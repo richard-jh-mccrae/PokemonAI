@@ -5,6 +5,8 @@ same: degrade the way unknown ids already do, keep the decision, and where the d
 pricing-relevant, SAY SO as a gap — never absorb silently, never die."""
 from __future__ import annotations
 
+from observation_builders import build_observation, advance_observation
+
 import math
 from dataclasses import replace
 
@@ -14,8 +16,8 @@ from ledger_helpers import (DRAGAPULT, FIRE_E, LILLIES, ScriptedProvider, action
                             player, printout)
 
 from common.algebra import Terminal
-from common.board import BoardState
-from common.ledger import LedgerContext, LedgerDecider, LedgerWeights, evaluate
+from common.observation import ObservationConstructionError, ObservationState
+from common.ledger import EvaluationModel, LedgerDecider, LedgerWeights, evaluate
 from common.ledger.chance import refresh_value
 from common.ledger.decider import LedgerUnavailable
 from common.options import enumerate_legal_actions
@@ -46,7 +48,7 @@ def test_a_non_finite_swing_scores_zero_and_logs_the_gap():
     provider = ScriptedProvider(menus={"root": (play, end)},
                                 nodes={("root", play.identity): Terminal(struck, "won")})
     decider = LedgerDecider((DRAGAPULT,) * 60, "test",
-                            LedgerContext.build(weights=weights),
+                            EvaluationModel.build(weights=weights),
                             provider_factory=lambda _s, **_kw: provider)
     decision = decider.decide(root_obs)
     assert any("non-finite price" in gap for gap in decision.diagnostics["gaps"])
@@ -59,21 +61,17 @@ def test_refresh_tolerates_idless_hand_rows():
     dropped the guard and died on `{"id": None}`."""
     obs = printout(me=player(active=body(DRAGAPULT, 1), hand=[LILLIES, FIRE_E]))
     obs["current"]["players"][0]["hand"].extend([{"id": None, "serial": 9}, {"serial": 10}])
-    board = BoardState.root(obs, decklist=(DRAGAPULT,) * 30)
-    value, _gaps = refresh_value(obs, board, LILLIES, ((6, 0),), False,
-                                 lambda synthetic: evaluate(synthetic, LedgerContext.build()))
+    board = build_observation(obs, decklist=(DRAGAPULT,) * 30)
+    value, _gaps = refresh_value(board, LILLIES, ((6, 0),), False,
+                                 lambda synthetic: evaluate(synthetic, EvaluationModel.build()))
     assert math.isfinite(value)
 
 
-def test_refresh_tolerates_a_single_entry_players_list():
-    """`_synthesize` indexed players[1 - seat] unguarded while `_player` ten lines up
-    bounds-checks the identical access."""
+def test_observation_rejects_a_single_entry_players_list():
     obs = printout(me=player(active=body(DRAGAPULT, 1), hand=[LILLIES]))
     obs["current"]["players"] = [obs["current"]["players"][0]]
-    board = BoardState.root(obs, decklist=(DRAGAPULT,) * 30)
-    value, _gaps = refresh_value(obs, board, LILLIES, ((6, 0),), False,
-                                 lambda synthetic: evaluate(synthetic, LedgerContext.build()))
-    assert math.isfinite(value)
+    with pytest.raises(ObservationConstructionError):
+        build_observation(obs, decklist=(DRAGAPULT,) * 30)
 
 
 def test_the_enumerator_survives_none_counts_and_junk_option_rows():
@@ -90,10 +88,7 @@ def test_the_enumerator_survives_none_counts_and_junk_option_rows():
     assert covered == {0, 1, 2}                  # junk keeps its index; every index covered
 
 
-def test_board_digestion_degrades_malformed_rows_like_unknown_ids():
-    """One choke point (`card_node`) covers every zone: id-less rows vanish, a None energy
-    unit is dropped, a dict-shaped active reads as no active, junk select rows are skipped,
-    and a None-count prize entry is filtered — the whole board still evaluates."""
+def test_observation_construction_rejects_a_structurally_malformed_zone():
     me = player(active=body(DRAGAPULT, 1), hand=[FIRE_E])
     me["hand"].extend([{"id": None, "serial": 8}, {"serial": 9}])
     me["discard"] = [{"id": None}, {"id": FIRE_E, "serial": 900}]
@@ -104,11 +99,8 @@ def test_board_digestion_degrades_malformed_rows_like_unknown_ids():
         "remainDamageCounter": 0, "remainEnergyCost": 0})
     obs["current"]["players"][1]["active"] = {"id": DRAGAPULT}     # dict where a list belongs
     obs["own_prizes"] = {FIRE_E: None, DRAGAPULT: 1, None: 2}
-    board = BoardState.root(obs, decklist=(DRAGAPULT,) * 30)
-    assert board.me.active.energies == (5,)
-    assert board.them.active is None
-    assert board.own_prizes == ((DRAGAPULT, 1),)
-    assert math.isfinite(evaluate(board, LedgerContext.build()).total)
+    with pytest.raises(ObservationConstructionError, match="player.active"):
+        build_observation(obs, decklist=(DRAGAPULT,) * 30)
 
 
 def test_a_raising_provider_close_does_not_mask_the_decision():
@@ -123,7 +115,7 @@ def test_a_raising_provider_close_does_not_mask_the_decision():
     play, end = action("play", (0,)), action("end", (1,))
     provider = SlammingProvider(menus={"root": (play, end)},
                                 nodes={("root", play.identity): Terminal(struck, "done")})
-    decision = LedgerDecider((DRAGAPULT,) * 60, "test", LedgerContext.build(),
+    decision = LedgerDecider((DRAGAPULT,) * 60, "test", EvaluationModel.build(),
                              provider_factory=lambda _s, **_kw: provider).decide(root_obs)
     assert decision.diagnostics["backend"] == "ledger"
 
@@ -138,7 +130,7 @@ def test_an_unavailable_provider_is_closed_before_the_refusal():
         def close(self):
             closed.append(True)
 
-    decider = LedgerDecider((DRAGAPULT,) * 60, "test", LedgerContext.build(),
+    decider = LedgerDecider((DRAGAPULT,) * 60, "test", EvaluationModel.build(),
                             provider_factory=lambda _s, **_kw: HalfOpenProvider())
     with pytest.raises(LedgerUnavailable):
         decider.decide(printout(me=player(active=body(DRAGAPULT, 1))))
@@ -159,5 +151,5 @@ def test_the_last_resort_shell_is_total():
 def test_a_corrupt_bench_max_cannot_stall_the_evaluator():
     obs = printout(me=player(active=body(DRAGAPULT, 1)))
     obs["current"]["players"][0]["benchMax"] = 10 ** 9
-    valuation = evaluate(BoardState.root(obs), LedgerContext.build())
+    valuation = evaluate(build_observation(obs), EvaluationModel.build())
     assert math.isfinite(valuation.total)

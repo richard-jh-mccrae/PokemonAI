@@ -1,10 +1,9 @@
-"""Time BoardState.advance against full rebuilds over a synthetic in-search reprint sequence.
+"""Pair incremental ObservationState construction against full rebuilds on identical frames.
 
 Each step deep-copies the previous printout and applies one board-sized mutation (damage, a
 draw, an attach, a turn flag), which is the change profile of one search edge. Three pipelines
-consume the identical sequence: `BoardState.root` per step (rebuild everything), the
-`advance` chain (reuse untouched pieces), and `DecisionState.from_observation` + `plan_key`
-(the incumbent per-node cost). Run: `python -m tools.board_bench --steps 300`."""
+consume the identical sequence: `ObservationStateBuilder.root` per step (rebuild everything), the
+`advance` chain (reuse untouched pieces). Run: `python tools/observation_bench.py --steps 300`."""
 from __future__ import annotations
 
 import argparse
@@ -15,8 +14,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
-from common.board import BoardState                      # noqa: E402
-from deprecated.bellman.state import DecisionState
+from common.observation import ObservationStateBuilder               # noqa: E402
 
 IDS = (66, 112, 119, 120, 121, 140)
 DECK = tuple(IDS) * 10
@@ -86,34 +84,33 @@ def main(argv=None):
     args = parser.parse_args(argv)
     printouts = _sequence(args.steps)
     # Warm the process-wide card store and import machinery so no pipeline pays it in its timing.
-    BoardState.root(printouts[0], decklist=DECK).key
+    builder = ObservationStateBuilder(DECK)
+    builder.root(printouts[0]).position_key
 
     start = time.perf_counter()
-    roots = [BoardState.root(printout, decklist=DECK) for printout in printouts]
+    roots = [builder.root(printout) for printout in printouts]
     for board in roots:
         board.key
     root_ms = (time.perf_counter() - start) * 1000 / len(printouts)
 
     start = time.perf_counter()
-    chain = [BoardState.root(printouts[0], decklist=DECK)]
+    chain = [builder.root(printouts[0])]
+    deltas = []
     chain[0].key
     for printout in printouts[1:]:
-        chain.append(chain[-1].advance(printout))
+        child, delta = builder.advance(chain[-1], printout)
+        chain.append(child)
+        deltas.append(delta)
         chain[-1].key
     advance_ms = (time.perf_counter() - start) * 1000 / len(printouts)
-
-    start = time.perf_counter()
-    for printout in printouts:
-        DecisionState.from_observation(printout, deck=DECK, deck_name="bench").plan_key
-    decision_ms = (time.perf_counter() - start) * 1000 / len(printouts)
 
     mismatch = sum(1 for fresh, stepped in zip(roots, chain)
                    if fresh != stepped or fresh.key != stepped.key)
     print(f"steps                    {len(printouts)}")
-    print(f"BoardState.root          {root_ms:8.3f} ms/step")
-    print(f"BoardState.advance       {advance_ms:8.3f} ms/step   ({root_ms / advance_ms:4.1f}x vs root)")
-    print(f"DecisionState + plan_key {decision_ms:8.3f} ms/step   ({decision_ms / advance_ms:4.1f}x vs advance)")
+    print(f"ObservationStateBuilder.root    {root_ms:8.3f} ms/step")
+    print(f"ObservationStateBuilder.advance {advance_ms:8.3f} ms/step   ({root_ms / advance_ms:4.1f}x vs root)")
     print(f"advance == root mismatches: {mismatch}")
+    print(f"mean changed parts:         {sum(len(delta.parts) for delta in deltas) / len(deltas):8.3f}")
     return 1 if mismatch else 0
 
 

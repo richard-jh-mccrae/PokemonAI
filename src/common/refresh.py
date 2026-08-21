@@ -1,6 +1,8 @@
 """Describe a shuffle-refresh as printed counts; valuation lives with each brain."""
 from __future__ import annotations
 
+from .observation.provider import provider_payload as _payload
+
 from .algebra import Refresh
 from .cards import card_store, play_clauses
 from .cards.functions.draw import draw_branches, draw_shape_problem
@@ -15,7 +17,7 @@ def played_card_id(state, action) -> int | None:
     """Resolve a MAIN play through the public hand/menu, without engine-private state."""
     if action.identity.kind != "play" or len(action.selection) != 1:
         return None
-    observation = state.obs
+    observation = _payload(state)
     options = ((observation.get("select") or {}).get("option") or ())
     option_index = action.selection[0]
     if not 0 <= option_index < len(options):
@@ -42,7 +44,7 @@ def refresh_transition(state, action, cards=None) -> Refresh | None:
                        if clause.kind == "draw" and clause.rider in SHUFFLE_RIDERS)
     if len(candidates) != 1 or draw_shape_problem(candidates[0]) is not None:
         return None
-    current = state.obs.get("current") or {}
+    current = _payload(state).get("current") or {}
     players = current.get("players") or ()
     mine = players[state.root_seat] if len(players) > state.root_seat else {}
     opponent = players[1 - state.root_seat] if len(players) > 1 else {}

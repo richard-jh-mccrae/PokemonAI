@@ -80,6 +80,7 @@ def _compact_diagnostics(diagnostics: dict) -> dict:
 
 
 def to_record(decision, *, read=None, seat=None, compact=False,
+              state=None,
               decision_seconds: float | None = None,
               decision_limit_seconds: float | None = None,
               deadline_hit: bool | None = None) -> dict:
@@ -100,6 +101,9 @@ def to_record(decision, *, read=None, seat=None, compact=False,
             "unknown_mass": float(read.unknown_mass),
         } if read is not None and read.candidates else None),
     }
+    if state is not None:
+        from common.observation import ObservationRecord
+        record["observation_record"] = json.loads(ObservationRecord.from_state(state).dumps())
     if seat is not None:
         record["seat"] = int(seat)
     if decision_seconds is not None:
@@ -111,9 +115,9 @@ def to_record(decision, *, read=None, seat=None, compact=False,
     return record
 
 
-def emit(decision, *, read=None, seat=None, out=None, decision_seconds=None,
+def emit(decision, *, read=None, seat=None, state=None, out=None, decision_seconds=None,
          decision_limit_seconds=None, deadline_hit=None) -> None:
-    record = to_record(decision, read=read, seat=seat, compact=True,
+    record = to_record(decision, read=read, seat=seat, state=state, compact=True,
                        decision_seconds=decision_seconds,
                        decision_limit_seconds=decision_limit_seconds,
                        deadline_hit=deadline_hit)

@@ -4,7 +4,6 @@ import json
 
 from common import RootDecision
 from deprecated.bellman.state import DecisionState
-from common.board_cards import body_card_ids
 from common.card_worth import ACE_SPEC_TIER, ENERGY_TIER, ROLE_TIER, function_role, role_value
 from common.option_equivalence import (
     class_representatives, fan_out, fingerprint_source_card_id, option_in_play_source_id,
@@ -12,6 +11,7 @@ from common.option_equivalence import (
 )
 from common.strategy import PrizePlan, Roles, Strategy
 from common.telemetry import to_record
+from common.observation import ObservationStateBuilder
 from observation_helpers import engine_opt
 
 
@@ -49,13 +49,6 @@ def test_intrinsic_card_functions_resolve_to_general_roles():
     assert function_role(("search", "tutor_pokemon")) == "tutor"
     assert function_role(("energy_denial", "coin")) == "disruption"
     assert function_role(("draw", "dig")) is None
-
-
-def test_board_card_walk_uses_attached_cards_not_energy_units():
-    body = {"id": 10, "energies": [0, 0, 6],
-            "energyCards": [{"id": 17}, {"id": 20}],
-            "tools": [{"id": 1250}], "preEvolution": [{"id": 9}]}
-    assert list(body_card_ids(body)) == [10, 17, 20, 1250, 9]
 
 
 def test_option_equivalence_helpers_preserve_the_best_member():
@@ -152,6 +145,29 @@ def test_telemetry_records_whole_decision_duration():
     record = to_record(decision, decision_seconds=0.125)
 
     assert record["decision_seconds"] == 0.125
+
+
+def test_telemetry_persists_the_versioned_observation_record():
+    state = ObservationStateBuilder().root({
+        "select": None, "logs": [], "current": {
+            "yourIndex": 0, "turn": 1, "firstPlayer": 0, "supporterPlayed": False,
+            "stadiumPlayed": False, "energyAttached": False, "retreated": False,
+            "result": None, "stadium": [], "looking": None, "players": [
+                {"active": [], "bench": [], "hand": [], "handCount": 0,
+                 "discard": [], "prize": [], "deckCount": 0, "benchMax": 5,
+                 "poisoned": False, "burned": False, "asleep": False,
+                 "paralyzed": False, "confused": False},
+                {"active": [], "bench": [], "hand": None, "handCount": 0,
+                 "discard": [], "prize": [], "deckCount": 0, "benchMax": 5,
+                 "poisoned": False, "burned": False, "asleep": False,
+                 "paralyzed": False, "confused": False}],
+        }})
+    decision = RootDecision((0,), None, 0.0, True, {})
+
+    record = to_record(decision, state=state)
+
+    assert record["observation_record"]["schema_version"] == 1
+    assert record["observation_record"]["payload"]["$type"] == "ObservationState"
 
 
 def test_search_session_resume_blob_is_not_part_of_plan_suffix_identity():

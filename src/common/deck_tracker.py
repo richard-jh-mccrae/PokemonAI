@@ -18,10 +18,9 @@ from __future__ import annotations
 from collections import Counter
 
 from cg.api import AreaType, LogType
-from common.board_cards import body_card_entries, card_id as _card_id
 from common.cards import card_store, play_clauses
+from common.observation import ObservationState
 
-_HAND, _DISCARD, _ACTIVE, _BENCH = "hand", "discard", "active", "bench"
 _AREA_HAND, _AREA_PRIZE = 2, 6                       # cg.api AreaType.HAND / .PRIZE (log zone codes)
 _AREA_DECK = int(AreaType.DECK)
 _CLEAR_TOP = frozenset({int(LogType.SHUFFLE), int(LogType.MOVE_CARD_REVERSE)})
@@ -65,44 +64,37 @@ class OwnCardModel:
     def known_top_export(self) -> tuple[tuple[int, int], ...] | None:
         return self._known_top
 
-    def observe(self, obs: dict) -> None:
+    def observe(self, state: ObservationState) -> None:
         """Update the model from one observation. Never raises: on any error it drops the anchor
         (falls back to stateless bounds) rather than risk a false certainty or crashing the agent."""
         try:
-            self._observe(obs)
+            self._observe(state)
         except Exception:
             self._prizes = None
             self._known_top = None
             self._resolving_source = None
 
     # -- internals -------------------------------------------------------------------------------
-    def _observe(self, obs: dict) -> None:
-        select = obs.get("select")
+    def _observe(self, state: ObservationState) -> None:
+        select = state.select
         if select is None:                         # initial deck-submission step == match start
             self.reset()
             return
-        state = obs.get("current") or {}
-        players = state.get("players") or []
-        yi = state.get("yourIndex", 0)
-        me = players[yi] if 0 <= yi < len(players) and players[yi] else None
-        if not me:
-            return
-
-        turn = state.get("turn")
-        if self._last_turn is not None and turn is not None and turn < self._last_turn:
+        turn = state.turn.number
+        if self._last_turn is not None and turn < self._last_turn:
             self.reset()                           # turn went backwards -> new match (local harness)
         self._last_turn = turn
-        self._advance_known_top(obs, int(yi))
-        self._record_prize_takes(obs, yi)
+        self._advance_known_top(state)
+        self._record_prize_takes(state)
 
-        visible = self._visible(me, select)
+        visible = self._visible(state)
         if any(visible[c] > self.decklist.get(c, 0) for c in visible):
             self._prizes = None                    # foreign / inconsistent state -> never trust it
             return
-        remaining = len(me.get("prize") or [])
+        remaining = state.me.prize_count
         hidden = self.decklist - visible           # deck ∪ prizes multiset (everything unseen)
 
-        revealed = self._revealed_full_deck(select, me)
+        revealed = self._revealed_full_deck(state)
         if revealed is not None:                   # full deck reveal -> (re)anchor prizes exactly
             prizes = self.decklist - revealed - visible
             if sum(prizes.values()) == remaining and all(v >= 0 for v in prizes.values()):
@@ -130,19 +122,19 @@ class OwnCardModel:
         else:                                      # prizes grew -> impossible -> desync
             self._prizes = None
 
-    def _advance_known_top(self, obs: dict, seat: int) -> None:
-        select = obs.get("select") or {}
-        resolving = next((int(entry["id"]) for entry in
-                          (select.get("effect"), select.get("contextCard"))
-                          if isinstance(entry, dict) and entry.get("id") is not None), None)
+    def _advance_known_top(self, state: ObservationState) -> None:
+        select = state.select
+        resolving = next((entry.card_id for entry in
+                          (() if select is None else (select.effect, select.context_card))
+                          if entry is not None), None)
         placing = self._resolving_source in self._stackers
         belief = self._known_top
-        for entry in obs.get("logs") or ():
-            if not isinstance(entry, dict) or entry.get("playerIndex") != seat:
+        for event in state.events:
+            entry = dict(event.public_fields)
+            if entry.get("playerIndex") != state.seat:
                 continue
-            try:
-                kind = int(entry.get("type"))
-            except (TypeError, ValueError):
+            kind = event.kind
+            if kind is None:
                 continue
             if kind in _CLEAR_TOP:
                 belief = None
@@ -163,14 +155,13 @@ class OwnCardModel:
         self._known_top = belief
         self._resolving_source = resolving
 
-    def _record_prize_takes(self, obs: dict, yi: int) -> None:
+    def _record_prize_takes(self, state: ObservationState) -> None:
         """Accumulate MY prize takes from the log DELTA, keyed by ``serial`` so a replayed frame cannot
         count one twice. An entry missing ``serial``/``cardId`` is ignored (the fallback stays in charge)."""
-        for entry in (obs.get("logs") or ()):
-            if not isinstance(entry, dict):
-                continue
+        for event in state.events:
+            entry = dict(event.public_fields)
             if (entry.get("fromArea") != _AREA_PRIZE or entry.get("toArea") != _AREA_HAND
-                    or entry.get("playerIndex") != yi):
+                    or entry.get("playerIndex") != state.seat):
                 continue
             serial, cid = entry.get("serial"), entry.get("cardId")
             if serial is not None and cid is not None:
@@ -187,45 +178,42 @@ class OwnCardModel:
             return None                            # names a card that wasn't prized -> desync
         return self._prizes - taken
 
-    def _visible(self, me: dict, select: dict) -> Counter:
+    def _visible(self, state: ObservationState) -> Counter:
         """MY cards provably OUTSIDE deck+prizes, plus the card whose effect is RESOLVING (it has left
         the deck but sits in no zone). That rider is deduped by ``serial``: an Ability's is still in play."""
         c: Counter = Counter()
         seen: set = set()
 
-        def add(entry) -> None:
-            cid = _card_id(entry)
-            if cid is None:
+        def add(card) -> None:
+            if card is None:
                 return
-            c[cid] += 1
-            serial = entry.get("serial") if isinstance(entry, dict) else None
+            c[card.card_id] += 1
+            serial = card.serial
             if serial is not None:
                 seen.add(serial)
 
-        for zone in (_HAND, _DISCARD):
-            for entry in (me.get(zone) or []):
-                add(entry)
-        for zone in (_ACTIVE, _BENCH):
-            for poke in (me.get(zone) or []):
-                for entry in body_card_entries(poke):   # the ONE walk (common.board_cards)
-                    add(entry)
-        for key in ("effect", "contextCard"):
-            entry = select.get(key)
-            if _card_id(entry) is None:
+        for card in tuple(state.me.hand) + tuple(state.me.discard):
+            add(card)
+        for body in state.me.bodies:
+            for card in (body.card, *body.energy_cards, *body.tools, *body.pre_evolution):
+                add(card)
+        select = state.select
+        for entry in (() if select is None else (select.effect, select.context_card)):
+            if entry is None:
                 continue
-            serial = entry.get("serial") if isinstance(entry, dict) else None
+            serial = entry.serial
             if serial is not None and serial in seen:
                 continue                           # already counted where it actually sits
             add(entry)
         return c
 
-    def _revealed_full_deck(self, select: dict, me: dict) -> Counter | None:
+    def _revealed_full_deck(self, state: ObservationState) -> Counter | None:
         """The full remaining deck as a multiset, ONLY on a complete reveal; None otherwise — never
         anchor off a subset."""
-        deck = select.get("deck")
-        if not deck or len(deck) != me.get("deckCount"):
+        deck = None if state.select is None else state.select.deck
+        if not deck or len(deck) != state.me.deck_count:
             return None
-        return Counter(cid for cid in (_card_id(d) for d in deck) if cid is not None)
+        return Counter(card.card_id for card in deck)
 
     @staticmethod
     def _consistent(prizes: Counter, hidden: Counter, remaining: int) -> bool:

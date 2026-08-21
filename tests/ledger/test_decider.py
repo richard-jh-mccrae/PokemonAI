@@ -4,6 +4,8 @@ A fake provider returns prepared algebra nodes, so these pin the POLICY (turn sp
 argmax, chain resolution, refresh sampling determinism) without an engine in the loop."""
 from __future__ import annotations
 
+from observation_builders import build_observation, advance_observation
+
 from ledger_helpers import (DARK_E, DARKNESS, DRAGAPULT, DRAKLOAK, DREEPY, FIRE, FIRE_E,
                             HARLEQUIN, LILLIES, PSYCHIC, ScriptedProvider, action, body,
                             player, printout)
@@ -11,18 +13,18 @@ from ledger_helpers import (DARK_E, DARKNESS, DRAGAPULT, DRAKLOAK, DREEPY, FIRE,
 import pytest
 
 from common.algebra import Deterministic, Refresh, Terminal, Unknown
-from common.ledger import LedgerContext, LedgerDecider
+from common.ledger import EvaluationModel, LedgerDecider
 from common.ledger.decider import LedgerUnavailable
 from deprecated.bellman.state import DecisionState
 
 
 def make_decider(provider, deck=(DRAGAPULT, FIRE_E, DARK_E) * 20, sink=None):
-    return LedgerDecider(deck, "test", LedgerContext.build(),
+    return LedgerDecider(deck, "test", EvaluationModel.build(),
                          provider_factory=lambda _state, **_kw: provider, gap_sink=sink)
 
 
 def state_of(observation, deck):
-    identity = f"ledger:{LedgerContext.build().weights.identity}"
+    identity = f"ledger:{EvaluationModel.build().weights.identity}"
     return DecisionState.from_observation(observation, deck=tuple(deck), deck_name="test",
                                           value_registry_identity=identity)
 
@@ -133,7 +135,7 @@ def test_refresh_pricing_is_deterministic_and_reports_no_false_gaps():
     provider = ScriptedProvider(
         menus={"root": (play, end)},
         nodes={("root", play.identity): Refresh(LILLIES, ((6, 0),), False)})
-    decider = LedgerDecider(deck, "test", LedgerContext.build(),
+    decider = LedgerDecider(deck, "test", EvaluationModel.build(),
                             provider_factory=lambda _state, **_kw: provider)
     first = decider.decide(root_obs)
     second = decider.decide(root_obs)
@@ -159,12 +161,12 @@ def test_lillies_prices_higher_when_the_hand_it_shuffles_away_is_dead():
         provider = ScriptedProvider(
             menus={"root": (play, end)},
             nodes={("root", play.identity): Refresh(LILLIES, ((6, 0),), False)})
-        decision = LedgerDecider(deck, "test", LedgerContext.build(),
+        decision = LedgerDecider(deck, "test", EvaluationModel.build(),
                                  provider_factory=lambda _s, **_kw: provider).decide(root_obs)
         return {entry["action"]: entry["swing"]
                 for entry in decision.diagnostics["prices"]}[str(play.identity)]
 
-    context = LedgerContext.build()
+    context = EvaluationModel.build()
     from common.ledger.worth import base_worth
     assert (base_worth(DARK_E, context.facts(DARK_E), context)
             == base_worth(FIRE_E, context.facts(FIRE_E), context))
@@ -188,7 +190,7 @@ def test_harlequin_two_leg_ev_prices_the_opponents_redraw():
             menus={"root": (play, end)},
             nodes={("root", play.identity):
                    Refresh(HARLEQUIN, ((5, 3), (3, 5)), True)})
-        decision = LedgerDecider(deck, "test", LedgerContext.build(),
+        decision = LedgerDecider(deck, "test", EvaluationModel.build(),
                                  provider_factory=lambda _s, **_kw: provider).decide(root_obs)
         return {entry["action"]: entry["swing"]
                 for entry in decision.diagnostics["prices"]}[str(play.identity)]
@@ -257,7 +259,7 @@ def test_an_unavailable_provider_raises_ledger_unavailable():
         def __init__(self, *_args, **_kwargs):
             pass
 
-    decider = LedgerDecider(DECK, "test", LedgerContext.build(),
+    decider = LedgerDecider(DECK, "test", EvaluationModel.build(),
                             provider_factory=lambda _s, **_kw: DeadProvider())
     with pytest.raises(LedgerUnavailable):
         decider.decide(printout(me=player(active=body(DRAGAPULT, 1))))
@@ -276,7 +278,7 @@ def test_harlequin_legs_average_exactly_on_a_uniform_pool():
         provider = ScriptedProvider(
             menus={"root": (play, end)},
             nodes={("root", play.identity): Refresh(HARLEQUIN, draws, True)})
-        decision = LedgerDecider(deck, "test", LedgerContext.build(),
+        decision = LedgerDecider(deck, "test", EvaluationModel.build(),
                                  provider_factory=lambda _s, **_kw: provider).decide(root_obs)
         return {entry["action"]: entry["swing"]
                 for entry in decision.diagnostics["prices"]}[str(play.identity)]
@@ -326,7 +328,7 @@ def test_a_positive_hand_shuffle_alone_still_gets_played():
 
 
 def test_price_actions_flags_the_root_refresh_node():
-    from common.board import BoardState
+    from common.observation import ObservationState
     from common.ledger import PreviewState, evaluate
     from common.ledger.preview import price_actions
 
@@ -341,11 +343,11 @@ def test_price_actions_flags_the_root_refresh_node():
         menus={"root": (attach, play, end)},
         nodes={("root", attach.identity): Deterministic(attached),
                ("root", play.identity): Refresh(LILLIES, ((6, 0),), False)})
-    ctx = LedgerContext.build()
-    board = BoardState.root(root_obs, decklist=DECK)
+    ctx = EvaluationModel.build()
+    board = build_observation(root_obs, decklist=DECK)
     state = PreviewState(root_obs, board.seat, "root", deck=DECK,
                          deck_counts=board.deck_counts or (),
-                         prize_counts=board.own_prizes or ())
+                         prize_counts=getattr(board.knowledge.own_prizes, "cards", ()))
     flags = {str(price.action.identity): price.refresh
              for price in price_actions(state, board, evaluate(board, ctx).total,
                                         provider, ctx)}
@@ -366,7 +368,7 @@ def test_act_threshold_hands_a_small_positive_turn_to_the_ender():
     provider = ScriptedProvider(
         menus={"root": (attach, end)},
         nodes={("root", attach.identity): Deterministic(attached)})
-    lifted = LedgerDecider(DECK, "test", LedgerContext.build(overrides={"act_threshold": 5.0}),
+    lifted = LedgerDecider(DECK, "test", EvaluationModel.build(overrides={"act_threshold": 5.0}),
                            provider_factory=lambda _s, **_kw: provider).decide(root_obs)
     assert lifted.action.kind == "end"
     default = make_decider(provider).decide(root_obs)

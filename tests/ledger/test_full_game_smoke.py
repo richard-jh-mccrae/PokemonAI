@@ -1,4 +1,4 @@
-"""One whole cgpy game through the LIVE runtime: the Ledger answers, BoardState agrees.
+"""One whole cgpy game through the LIVE runtime: the Ledger answers, ObservationState agrees.
 
 The deployment shell (common.runtime) catches every exception into a last-resort answer,
 so a completely dead Ledger still finishes matches and every other full-game harness stays
@@ -6,12 +6,14 @@ green. This smoke is the liveness assertion the rest of the tree cannot supply:
 
 - every post-pregame decision must come back `backend == "ledger"` (or the trivial
   forced-selection shortcut) — one crash fallback anywhere fails the game;
-- both seats' BoardState advance chains are cross-checked against the ENGINE'S OWN state —
+- both seats' ObservationState advance chains are cross-checked against the ENGINE'S OWN state —
   god truth, not a rendered reprint — every step: zone counts, hand and discard contents,
   actives, bench, statuses, stadium;
 - the game must reach a real result, the terminal frame is digested (the one frame shape no
   fixture ever carried), and the evaluator reads the win/loss/draw off it."""
 from __future__ import annotations
+
+from observation_builders import build_observation, advance_observation
 
 import importlib.util
 from collections import Counter
@@ -21,10 +23,10 @@ from cgpy.engine import Engine
 from cgpy.render import observation
 from cgpy.rng import SeededRng
 
-from common.board import BoardState
+from common.observation import HiddenHand, ObservationState, ObservationStateBuilder
 from common.deck_tracker import OwnCardModel
 from common.engine import CgpyTransitionProvider
-from common.ledger import LedgerContext, evaluate
+from common.ledger import EvaluationModel, evaluate
 from common.runtime import build_runtime
 
 REPO = Path(__file__).resolve().parents[2]
@@ -58,7 +60,7 @@ def _assert_board_matches_engine(board, gs, seat, step):
         assert side.prize_count == len(engine_side.prize), note
         assert Counter(card.card_id for card in side.discard) \
             == _ids(gs, engine_side.discard), note
-        if side.hand is not None:
+        if not isinstance(side.hand, HiddenHand):
             assert Counter(card.card_id for card in side.hand) \
                 == _ids(gs, engine_side.hand), note
         assert (side.active is None) == (engine_side.active is None), note
@@ -85,14 +87,14 @@ def test_a_full_cgpy_mirror_game_runs_on_the_ledger_start_to_finish():
     runtimes = {seat: _runtime(deck) for seat in (0, 1)}
     own_cards = {seat: OwnCardModel(runtimes[seat].deck)
                  for seat in (0, 1)}
-    chains = {seat: BoardState.root(observation(engine.gs, seat), decklist=deck)
+    chains = {seat: build_observation(observation(engine.gs, seat), decklist=deck)
               for seat in (0, 1)}
     backends: Counter = Counter()
     steps = 0
     while engine.gs.result == -1 and steps < MAX_STEPS:
         seat = engine.gs.pending.seat
         obs = observation(engine.gs, seat)
-        own_cards[seat].observe(obs)
+        own_cards[seat].observe(ObservationStateBuilder(deck).root(obs))
         obs["own_prizes"] = own_cards[seat].prize_export()
         obs["known_top"] = own_cards[seat].known_top_export()
         turn = int((obs.get("current") or {}).get("turn", 0))
@@ -108,7 +110,7 @@ def test_a_full_cgpy_mirror_game_runs_on_the_ledger_start_to_finish():
         engine.step(list(decision.chosen))
         steps += 1
         for view in (0, 1):
-            chains[view] = chains[view].advance(observation(engine.gs, view))
+            chains[view] = advance_observation(chains[view], observation(engine.gs, view))
             if engine.gs.turn >= 1:        # setup facedowns are legitimately masked
                 _assert_board_matches_engine(chains[view], engine.gs, view, steps)
 
@@ -117,8 +119,8 @@ def test_a_full_cgpy_mirror_game_runs_on_the_ledger_start_to_finish():
     assert backends.get("last-resort-fallback", 0) == 0, backends
 
     # The terminal frame digests, and the evaluator reads the outcome straight off the board.
-    ctx = LedgerContext.build()
-    finals = {view: evaluate(chains[view].advance(observation(engine.gs, view)), ctx)
+    ctx = EvaluationModel.build()
+    finals = {view: evaluate(advance_observation(chains[view], observation(engine.gs, view)), ctx)
               for view in (0, 1)}
     for view in (0, 1):
         assert chains[view].turn.result == engine.gs.result

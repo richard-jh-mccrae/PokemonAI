@@ -1,9 +1,13 @@
-"""Construction: sides, masking-by-type, fact pinning, and both select dialects."""
+"""Construction: sides, hidden variants, static-fact separation, and select dialects."""
 from __future__ import annotations
+
+from observation_builders import build_observation, advance_observation
+
+import pytest
 
 from observation_helpers import engine_opt, opt
 
-from common.board import BoardState
+from common.observation import HiddenHand, ObservationConstructionError, ObservationState
 from common.cards import card_store
 
 KNOWN, UNKNOWN = 66, 999_999
@@ -39,13 +43,13 @@ def printout(*, me=None, them=None, turn=2, select=None, stadium=(), **top):
 
 
 def test_root_maps_both_sides_and_the_turn():
-    board = BoardState.root(printout(
+    board = build_observation(printout(
         me=player(active=body(KNOWN, 1), bench=[body(112, 2)], hand=[119, 119], discard=[120]),
         them=player(own=False, hand_count=4, prizes=2)))
     assert board.me.active.card.card_id == KNOWN and not board.me.active_hidden
     assert [b.card.card_id for b in board.me.bench] == [112]
     assert board.me.hand.count(119) == 2 and len(board.me.discard) == 1
-    assert board.them.hand is None and board.them.hand_count == 4
+    assert isinstance(board.them.hand, HiddenHand) and board.them.hand_count == 4
     assert board.them.prize_count == 2
     assert board.turn.number == 2 and not board.turn.supporter_played
 
@@ -53,14 +57,14 @@ def test_root_maps_both_sides_and_the_turn():
 def test_facedown_active_is_hidden_even_to_its_owner():
     me = player()
     me["active"] = [None]
-    board = BoardState.root(printout(me=me))
+    board = build_observation(printout(me=me))
     assert board.me.active is None and board.me.active_hidden
 
 
 def test_card_facts_pin_from_the_store_and_unknown_ids_degrade():
-    board = BoardState.root(printout(me=player(active=body(KNOWN, 1), hand=[UNKNOWN])))
-    assert board.me.active.card.facts is card_store()[KNOWN]
-    assert board.me.hand.cards[0].facts is None
+    board = build_observation(printout(me=player(active=body(KNOWN, 1), hand=[UNKNOWN])))
+    assert card_store()[board.me.active.card.card_id] is card_store()[KNOWN]
+    assert card_store().get(board.me.hand.cards[0].card_id) is None
 
 
 def test_opponent_hand_and_prize_contents_are_unrepresentable():
@@ -68,8 +72,8 @@ def test_opponent_hand_and_prize_contents_are_unrepresentable():
     them = player(own=False)
     them["hand"] = [{"id": KNOWN, "serial": 5, "playerIndex": 1}]
     them["prize"] = [{"id": 112, "serial": 6, "playerIndex": 1}, None]
-    board = BoardState.root(printout(them=them))
-    assert board.them.hand is None
+    board = build_observation(printout(them=them))
+    assert isinstance(board.them.hand, HiddenHand)
     assert board.them.prize_count == 2
 
 
@@ -82,7 +86,7 @@ def test_select_normalizes_both_engine_dialects():
                               "remainDamageCounter": 0, "remainEnergyCost": 0,
                               "option": [engine_opt(7, index=2)], "deck": None,
                               "contextCard": None, "effect": None})
-    a, b = BoardState.root(sparse), BoardState.root(padded)
+    a, b = build_observation(sparse), build_observation(padded)
     assert a.select.options == b.select.options
     assert a.select.options[0].index == 2 and a.select.options[0].area is None
 
@@ -92,42 +96,41 @@ def test_seat_one_viewer_maps_sides_and_deck_counts():
     theirs = player(own=False, hand_count=5)
     obs = printout(me=theirs, them=mine)
     obs["current"]["yourIndex"] = 1
-    board = BoardState.root(obs, decklist=(66,) * 2 + (119,) * 2 + (120,) * 2)
+    board = build_observation(obs, decklist=(66,) * 2 + (119,) * 2 + (120,) * 2)
     assert board.seat == 1
     assert board.me.active.card.card_id == 66 and board.me.hand.count(119) == 1
-    assert board.them.hand is None and board.them.hand_count == 5
+    assert isinstance(board.them.hand, HiddenHand) and board.them.hand_count == 5
     assert board.deck_counts == ((66, 1), (119, 1), (120, 1))
 
 
 def test_stadium_ownership_gates_the_deck_deduction():
     deck = (1252, 1252)
     theirs = printout(stadium=[{"id": 1252, "serial": 60, "playerIndex": 1}])
-    assert BoardState.root(theirs, decklist=deck).deck_counts == ((1252, 2),)
+    assert build_observation(theirs, decklist=deck).deck_counts == ((1252, 2),)
     mine = printout(stadium=[{"id": 1252, "serial": 60, "playerIndex": 0}])
-    assert BoardState.root(mine, decklist=deck).deck_counts == ((1252, 1),)
+    assert build_observation(mine, decklist=deck).deck_counts == ((1252, 1),)
     unstamped = printout(stadium=[{"id": 1252, "serial": 60}])   # no owner: counts as mine
-    assert BoardState.root(unstamped, decklist=deck).deck_counts == ((1252, 1),)
+    assert build_observation(unstamped, decklist=deck).deck_counts == ((1252, 1),)
 
 
 def test_body_riders_pin_facts_and_reach_the_key():
     base = printout(me=player(active=body(66, 1, energy_cards=(3,), tools=(1174,), pre=(305,))))
-    board = BoardState.root(base)
+    board = build_observation(base)
     active = board.me.active
     assert [card.card_id for card in active.energy_cards] == [3]
-    assert active.tools[0].facts is card_store()[1174]
+    assert card_store()[active.tools[0].card_id] is card_store()[1174]
     assert active.pre_evolution[0].card_id == 305
     import copy
     untooled = copy.deepcopy(base)
     untooled["current"]["players"][0]["active"][0]["tools"] = []
-    assert BoardState.root(untooled).key != board.key
+    assert build_observation(untooled).key != board.key
 
 
-def test_root_degrades_on_an_empty_or_truncated_printout():
-    empty = BoardState.root({})
-    assert empty.me.active is None and empty.me.hand is None
-    assert len(empty.them.discard) == 0 and isinstance(empty.key, str)
-    solo = BoardState.root({"current": {"yourIndex": 0, "players": [player()]}})
-    assert solo.me.hand is not None and solo.them.hand_count == 0
+def test_root_rejects_an_empty_or_truncated_printout():
+    with pytest.raises(ObservationConstructionError):
+        build_observation({})
+    with pytest.raises(ObservationConstructionError):
+        build_observation({"current": {"yourIndex": 0, "players": [player()]}})
 
 
 def test_looking_carries_visible_cards_and_hides_hidden_ones():
@@ -135,18 +138,7 @@ def test_looking_carries_visible_cards_and_hides_hidden_ones():
     seen["current"]["looking"] = [{"id": KNOWN, "serial": 30}, {"id": 112, "serial": 31}]
     hidden = printout()
     hidden["current"]["looking"] = [None, None]
-    a, b = BoardState.root(seen), BoardState.root(hidden)
+    a, b = build_observation(seen), build_observation(hidden)
     assert a.looking.count == 2 and [c.card_id for c in a.looking.cards] == [KNOWN, 112]
     assert b.looking.count == 2 and b.looking.cards is None
     assert a.key != b.key
-
-
-def test_deck_counts_match_decision_state():
-    from deprecated.bellman.state import DecisionState
-    deck = (KNOWN,) * 3 + (112,) * 2 + (119,) * 4 + (120,) * 2
-    obs = printout(me=player(active=body(KNOWN, 1, energy_cards=(120,)), bench=[body(112, 2)],
-                             hand=[119], discard=[119]),
-                   own_prizes={KNOWN: 1})
-    board = BoardState.root(obs, decklist=deck)
-    state = DecisionState.from_observation(obs, deck=deck, deck_name="probe")
-    assert board.deck_counts == state.deck_counts

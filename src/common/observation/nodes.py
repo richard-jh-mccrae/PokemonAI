@@ -1,10 +1,4 @@
-"""Typed nodes of the observable board, one frozen piece per zone, digested at build.
-
-A digest is the piece's SEMANTIC identity: engine serials, owner seats and the render order of
-unordered zones never enter it, so a renumbered or permuted reprint digests identically (the
-same equivalence `common.state` applies to whole observations). Card facts are pinned on the
-node at build from `common.cards.card_store()`; an id the store lacks pins None rather than
-raising, because a mid-search unknown card must degrade, not crash."""
+"""Frozen typed nodes of one player-visible observation."""
 from __future__ import annotations
 
 import hashlib
@@ -55,7 +49,9 @@ def canon(value):
                      sorted(value.items(), key=lambda item: str(item[0])))
     if isinstance(value, (list, tuple)):
         return tuple(canon(child) for child in value)
-    return value
+    if value is None or isinstance(value, (bool, int, float, str)):
+        return value
+    raise TypeError(f"unsupported observation value {type(value).__name__}")
 
 
 @dataclass(frozen=True, slots=True)
@@ -64,28 +60,32 @@ class Card:
     card_id: int
     serial: int | None = field(compare=False)
     owner: int | None = field(compare=False)
-    facts: object | None = field(compare=False, repr=False)
+
+    def __post_init__(self):
+        object.__setattr__(self, "card_id", int(self.card_id))
+        object.__setattr__(self, "serial", None if self.serial is None else int(self.serial))
+        object.__setattr__(self, "owner", None if self.owner is None else int(self.owner))
 
 
-def card_node(entry, store) -> Card | None:
+def card_node(entry) -> Card | None:
     if not entry:
         return None
     card_id = entry.get("id")
     if card_id is None:
         return None                    # an id-less row degrades like an unknown id: absent
     card_id = int(card_id)
-    return Card(card_id, entry.get("serial"), entry.get("playerIndex"), store.get(card_id))
+    return Card(card_id, entry.get("serial"), entry.get("playerIndex"))
 
 
-def card_tuple(entries, store) -> tuple[Card, ...]:
-    return tuple(node for node in (card_node(entry, store) for entry in entries or ())
+def card_tuple(entries) -> tuple[Card, ...]:
+    return tuple(node for node in (card_node(entry) for entry in entries or ())
                  if node is not None)
 
 
 @dataclass(frozen=True, slots=True)
 class CardBag:
     """An order-free zone (hand, discard): render order is not identity."""
-    cards: tuple[Card, ...]
+    cards: tuple[Card, ...] = field(compare=False)
     counts: tuple[tuple[int, int], ...]
     digest: bytes = field(compare=False)
 
@@ -99,8 +99,41 @@ class CardBag:
         return iter(self.cards)
 
 
-def card_bag(entries, store) -> CardBag:
-    cards = tuple(sorted(card_tuple(entries, store), key=lambda card: card.card_id))
+@dataclass(frozen=True, slots=True)
+class VisibleHand:
+    bag: CardBag
+
+    @property
+    def cards(self) -> tuple[Card, ...]:
+        return self.bag.cards
+
+    @property
+    def counts(self) -> tuple[tuple[int, int], ...]:
+        return self.bag.counts
+
+    def count(self, card_id: int) -> int:
+        return self.bag.count(card_id)
+
+    def __len__(self) -> int:
+        return len(self.bag)
+
+    def __iter__(self):
+        return iter(self.bag)
+
+
+@dataclass(frozen=True, slots=True)
+class HiddenHand:
+    count: int
+
+    def __iter__(self):
+        return iter(())
+
+    def __len__(self) -> int:
+        return self.count
+
+
+def card_bag(entries) -> CardBag:
+    cards = card_tuple(entries)
     counts = tuple(sorted(Counter(card.card_id for card in cards).items()))
     return CardBag(cards, counts, digest(counts))
 
@@ -119,18 +152,18 @@ class Body:
     digest: bytes = field(compare=False)
 
 
-def body_node(entry, store) -> Body | None:
+def body_node(entry) -> Body | None:
     if not entry:
         return None
-    card = card_node(entry, store)
+    card = card_node(entry)
     if card is None:
         return None
     hp, max_hp = int(entry.get("hp") or 0), int(entry.get("maxHp") or 0)
     appeared = bool(entry.get("appearThisTurn"))
     energies = tuple(int(unit) for unit in entry.get("energies") or () if unit is not None)
-    energy_cards = card_tuple(entry.get("energyCards"), store)
-    tools = card_tuple(entry.get("tools"), store)
-    pre_evolution = card_tuple(entry.get("preEvolution"), store)
+    energy_cards = card_tuple(entry.get("energyCards"))
+    tools = card_tuple(entry.get("tools"))
+    pre_evolution = card_tuple(entry.get("preEvolution"))
     body_digest = digest(
         card.card_id, hp, max_hp, appeared, energies,
         tuple(c.card_id for c in energy_cards), tuple(c.card_id for c in tools),
@@ -147,7 +180,7 @@ class Side:
     bench: tuple[Body, ...]
     bench_max: int
     deck_count: int
-    hand: CardBag | None
+    hand: VisibleHand | HiddenHand
     hand_count: int
     discard: CardBag
     prize_count: int
@@ -162,14 +195,14 @@ class Side:
         return ((self.active,) if self.active is not None else ()) + self.bench
 
 
-def active_node(raw_active, store) -> tuple[Body | None, bool]:
+def active_node(raw_active) -> tuple[Body | None, bool]:
     """The render's three shapes: [] no active, [None] facedown even to its owner, [body]."""
     entries = raw_active if isinstance(raw_active, (list, tuple)) else ()
     if not entries:
         return None, False
     if entries[0] is None:
         return None, True
-    return body_node(entries[0], store), False
+    return body_node(entries[0]), False
 
 
 @dataclass(frozen=True, slots=True)
@@ -181,18 +214,18 @@ class Turn:
     stadium_played: bool
     energy_attached: bool
     retreated: bool
-    result: object | None
+    result: int | None
 
     def scalars(self) -> tuple:
         return (self.number, self.first_player, self.supporter_played, self.stadium_played,
-                self.energy_attached, self.retreated, canon(self.result))
+                self.energy_attached, self.retreated, self.result)
 
 
 def turn_node(current) -> Turn:
     return Turn(int(current.get("turn") or 0), current.get("firstPlayer"),
                 bool(current.get("supporterPlayed")), bool(current.get("stadiumPlayed")),
                 bool(current.get("energyAttached")), bool(current.get("retreated")),
-                current.get("result"))
+                None if current.get("result") is None else int(current["result"]))
 
 
 @dataclass(frozen=True, slots=True)
@@ -202,13 +235,13 @@ class Looking:
     cards: tuple[Card, ...] | None
 
 
-def looking_node(raw, store) -> Looking | None:
+def looking_node(raw) -> Looking | None:
     if raw is None:
         return None
     entries = tuple(raw)
     if any(entry is None for entry in entries):
         return Looking(len(entries), None)
-    return Looking(len(entries), card_tuple(entries, store))
+    return Looking(len(entries), card_tuple(entries))
 
 
 #: Every field of an engine option; the deployed engine pads absent ones with None, the offline
@@ -237,13 +270,13 @@ class Option:
 
 
 def option_node(entry) -> Option:
-    return Option(**{name: entry.get(name) for name in OPTION_FIELDS})
+    return Option(**{name: canon(entry.get(name)) for name in OPTION_FIELDS})
 
 
 @dataclass(frozen=True, slots=True)
 class SelectPrompt:
     """The pending engine question. Options and the deck listing are menu material, not position
-    identity, so `identity()` excludes both — matching `common.state`'s select hashing."""
+    identity, so `identity()` excludes both."""
     type: int | None
     context: int | None
     min_count: int | None
@@ -262,7 +295,7 @@ class SelectPrompt:
                 None if self.effect is None else self.effect.card_id)
 
 
-def select_node(raw, store) -> SelectPrompt | None:
+def select_node(raw) -> SelectPrompt | None:
     if raw is None:
         return None
     deck = raw.get("deck")
@@ -271,10 +304,11 @@ def select_node(raw, store) -> SelectPrompt | None:
         raw.get("remainDamageCounter"), raw.get("remainEnergyCost"),
         tuple(option_node(entry) for entry in raw.get("option") or ()
               if isinstance(entry, dict)),
-        None if deck is None else card_tuple(deck, store),
-        card_node(raw.get("contextCard"), store), card_node(raw.get("effect"), store))
+        None if deck is None else card_tuple(deck),
+        card_node(raw.get("contextCard")), card_node(raw.get("effect")))
 
 
-__all__ = ("Body", "Card", "CardBag", "Looking", "Option", "OPTION_FIELDS", "SelectPrompt",
-           "Side", "Turn", "active_node", "body_node", "canon", "card_bag", "card_node", "card_tuple",
+__all__ = ("Body", "Card", "CardBag", "HiddenHand", "Looking", "Option", "OPTION_FIELDS",
+           "SelectPrompt", "Side", "Turn", "VisibleHand", "active_node", "body_node", "canon",
+           "card_bag", "card_node", "card_tuple",
            "digest", "feed", "looking_node", "option_node", "select_node", "turn_node")

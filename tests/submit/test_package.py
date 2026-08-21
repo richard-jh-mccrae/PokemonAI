@@ -60,7 +60,8 @@ def test_package_contains_the_ledger_and_no_bellman_search(tmp_path):
         assert "common/refresh.py" in names
         assert "common/ledger/decider.py" in names
         assert "common/ledger/seam.py" in names
-        assert "common/board/state.py" in names
+        assert "common/observation/state.py" in names
+        assert "common/observation/record.py" in names
         # The Bellman search stack lives in deprecated/ and must never ship again.
         for retired in ("common/planner.py", "common/solver.py", "common/demand.py",
                         "common/potential.py", "common/value.py", "common/value_equations.py",

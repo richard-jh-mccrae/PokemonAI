@@ -16,6 +16,7 @@ from __future__ import annotations
 from collections import Counter
 from dataclasses import dataclass, field, replace
 from functools import lru_cache
+from types import MappingProxyType
 from typing import Mapping
 
 from common.cards import card_store, pokemon_default_roles
@@ -26,7 +27,7 @@ from .weights import LedgerWeights
 
 
 @dataclass(frozen=True)
-class OpponentLayer:
+class OpponentEvaluation:
     """Scouting's read of THEIR side (ADR-0148): card-generic ``roles`` price at full
     strength; ``brief_roles`` + the Brief-bent ``weights`` blend in by ``gamma``, fail-open."""
 
@@ -35,9 +36,15 @@ class OpponentLayer:
     weights: LedgerWeights
     gamma: float
 
+    def __post_init__(self):
+        object.__setattr__(self, "roles", MappingProxyType({
+            int(card_id): tuple(values) for card_id, values in self.roles.items()}))
+        object.__setattr__(self, "brief_roles", MappingProxyType({
+            int(card_id): tuple(values) for card_id, values in self.brief_roles.items()}))
+
 
 @dataclass(frozen=True)
-class LedgerContext:
+class EvaluationModel:
     """Everything deck-scoped the evaluator needs: weights, Roles, and the store itself."""
 
     weights: LedgerWeights
@@ -45,12 +52,22 @@ class LedgerContext:
     store: Mapping[int, object] = field(repr=False)
     #: The per-decision scouting layer for THEIR side's worth reads; None prices the opponent
     #: exactly as before the wiring (store defaults, unknown floor).
-    opponent: OpponentLayer | None = None
+    opponent: OpponentEvaluation | None = None
+    schema_version: int = 1
+
+    def __post_init__(self):
+        object.__setattr__(self, "roles", MappingProxyType({
+            int(card_id): tuple(values) for card_id, values in self.roles.items()}))
+        object.__setattr__(self, "store", MappingProxyType(dict(self.store)))
+
+    @property
+    def version(self) -> str:
+        return f"evaluation-v{self.schema_version}:{self.weights.identity}"
 
     @classmethod
     def build(cls, *, weights: LedgerWeights | None = None,
               roles: Mapping[int, tuple[str, ...]] | None = None,
-              overrides: Mapping[str, float] | None = None) -> "LedgerContext":
+              overrides: Mapping[str, float] | None = None) -> "EvaluationModel":
         resolved = (weights or LedgerWeights()).resolve(overrides)
         merged = dict(pokemon_default_roles())
         for card_id, declared in (roles or {}).items():
@@ -58,7 +75,7 @@ class LedgerContext:
                 merged[int(card_id)] = tuple(declared)
         return cls(weights=resolved, roles=merged, store=card_store())
 
-    def with_opponent(self, layer: OpponentLayer | None) -> "LedgerContext":
+    def with_opponent(self, layer: OpponentEvaluation | None) -> "EvaluationModel":
         return self if layer is self.opponent else replace(self, opponent=layer)
 
     def facts(self, card_id: int):
@@ -94,7 +111,7 @@ def _resolve_worth(card_id: int, facts, weights: LedgerWeights,
     return max(role_read, tag_read, kind_read), None
 
 
-def base_worth(card_id: int, facts, ctx: LedgerContext, *,
+def base_worth(card_id: int, facts, ctx: EvaluationModel, *,
                own: bool = True) -> tuple[float, str | None]:
     """A card's standing worth in prizes, plus a coverage gap when the store cannot see it.
     THEIR side blends the scouting layer in by gamma (ADR-0148); gamma 0 = the general read."""
@@ -133,7 +150,7 @@ def _forward_lines() -> Mapping[str, tuple[int, ...]]:
     return {name: tuple(ids) for name, ids in forward.items()}
 
 
-def _line_attacks(body_facts, ctx: LedgerContext, *, own_only: bool = False):
+def _line_attacks(body_facts, ctx: EvaluationModel, *, own_only: bool = False):
     attacks = list(getattr(body_facts, "attacks", ()) or ())
     if own_only or body_facts is None:
         return attacks
@@ -143,7 +160,7 @@ def _line_attacks(body_facts, ctx: LedgerContext, *, own_only: bool = False):
     return attacks
 
 
-def _line_entries(body_facts, ctx: LedgerContext):
+def _line_entries(body_facts, ctx: EvaluationModel):
     """(attack, evolution id or None for the body's own attacks) over the forward line."""
     for attack in getattr(body_facts, "attacks", ()) or ():
         yield attack, None
@@ -154,7 +171,7 @@ def _line_entries(body_facts, ctx: LedgerContext):
             yield attack, evo_id
 
 
-def line_reach(hand_name_counts, deck_counts, ctx: LedgerContext) -> Mapping[int, float]:
+def line_reach(hand_name_counts, deck_counts, ctx: EvaluationModel) -> Mapping[int, float]:
     """The reach gate per store evolution id: how credible is it that this evolution arrives?
     1.0 with the card in hand, `reach_in_deck` while it sits in the deck — or whenever the
     side's deck knowledge is absent, since absence of knowledge is not absence of the card —
@@ -200,7 +217,7 @@ def any_attack_payable(body_facts, attached) -> bool:
     return False
 
 
-def _slot_fill(unit: int, body_facts, attached, ctx: LedgerContext, reach=None) -> str:
+def _slot_fill(unit: int, body_facts, attached, ctx: EvaluationModel, reach=None) -> str:
     """What one MORE unit of this color would fill on this body: a typed slot (through the
     forward line), a colorless slot (own attacks in full; a line evolution's only through a
     positive reach gate), or nothing."""
@@ -219,7 +236,7 @@ def _slot_fill(unit: int, body_facts, attached, ctx: LedgerContext, reach=None) 
     return "dead"
 
 
-def unit_fills_a_slot(unit: int, body_facts, attached, ctx: LedgerContext, reach=None) -> bool:
+def unit_fills_a_slot(unit: int, body_facts, attached, ctx: EvaluationModel, reach=None) -> bool:
     """Marginal usability of one MORE unit of this color on this body."""
     return _slot_fill(unit, body_facts, attached, ctx, reach) != "dead"
 
@@ -251,7 +268,7 @@ def best_payable_damage(attacker_facts, attached, defender_facts) -> int:
 
 
 def projected_incoming_damage(attacker_facts, attached, defender_facts,
-                              ctx: LedgerContext) -> int:
+                              ctx: EvaluationModel) -> int:
     """The conservative next-turn read (ADR-0152): before the opponent's active attacks it
     gets ONE more Energy (of whatever color is still missing) and may evolve ONCE, attached
     units carried up. Largest damage any such attacker lands on the defender."""
@@ -277,7 +294,7 @@ def projected_incoming_damage(attacker_facts, attached, defender_facts,
     return best
 
 
-def top_attack_cost(body_facts, ctx: LedgerContext, reach=None) -> int:
+def top_attack_cost(body_facts, ctx: EvaluationModel, reach=None) -> int:
     """The largest attack cost this body can grow into: its own attacks in full, a line
     evolution's only through a positive reach gate (ADR-0150's concentration target)."""
     gates = reach or {}
@@ -289,7 +306,7 @@ def top_attack_cost(body_facts, ctx: LedgerContext, reach=None) -> int:
     return best
 
 
-def usable_units(body_facts, attached, ctx: LedgerContext, reach=None) -> float:
+def usable_units(body_facts, attached, ctx: EvaluationModel, reach=None) -> float:
     """The largest attached-unit count any single attack absorbs — typed and colorless slots
     for the body's own attacks; for the forward line's, typed in full and colorless scaled by
     that evolution's reach gate (charging Staryu for Nebula Beam is real value exactly as far
@@ -324,12 +341,12 @@ class Demand:
     free_bench: int = 0
 
     @classmethod
-    def read(cls, side, ctx: LedgerContext) -> "Demand":
+    def read(cls, side, ctx: EvaluationModel) -> "Demand":
         bodies = side.bodies
-        names = Counter(body.card.facts.name for body in bodies
-                        if body.card.facts is not None)
-        hand_names = Counter(card.facts.name for card in (side.hand or ())
-                             if card.facts is not None)
+        names = Counter(facts.name for body in bodies
+                        if (facts := ctx.facts(body.card.card_id)) is not None)
+        hand_names = Counter(facts.name for card in side.hand
+                             if (facts := ctx.facts(card.card_id)) is not None)
         return cls(body_name_counts=names,
                    body_id_counts=Counter(body.card.card_id for body in bodies),
                    hand_name_counts=hand_names, bodies=bodies,
@@ -337,7 +354,7 @@ class Demand:
 
 
 def demand_scale(card_id: int, facts, demand: Demand, copies_before: int,
-                 ctx: LedgerContext, deck_counts) -> float:
+                 ctx: EvaluationModel, deck_counts) -> float:
     """The multiplier demand puts on this copy's hand/deck worth (1.0 = fully live)."""
     weights = ctx.weights
     scale, capacity = _liveness(card_id, facts, demand, ctx, deck_counts)
@@ -346,7 +363,7 @@ def demand_scale(card_id: int, facts, demand: Demand, copies_before: int,
     return scale
 
 
-def _liveness(card_id, facts, demand: Demand, ctx: LedgerContext, deck_counts):
+def _liveness(card_id, facts, demand: Demand, ctx: EvaluationModel, deck_counts):
     """(demand multiplier for the card's enabling condition, copies the board can consume);
     colorless-only energy is a lesser want than one filling a typed slot."""
     weights = ctx.weights
@@ -367,8 +384,9 @@ def _liveness(card_id, facts, demand: Demand, ctx: LedgerContext, deck_counts):
         reach = line_reach(demand.hand_name_counts, deck_counts, ctx)
         colorless_only = False
         for body in demand.bodies:
-            fills = _slot_fill(facts.provides, body.card.facts, body.energies, ctx, reach)
-            if fills == "typed" or _multi_provision_live(facts, body):
+            fills = _slot_fill(facts.provides, ctx.facts(body.card.card_id),
+                               body.energies, ctx, reach)
+            if fills == "typed" or _multi_provision_live(facts, body, ctx):
                 return 1.0, None
             colorless_only = colorless_only or fills == "colorless"
         return (weights.demand_colorless_only if colorless_only
@@ -381,13 +399,13 @@ def _liveness(card_id, facts, demand: Demand, ctx: LedgerContext, deck_counts):
     return 1.0, None
 
 
-def _multi_provision_live(facts, body) -> bool:
+def _multi_provision_live(facts, body, ctx: EvaluationModel) -> bool:
     """A special energy whose record provides several units to THIS body (Ignition's
     `energy_provide` clause: one, or three on an evolution) reads fully live when the body can
     absorb at least two of them at once — one card doing two basics' work. Bodies are read as
     they stand: multi-provision on a future evolution is the speculative colorless value the
     marginal model refuses to pay (module docstring)."""
-    body_facts = body.card.facts
+    body_facts = ctx.facts(body.card.card_id)
     if body_facts is None:
         return False
     provided = provision_units(facts, evolved=body_facts.evolves_from is not None)
@@ -401,7 +419,7 @@ def _multi_provision_live(facts, body) -> bool:
     return False
 
 
-def _fetch_liveness(fetches, demand: Demand, ctx: LedgerContext, deck_counts) -> float:
+def _fetch_liveness(fetches, demand: Demand, ctx: EvaluationModel, deck_counts) -> float:
     """A deck fetch is exactly as live as its BEST reachable target — a multiplier compare,
     never a truthiness read (a dead multiplier is still truthy)."""
     if deck_counts is None:
@@ -436,5 +454,5 @@ def _fetchable(fetches, target) -> bool:
     return False
 
 
-__all__ = ("Demand", "LedgerContext", "any_attack_payable", "base_worth", "demand_scale",
+__all__ = ("Demand", "EvaluationModel", "any_attack_payable", "base_worth", "demand_scale",
            "line_reach", "unit_fills_a_slot", "usable_units")

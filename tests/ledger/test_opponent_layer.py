@@ -8,7 +8,7 @@ from __future__ import annotations
 import pytest
 
 from common.cards import card_store
-from common.ledger import LedgerContext, LedgerWeights, OpponentLayer
+from common.ledger import EvaluationModel, LedgerWeights, OpponentEvaluation
 from common.ledger.worth import base_worth
 
 #: A card id no store record covers — the shape of every scouted-but-unauthored opponent.
@@ -16,12 +16,12 @@ UNKNOWN_ID = 424242
 
 
 def layer(*, roles=None, brief_roles=None, weights=None, gamma=0.0):
-    return OpponentLayer(roles=roles or {}, brief_roles=brief_roles or {},
+    return OpponentEvaluation(roles=roles or {}, brief_roles=brief_roles or {},
                          weights=weights or LedgerWeights(), gamma=gamma)
 
 
 def test_generic_role_claims_price_a_store_unknown_opponent_card():
-    ctx = LedgerContext.build().with_opponent(
+    ctx = EvaluationModel.build().with_opponent(
         layer(roles={UNKNOWN_ID: ("primary_attacker",)}))
     worth, gap = base_worth(UNKNOWN_ID, None, ctx, own=False)
     assert worth == ctx.weights.role_worth["primary_attacker"]
@@ -34,14 +34,14 @@ def test_brief_claims_blend_by_gamma():
     floor = LedgerWeights().unknown_card_worth
     tier = LedgerWeights().role_worth["primary_attacker"]
     for gamma, expected in ((0.0, floor), (0.5, floor + 0.5 * (tier - floor)), (1.0, tier)):
-        ctx = LedgerContext.build().with_opponent(
+        ctx = EvaluationModel.build().with_opponent(
             layer(brief_roles={UNKNOWN_ID: ("primary_attacker",)}, gamma=gamma))
         assert base_worth(UNKNOWN_ID, None, ctx, own=False)[0] == pytest.approx(expected)
 
 
 def test_brief_ledger_overrides_scope_to_their_side_only():
     bent = LedgerWeights().resolve({"role.primary_attacker": 0.9})
-    ctx = LedgerContext.build().with_opponent(
+    ctx = EvaluationModel.build().with_opponent(
         layer(brief_roles={UNKNOWN_ID: ("primary_attacker",)}, weights=bent, gamma=1.0))
     assert base_worth(UNKNOWN_ID, None, ctx, own=False)[0] == pytest.approx(0.9)
     # Our own general tier is untouched by the Brief's bend.
@@ -49,7 +49,7 @@ def test_brief_ledger_overrides_scope_to_their_side_only():
 
 
 def test_without_a_layer_the_opponent_reads_exactly_as_before():
-    ctx = LedgerContext.build()
+    ctx = EvaluationModel.build()
     assert base_worth(UNKNOWN_ID, None, ctx, own=False) == \
         base_worth(UNKNOWN_ID, None, ctx, own=True)
 
@@ -57,6 +57,6 @@ def test_without_a_layer_the_opponent_reads_exactly_as_before():
 def test_special_energy_prices_through_its_own_kind_lever():
     ignition = card_store()[17]
     basic = card_store()[3]
-    ctx = LedgerContext.build(overrides={"kind.special_energy": 0.42})
+    ctx = EvaluationModel.build(overrides={"kind.special_energy": 0.42})
     assert base_worth(17, ignition, ctx)[0] == pytest.approx(0.42)
     assert base_worth(3, basic, ctx)[0] == pytest.approx(ctx.weights.kind_worth["energy"])

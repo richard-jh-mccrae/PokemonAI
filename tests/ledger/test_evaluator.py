@@ -5,6 +5,8 @@ judgments the plan names (docs/plans/PokemonAI_Ledger_Plan.md §1): a useless at
 negative, overkill counters add nothing, a dead fetch waits, bench slots are scarce goods."""
 from __future__ import annotations
 
+from observation_builders import build_observation, advance_observation
+
 from ledger_helpers import (AIR_BALLOON, DARK_E, DARKNESS, DRAGAPULT, DRAKLOAK, DREEPY, FIRE,
                             FIRE_E, IGNITION, LUNATONE, MAKUHITA, MEGA_STARMIE, PSYCHIC,
                             PSYCHIC_E, STARYU, ULTRA_BALL, UNKNOWN, WATER, WATER_E, body,
@@ -12,17 +14,17 @@ from ledger_helpers import (AIR_BALLOON, DARK_E, DARKNESS, DRAGAPULT, DRAKLOAK, 
 
 import pytest
 
-from common.board import BoardState
-from common.ledger import LedgerContext, LedgerWeights, evaluate
+from common.observation import ObservationState
+from common.ledger import EvaluationModel, LedgerWeights, evaluate
 
 
 def board(**kwargs):
     decklist = kwargs.pop("decklist", None)
-    return BoardState.root(printout(**kwargs), decklist=decklist)
+    return build_observation(printout(**kwargs), decklist=decklist)
 
 
 def ctx(**kwargs):
-    return LedgerContext.build(weights=LedgerWeights(), **kwargs)
+    return EvaluationModel.build(weights=LedgerWeights(), **kwargs)
 
 
 def swing(before, after, context=None):
@@ -212,7 +214,7 @@ def test_won_result_dominates_everything():
     context = ctx()
     printed = printout(me=player())
     printed["current"]["result"] = 0
-    won = BoardState.root(printed)
+    won = build_observation(printed)
     assert evaluate(won, context).total > 50.0
 
 
@@ -232,7 +234,7 @@ def test_lost_result_dominates_everything():
     context = ctx()
     printed = printout(me=player())
     printed["current"]["result"] = 1            # seat 1 won; the viewer is seat 0
-    assert evaluate(BoardState.root(printed), context).total < -50.0
+    assert evaluate(build_observation(printed), context).total < -50.0
 
 
 def test_a_draw_prices_between_the_win_and_the_loss():
@@ -243,9 +245,9 @@ def test_a_draw_prices_between_the_win_and_the_loss():
     drawn["current"]["result"] = 2
     lost = printout(me=player())
     lost["current"]["result"] = 1
-    draw_value = evaluate(BoardState.root(drawn), context)
+    draw_value = evaluate(build_observation(drawn), context)
     assert draw_value.part("result") == 0.0
-    assert draw_value.total > evaluate(BoardState.root(lost), context).total
+    assert draw_value.total > evaluate(build_observation(lost), context).total
 
 
 # --- per-body terms: statuses, tools, the stack underneath, prize liability ---

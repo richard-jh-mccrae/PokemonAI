@@ -1,6 +1,8 @@
 """The preview seam changes plumbing, never judgment: identical prices on real frames."""
 from __future__ import annotations
 
+from observation_builders import build_observation, advance_observation
+
 from pathlib import Path
 
 import pytest
@@ -8,7 +10,7 @@ import pytest
 from agent_helpers import deck as agent_deck
 
 from common.engine import CgpyTransitionProvider, LedgerCgpyProvider
-from common.ledger import (LedgerContext, LedgerDecider, LedgerNativeProvider, PreviewState,
+from common.ledger import (EvaluationModel, LedgerDecider, LedgerNativeProvider, PreviewState,
                            preview_provider_factory)
 from common.native_engine import NativeCgTransitionProvider
 from deprecated.bellman.state import DecisionState
@@ -31,19 +33,19 @@ def _main_frames(count=3):
 def test_preview_seam_prices_identically_to_the_decisionstate_path(frame):
     """Same frame, same swings: the DecisionState-successor path (built explicitly here — the
     decider itself no longer constructs one) against the live board-native path."""
-    from common.board import BoardState
+    from common.observation import ObservationState
     from common.ledger.evaluate import evaluate
     from common.ledger.preview import price_actions
 
-    ctx = LedgerContext.build()
-    board = BoardState.root(frame.obs, decklist=DECK)
+    ctx = EvaluationModel.build()
+    board = build_observation(frame.obs, decklist=DECK)
     baseline = evaluate(board, ctx).total
     heavy_state = DecisionState.from_observation(frame.obs, deck=DECK,
                                                  deck_name="mega_starmie")
     heavy = price_actions(heavy_state, board, baseline,
                           CgpyTransitionProvider(heavy_state), ctx)
 
-    light_decider = LedgerDecider(DECK, "mega_starmie", LedgerContext.build(),
+    light_decider = LedgerDecider(DECK, "mega_starmie", EvaluationModel.build(),
                                   provider_factory=LedgerCgpyProvider)
     light = light_decider.decide(frame.obs)
 
@@ -65,7 +67,7 @@ def test_the_ledger_path_constructs_no_decisionstate(monkeypatch):
         return original(cls, *args, **kwargs)
 
     monkeypatch.setattr(DecisionState, "from_observation", classmethod(counting))
-    decider = LedgerDecider(DECK, "mega_starmie", LedgerContext.build(),
+    decider = LedgerDecider(DECK, "mega_starmie", EvaluationModel.build(),
                             provider_factory=LedgerCgpyProvider)
     decision = decider.decide(frame.obs)
     assert decision.diagnostics["backend"] == "ledger"

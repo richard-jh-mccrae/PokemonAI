@@ -7,9 +7,9 @@ import hashlib
 
 from .algebra import Actor, Chance, Deterministic, Terminal, Unknown, WeightedEdge
 from .cards import card_store
-from .cards.functions.attack_lock import carry_attack_locks
 from .options import LegalAction, recycled_card_ids
 from .refresh import refresh_transition
+from .observation.provider import provider_payload as _payload
 from common.strategy.context import _MAIN, _NO, _YES
 
 
@@ -162,7 +162,8 @@ class NativeCgTransitionProvider:
         self.cards = card_store() if cards is None else cards
         self.world_count = max(1, int(world_count))
         self._worlds: dict[str, tuple[_NativeWorld, ...]] = {}
-        self._root_turn = int((root.obs.get("current") or {}).get("turn") or 0)
+        self._provider_metadata: dict[int, dict] = {}
+        self._root_turn = int((_payload(root).get("current") or {}).get("turn") or 0)
         self._error = ""
         self._api = api_module
         self._search_open = False
@@ -198,7 +199,7 @@ class NativeCgTransitionProvider:
         return state.legal_actions
 
     def actor(self, state) -> Actor:
-        seat = int(state.obs.get("bellmanActor", state.root_seat))
+        seat = int(getattr(state, "actor_seat", state.root_seat))
         return Actor.OURS if seat == state.root_seat else Actor.OPPONENT
 
     def transition(self, state, action: LegalAction):
@@ -216,9 +217,12 @@ class NativeCgTransitionProvider:
                 committed = world.attack_committed or action.identity.kind == "attack"
                 observation = self._observation(
                     stepped.observation, state, actor_seat=forced_next_actor)
-                recycled = recycled_card_ids(state.obs, action, self.registry, state.root_seat)
-                if recycled:
-                    observation["bellmanRecycledCardIds"] = recycled
+                recycled = recycled_card_ids(
+                    _payload(state), action, self.registry, state.root_seat,
+                    carried=getattr(state, "recycled_card_ids", ()),
+                    actor_seat=getattr(state, "actor_seat", state.root_seat))
+                self._provider_metadata.setdefault(id(observation), {})[
+                    "recycled_card_ids"] = recycled
                 if int(((observation.get("select") or {}).get("context", -1))) == MANUAL_COIN_CONTEXT:
                     children.extend(self._coin_children(
                         stepped.searchId, world.probability, committed, state, observation,
@@ -230,7 +234,7 @@ class NativeCgTransitionProvider:
             return Unknown("native cg transition failed", f"{type(exc).__name__}: {exc}")
 
     def _begin_worlds(self, root) -> tuple[_NativeWorld, ...]:
-        observation = root.obs
+        observation = _payload(root)
         current = observation.get("current") or {}
         players = current.get("players") or ()
         mine = players[root.root_seat] if len(players) > root.root_seat else {}
@@ -259,13 +263,18 @@ class NativeCgTransitionProvider:
 
     def _observation(self, native_observation, parent, *, actor_seat=None) -> dict:
         observation = _plain_native(native_observation)
-        observation["bellmanBeliefKey"] = _hidden_signature(observation, parent.root_seat)
-        observation["bellmanActor"] = (_actor_seat(observation, parent.root_seat)
-                                       if actor_seat is None else int(actor_seat))
+        actor = (_actor_seat(observation, parent.root_seat)
+                 if actor_seat is None else int(actor_seat))
+        if not hasattr(self, "_provider_metadata"):
+            self._provider_metadata = {}
+        self._provider_metadata[id(observation)] = {
+            "belief_token": _hidden_signature(observation, parent.root_seat),
+            "actor_seat": actor,
+        }
         current = observation.get("current") or {}
         current["yourIndex"] = parent.root_seat
         players = current.get("players") or ()
-        parent_players = (parent.obs.get("current") or {}).get("players") or ()
+        parent_players = (_payload(parent).get("current") or {}).get("players") or ()
         if 0 <= parent.root_seat < len(players) and 0 <= parent.root_seat < len(parent_players):
             root_player = players[parent.root_seat] or {}
             parent_player = parent_players[parent.root_seat] or {}
@@ -279,15 +288,6 @@ class NativeCgTransitionProvider:
             player["prize"] = [None] * len(player.get("prize") or ())
             if seat != parent.root_seat:
                 player["hand"] = None
-        if "own_prizes" in parent.obs:
-            observation["own_prizes"] = parent.obs["own_prizes"]
-        if "known_top" in parent.obs:
-            observation["known_top"] = parent.obs["known_top"]
-        # A self-lock the SEARCH just spent is only visible in this step's log, so carry the
-        # parent's locks forward and fold this successor's own ATTACK entries onto them. Written
-        # only when non-empty: the key participates in the state identity, and an empty map present
-        # here would not match the absent key on the live observation the next turn arrives as.
-        carry_attack_locks(parent.obs, observation)
         return observation
 
     def _coin_children(self, search_id: int, probability: float, committed: bool,
@@ -351,11 +351,11 @@ class NativeCgTransitionProvider:
         return normalized[0].node if len(normalized) == 1 else Chance(normalized)
 
     def _node(self, parent, successor, rows):
-        current = successor.obs.get("current") or {}
+        current = _payload(successor).get("current") or {}
         result = int(current.get("result", -1))
         if result != -1:
             return Terminal(successor, "win" if result == parent.root_seat else "loss")
-        select = successor.obs.get("select") or {}
+        select = _payload(successor).get("select") or {}
         committed = any(row[2] for row in rows)
         passed_turn = (committed
                        and int(current.get("turn", self._root_turn)) != self._root_turn

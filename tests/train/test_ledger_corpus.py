@@ -118,8 +118,8 @@ def _deck(deck_name="mega_starmie"):
 def test_stamping_prizes_makes_deck_knowledge_exact():
     """An archived frame with no own-prize anchor overcounts the deck by exactly the prize
     count; stamping restores the live shell's information state (deck total == deckCount)."""
-    from common.board import BoardState
-    from common.engine import stamp_own_prizes
+    from common.observation import ObservationStateBuilder
+    from common.engine import determinized_prize_knowledge
 
     frame = _archived_frame()
     deck = _deck()
@@ -129,28 +129,29 @@ def test_stamping_prizes_makes_deck_knowledge_exact():
     prize_count = len(me.get("prize") or ())
     assert prize_count > 0
 
-    before = BoardState.root(obs, decklist=deck)
+    builder = ObservationStateBuilder(deck)
+    before = builder.root(obs)
     before_pool = dict(before.deck_counts or ())
     assert sum(before_pool.values()) == int(me["deckCount"]) + prize_count
 
-    assert stamp_own_prizes(obs, deck) is True
-    after = BoardState.root(obs, decklist=deck)
-    assert sum(count for _, count in after.own_prizes) == prize_count
+    knowledge = determinized_prize_knowledge(obs, deck)
+    after = builder.root(obs, knowledge=knowledge)
+    own_prizes = after.knowledge.own_prizes.cards
+    assert sum(count for _, count in own_prizes) == prize_count
     assert sum(count for _, count in after.deck_counts) == int(me["deckCount"])
     # The stamp only names cards that were actually in the unseen pool.
-    for card_id, count in after.own_prizes:
+    for card_id, count in own_prizes:
         assert before_pool.get(card_id, 0) >= count
 
 
-def test_stamping_respects_an_existing_anchor():
-    from common.engine import stamp_own_prizes
+def test_determinized_prize_knowledge_is_stable_without_mutating_the_frame():
+    from common.engine import determinized_prize_knowledge
 
     frame = _archived_frame()
     obs = frame.obs
-    assert stamp_own_prizes(obs, _deck()) is True
-    anchored = obs["own_prizes"]
-    assert stamp_own_prizes(obs, _deck()) is False       # second call must not re-roll
-    assert obs["own_prizes"] is anchored
+    before = repr(obs)
+    assert determinized_prize_knowledge(obs, _deck()) == determinized_prize_knowledge(obs, _deck())
+    assert repr(obs) == before
 
 
 def test_retired_rulings_are_listed_not_graded():

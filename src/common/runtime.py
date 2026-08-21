@@ -9,12 +9,13 @@ from time import perf_counter
 
 from common import telemetry
 from common.api import ActionIdentity, RootDecision
-from common.cards.functions.attack_lock import fold_attack_locks
+from common.observation import (HiddenHand, LegalKnowledge, ObservationState,
+                                ObservationStateBuilder, OpponentBelief, reduce_knowledge)
 from common.cards import CardFunctions, card_store
 from common.cards.card_facts import EnergyCard
 from common.cards.functions.damage import bench_reach
 from common.deck_tracker import OwnCardModel
-from common.ledger import (LedgerContext, LedgerDecider, OpponentLayer,
+from common.ledger import (EvaluationModel, LedgerDecider, OpponentEvaluation,
                            preview_provider_factory)
 from common.scouting.artifact import load_artifact
 from common.scouting.briefs import load_briefs, match_brief, scouted_ledger_roles
@@ -122,9 +123,10 @@ class AgentRuntime:
         # Match-scoped: `logs` is a DELTA, so a lock spent two selections ago is no longer in the
         # observation. On the runtime so replay and test callers see the deployed board state.
         self._attack_locks: dict = {}
+        self.knowledge = LegalKnowledge()
         self.ledger = LedgerDecider(
             self.deck, strategy.name,
-            LedgerContext.build(
+            EvaluationModel.build(
                 # `ledger_weights` is the tuner's seam: a candidate GENERAL vector under
                 # trial; the deck's own overrides still bend it on top.
                 weights=ledger_weights,
@@ -135,60 +137,51 @@ class AgentRuntime:
             provider_kwargs={"registry": _ProviderFactSources(self.functions),
                              "stats": self.stats})
 
-    @staticmethod
-    def _player(observation, seat):
-        players = ((observation.get("current") or {}).get("players") or ())
-        return players[seat] if 0 <= seat < len(players) and players[seat] else {}
-
-    def _option_card_id(self, observation, option, seat: int) -> int | None:
-        option_type = option.get("type")             # 0 is a legal type; `or` would eat it
-        if option_type is None or int(option_type) != _CARD or option.get("area") != _HAND:
+    def _option_card_id(self, state: ObservationState, option) -> int | None:
+        option_type = option.type
+        if option_type is None or int(option_type) != _CARD or option.area != _HAND:
             return None
-        owner = option.get("playerIndex")                # present-but-None on the engine shape
-        owner = seat if owner is None else int(owner)
-        hand = self._player(observation, owner).get("hand") or ()
-        index = option.get("index")
-        if not isinstance(index, int) or not 0 <= index < len(hand) or not hand[index]:
+        owner = state.seat if option.playerIndex is None else int(option.playerIndex)
+        hand = state.me.hand if owner == state.seat else state.them.hand
+        index = option.index
+        if isinstance(hand, HiddenHand) or not isinstance(index, int) or not 0 <= index < len(hand):
             return None
-        card_id = hand[index].get("id")
-        return int(card_id) if card_id is not None else None
+        return hand.cards[index].card_id
 
     @staticmethod
     def _option_of_type(options, option_type: int) -> int | None:
         return next((index for index, option in enumerate(options)
-                     if int(option.get("type", -1)) == option_type), None)
+                     if option.type is not None and int(option.type) == option_type), None)
 
-    def _hand_has_setup_starter(self, observation, seat: int) -> bool:
+    def _hand_has_setup_starter(self, state: ObservationState) -> bool:
         """Whether the hand can legally supply the setup Active.
 
         Printed setup abilities are represented by the portable ``opener`` function tag.  They are
         legal starters even when the card's ordinary evolution stage is not Basic.
         """
-        for card in self._player(observation, seat).get("hand") or ():
-            stat = self.stats.get(card.get("id")) if card and self.stats else None
-            card_id = int(card["id"]) if card and card.get("id") is not None else None
+        for card in state.me.hand:
+            card_id = card.card_id
+            stat = self.stats.get(card_id) if self.stats else None
             tags = self.functions.tags(card_id) if card_id is not None and self.functions else ()
             if (stat is not None and stat.is_pokemon
                     and (stat.stage == "basic" or "opener" in tags)):
                 return True
         return False
 
-    def _pregame(self, observation) -> RootDecision:
-        current = observation.get("current") or {}
-        seat = int(current.get("yourIndex", 0))
-        select = observation.get("select") or {}
-        options = select.get("option") or ()
-        context = int(select.get("context", -1))
+    def _pregame(self, state: ObservationState) -> RootDecision:
+        select = state.select
+        options = () if select is None else select.options
+        context = -1 if select is None or select.context is None else int(select.context)
         chosen: tuple[int, ...]
         action = "pregame"
         if context == _SETUP_ACTIVE:
             offered = {card_id: index for index, option in enumerate(options)
-                       if (card_id := self._option_card_id(observation, option, seat)) is not None}
+                       if (card_id := self._option_card_id(state, option)) is not None}
             pick = next((offered[card_id] for card_id in self.strategy.starter_priority
                          if card_id in offered), None)
             chosen = (pick if pick is not None else 0,) if options else ()
             action = "setup_active"
-        elif context == _SETUP_BENCH and int(select.get("minCount", 0)) == 0:
+        elif context == _SETUP_BENCH and int(select.min_count or 0) == 0:
             chosen, action = (), "setup_bench_decline"
         elif context == _IS_FIRST:
             preferred = str(self.strategy.params.get("preferred_start", "second"))
@@ -196,27 +189,27 @@ class AgentRuntime:
             pick = self._option_of_type(options, option_type)
             chosen, action = ((pick if pick is not None else 0,), "choose_start")
         elif context == _MULLIGAN:
-            option_type = _NO if self._hand_has_setup_starter(observation, seat) else _YES
+            option_type = _NO if self._hand_has_setup_starter(state) else _YES
             pick = self._option_of_type(options, option_type)
             chosen, action = ((pick if pick is not None else 0,), "mulligan")
         elif context == _DRAW_COUNT:
             # Taking a free mulligan draw cannot remove information or a held option.  The
             # numerically largest offered count therefore dominates every smaller count.
             pick = max(range(len(options)),
-                       key=lambda index: int(options[index].get("number") or 0), default=None)
+                       key=lambda index: int(options[index].number or 0), default=None)
             chosen, action = ((pick,) if pick is not None else (), "free_draw_count")
         else:
-            minimum = min(int(select.get("minCount", 0)), len(options))
+            minimum = min(int(select.min_count or 0), len(options))
             chosen = tuple(range(minimum))
         return RootDecision(
             chosen, ActionIdentity(action, (context,)), 0.0, True,
             {"backend": "declarative-pregame", "context": context},
         )
 
-    def _observe_matchup(self, observation) -> float:
+    def _observe_matchup(self, state: ObservationState) -> float:
         """One scouting pass per decision, shared by both brains: refresh the Read, match the
         Brief when confidence clears zero, and return the gamma."""
-        self.last_read = self.scout.observe(observation) if self.scout is not None else Read()
+        self.last_read = self.scout.observe(state) if self.scout is not None else Read()
         gamma = posture_gamma(self.last_read)
         self.last_brief = match_brief(self.briefs, self.last_read) if gamma > 0.0 else None
         return gamma
@@ -225,22 +218,25 @@ class AgentRuntime:
         """Match-boundary state clearing; the teacher extends this with its plan caches."""
         self.last_read = Read()
         self._attack_locks = {}
+        self.knowledge = LegalKnowledge()
 
     def _invalidate_plans(self) -> None:
         """The Ledger holds no cross-decision plan state; the Bellman teacher overrides."""
 
-    def _forced_selection(self, observation):
-        select = observation.get("select") or {}
-        options = tuple(select.get("option") or ())
-        minimum = _int_field(select, "minCount", 0)
-        maximum = _int_field(select, "maxCount", len(options))
+    def _forced_selection(self, state: ObservationState):
+        select = state.select
+        options = () if select is None else select.options
+        minimum = 0 if select is None or select.min_count is None else int(select.min_count)
+        maximum = len(options) if select is None or select.max_count is None else int(select.max_count)
         if len(options) > 1 or minimum != maximum or minimum != len(options):
             return None
         self._invalidate_plans()
         return RootDecision(
             tuple(range(len(options))), ActionIdentity(
-                "forced_selection", (int(select.get("context", -1)),)),
-            0.0, True, {"backend": "forced-selection", "context": select.get("context"),
+                "forced_selection", (-1 if select is None or select.context is None
+                                     else int(select.context),)),
+            0.0, True, {"backend": "forced-selection",
+                        "context": None if select is None else select.context,
                         "option_count": len(options)})
 
     def decide(self, observation: dict) -> RootDecision:
@@ -259,23 +255,16 @@ class AgentRuntime:
                                            error=report)
 
     def _decide(self, observation: dict) -> RootDecision:
-        current = observation.get("current") or {}
-        if _int_field(current, "turn", 0) <= 0:
+        state = ObservationStateBuilder(self.deck).root(observation, knowledge=self.knowledge)
+        self.knowledge = state.knowledge
+        if state.turn.number <= 0:
             self._reset_for_pregame()
-            return self._pregame(observation)
-        # Above every early return: a selection answered by the fallback still has to
-        # contribute its ATTACK rows, or the delta carries them away for good.
-        self._attack_locks = fold_attack_locks(
-            self._attack_locks, observation.get("logs"),
-            turn=_int_field(current, "turn", 0))
-        if self._attack_locks:
-            observation["attack_locks"] = self._attack_locks
-        scope = (_int_field(current, "turn", 0), _int_field(current, "yourIndex", 0))
-        select = observation.get("select") or {}
-        context = _int_field(select, "context", -1)
-        effect = select.get("effect") or {}
-        effect_key = tuple(effect.get(key) for key in ("playerIndex", "id", "serial")) \
-            if effect else None
+            return self._pregame(state)
+        scope = (state.turn.number, state.seat)
+        select = state.select
+        context = -1 if select is None or select.context is None else int(select.context)
+        effect = None if select is None else select.effect
+        effect_key = ((effect.owner, effect.card_id, effect.serial) if effect is not None else None)
         new_effect = (self._fallback_effect is not None and effect_key is not None
                       and effect_key != self._fallback_effect)
         if (context == 0 or new_effect
@@ -295,7 +284,7 @@ class AgentRuntime:
         if collector_was_enabled:
             gc.disable()
         try:
-            decision = self._decide_core(observation)
+            decision = self._decide_core(state, observation)
             production = (decision.diagnostics.get("production") or {})
             if bool(production.get("deadline_hit")):
                 if context == 0:
@@ -308,27 +297,24 @@ class AgentRuntime:
             if collector_was_enabled:
                 gc.enable()
 
-    def _decide_core(self, observation: dict) -> RootDecision:
-        forced = self._forced_selection(observation)
+    def _decide_core(self, state: ObservationState, observation: dict) -> RootDecision:
+        forced = self._forced_selection(state)
         if forced is not None:
             return forced
-        gamma = self._observe_matchup(observation)
+        gamma = self._observe_matchup(state)
+        self.knowledge = reduce_knowledge(
+            self.knowledge, opponent=_belief_from_read(self.last_read))
+        state = ObservationStateBuilder(self.deck).root(observation, knowledge=self.knowledge)
+        self.last_state = state
         return self.ledger.decide(
-            observation, opponent=self._opponent_layer(observation, self.last_brief, gamma))
+            observation, opponent=self._opponent_layer(state, self.last_brief, gamma),
+            knowledge=self.knowledge, state=state)
 
-    def _opponent_layer(self, observation: dict, brief, gamma: float):
+    def _opponent_layer(self, state: ObservationState, brief, gamma: float):
         """Scouting priced into the Ledger (ADR-0148): generic roles for shown cards at full
         strength; the matched Brief's claims and `ledger_overrides` blended in by gamma."""
-        current = observation.get("current") or {}
-        seat = int(current.get("yourIndex", 0))
-        players = current.get("players") or ()
-        opponent = (players[1 - seat] if len(players) == 2 and players[1 - seat] else {})
-        bodies = tuple(body for body in
-                       tuple(opponent.get("active") or ()) + tuple(opponent.get("bench") or ())
-                       if body)
-        shown = {int(body["id"]) for body in bodies if body.get("id") is not None}
-        shown.update(int(card["id"]) for card in (opponent.get("discard") or ())
-                     if isinstance(card, dict) and card.get("id") is not None)
+        shown = {body.card.card_id for body in state.them.bodies}
+        shown.update(card.card_id for card in state.them.discard)
         roles = {card_id: tuple(card_roles) for card_id, card_roles in
                  general_pokemon_roles(shown, self.stats, self.functions).items()}
         brief_roles = scouted_ledger_roles(self.last_read, brief, self.stats,
@@ -339,7 +325,7 @@ class AgentRuntime:
         overrides = getattr(brief, "ledger_overrides", None) if brief is not None else None
         if overrides:
             weights = weights.resolve(overrides)      # a typo'd Brief key raises loud here
-        return OpponentLayer(roles=roles, brief_roles=brief_roles, weights=weights,
+        return OpponentEvaluation(roles=roles, brief_roles=brief_roles, weights=weights,
                              gamma=gamma)
 
     @staticmethod
@@ -387,6 +373,15 @@ def build_runtime(strategy, deck, **kwargs) -> AgentRuntime:
     """Construct the one shared runtime; injectable seams keep tests engine-independent."""
 
     return AgentRuntime(strategy, deck, **kwargs)
+
+
+def _belief_from_read(read: Read) -> OpponentBelief:
+    scale = 1_000_000
+    candidates = tuple((str(name), round(float(probability) * scale))
+                       for name, probability in read.candidates)
+    expected = tuple(sorted((int(card_id), round(float(probability) * scale))
+                            for card_id, probability in read.expected_cards))
+    return OpponentBelief(evidence=(("archetypes", candidates),), probabilities=expected)
 
 
 def _read_deck() -> list[int]:
@@ -470,9 +465,13 @@ def make_agent(strategy):
             return list(runtime.deck)
         started = perf_counter()
         try:
-            own_cards.observe(observation)
-            observation["own_prizes"] = own_cards.prize_export()
-            observation["known_top"] = own_cards.known_top_export()
+            provisional = ObservationStateBuilder(runtime.deck).root(
+                observation, knowledge=getattr(runtime, "knowledge", LegalKnowledge()))
+            own_cards.observe(provisional)
+            runtime.knowledge = reduce_knowledge(
+                getattr(runtime, "knowledge", LegalKnowledge()),
+                own_prizes=tuple(sorted((own_cards.prize_export() or {}).items())),
+                known_top=own_cards.known_top_export() or ())
             decision = runtime.decide(observation)
         except Exception:                            # an uncaught raise forfeits the match
             traceback.print_exc(file=sys.stderr)
@@ -482,8 +481,8 @@ def make_agent(strategy):
             return chosen
         if telemetry_on:
             try:
-                seat = int((observation.get("current") or {}).get("yourIndex", 0))
-                telemetry.emit(decision, read=runtime.last_read, seat=seat,
+                telemetry.emit(decision, read=runtime.last_read, seat=provisional.seat,
+                               state=getattr(runtime, "last_state", provisional),
                                decision_seconds=perf_counter() - started,
                                decision_limit_seconds=runtime.last_decision_limit,
                                deadline_hit=runtime.last_deadline_hit)

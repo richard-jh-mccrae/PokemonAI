@@ -37,13 +37,18 @@ def _agent_with_boom(monkeypatch, decide):
 
 
 def _menu(options, *, min_count=1, max_count=1, context=0, turn=2):
+    side = {"hand": [], "handCount": 0, "active": [], "bench": [], "benchMax": 5,
+            "discard": [], "prize": [], "deckCount": 0, "poisoned": False,
+            "burned": False, "asleep": False, "paralyzed": False, "confused": False}
     return {
         "select": {"context": context, "minCount": min_count, "maxCount": max_count,
                    "option": list(options)},
-        "current": {"turn": turn, "yourIndex": 0, "players": [
-            {"hand": [], "active": [], "bench": [], "discard": [], "prize": []},
-            {"hand": None, "handCount": 0, "active": [], "bench": [], "discard": [],
-             "prize": []},
+        "current": {"turn": turn, "yourIndex": 0, "firstPlayer": 0,
+                    "supporterPlayed": False, "stadiumPlayed": False,
+                    "energyAttached": False, "retreated": False, "result": None,
+                    "stadium": [], "looking": None, "players": [
+            dict(side),
+            {**side, "hand": None},
         ]},
         "logs": [],
     }
@@ -200,7 +205,7 @@ def test_one_effect_timeout_latches_the_fallback_until_main_returns():
     deployed = _mega_starmie_runtime()
     calls = 0
 
-    def timed_out(_observation):
+    def timed_out(_state, _observation):
         nonlocal calls
         calls += 1
         return runtime_module.RootDecision(
