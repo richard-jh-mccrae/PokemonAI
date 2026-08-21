@@ -33,8 +33,8 @@ one-way: `deprecated/` may ride `src/`, never the reverse.
 - **Providers keep only live hooks**: `footprint`, `terminal_action_supported` (native) and
   `resolve_end` moved to `BellmanNativeProvider`/`BellmanCgpyProvider`;
   `bellman_provider_factory` maps live factories to them, mirroring the preview seam. The
-  effect-coverage predicate (`terminal_effects_supported`) relocated to `common/effects.py`
-  because the offline provider's ability-noop guard is a live consumer; the cgpy provider keeps
+  effect-coverage predicate (`terminal_effects_supported`) lives in `engine.py` with its one
+  live consumer, the offline provider's ability-noop guard; the cgpy provider keeps
   `terminal_action_supported` for the same reason.
 - **Splits at the seam**: `refresh.py` keeps the printed-counts `Refresh` transition (the Ledger
   prices those nodes); the Bellman valuation became `refresh_evaluator.py`. `information.py`
@@ -56,7 +56,12 @@ one-way: `deprecated/` may ride `src/`, never the reverse.
   `legacy_roles_resolve` so its frozen contract is untouched. This corrected a live
   mispricing: the inference was overwriting mega_lucario's authored `supporter_tutor` on
   Meowth ex with off-vocabulary words the Ledger prices at zero. `card_tags.is_card_key`
-  folded into `cards/tags.py`. The bundle
+  folded into `cards/tags.py`. `CardEffects` (the pre-store clause table) moved to the
+  quarantine with its one remaining runtime consumer, the teacher: the deck tracker's
+  known-top stackers now read the store's record clauses (provably identical live — the only
+  two `deck_top` cards are in no shipped deck), and the coverage predicate moved into
+  `engine.py`, its one live consumer. `card_effects.json` STAYS in src as the audited
+  authoring source the store records are generated from, but leaves the bundle. The bundle
   therefore stops shipping the search stack; the manifest is schema 7, `system: "ledger"`, and
   documents the resolved `LedgerWeights` instead of a pilot profile.
 - **CI runs none of it** (owner's ruling): the moved suites leave every CI job; `deprecated/**`

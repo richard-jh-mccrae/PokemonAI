@@ -7,7 +7,7 @@ from __future__ import annotations
 
 from functools import partial
 
-from common.effects import terminal_effects_supported
+from common.engine import terminal_effects_supported
 from common.engine import CgpyTransitionProvider
 from common.native_engine import NativeCgTransitionProvider
 from common.option_equivalence import option_in_play_source_id

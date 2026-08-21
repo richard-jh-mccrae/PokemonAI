@@ -70,6 +70,7 @@ def test_package_contains_the_ledger_and_no_bellman_search(tmp_path):
         assert any(name.startswith("cg/") for name in names)
         assert "brief.html" in names and "brief.csv" in names
         assert "runtime_config.json" not in names
+        assert "common/card_effects.json" not in names   # authoring source; nothing shipped reads it
         manifest_text = bundle.read("brief.html").decode("utf-8")
         assert '"system": "ledger"' in manifest_text
 

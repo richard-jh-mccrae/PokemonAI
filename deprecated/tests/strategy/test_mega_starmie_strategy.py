@@ -8,7 +8,7 @@ from common.cards import CardFunctions
 from common.cards.functions.damage import bench_reach
 from deprecated.bellman.runtime import legacy_roles_resolve
 from deprecated.bellman.demand import StrategyBeamBuilder, semantic_action_key
-from common.effects import CardEffects
+from deprecated.bellman.effects import CardEffects
 from common.options import enumerate_legal_actions
 from common.scouting.provider import EngineCardStatProvider
 from deprecated.bellman.activation import (

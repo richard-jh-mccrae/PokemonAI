@@ -23,6 +23,7 @@ from .activation import (
 from .belief import BellmanDeckProfile, opponent_belief
 from .budget_prototype import DecisionClock
 from .demand import StrategyBeamBuilder, semantic_action_key
+from .effects import CardEffects
 from .dragapult_potential import DragapultPotential
 from .pilot_profile import PilotProfile
 from .planner import BellmanTurnPlanner
@@ -105,6 +106,7 @@ class BellmanTeacherRuntime(AgentRuntime):
 
     def __init__(self, strategy, deck, **kwargs):
         super().__init__(strategy, deck, **kwargs)
+        self.effects = CardEffects.load()
         # The teacher's frozen contract predates the store-based resolution (ADR-0149):
         # re-resolve with the inference it shipped with before anything reads self.roles.
         self.roles = legacy_roles_resolve(strategy.roles, self.deck, self.stats, self.functions)

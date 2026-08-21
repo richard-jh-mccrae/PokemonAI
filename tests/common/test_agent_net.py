@@ -24,7 +24,6 @@ def _strategy(name: str = "mega_starmie"):
 def _agent_with_boom(monkeypatch, decide):
     class BoomRuntime:
         deck = tuple(range(1, 61))
-        effects = None
         last_read = None
         last_decision_limit = None
         last_deadline_hit = False

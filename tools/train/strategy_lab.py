@@ -41,7 +41,7 @@ def _runtime(focused: bool, *, reuse=True, planning_seconds=None):
         global_values=values,
         authored_deck_overrides=getattr(module.STRATEGY, "pilot_overrides", {}),
         provenance="strategy-lab")
-    return runtime, OwnCardModel(deck, effects=runtime.effects)
+    return runtime, OwnCardModel(deck)
 
 
 def _percentile(values, quantile):

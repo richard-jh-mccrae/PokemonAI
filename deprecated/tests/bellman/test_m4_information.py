@@ -192,7 +192,7 @@ def test_real_engine_owns_resolution_and_hidden_information_has_an_explicit_boun
                                         "deck.csv").read_text().split())
     from bellman_helpers import runtime
     from common.cards import CardFunctions
-    from common.effects import CardEffects
+    from deprecated.bellman.effects import CardEffects
     tags = CardFunctions.load()
     stats = runtime().stats
     registry = ValueRegistry(

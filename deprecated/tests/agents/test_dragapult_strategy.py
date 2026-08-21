@@ -8,7 +8,7 @@ from deprecated.bellman.runtime import legacy_roles_resolve
 from deprecated.bellman.demand import StrategyBeamBuilder
 from deprecated.bellman.dragapult_potential import DragapultPotential
 from common.cards import CardFunctions
-from common.effects import CardEffects
+from deprecated.bellman.effects import CardEffects
 from deprecated.bellman.value import ValueRegistry
 from common.scouting.provider import EngineCardStatProvider
 from deprecated.bellman.activation import (

@@ -12,7 +12,6 @@ from common.api import ActionIdentity, RootDecision
 from common.cards.functions.attack_lock import fold_attack_locks
 from common.cards import CardFunctions
 from common.deck_tracker import OwnCardModel
-from common.effects import CardEffects
 from common.ledger import LedgerContext, LedgerDecider, preview_provider_factory
 from common.scouting.artifact import load_artifact
 from common.scouting.briefs import load_briefs
@@ -56,7 +55,6 @@ class AgentRuntime:
             stats.warm()
         self.stats = stats
         self.functions = CardFunctions.load() if functions is _ENGINE else functions
-        self.effects = CardEffects.load()
         self.roles = strategy.roles.resolve(self.deck)
         if scout is _ENGINE:
             scout = Scout(load_artifact(), provider=self.stats)
@@ -373,7 +371,7 @@ def make_agent(strategy):
     """Create the Kaggle ``agent(observation)`` hook."""
 
     runtime = build_runtime(strategy, _read_deck())
-    own_cards = OwnCardModel(runtime.deck, effects=runtime.effects)
+    own_cards = OwnCardModel(runtime.deck)
     telemetry_on = os.environ.get("AGENT_NO_TELEMETRY") != "1"
 
     def agent(observation: dict) -> list[int]:

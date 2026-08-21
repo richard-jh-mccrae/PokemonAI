@@ -20,7 +20,6 @@ from common import (
 )
 from deprecated.bellman.state import DecisionState
 from common.engine import CgpyTransitionProvider
-from common.effects import CardEffects
 from common.runtime import build_runtime
 from common.native_engine import _hidden_signature
 
@@ -51,7 +50,7 @@ def test_partial_ability_that_resolves_as_a_noop_fails_closed():
     provider.cards = {1259: TrainerCard(
         1259, "Test Stadium", STADIUM,
         clauses=(Clause("fetch", target="pokemon", zone="deck", name_family="Marnie's"),))}
-    provider.effects = CardEffects({})
+    provider.effects = None
     provider.stats = None
     provider._register_successor = lambda *_args: Deterministic(successor)
 

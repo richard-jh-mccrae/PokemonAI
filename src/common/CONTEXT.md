@@ -83,7 +83,8 @@ The live decision path:
 - `refresh.py`: the printed-counts shuffle-refresh transition both providers emit and the Ledger
   prices analytically;
 - `information.py`: exact hypergeometric draw/reveal outcome classes for the offline provider;
-- `effects.py`: the effect-clause table and the coverage predicate that gates exact reasoning;
+- `card_effects.json`: the audited effect-clause source the store records are generated from
+  (`tools/build_pokemon_cards.py`); its runtime loader lives with the teacher;
 - `algebra.py`, `api.py`, `options.py`: the transition algebra, decision contracts, and
   legal-action enumeration (the providers' canonical DecisionState moved to the quarantine —
   the live path builds none, pinned in `tests/ledger`).

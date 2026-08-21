@@ -83,7 +83,7 @@ def test_a_full_cgpy_mirror_game_runs_on_the_ledger_start_to_finish():
     engine, err_player, err_type = Engine.start(deck, deck, rng=SeededRng(424242))
     assert engine is not None, f"deck rejected: seat {err_player} errorType {err_type}"
     runtimes = {seat: _runtime(deck) for seat in (0, 1)}
-    own_cards = {seat: OwnCardModel(runtimes[seat].deck, effects=runtimes[seat].effects)
+    own_cards = {seat: OwnCardModel(runtimes[seat].deck)
                  for seat in (0, 1)}
     chains = {seat: BoardState.root(observation(engine.gs, seat), decklist=deck)
               for seat in (0, 1)}

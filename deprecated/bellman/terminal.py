@@ -14,7 +14,7 @@ from common.algebra import (
     Actor, Chance, Choice, Deterministic, Refresh, RevealChoice, Terminal, Unknown,
 )
 from common.api import ActionIdentity
-from common.effects import terminal_effects_supported
+from common.engine import terminal_effects_supported
 from common.options import LegalAction
 from .state import DecisionState
 
