@@ -24,12 +24,12 @@ import sys
 import time
 
 REPO = Path(__file__).resolve().parents[2]
-sys.path[:0] = [str(REPO / "tools"), str(REPO / "src")]
+sys.path[:0] = [str(REPO), str(REPO / "tools"), str(REPO / "src")]
 
 from common.option_equivalence import option_equivalence  # noqa: E402
 from common.engine import CgpyTransitionProvider  # noqa: E402 - offline diagnostic only
-from common.planner import DEFAULT_PRODUCTION_LIMITS  # noqa: E402
-from common.runtime import build_runtime  # noqa: E402
+from deprecated.bellman.planner import DEFAULT_PRODUCTION_LIMITS  # noqa: E402
+from deprecated.bellman import build_teacher_runtime  # noqa: E402
 from common.telemetry import to_record  # noqa: E402
 from train.blunder.store import load_corrections  # noqa: E402
 from train.blunder.decode import option_label  # noqa: E402
@@ -57,7 +57,7 @@ def _build_runtime(max_seconds: float | None = None, deck_name: str = DEFAULT_DE
     # offline cgpy diagnostic provider; the shipped Kaggle runtime always uses native cg.
     limits = (None if max_seconds is None else
               replace(DEFAULT_PRODUCTION_LIMITS, max_seconds=float(max_seconds)))
-    return build_runtime(module.STRATEGY, deck, provider_factory=CgpyTransitionProvider,
+    return build_teacher_runtime(module.STRATEGY, deck, provider_factory=CgpyTransitionProvider,
                          limits=limits)
 
 

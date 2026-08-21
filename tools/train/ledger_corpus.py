@@ -31,7 +31,10 @@ REPO = Path(__file__).resolve().parents[2]
 sys.path[:0] = [str(REPO / "tools"), str(REPO / "src")]
 
 from common.option_equivalence import class_of, option_equivalence  # noqa: E402
+from functools import partial
+
 from common.engine import CgpyTransitionProvider, stamp_own_prizes  # noqa: E402 - offline replay only
+from deprecated.bellman.effects import CardEffects  # noqa: E402 - replay coverage facts (ADR-0147)
 from common.runtime import build_runtime  # noqa: E402
 from train.blunder.store import load_corrections  # noqa: E402
 from train.blunder.decode import option_label  # noqa: E402
@@ -55,7 +58,8 @@ def _build_runtime(deck_name: str, weight_overrides=None):
         from common.ledger import LedgerWeights
 
         ledger_weights = LedgerWeights().resolve(weight_overrides)
-    return build_runtime(module.STRATEGY, deck, provider_factory=CgpyTransitionProvider,
+    replay_provider = partial(CgpyTransitionProvider, effects=CardEffects.load())
+    return build_runtime(module.STRATEGY, deck, provider_factory=replay_provider,
                          ledger_weights=ledger_weights)
 
 

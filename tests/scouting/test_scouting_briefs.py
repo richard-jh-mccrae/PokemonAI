@@ -10,7 +10,7 @@ import pytest
 
 from common.card_worth import role_value
 from common.cards import CardFunctions
-from common.pokemon_roles import general_pokemon_roles
+from common.scouting.pokemon_roles import general_pokemon_roles
 from common.scouting.artifact import load_artifact
 from common.scouting.briefs import (
     Brief, load_briefs, match_brief, resolve_brief_cards, resolve_scouted_role_worth,

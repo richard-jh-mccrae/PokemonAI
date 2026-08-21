@@ -1,11 +1,11 @@
 """One whole cgpy game through the LIVE runtime: the Ledger answers, BoardState agrees.
 
-The deployment shell (common.runtime) catches every exception into a strategy-fallback answer,
+The deployment shell (common.runtime) catches every exception into a last-resort answer,
 so a completely dead Ledger still finishes matches and every other full-game harness stays
 green. This smoke is the liveness assertion the rest of the tree cannot supply:
 
 - every post-pregame decision must come back `backend == "ledger"` (or the trivial
-  forced-selection shortcut) — one strategy-fallback anywhere fails the game;
+  forced-selection shortcut) — one crash fallback anywhere fails the game;
 - both seats' BoardState advance chains are cross-checked against the ENGINE'S OWN state —
   god truth, not a rendered reprint — every step: zone counts, hand and discard contents,
   actives, bench, statuses, stadium;
@@ -83,7 +83,7 @@ def test_a_full_cgpy_mirror_game_runs_on_the_ledger_start_to_finish():
     engine, err_player, err_type = Engine.start(deck, deck, rng=SeededRng(424242))
     assert engine is not None, f"deck rejected: seat {err_player} errorType {err_type}"
     runtimes = {seat: _runtime(deck) for seat in (0, 1)}
-    own_cards = {seat: OwnCardModel(runtimes[seat].deck, effects=runtimes[seat].effects)
+    own_cards = {seat: OwnCardModel(runtimes[seat].deck)
                  for seat in (0, 1)}
     chains = {seat: BoardState.root(observation(engine.gs, seat), decklist=deck)
               for seat in (0, 1)}
@@ -114,7 +114,7 @@ def test_a_full_cgpy_mirror_game_runs_on_the_ledger_start_to_finish():
 
     assert engine.gs.result != -1, f"no result after {MAX_STEPS} steps; backends {backends}"
     assert backends["ledger"] >= 20, backends
-    assert backends.get("strategy-fallback", 0) == 0, backends
+    assert backends.get("last-resort-fallback", 0) == 0, backends
 
     # The terminal frame digests, and the evaluator reads the outcome straight off the board.
     ctx = LedgerContext.build()

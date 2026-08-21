@@ -20,7 +20,7 @@ from common.ledger.chance import refresh_value
 from common.ledger.decider import LedgerUnavailable
 from common.options import enumerate_legal_actions
 from common.runtime import _last_resort_selection
-from common.state import DecisionState
+from deprecated.bellman.state import DecisionState
 
 
 def test_non_finite_weight_overrides_refuse_at_resolve_time():

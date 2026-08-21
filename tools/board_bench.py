@@ -16,7 +16,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
 from common.board import BoardState                      # noqa: E402
-from common.state import DecisionState                   # noqa: E402
+from deprecated.bellman.state import DecisionState
 
 IDS = (66, 112, 119, 120, 121, 140)
 DECK = tuple(IDS) * 10

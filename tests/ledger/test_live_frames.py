@@ -6,7 +6,7 @@ from pathlib import Path
 
 import pytest
 
-from bellman_helpers import deck as agent_deck, strategy as agent_strategy
+from agent_helpers import deck as agent_deck, strategy as agent_strategy
 
 from common.engine import CgpyTransitionProvider
 from common.options import enumerate_legal_actions

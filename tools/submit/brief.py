@@ -1,4 +1,4 @@
-"""Build the Bellman agent manifest and its human-readable brief."""
+"""Build the shipped-agent manifest and its human-readable brief."""
 from __future__ import annotations
 
 import csv
@@ -8,14 +8,12 @@ import io
 import json
 import sys
 from collections import Counter
+from dataclasses import fields
 from datetime import datetime
 from pathlib import Path
-from types import SimpleNamespace
 
 from submit.package import REPO, _git_hash, artifact_stem
-from common.cards import CardFunctions
-from common.pilot_profile import PilotProfile
-from common.strategy.strategies import GENERAL_STRATEGIES, resolve_strategies
+from common.ledger.weights import LedgerWeights
 
 
 def _load_strategy(agent_dir: Path):
@@ -50,10 +48,8 @@ def _deck(agent_dir: Path, cards: dict | None = None) -> dict:
     return {"size": len(ids), "cards": rows}
 
 
-def _strategy(strategy, deck, cards) -> dict:
-    stats = SimpleNamespace(get=lambda card_id: (
-        SimpleNamespace(**cards[int(card_id)]) if int(card_id) in cards else None))
-    resolved_roles = strategy.roles.resolve(deck, stats, CardFunctions.load())
+def _strategy(strategy, deck) -> dict:
+    resolved_roles = strategy.roles.resolve(deck)
     roles = {str(card_id): list(names) for card_id, names in sorted(resolved_roles.items())}
     lines = [{"path": list(line.path), "payoff": line.payoff, "role": line.role,
               "ready": {"energy": line.ready.energy}}
@@ -71,15 +67,30 @@ def _strategy(strategy, deck, cards) -> dict:
                      for card_id, partners in sorted(strategy.partners.items())},
         "worth_overrides": {str(card_id): value
                             for card_id, value in sorted(strategy.worth_overrides.items())},
-        "pilot_overrides": dict(strategy.pilot_overrides),
         "prize_plan": prize_plan,
         "params": dict(strategy.params),
     }
 
 
+def _ledger_weights(strategy) -> dict:
+    overrides = dict(getattr(strategy, "ledger_overrides", {}) or {})
+    resolved = LedgerWeights().resolve(overrides)
+    scalars = {f.name: getattr(resolved, f.name) for f in fields(resolved)
+               if f.init and f.name not in ("roles", "tags", "kinds", "card_worth")}
+    return {
+        "identity": resolved.identity,
+        "deck_overrides": {str(name): float(value) for name, value in sorted(overrides.items())},
+        "scalars": scalars,
+        "roles": {name: value for name, value in resolved.roles},
+        "tags": {name: value for name, value in resolved.tags},
+        "kinds": {name: value for name, value in resolved.kinds},
+        "card_worth": {str(card_id): value for card_id, value in resolved.card_worth},
+    }
+
+
 def build_manifest(agent_dir, *, when=None, git_hash=None, agent_name=None, cards=None,
-                   pilot_values=None, **_ignored) -> dict:
-    """Describe the exact Bellman bundle without importing the engine."""
+                   **_ignored) -> dict:
+    """Describe the exact shipped bundle without importing the engine."""
     agent_dir = Path(agent_dir)
     when = when or datetime.now()
     git_hash = _git_hash(REPO) if git_hash is None else git_hash
@@ -88,30 +99,18 @@ def build_manifest(agent_dir, *, when=None, git_hash=None, agent_name=None, card
     cards = _card_index() if cards is None else cards
     deck = _deck(agent_dir, cards)
     deck_ids = tuple(card["id"] for card in deck["cards"] for _ in range(card["count"]))
-    pilot_profile = PilotProfile.resolve(
-        global_values=pilot_values,
-        authored_deck_overrides=strategy.pilot_overrides,
-        provenance=f"strategy:{strategy.name}")
-    strategy_catalog = resolve_strategies(
-        GENERAL_STRATEGIES, strategy.strategies,
-        overrides=strategy.strategy_overrides)
     return {
-        "schema_version": 6,
+        "schema_version": 7,
         "provenance": {
             "agent": agent_name,
             "built_at": when.isoformat(timespec="seconds"),
             "git_hash": git_hash,
             "artifact": artifact_stem(agent_name, when=when, git_hash=git_hash),
         },
-        "system": "bellman",
+        "system": "ledger",
         "deck": deck,
-        "strategy": _strategy(strategy, deck_ids, cards),
-        "strategy_catalog": {
-            "enabled": pilot_profile.get("strategy.focus_enabled") >= 0.5,
-            "odds_enabled": True,
-            "resolved": strategy_catalog.as_dict(),
-        },
-        "pilot_profile": pilot_profile.as_dict(),
+        "strategy": _strategy(strategy, deck_ids),
+        "ledger_weights": _ledger_weights(strategy),
         "safety_bounds": {
             "callback_watchdog_seconds": {
                 "value": 120.0, "units": "seconds", "adjustable": False,
@@ -119,7 +118,7 @@ def build_manifest(agent_dir, *, when=None, git_hash=None, agent_name=None, card
             },
         },
         "capabilities": {
-            "bellman": True,
+            "ledger": True,
             "card_functions": (agent_dir / "common" / "card_functions.json").exists(),
             "scouting": (agent_dir / "common" / "scouting" / "artifact.json").exists(),
             "native_engine": (agent_dir / "cg").exists(),
@@ -128,10 +127,8 @@ def build_manifest(agent_dir, *, when=None, git_hash=None, agent_name=None, card
 
 
 def render_brief_csv(manifest: dict) -> str:
-    fields = ("schema_version", "agent", "artifact", "system", "record_type", "card_id",
-              "value", "name", "group", "family", "global", "deck_learned_adjustment",
-              "authored_deck_override", "effective", "minimum", "maximum", "units",
-              "learnable", "provenance")
+    fields_ = ("schema_version", "agent", "artifact", "system", "record_type", "card_id",
+               "value", "name", "provenance")
     provenance = manifest["provenance"]
     common = {"schema_version": manifest["schema_version"], "agent": provenance["agent"],
               "artifact": provenance["artifact"], "system": manifest["system"]}
@@ -141,12 +138,16 @@ def render_brief_csv(manifest: dict) -> str:
     rows.extend({**common, "record_type": "starter", "card_id": card_id,
                  "value": position}
                 for position, card_id in enumerate(manifest["strategy"]["starter_priority"]))
-    for group_rows in manifest["pilot_profile"]["groups"].values():
-        rows.extend({**common, "record_type": "pilot_parameter", **row,
-                     "provenance": manifest["pilot_profile"]["provenance"]}
-                    for row in group_rows)
+    weights = manifest["ledger_weights"]
+    for group in ("scalars", "roles", "tags", "kinds"):
+        rows.extend({**common, "record_type": "ledger_weight", "name": f"{group}.{name}",
+                     "value": value, "provenance": weights["identity"]}
+                    for name, value in weights[group].items())
+    rows.extend({**common, "record_type": "ledger_weight", "name": f"card.{card_id}",
+                 "value": value, "provenance": weights["identity"]}
+                for card_id, value in weights["card_worth"].items())
     output = io.StringIO(newline="")
-    writer = csv.DictWriter(output, fieldnames=fields)
+    writer = csv.DictWriter(output, fieldnames=fields_)
     writer.writeheader()
     writer.writerows(rows)
     return output.getvalue()
@@ -159,51 +160,47 @@ def render_brief(manifest: dict, **_ignored) -> str:
     role_rows = "".join(
         f"<li><code>{html.escape(card_id)}</code>: {html.escape(', '.join(roles))}</li>"
         for card_id, roles in strategy["roles"].items())
-    customized = sum(
-        row["deck_learned_adjustment"] != 0 or row["authored_deck_override"] is not None
-        for rows in manifest["pilot_profile"]["groups"].values() for row in rows)
-    profile_sections = []
-    for group, rows in manifest["pilot_profile"]["groups"].items():
+    weights = manifest["ledger_weights"]
+    overridden = set(weights["deck_overrides"])
+
+    def weight_table(group: str, prefix: str = "") -> str:
         rendered = "".join(
-            ("<tr class='custom' >" if (row["deck_learned_adjustment"] != 0
-                                        or row["authored_deck_override"] is not None) else "<tr>")
-            + "".join(f"<td>{html.escape(str(row[key]))}</td>" for key in (
-                "name", "family", "global", "deck_learned_adjustment",
-                "authored_deck_override", "effective", "minimum", "maximum", "units"))
-            + "</tr>" for row in rows)
-        profile_sections.append(
-            f"<details><summary>{html.escape(group)} ({len(rows)})</summary>"
-            "<table><thead><tr><th>Name</th><th>Family</th><th>Global</th>"
-            "<th>Deck learned</th><th>Deck authored</th><th>Effective</th>"
-            "<th>Min</th><th>Max</th><th>Units</th></tr></thead>"
-            f"<tbody>{rendered}</tbody></table></details>")
+            ("<tr class='custom'>" if f"{prefix}{name}" in overridden or name in overridden
+             else "<tr>")
+            + f"<td>{html.escape(str(name))}</td><td>{value}</td></tr>"
+            for name, value in weights[group].items())
+        return (f"<details><summary>{html.escape(group)} ({len(weights[group])})</summary>"
+                "<table><thead><tr><th>Name</th><th>Value</th></tr></thead>"
+                f"<tbody>{rendered}</tbody></table></details>")
+
+    weight_sections = "".join((
+        weight_table("scalars"),
+        weight_table("roles", "role."),
+        weight_table("tags", "tag."),
+        weight_table("kinds", "kind."),
+        weight_table("card_worth", "card."),
+    ))
+    override_rows = "".join(
+        f"<li><code>{html.escape(name)}</code>: {value}</li>"
+        for name, value in weights["deck_overrides"].items()) or "<li>none</li>"
     safety_rows = "".join(
         f"<li><code>{html.escape(name)}</code>: {row['value']} {html.escape(row['units'])}</li>"
         for name, row in manifest["safety_bounds"].items())
-    strategy_catalog = manifest["strategy_catalog"]
-    effective_rows = "".join(
-        f"<li><code>{html.escape(row['identifier'])}</code> · "
-        f"{html.escape(row['deadline'])} · {html.escape(row['conviction'])}<br>"
-        f"when {html.escape(str(row['conditions']))}<br>"
-        f"seek {html.escape(str(row['desired_facts']))}</li>"
-        for row in strategy_catalog["resolved"]["effective"])
     return (
         "<!doctype html>\n<html lang='en'><head><meta charset='utf-8'>"
-        f"<title>Bellman Agent Brief — {html.escape(provenance['agent'])}</title>"
+        f"<title>Agent Brief — {html.escape(provenance['agent'])}</title>"
         "<style>body{font-family:system-ui,sans-serif;margin:2rem;max-width:60rem}"
         "code{background:#f3f3f3;padding:.1rem .3rem}table{border-collapse:collapse;width:100%}"
         "th,td{border:1px solid #ddd;padding:.35rem;text-align:left}.custom{background:#fff3bf}"
         "details{margin:.6rem 0}</style></head><body>"
         f"<h1>{html.escape(provenance['agent'])}</h1>"
-        f"<p>Bellman · {manifest['deck']['size']} cards · "
+        f"<p>Ledger · {manifest['deck']['size']} cards · "
         f"<code>{html.escape(provenance['git_hash'])}</code></p>"
         f"<h2>Deck roles</h2><ul>{role_rows}</ul>"
         f"<h2>Starter priority</h2><p>{html.escape(str(strategy['starter_priority']))}</p>"
-        f"<h2>Strategy beam</h2><p>{'ON' if strategy_catalog['enabled'] else 'OFF'} · "
-        f"Odds {'ON' if strategy_catalog['odds_enabled'] else 'OFF'} · "
-        f"<code>{strategy_catalog['resolved']['content_hash']}</code></p><ul>{effective_rows}</ul>"
-        f"<h2>Pilot profile</h2><p><code>{manifest['pilot_profile']['hash']}</code> · "
-        f"{customized} deck-customized parameters</p>{''.join(profile_sections)}"
+        f"<h2>Ledger weights</h2><p><code>{weights['identity']}</code> · "
+        f"{len(weights['deck_overrides'])} deck overrides</p>"
+        f"<ul>{override_rows}</ul>{weight_sections}"
         f"<details><summary>Read-only safety bounds</summary><ul>{safety_rows}</ul></details>"
         f"<script type='application/json' id='manifest'>{payload}</script>"
         "</body></html>\n"

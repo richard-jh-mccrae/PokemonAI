@@ -19,6 +19,7 @@ from collections import Counter
 
 from cg.api import AreaType, LogType
 from common.board_cards import body_card_entries, card_id as _card_id
+from common.cards import card_store, play_clauses
 
 _HAND, _DISCARD, _ACTIVE, _BENCH = "hand", "discard", "active", "bench"
 _AREA_HAND, _AREA_PRIZE = 2, 6                       # cg.api AreaType.HAND / .PRIZE (log zone codes)
@@ -32,12 +33,13 @@ class OwnCardModel:
     """Feed every observation to :meth:`observe`; read :meth:`prize_export` for the exact prize multiset
     (None until a search anchors it). The consumer derives the deck from it."""
 
-    def __init__(self, deck, *, effects=None) -> None:
+    def __init__(self, deck, *, cards=None) -> None:
         self.decklist: Counter = Counter(int(c) for c in deck)
-        table = getattr(effects, "_table", {}) if effects is not None else {}
+        #: Card records by id — the unified store unless a test injects its own records.
+        cards = card_store() if cards is None else cards
         self._stackers = frozenset(
-            int(card_id) for card_id, clauses in table.items()
-            if any(clause.get("dest") == "deck_top" for clause in clauses))
+            int(card_id) for card_id, record in cards.items()
+            if any(clause.params.get("dest") == "deck_top" for clause in play_clauses(record)))
         self._known_top: tuple[tuple[int, int], ...] | None = None
         self._resolving_source: int | None = None
         self._prizes: Counter | None = None       # exact prize multiset once anchored (else None)

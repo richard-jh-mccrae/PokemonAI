@@ -1,4 +1,4 @@
-"""Neutral cgpy transition provider for Bellman search."""
+"""Neutral cgpy transition provider: the offline twin of the native engine seam."""
 from __future__ import annotations
 
 from collections import Counter
@@ -12,13 +12,10 @@ from .cards import card_store, play_clauses
 from .cards.functions.attack_lock import carry_attack_locks
 from .option_equivalence import option_in_play_source_id
 from .options import LegalAction, recycled_card_ids
-from .state import DecisionState
 from .information import draw_outcomes, reveal_sets
 from .cards.functions.fetch import WINDOW, fetch_target_matches
 from .native_engine import _own_hidden_zones
-from .commutativity import action_footprint
 from .refresh import refresh_transition
-from .terminal import terminal_effects_supported
 from common.strategy.context import (
     _ACTIVE, _ATTACH_FROM, _BENCH, _CARD, _DAMAGE, _DECK, _DISCARD, _DISCARD_ENERGY, _HAND,
     _LOOKING, _MAIN, _MOVE_CARD, _SWITCH, _TO_ACTIVE, _TO_HAND, _YES, _NO,
@@ -77,12 +74,55 @@ def stamp_own_prizes(observation: dict, decklist) -> bool:
     return True
 
 
+def terminal_effects_supported(state, action, *, card_id, recipient_id, effects, stats) -> bool:
+    """Whether this action's effects are modelled exactly enough for sound reasoning."""
+    kind = action.identity.kind
+    stat = stats.get(card_id) if stats is not None and card_id is not None else None
+    clauses = effects.clauses(card_id) if effects is not None and card_id is not None else ()
+    fully_covered = bool(
+        effects is not None and card_id is not None and hasattr(effects, "fully_covers")
+        and effects.fully_covers(card_id))
+    if kind in {"play", "evolve", "ability", "skill"}:
+        if card_id is None:
+            return False
+        pokemon_without_ability = bool(
+            kind in {"play", "evolve"} and stat is not None
+            and getattr(stat, "is_pokemon", False)
+            and not getattr(stat, "hasAbility", False))
+        if not pokemon_without_ability and not fully_covered:
+            return False
+    if kind == "attach":
+        if stat is None or not (getattr(stat, "is_basic_energy", False) or fully_covered):
+            return False
+        recipient_stat = (stats.get(recipient_id)
+                          if stats is not None and recipient_id is not None else None)
+        if recipient_stat is not None and getattr(recipient_stat, "hasAbility", False):
+            if (effects is None or not hasattr(effects, "fully_covers")
+                    or not effects.fully_covers(recipient_id)):
+                return False
+            clauses = (*clauses, *effects.clauses(recipient_id))
+    if any(clause.get("kind") == "draw" or clause.get("dig") for clause in clauses):
+        return False
+    if (any(clause.get("kind") == "fetch" and clause.get("zone") == "deck"
+            for clause in clauses) and "own_prizes" not in state.obs):
+        return False
+    if kind == "attack" and len(action.selection) == 1:
+        options = tuple((state.obs.get("select") or {}).get("option") or ())
+        index = action.selection[0]
+        option = options[index] if 0 <= index < len(options) else {}
+        attack = (stats.attack(option.get("attackId"))
+                  if stats is not None and hasattr(stats, "attack") else None)
+        if attack is None or int(getattr(attack, "hiddenPerUnit", 0) or 0) > 0:
+            return False
+    return True
+
+
 class CgpyTransitionProvider:
     """Forkable full-rules engine adapter.  It enumerates and applies; it never ranks."""
 
     backend = "cgpy-bellman"
 
-    def __init__(self, root: DecisionState, *, registry=None, effects=None, stats=None, engine=None,
+    def __init__(self, root, *, registry=None, effects=None, stats=None, engine=None,
                  cards=None):
         self.root = root
         self.registry = registry
@@ -141,12 +181,12 @@ class CgpyTransitionProvider:
         """The engine-map key for a state; the preview seam substitutes identity tokens."""
         return state.semantic_key
 
-    def actions(self, state: DecisionState) -> tuple[LegalAction, ...]:
+    def actions(self, state) -> tuple[LegalAction, ...]:
         if not self._local_nested and self._key(state) not in self._engines:
             return ()
         return state.legal_actions
 
-    def actor(self, state: DecisionState) -> Actor:
+    def actor(self, state) -> Actor:
         if self._local_nested:
             return Actor.OURS
         engine = self._engines.get(self._key(state))
@@ -154,10 +194,7 @@ class CgpyTransitionProvider:
             return Actor.OURS
         return Actor.OURS if engine.select_seat == state.root_seat else Actor.OPPONENT
 
-    def footprint(self, state: DecisionState, action: LegalAction):
-        return action_footprint(state, action, cards=self.cards)
-
-    def terminal_action_supported(self, state: DecisionState, action: LegalAction) -> bool:
+    def terminal_action_supported(self, state, action: LegalAction) -> bool:
         kind = action.identity.kind
         options = tuple((state.obs.get("select") or {}).get("option") or ())
         option_index = action.selection[0] if len(action.selection) == 1 else -1
@@ -186,7 +223,7 @@ class CgpyTransitionProvider:
             state, action, card_id=card_id, recipient_id=recipient_id,
             effects=self.effects, stats=self.stats)
 
-    def transition(self, state: DecisionState, action: LegalAction):
+    def transition(self, state, action: LegalAction):
         if self._local_nested:
             return self._local_nested_transition(state, action)
         engine = self._engines.get(self._key(state))
@@ -229,9 +266,6 @@ class CgpyTransitionProvider:
             return successor
         except Exception as exc:  # noqa: BLE001 - an engine gap is explicit
             return Unknown("cgpy transition failed", f"{type(exc).__name__}: {exc}")
-
-    def resolve_end(self, state: DecisionState, action: LegalAction):
-        return self.transition(state, action)
 
     @staticmethod
     def _played_card_id(engine, action):

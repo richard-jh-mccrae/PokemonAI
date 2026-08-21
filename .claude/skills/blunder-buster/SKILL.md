@@ -36,7 +36,7 @@ explains a group.
    action, transition, or uncertainty, never a named card, correction, or one-off scenario.
 3. Implement only the general model change. Preserve the distinction between observed facts,
    inferred beliefs, and unknown information.
-4. Add one focused regression under `tests/corrections/` for this correction. The test must build
+4. Add one focused regression under `deprecated/tests/corrections/` (teacher pins, ADR-0149) for this correction. The test must build
    the recorded state (or the smallest faithful projection), assert the corrected decision/value
    relation, and fail before the repair.
 5. Run that correction test and the closest affected Bellman tests. If a grouped repair resolves
@@ -62,7 +62,7 @@ general Bellman model change.
 
 After all supplied corrections pass individually:
 
-1. Run `python -m pytest tests/corrections/ -q` and the affected Bellman suite. Resolve every
+1. Run `python -m pytest deprecated/tests/corrections/ -q` and the affected suite under `deprecated/tests/`. Resolve every
    regression before continuing.
 2. Run a serial 10-game mirror match of the repaired agent. Time every agent callback and every
    match with a generic harness measurement; if none exists, add reusable nonproduction timing

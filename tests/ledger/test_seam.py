@@ -5,13 +5,13 @@ from pathlib import Path
 
 import pytest
 
-from bellman_helpers import deck as agent_deck
+from agent_helpers import deck as agent_deck
 
 from common.engine import CgpyTransitionProvider, LedgerCgpyProvider
 from common.ledger import (LedgerContext, LedgerDecider, LedgerNativeProvider, PreviewState,
                            preview_provider_factory)
 from common.native_engine import NativeCgTransitionProvider
-from common.state import DecisionState
+from deprecated.bellman.state import DecisionState
 from train.blunder.store import load_corrections
 
 REPO = Path(__file__).resolve().parents[2]

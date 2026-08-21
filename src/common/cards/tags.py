@@ -5,9 +5,13 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-from common.card_tags import is_card_key
-
 _DEFAULT = Path(__file__).resolve().parents[1] / "card_functions.json"
+
+
+def is_card_key(key) -> bool:
+    """Return whether a JSON key is a card id rather than reserved metadata."""
+
+    return str(key).lstrip("-").isdigit()
 
 
 class CardFunctions:

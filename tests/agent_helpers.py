@@ -1,0 +1,25 @@
+"""Shared loaders for a shipped agent's declarations and decklist."""
+from __future__ import annotations
+
+from functools import lru_cache
+import importlib.util
+from pathlib import Path
+
+
+REPO = Path(__file__).resolve().parents[1]
+
+
+@lru_cache(maxsize=None)
+def strategy(name: str):
+    path = REPO / "src" / "agents" / name / "strategy.py"
+    spec = importlib.util.spec_from_file_location(f"_test_{name}_strategy", path)
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module.STRATEGY
+
+
+@lru_cache(maxsize=None)
+def deck(name: str) -> tuple[int, ...]:
+    return tuple(int(value) for value in
+                 (REPO / "src" / "agents" / name / "deck.csv").read_text().splitlines()
+                 if value.strip())
