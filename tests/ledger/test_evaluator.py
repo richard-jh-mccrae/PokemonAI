@@ -482,8 +482,9 @@ def test_doomed_active_discount_prices_the_killable_active_as_spent():
     killable = against(body(STARYU, 9, hp=70, max_hp=70))            # 120 >= 70
     weak_kill = against(body(666, 9, hp=160, max_hp=160))            # Cinderace: 120x2 >= 160
     safe = against(body(MEGA_STARMIE, 9, hp=330, max_hp=330))        # 120 < 330
-    armed = ctx(overrides={"doomed_active_discount": 0.5})
-    flat = ctx()
+    armed = ctx()
+    assert armed.weights.doomed_active_discount > 0    # the 2026-08-21 armed default
+    flat = ctx(overrides={"doomed_active_discount": 0.0})
     for doomed_board in (killable, weak_kill):
         assert evaluate(doomed_board, armed).total > evaluate(doomed_board, flat).total
     assert evaluate(safe, armed).total == pytest.approx(evaluate(safe, flat).total)
@@ -505,8 +506,8 @@ def test_our_doomed_read_grants_their_active_the_coming_attach_and_one_evolution
         return board(me=player(active=body(MEGA_STARMIE, 1, hp=150, max_hp=330)),
                      them=player(own=False, active=attacker))
 
-    armed = ctx(overrides={"doomed_active_discount": 0.5})
-    flat = ctx()
+    armed = ctx()
+    flat = ctx(overrides={"doomed_active_discount": 0.0})
     doomed = ours_vs(body(MAKUHITA, 9, energies=(fighting, fighting)))
     assert evaluate(doomed, armed).total < evaluate(doomed, flat).total
     one_short = ours_vs(body(MAKUHITA, 9, energies=(fighting,)))

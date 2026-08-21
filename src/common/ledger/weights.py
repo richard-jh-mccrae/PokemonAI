@@ -128,7 +128,8 @@ class LedgerWeights:
     #: Fraction of its worth a doomed active loses. THEIR active is doomed when OUR paid-up
     #: attack can KO it outright (weakness applied). OURS is doomed under the conservative
     #: next-turn read: their active gets one attach and one evolution before it swings.
-    doomed_active_discount: float = 0.0
+    #: Armed at 0.4 by owner order 2026-08-21; the flips it buys are accepted, not gate-clean.
+    doomed_active_discount: float = 0.4
 
     # The Active Spot: worth extra when its occupant can actually pay an attack.
     active_premium: float = 0.08

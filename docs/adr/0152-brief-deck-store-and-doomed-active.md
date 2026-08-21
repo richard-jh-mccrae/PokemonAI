@@ -32,3 +32,13 @@ for every card the 16 scouting Briefs name.
   tie accident; the ruled line is a gust→attack→snipe double KO, planner scope.
 - Dark levers now three: `concentration`, `hp_value`, `doomed_active_discount` — all with
   measured profiles awaiting a round (or the planner) that can afford their trades.
+
+## Addendum 2026-08-21
+
+The doomed read was re-ruled ASYMMETRIC and armed at 0.4 by owner order. THEIR active is
+doomed only on our paid-up outright KO this turn (the engine still prices every actual attack;
+the record read only bridges the pre-attack step — ours-only measured 210/426, NET negative,
+so the anticipation stays). OURS is doomed under the conservative incoming read: their active
+receives its coming attach (missing color first) plus one DIRECT evolution, energy carried,
+before it swings (`worth.projected_incoming_damage`). Armed profile vs the armed-concentration
+baseline: 213 -> 216 of 426, floor dragapult_ex 46.5% (19 up, 16 down).

@@ -44,3 +44,9 @@ to the basic {W}, same started recipient.
   concentrate there too, and the exception requires the threat read the 1-ply brain lacks.
 - Evaluator mechanism tests pin both shapes (2-and-0 beats 1-and-1 when armed; splits tie at
   0.0; bench rental worth == bare body, active rental > bare).
+
+## Addendum 2026-08-21
+
+Armed at 0.1 by owner order, trading the zero-flip gate: 208 -> 213 of 426 (13 up, 8 down),
+floor dragapult_ex 41.9%. Arming exposed that benched rentals counted as attack progress in
+the concentration term; they no longer do (same rental ruling: it evaporates, so no progress).
