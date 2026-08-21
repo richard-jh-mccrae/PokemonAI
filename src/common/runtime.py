@@ -10,13 +10,17 @@ from time import perf_counter
 from common import telemetry
 from common.api import ActionIdentity, RootDecision
 from common.cards.functions.attack_lock import fold_attack_locks
-from common.cards import CardFunctions
+from common.cards import CardFunctions, card_store
+from common.cards.card_facts import EnergyCard
+from common.cards.functions.damage import bench_reach
 from common.deck_tracker import OwnCardModel
-from common.ledger import LedgerContext, LedgerDecider, preview_provider_factory
+from common.ledger import (LedgerContext, LedgerDecider, OpponentLayer,
+                           preview_provider_factory)
 from common.scouting.artifact import load_artifact
-from common.scouting.briefs import load_briefs
+from common.scouting.briefs import load_briefs, match_brief, scouted_ledger_roles
+from common.scouting.pokemon_roles import general_pokemon_roles
 from common.scouting.provider import EngineCardStatProvider
-from common.scouting.read import Read
+from common.scouting.read import Read, posture_gamma
 from common.scouting.scout import Scout
 from common.strategy.context import (
     _CARD,
@@ -42,12 +46,58 @@ from common.strategy.context import (
 _ENGINE = object()
 
 
+class _StoreFacts:
+    """One card's numbers the engine adapters price mid-transition, read off its record."""
+
+    __slots__ = ("bench_damage", "prize_value", "energy_type")
+
+    def __init__(self, record):
+        self.bench_damage = max((bench_reach(attack)
+                                 for attack in getattr(record, "attacks", ()) or ()), default=0)
+        self.prize_value = getattr(record, "prize_value", 1)
+        self.energy_type = (record.provides if isinstance(record, EnergyCard)
+                            else getattr(record, "energy_type", None))
+
+
+class _TagView:
+    def __init__(self, functions):
+        self._functions = functions
+
+    def get(self, card_id, default=()):
+        tags = self._functions.tags(int(card_id)) if self._functions is not None else ()
+        return tuple(tags) if tags else default
+
+
+class _FactsView:
+    def __init__(self, store):
+        self._store = store
+        self._cache: dict = {}
+
+    def get(self, card_id, default=None):
+        card_id = int(card_id)
+        if card_id not in self._cache:
+            record = self._store.get(card_id)
+            self._cache[card_id] = _StoreFacts(record) if record is not None else None
+        found = self._cache[card_id]
+        return found if found is not None else default
+
+
+class _ProviderFactSources:
+    """The `registry` surface the engine adapters read (ADR-0148): `.functions` for recycle
+    tags, `.facts` for store-derived transition numbers. No Bellman registry involved."""
+
+    def __init__(self, functions):
+        self.functions = _TagView(functions)
+        self.facts = _FactsView(card_store())
+
+
 class AgentRuntime:
     """Deployment shell: declarative pregame, forced selections, and the Ledger (ADR-0145/0149);
     the Bellman teacher extends this shell from ``deprecated/bellman/runtime.py``."""
 
     def __init__(self, strategy, deck, *, stats=_ENGINE, functions=_ENGINE,
-                 scout=_ENGINE, briefs=_ENGINE, provider_factory=None, limits=None):
+                 scout=_ENGINE, briefs=_ENGINE, provider_factory=None, limits=None,
+                 ledger_weights=None):
         self.strategy = strategy
         self.deck = tuple(int(card_id) for card_id in deck)
         if stats is _ENGINE:
@@ -75,10 +125,15 @@ class AgentRuntime:
         self.ledger = LedgerDecider(
             self.deck, strategy.name,
             LedgerContext.build(
+                # `ledger_weights` is the tuner's seam: a candidate GENERAL vector under
+                # trial; the deck's own overrides still bend it on top.
+                weights=ledger_weights,
                 roles={card_id: tuple(self.roles.get(card_id, ()) or ())
                        for card_id in self.deck},
                 overrides=getattr(strategy, "ledger_overrides", None)),
-            provider_factory=preview_provider_factory(self.provider_factory))
+            provider_factory=preview_provider_factory(self.provider_factory),
+            provider_kwargs={"registry": _ProviderFactSources(self.functions),
+                             "stats": self.stats})
 
     @staticmethod
     def _player(observation, seat):
@@ -157,6 +212,14 @@ class AgentRuntime:
             chosen, ActionIdentity(action, (context,)), 0.0, True,
             {"backend": "declarative-pregame", "context": context},
         )
+
+    def _observe_matchup(self, observation) -> float:
+        """One scouting pass per decision, shared by both brains: refresh the Read, match the
+        Brief when confidence clears zero, and return the gamma."""
+        self.last_read = self.scout.observe(observation) if self.scout is not None else Read()
+        gamma = posture_gamma(self.last_read)
+        self.last_brief = match_brief(self.briefs, self.last_read) if gamma > 0.0 else None
+        return gamma
 
     def _reset_for_pregame(self) -> None:
         """Match-boundary state clearing; the teacher extends this with its plan caches."""
@@ -249,7 +312,35 @@ class AgentRuntime:
         forced = self._forced_selection(observation)
         if forced is not None:
             return forced
-        return self.ledger.decide(observation)
+        gamma = self._observe_matchup(observation)
+        return self.ledger.decide(
+            observation, opponent=self._opponent_layer(observation, self.last_brief, gamma))
+
+    def _opponent_layer(self, observation: dict, brief, gamma: float):
+        """Scouting priced into the Ledger (ADR-0148): generic roles for shown cards at full
+        strength; the matched Brief's claims and `ledger_overrides` blended in by gamma."""
+        current = observation.get("current") or {}
+        seat = int(current.get("yourIndex", 0))
+        players = current.get("players") or ()
+        opponent = (players[1 - seat] if len(players) == 2 and players[1 - seat] else {})
+        bodies = tuple(body for body in
+                       tuple(opponent.get("active") or ()) + tuple(opponent.get("bench") or ())
+                       if body)
+        shown = {int(body["id"]) for body in bodies if body.get("id") is not None}
+        shown.update(int(card["id"]) for card in (opponent.get("discard") or ())
+                     if isinstance(card, dict) and card.get("id") is not None)
+        roles = {card_id: tuple(card_roles) for card_id, card_roles in
+                 general_pokemon_roles(shown, self.stats, self.functions).items()}
+        brief_roles = scouted_ledger_roles(self.last_read, brief, self.stats,
+                                           self.functions) if gamma > 0.0 else {}
+        if not roles and not brief_roles:
+            return None
+        weights = self.ledger.ctx.weights
+        overrides = getattr(brief, "ledger_overrides", None) if brief is not None else None
+        if overrides:
+            weights = weights.resolve(overrides)      # a typo'd Brief key raises loud here
+        return OpponentLayer(roles=roles, brief_roles=brief_roles, weights=weights,
+                             gamma=gamma)
 
     @staticmethod
     def _crash_report(observation: dict, exc: Exception) -> dict:

@@ -12,8 +12,7 @@ from common.options import enumerate_legal_actions
 from common.runtime import AgentRuntime, _int_field, _last_resort_selection
 from common.scouting.pokemon_roles import general_pokemon_roles
 from common.strategy import Roles
-from common.scouting.briefs import match_brief, resolve_scouted_role_worth
-from common.scouting.read import Read, posture_gamma
+from common.scouting.briefs import resolve_scouted_role_worth
 from .state import DecisionState
 from common.strategy.context import _TO_HAND
 from .activation import (
@@ -158,10 +157,8 @@ class BellmanTeacherRuntime(AgentRuntime):
         self._proof_id = ""
 
     def _planner(self, observation):
-        self.last_read = self.scout.observe(observation) if self.scout is not None else Read()
-        gamma = posture_gamma(self.last_read)
-        brief = match_brief(self.briefs, self.last_read) if gamma > 0.0 else None
-        self.last_brief = brief
+        self._observe_matchup(observation)
+        brief = self.last_brief
         current = observation.get("current") or {}
         seat = int(current.get("yourIndex", 0))
         belief = opponent_belief(
