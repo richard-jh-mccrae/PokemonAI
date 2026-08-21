@@ -6,7 +6,6 @@ CARD = TrainerCard(
     name='Hop’s Bag',
     kind=ITEM,
     text='Search your deck for up to 2 Basic Hop’s Pokémon and put them onto your Bench. Then, shuffle your deck.',
-    tags=frozenset(['search']),
     clauses=(Clause('fetch', target='basic_pokemon', zone='deck', amount=2, dest='bench', name_family="Hop's"),),
     covers='partial',
 )

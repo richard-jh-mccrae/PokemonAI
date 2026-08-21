@@ -1,10 +1,8 @@
-"""Trainer records stay true to the engine defs, the tag table, and the audited clause store."""
+"""Trainer records stay true to the engine defs and audited clause store."""
 from __future__ import annotations
 
-import json
-
 import pytest
-from cards_helpers import REPO, TRAINER_KINDS, engine_cards  # noqa: F401  engine_cards is a fixture
+from cards_helpers import TRAINER_KINDS, engine_cards  # noqa: F401  engine_cards is a fixture
 
 from common.cards import trainer_card_store
 from common.cards.card_facts import Clause
@@ -17,13 +15,6 @@ def test_trainer_facts_match_the_engine_defs(engine_cards):
         assert (card.name, card.kind, card.ace_spec) == (
             source["name"], TRAINER_KINDS[source["cardType"]], source["aceSpec"]), card_id
         assert card.text == (skills[0]["text"] if skills else ""), card_id
-
-
-def test_trainer_tags_match_the_shipped_tag_table():
-    measured = json.loads((REPO / "tools" / "meta_tracker" / "measured_functions.json")
-                          .read_text(encoding="utf-8"))
-    for card_id, card in trainer_card_store().items():
-        assert card.tags == frozenset(measured.get(str(card_id), [])), card_id
 
 
 def test_trainer_clauses_stay_synced_with_the_clause_store():

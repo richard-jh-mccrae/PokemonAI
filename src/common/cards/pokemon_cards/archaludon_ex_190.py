@@ -12,7 +12,6 @@ CARD = PokemonCard(
     weakness=FIRE,
     resistance=GRASS,
     retreat_cost=2,
-    tags=frozenset(['discard_energy_recur']),
     default_roles=('primary_attacker',),
     covers='full',
     abilities=(

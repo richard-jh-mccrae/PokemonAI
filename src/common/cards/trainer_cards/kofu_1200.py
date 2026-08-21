@@ -6,7 +6,6 @@ CARD = TrainerCard(
     name='Kofu',
     kind=SUPPORTER,
     text='Put 2 cards from your hand on the bottom of your deck in any order. If you put 2 cards on the bottom of your deck in this way, draw 4 cards.\xa0(If you can’t put 2 cards from your hand on the bottom of your deck, you can’t use this card.)',
-    tags=frozenset(['draw']),
     clauses=(Clause('draw', amount=4, cost='bottom_2', cost_required=True),),
     covers='full',
 )

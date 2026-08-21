@@ -6,5 +6,4 @@ CARD = TrainerCard(
     name="Team Rocket's Archer",
     kind=SUPPORTER,
     text='You can use this card only if any of your Team Rocket’s Pokémon were Knocked Out during your opponent’s last turn.\n\nEach player shuffles their hand into their deck. Then, you draw 5 cards, and your opponent draws 3 cards.',
-    tags=frozenset(['hand_disruption']),
 )

@@ -10,7 +10,6 @@ CARD = PokemonCard(
     evolves_from='Ponyta',
     weakness=WATER,
     retreat_cost=1,
-    tags=frozenset(['dig:1', 'draw']),
     abilities=(
         Ability(
             name='Hurried Gait',

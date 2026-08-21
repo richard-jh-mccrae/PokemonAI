@@ -10,7 +10,6 @@ CARD = PokemonCard(
     evolves_from='Magmar',
     weakness=WATER,
     retreat_cost=2,
-    tags=frozenset(['burn']),
     abilities=(
         Ability(
             name='Magma Surge',

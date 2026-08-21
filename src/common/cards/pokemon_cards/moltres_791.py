@@ -9,7 +9,6 @@ CARD = PokemonCard(
     stage=BASIC,
     weakness=WATER,
     retreat_cost=1,
-    tags=frozenset([]),
     default_roles=('support_pokemon', 'backup_attacker'),
     attacks=(
         Attack(

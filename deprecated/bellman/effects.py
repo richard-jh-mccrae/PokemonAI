@@ -4,7 +4,7 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-from common.cards.tags import is_card_key
+from deprecated.bellman.tags import is_card_key
 
 
 _DEFAULT = Path(__file__).with_name("card_effects.json")

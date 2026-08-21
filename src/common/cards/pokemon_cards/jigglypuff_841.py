@@ -9,7 +9,6 @@ CARD = PokemonCard(
     stage=BASIC,
     weakness=FIGHTING,
     retreat_cost=1,
-    tags=frozenset([]),
     attacks=(
         Attack(
             attack_id=1213,

@@ -8,7 +8,6 @@ CARD = PokemonCard(
     energy_type=DRAGON,
     stage=BASIC,
     retreat_cost=1,
-    tags=frozenset(['dig']),
     abilities=(
         Ability(
             name='Attract Customers',

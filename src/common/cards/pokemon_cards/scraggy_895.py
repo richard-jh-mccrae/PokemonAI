@@ -9,7 +9,6 @@ CARD = PokemonCard(
     stage=BASIC,
     weakness=GRASS,
     retreat_cost=2,
-    tags=frozenset(['hand_disruption']),
     attacks=(
         Attack(
             attack_id=1292,

@@ -6,7 +6,6 @@ CARD = TrainerCard(
     name='Pokégear 3.0',
     kind=ITEM,
     text='Look at the top 7 cards of your deck. You may reveal a Supporter card you find there and put it into your hand. Shuffle the other cards back into your deck.',
-    tags=frozenset(['dig', 'draw']),
     clauses=(Clause('fetch', target='supporter', zone='deck', dig=7),),
     covers='full',
 )

@@ -6,5 +6,4 @@ CARD = TrainerCard(
     name='Drayton',
     kind=SUPPORTER,
     text='Look at the top 7 cards of your deck. You may reveal a Pokémon and a Trainer card you find there and put them into your hand. Shuffle the other cards back into your deck.',
-    tags=frozenset(['dig', 'draw']),
 )

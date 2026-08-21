@@ -16,7 +16,7 @@ from deprecated.bellman import ReferenceSolver
 from common.engine import _own_prize_export
 from deprecated.bellman.providers import BellmanCgpyProvider as CgpyTransitionProvider
 from deprecated.bellman.value import CardFacts, Potential, ValueOracle, ValueRegistry
-from common.cards import CardFunctions
+from deprecated.bellman.tags import CardFunctions
 
 
 WATER, IGNITION, CINDERACE, STARYU, MEGA = 3, 17, 666, 1030, 1031

@@ -1,8 +1,7 @@
 """Parametric Effect Clauses for Trainers — pure & lib-free (ADR-0032 item 6).
 
-Where a Function Tag is the coarse boolean trigger (``heal``), an Effect Clause carries the
-quantities the math reads: ``{kind, amount, restriction?, condition?, rider?}``, a card being a
-LIST of clauses. Measured from the same engine probe records the tag classifier reads.
+An Effect Clause carries both the typed capability and the quantities the math reads:
+``{kind, amount, restriction?, condition?, rider?}``, a card being a LIST of clauses.
 
 ``amount`` is an int, ``all`` (override-authored), or None — semantically the LARGEST magnitude
 the engine actually produced. A probe can under-measure, so merges keep the max observed and

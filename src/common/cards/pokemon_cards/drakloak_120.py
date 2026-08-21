@@ -9,7 +9,6 @@ CARD = PokemonCard(
     stage=STAGE1,
     evolves_from='Dreepy',
     retreat_cost=1,
-    tags=frozenset(['dig', 'dig:2', 'draw']),
     default_roles=('primary_attacker', 'draw_engine'),
     covers='full',
     abilities=(

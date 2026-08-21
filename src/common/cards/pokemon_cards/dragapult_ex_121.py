@@ -11,7 +11,6 @@ CARD = PokemonCard(
     ex=True,
     tera=True,
     retreat_cost=1,
-    tags=frozenset(['spread']),
     default_roles=('primary_attacker', 'sniper'),
     attacks=(
         Attack(

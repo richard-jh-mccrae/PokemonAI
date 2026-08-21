@@ -7,9 +7,9 @@
   "pokemon": [
     {"card": "Applin", "roles": ["primary_attacker"]},
     {"card": "Dipplin", "roles": ["primary_attacker"]},
-    {"card": "Fezandipiti ex", "roles": ["disruption_target"]},
+    {"card": "Fezandipiti ex", "roles": []},
     {"card": "Grookey", "roles": ["backup_attacker", "support_pokemon"]},
-    {"card": "Thwackey", "roles": ["backup_attacker", "disruption_target"]},
+    {"card": "Thwackey", "roles": ["backup_attacker"]},
     {"card": "Goldeen", "roles": ["backup_attacker"]},
     {"card": "Seaking", "roles": ["backup_attacker"]},
     {"card": "Psyduck", "roles": ["support_pokemon"]},

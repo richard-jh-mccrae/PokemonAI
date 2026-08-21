@@ -15,7 +15,7 @@ column.
 `src/common/cards/` holds one frozen record per printing — `PokemonCard` under `pokemon_cards/`,
 `TrainerCard` under `trainer_cards/`, `EnergyCard` under `energy_cards/` — one generated module
 per card, loaded once per process and served as one dict by `card_store()`. A record carries its
-printed facts, its Function Tags, and its effects **embedded**: Attacks and Abilities on the
+printed facts and typed effect Clauses **embedded**: Attacks and Abilities on the
 Pokémon record, the play effect on the Trainer record, the provision riders on the Energy
 record, every effect encoded as `Clause` legs.
 
@@ -30,8 +30,7 @@ with the same semantics as `general_pokemon_roles`.
 
 `tools/build_pokemon_cards.py` generates every card module from the engine-twin defs plus the
 shipped tag/clause stores and refuses to emit any effect it has no encoding for. The former
-The former `common/cards.py` module folded into the package as `common/cards/tags.py`; the public
-import `from common.cards import CardFunctions` is unchanged.
+The former loose-tag adapter was later quarantined with the Bellman teacher by Issue #582.
 
 ## Where a card function's logic lives
 

@@ -9,7 +9,6 @@ CARD = PokemonCard(
     stage=BASIC,
     weakness=LIGHTNING,
     retreat_cost=3,
-    tags=frozenset(['recycle']),
     default_roles=('primary_attacker', 'support_pokemon'),
     attacks=(
         Attack(

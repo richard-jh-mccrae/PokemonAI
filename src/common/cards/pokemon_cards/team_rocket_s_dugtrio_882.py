@@ -10,7 +10,6 @@ CARD = PokemonCard(
     evolves_from="Team Rocket's Diglett",
     weakness=GRASS,
     retreat_cost=1,
-    tags=frozenset(['team_rocket']),
     abilities=(
         Ability(
             name='Holes',

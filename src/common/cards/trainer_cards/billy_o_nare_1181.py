@@ -6,7 +6,6 @@ CARD = TrainerCard(
     name="Billy & O'Nare",
     kind=SUPPORTER,
     text='Draw 2 cards. Then, if you have 10 or more cards in your hand, draw 2 more cards.',
-    tags=frozenset(['draw']),
     clauses=(Clause('draw', amount=2, amount_if={'condition': 'hand_size_10_plus_after_draw', 'amount': 4}),),
     covers='full',
 )

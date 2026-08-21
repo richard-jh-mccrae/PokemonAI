@@ -11,7 +11,6 @@ CARD = PokemonCard(
     ex=True,
     weakness=FIGHTING,
     retreat_cost=3,
-    tags=frozenset(['team_rocket']),
     attacks=(
         Attack(
             attack_id=642,

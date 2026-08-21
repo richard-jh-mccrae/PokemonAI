@@ -1,6 +1,6 @@
 # ADR-0153 — The card store absorbs the JSON tables; a card is one record module
 
-Status: Accepted (2026-08-21); BUILT. Follows ADR-0143/0152; owner's directive.
+Status: Accepted (2026-08-21); loose-tag API superseded by Issue #582.
 
 ## Context
 
@@ -23,13 +23,13 @@ Card records are the single runtime source; the JSON tables leave `src/common` e
 - **Schema carries what the tables carried.** `Attack` gains typed engine-correction fields
   (`engine_overrides()` reassembles the stat-provider patch); every record class gains `covers`,
   the clause-completeness verdict, whose prose reasons stay with the authoring source.
-- **Loaders become store views with unchanged APIs.** `CardFunctions.load()` serves record tags;
+- **Loaders become store views with unchanged APIs.** The former loose-tag view served record tags;
   `load_attack_overrides()` reassembles patches from record attacks and feeds the same
   `build_attack_stats`. Equivalence was proven against the tables before deletion: zero tag
   mismatches, zero verdict mismatches, all 117 attack patches byte-identical, and the teacher's
   six correction pins reproduce exactly.
-- **Authoring inputs live with the authoring tools.** `measured_functions.json` (probe
-  accumulation), `attack_overrides.json` + provenance (generator output), and the measured/
+- **Authoring inputs live with the authoring tools.** The frozen tag-era inputs moved under
+  `deprecated/bellman/tag_tools/`; `attack_overrides.json` + provenance and the measured/
   override effect sources sit under `tools/meta_tracker/`; `build_pokemon_cards.py` bakes them
   into record modules and remains byte-idempotent. `build_card_effects.py` is now the merge
   library the builder and gates share.
@@ -39,7 +39,7 @@ Card records are the single runtime source; the JSON tables leave `src/common` e
 
 ## Consequences
 
-The store triples to ~493 modules; the bundle ships record modules and no JSON. Tag or clause
+The store triples to ~493 modules; the bundle ships record modules and no JSON. Clause
 edits are now typed, reviewable diffs on one card's file. The sync gates invert: records are
 verified against the tools-side authoring inputs rather than a shipped table. A new meta card
 enters by record generation (tail) or full authoring (core) — never by editing a table by hand.

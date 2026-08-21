@@ -38,9 +38,72 @@ It never represents hidden game truth or provider-control state.
 _Avoid_: BoardState, GameState, DecisionState
 
 **Evaluation Model**:
-The versioned card knowledge, roles, and parameters used to value an Observation State.
-It changes evaluation, never the facts or identity of the position.
+The versioned card knowledge, roles, Valuation Configuration, and Compute Configuration used to
+value an Observation State. It changes evaluation, never position facts or identity.
 _Avoid_: Observation State, LedgerContext, evaluator state
+
+**Valuation Feature**:
+A canonical deck-agnostic marginal property of a card, board, belief, or continuation.
+Independent active features contribute additively.
+_Avoid_: Rule, card pin, mechanic branch
+
+**Feature Catalog**:
+The single typed authority for every Valuation Feature identity and coefficient requirement.
+_Avoid_: Weight field, emitted string, subsystem registry
+
+**Feature Activation**:
+A sparse observed or derived quantity emitted independently of coefficients.
+_Avoid_: Contribution, configured weight
+
+**Feature Contribution**:
+A Feature Activation multiplied once by its resolved Valuation Coefficient.
+_Avoid_: Activation, hidden term
+
+**Valuation Configuration**:
+The complete versioned coefficients applied to Valuation Features. A Deck Overlay changes
+coefficients but never extraction.
+_Avoid_: Pilot Profile, deck branch
+
+**Deck Overlay**:
+Sparse residuals from our deck added to the general Valuation Configuration.
+_Avoid_: Absolute replacement, card override, opponent preference
+
+**Compute Configuration**:
+The versioned limits, sampling controls, and tolerances bounding Ledger work.
+_Avoid_: Valuation weight, policy preference
+
+**Behavior Identity**:
+The resolved Valuation Configuration and Compute Configuration identities recorded together.
+_Avoid_: Weights-only hash, deck name
+
+**Indifference Set**:
+Actions equal within Compute Configuration tolerance; a neutral seeded lottery selects among them.
+_Avoid_: Lowest selection, hidden hierarchy
+
+**Archetype Belief**:
+A candidate-conditioned set of opponent claims and resources paired with posterior probability.
+_Avoid_: Matched Brief, posture, top archetype
+
+**Opponent Trait**:
+A typed parameterized opponent claim which only gains value through board context.
+_Avoid_: Opponent weight, free-form claim
+
+**Continuation Footprint**:
+The marginal state value and action opportunities an action creates, preserves, or consumes.
+_Avoid_: Restock tag, card branch
+
+**Action Opportunity Cost**:
+A Valuation Feature pricing commitment to a turn-continuing action.
+_Avoid_: Act threshold, noise floor
+
+**Development Reach**:
+A Pokémon's rule-legal proximity to a meaningful current or next-turn state under uncertain resources.
+_Avoid_: Projected evolution, guaranteed next-turn attack
+
+**Coverage Unknown**:
+Legitimate missing game knowledge, emitted as a named feature and diagnostic. Unknown vocabulary
+or malformed configuration is an error.
+_Avoid_: Silent zero, typo fallback
 
 **Observation Record**:
 The versioned, hidden-safe serialized form of an Observation State used for replay and learning.
@@ -89,9 +152,9 @@ Scouting doctrine activated by the matched opponent Brief.
 _Avoid_: Opponent Role, matchup value
 
 **Pokémon Role**:
-Deck or scouting doctrine describing a Pokémon's strategic job, such as primary attacker, backup attacker, or support.
-Roles contribute to development, preservation, and KO value.
-_Avoid_: Win condition, secondary attacker, Trainer function, Strategy
+Typed deck or scouting doctrine describing one precise strategic job a Pokémon performs.
+Roles contribute to development, preservation, and KO value but never target priority.
+_Avoid_: Engine, disruption target, Trainer function, Strategy
 
 **General Pokémon Role**:
 A deck-independent Pokémon Role used whenever the same body has the same strategic job for either player.
@@ -106,12 +169,13 @@ The intrinsic ancestry between Pokémon cards. It comes from card facts and is n
 _Avoid_: Authored evolution map, Pokémon Role
 
 **Card Function**:
-An intrinsic Trainer or Energy capability shared across decks, such as search, draw, gust, or acceleration.
-_Avoid_: Pokémon Role, deck doctrine
+An intrinsic typed parameterized card capability shared across decks. It carries no value itself;
+the Ledger combines it with board context to emit Valuation Features.
+_Avoid_: Tag, Pokémon Role, deck doctrine, valuation feature
 
 The runtime performs declarative setup choices, resolves Roles and evolution from the unified
-card records (deck declarations REPLACE authored defaults), builds the deck's EvaluationModel
-from them and `ledger_overrides`, and sends every normal-turn decision to `common.ledger`.
+card records (deck declarations REPLACE authored defaults), builds the deck's Evaluation Model
+and complete effective configuration, and sends every normal-turn decision to `common.ledger`.
 
 Deck-local policy is data in `src/agents/<deck>/strategy.py`:
 
@@ -119,15 +183,16 @@ Deck-local policy is data in `src/agents/<deck>/strategy.py`:
 - starter priority and preferred first/second turn;
 - partner dependencies;
 - prize routes;
-- upward-only Worth overrides and `ledger_overrides`.
+- a sparse additive Ledger overlay over shared Valuation Features.
 
 The live decision path:
 
-- `ledger/`: the decider, worth/zone evaluation, option previews, and sampled-hand chance
+- `ledger/`: the Feature Catalog, linear activation/contribution evaluation, decider, option
+  previews, and compute-profiled sampled-hand chance
   (ADR-0145), plus the preview seam over the providers (ADR-0146);
 - `observation/`: ObservationState, its builder, knowledge, provider capsule, keys, record codec,
   events, and parent-relative delta;
-- `cards/`: the unified card store — one record module per card, carrying tags, clauses,
+- `cards/`: the unified card store — one record module per card, carrying typed clauses,
   coverage verdicts, and engine stat corrections (ADR-0143/0153) — and the per-function
   mechanics (`fetch.py`, `draw.py`, `damage.py`, `energy.py`, `attack_lock.py`);
 - `native_engine.py`: the production `cg` transition provider — forks the engine, enumerates and

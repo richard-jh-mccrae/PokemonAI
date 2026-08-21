@@ -6,7 +6,6 @@ CARD = TrainerCard(
     name='Boss’s Orders',
     kind=SUPPORTER,
     text='Switch in 1 of your opponent’s Benched Pokémon to the Active Spot.',
-    tags=frozenset(['gust']),
     clauses=(Clause('gust', target='any'),),
     covers='full',
 )

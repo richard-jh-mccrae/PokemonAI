@@ -7,7 +7,6 @@ CARD = TrainerCard(
     kind=ITEM,
     text='Search your deck for any number of Basic Pokémon and put them onto your Bench. Then, shuffle your deck.',
     ace_spec=True,
-    tags=frozenset(['search']),
     clauses=(Clause('fetch', target='basic_pokemon', zone='deck', amount='all', dest='bench'),),
     covers='full',
 )

@@ -9,7 +9,6 @@ CARD = PokemonCard(
     stage=BASIC,
     weakness=GRASS,
     retreat_cost=2,
-    tags=frozenset([]),
     default_roles=('primary_attacker',),
     attacks=(
         Attack(

@@ -7,6 +7,5 @@ CARD = TrainerCard(
     kind=TOOL,
     text='The Pokémon this card is attached to gets +100 HP.',
     ace_spec=True,
-    tags=frozenset(['tool']),
     clauses=(Clause('hp_bonus', amount=100),),
 )

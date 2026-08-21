@@ -6,7 +6,6 @@ CARD = TrainerCard(
     name='Dragon Elixir',
     kind=ITEM,
     text='Heal 60 damage from your Active {N} Pokémon.',
-    tags=frozenset([]),
     clauses=(Clause('heal', amount=60, restriction='active_dragon_only'),),
     covers='full',
 )

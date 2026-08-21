@@ -10,7 +10,6 @@ CARD = PokemonCard(
     evolves_from='Dunsparce',
     weakness=FIGHTING,
     retreat_cost=3,
-    tags=frozenset(['dig:3', 'draw', 'recycle_line', 'stall']),
     default_roles=('draw_engine',),
     covers='full',
     abilities=(

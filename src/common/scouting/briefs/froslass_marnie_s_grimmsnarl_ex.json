@@ -5,11 +5,11 @@
   "authored": "2026-08-12",
   "opponent_properties": {"opp_tempo": "midrange", "opp_spreads_bench": true, "opp_comeback_disruptor": true},
   "pokemon": [
-    {"card": "Froslass", "roles": ["backup_attacker", "disruption_target", "support_pokemon"]},
+    {"card": "Froslass", "roles": ["backup_attacker", "support_pokemon"]},
     {"card": "Marnie's Grimmsnarl ex", "roles": ["primary_attacker"]},
     {"card": "Marnie's Impidimp", "roles": ["primary_attacker"]},
     {"card": "Marnie's Morgrem", "roles": ["primary_attacker"]},
-    {"card": "Munkidori", "roles": ["disruption_target"]},
+    {"card": "Munkidori", "roles": []},
     {"card": "Snorunt", "roles": ["backup_attacker"]}
   ],
   "key_cards": [

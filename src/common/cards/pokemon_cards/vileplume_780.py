@@ -10,7 +10,6 @@ CARD = PokemonCard(
     evolves_from='Gloom',
     weakness=FIRE,
     retreat_cost=2,
-    tags=frozenset(['poison', 'sleep']),
     attacks=(
         Attack(
             attack_id=1128,

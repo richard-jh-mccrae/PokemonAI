@@ -6,5 +6,4 @@ CARD = EnergyCard(
     name='Basic {W} Energy',
     kind=BASIC_ENERGY,
     provides=WATER,
-    tags=frozenset([]),
 )

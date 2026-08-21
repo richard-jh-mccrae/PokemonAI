@@ -6,7 +6,6 @@ CARD = TrainerCard(
     name='Dawn',
     kind=SUPPORTER,
     text='Search your deck for a Basic Pokémon, a Stage 1 Pokémon, and a Stage 2 Pokémon, reveal them, and put them into your hand. Then, shuffle your deck.',
-    tags=frozenset(['search']),
     clauses=(Clause('fetch', target='basic_pokemon', zone='deck'), Clause('fetch', target='stage1', zone='deck'), Clause('fetch', target='stage2', zone='deck')),
     covers='full',
 )

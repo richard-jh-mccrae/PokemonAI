@@ -10,7 +10,6 @@ CARD = PokemonCard(
     evolves_from='Sobble',
     weakness=LIGHTNING,
     retreat_cost=1,
-    tags=frozenset([]),
     attacks=(
         Attack(
             attack_id=1051,

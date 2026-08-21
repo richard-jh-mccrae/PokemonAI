@@ -6,5 +6,4 @@ CARD = TrainerCard(
     name="Grimsley's Move",
     kind=SUPPORTER,
     text='Look at the top 7 cards of your deck and put a {D} Pokémon you find there onto your Bench. Shuffle the other cards and put them on the bottom of your deck. You can’t use this card during your first turn.',
-    tags=frozenset(['dig']),
 )

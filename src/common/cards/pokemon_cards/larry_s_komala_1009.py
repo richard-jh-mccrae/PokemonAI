@@ -9,7 +9,6 @@ CARD = PokemonCard(
     stage=BASIC,
     weakness=FIGHTING,
     retreat_cost=2,
-    tags=frozenset(['energy_accel', 'sleep']),
     abilities=(
         Ability(
             name='Lethargic Charge',

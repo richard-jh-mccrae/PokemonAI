@@ -10,7 +10,6 @@ CARD = PokemonCard(
     evolves_from='Iono’s Voltorb',
     weakness=FIGHTING,
     retreat_cost=0,
-    tags=frozenset([]),
     attacks=(
         Attack(
             attack_id=364,

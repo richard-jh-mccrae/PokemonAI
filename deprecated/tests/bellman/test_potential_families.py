@@ -4,7 +4,7 @@ from __future__ import annotations
 import pytest
 
 from deprecated.bellman import BoardPotential, CardFacts, ValueRegistry
-from common.card_worth import KNOWN_CARD_FLOOR
+from deprecated.bellman.card_worth import KNOWN_CARD_FLOOR
 from common.cards.card_facts import (
     Attack, BASIC, Clause, PokemonCard, STADIUM as STADIUM_KIND, TrainerCard,
 )

@@ -11,7 +11,6 @@ CARD = PokemonCard(
     ex=True,
     tera=True,
     retreat_cost=3,
-    tags=frozenset([]),
     attacks=(
         Attack(
             attack_id=258,

@@ -15,7 +15,7 @@ from ledger_helpers import (DRAGAPULT, FIRE_E, ScriptedProvider, action, body, p
 
 from common.algebra import (Actor, Chance, Choice, Deterministic, Edge, RevealChoice,
                             RevealOutcome, Terminal, WeightedEdge)
-from common.ledger import EvaluationModel, LedgerDecider
+from common.ledger import DeckOverlay, EvaluationModel, LedgerDecider
 from deprecated.bellman.state import DecisionState
 
 DECK = (DRAGAPULT, FIRE_E) * 20
@@ -56,15 +56,59 @@ def test_chance_weights_its_legs_by_probability():
     assert mixed == pytest.approx(0.25 * good_swing + 0.75 * bad_swing, abs=1e-9)
 
 
-def test_a_chance_that_may_end_the_turn_counts_as_an_ender():
-    """One leg resolves the turn: never gamble the turn away while sure plays remain, so the
-    whole chance action classifies as a turn-ender (the attack-last lesson)."""
+def test_chance_activations_are_independent_of_valuation_coefficients():
+    play, end = action("play", (0,)), action("end", (1,))
+    node = Chance((WeightedEdge(0.25, "good", Deterministic(GOOD)),
+                   WeightedEdge(0.75, "bad", Deterministic(BAD))))
+    provider = ScriptedProvider(menus={"root": (play, end)},
+                                nodes={("root", play.identity): node})
+
+    def activations(context):
+        decision = LedgerDecider(
+            DECK, "test", context,
+            provider_factory=lambda _s, **_kw: provider).decide(ROOT_OBS)
+        price = next(row for row in decision.diagnostics["prices"]
+                     if row["action"] == str(play.identity))
+        return {item["feature"]: item["activation"]
+                for item in price["continuation"]["contributions"]}
+
+    general = EvaluationModel.build()
+    bent = EvaluationModel.build(overlay=DeckOverlay({"kind.energy": 9.0}))
+    assert activations(general) == activations(bent)
+
+
+def test_a_chance_that_may_continue_is_not_hidden_by_an_end_risk_branch():
     _, ends, _ = price_of(Chance((WeightedEdge(0.5, "resolves", Terminal(GOOD, "done")),
                                   WeightedEdge(0.5, "continues", Deterministic(BAD)))))
-    assert ends is True
+    assert ends is False
     _, still_open, _ = price_of(Chance((WeightedEdge(0.5, "a", Deterministic(GOOD)),
                                         WeightedEdge(0.5, "b", Deterministic(BAD)))))
     assert still_open is False
+    _, certain_end, _ = price_of(Chance((WeightedEdge(0.5, "a", Terminal(GOOD, "done")),
+                                         WeightedEdge(0.5, "b", Terminal(BAD, "done")))))
+    assert certain_end is True
+
+
+def test_mixed_chance_prices_continuation_and_allowances_by_probability():
+    spent_obs = printout(me=player(active=body(DRAGAPULT, 1, energies=(2,)), hand=[]),
+                         them=player(own=False, active=body(DRAGAPULT, 2)))
+    spent_obs["current"]["energyAttached"] = True
+    spent = state_of(spent_obs)
+    play, end = action("play", (0,)), action("end", (1,))
+    node = Chance((WeightedEdge(0.25, "spent", Deterministic(spent)),
+                   WeightedEdge(0.75, "ended", Terminal(BAD, "done"))))
+    provider = ScriptedProvider(menus={"root": (play, end)},
+                                nodes={("root", play.identity): node})
+    decision = LedgerDecider(
+        DECK, "test", EvaluationModel.build(),
+        provider_factory=lambda _s, **_kw: provider).decide(ROOT_OBS)
+    price = next(row for row in decision.diagnostics["prices"]
+                 if row["action"] == str(play.identity))
+    activations = {item["feature"]: item["activation"]
+                   for item in price["continuation"]["contributions"]}
+
+    assert activations["action.opportunity_cost"] == pytest.approx(-0.25)
+    assert activations["continuation.allowance_consumed"] == pytest.approx(0.25)
 
 
 def test_choice_takes_the_best_leg_for_us_and_the_worst_when_theirs():

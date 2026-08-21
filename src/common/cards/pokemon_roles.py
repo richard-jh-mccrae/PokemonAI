@@ -17,17 +17,16 @@ POKEMON_ROLES: dict[str, str] = {
     "backup_attacker": "attacks for real damage, but is not the win condition",
     "sniper": "reaches past the Active to a benched target",
     "draw_engine": "its Ability draws or digs",
+    "search_engine": "its reusable in-play effect searches for setup resources",
+    "healer": "its reusable in-play effect sustains damaged bodies",
+    "stall_pokemon": "absorbs or denies tempo while the deck advances its plan",
     "supporter_tutor": "its Ability fetches a Supporter",
     "accel_source": "puts Energy into play faster than the one-per-turn attachment",
     "counter_mover": "relocates damage counters already on the board",
     "item_locker": "denies the opponent their Item cards",
     "retreat_assist": "moves a body out of the Active Spot without paying full Retreat",
     "gust": "drags a benched opponent into the Active Spot",
-    # The Brief target vocabulary (ADR-0148): carried by scouted OPPONENT bodies, priced by
-    # the Ledger's role tiers; our own decks' bodies never declare these.
     "support_pokemon": "does its work from the bench without attacking",
-    "disruption_target": "the body whose removal collapses the opponent's plan",
-    "engine": "the body whose Ability keeps the opponent's hand flowing",
 }
 
 

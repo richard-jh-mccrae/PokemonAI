@@ -10,7 +10,6 @@ CARD = PokemonCard(
     evolves_from="Ethan's Quilava",
     weakness=WATER,
     retreat_cost=2,
-    tags=frozenset([]),
     default_roles=('backup_attacker',),
     attacks=(
         Attack(

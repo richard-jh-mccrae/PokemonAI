@@ -27,7 +27,7 @@ def _runtime():
     spec.loader.exec_module(module)
     deck = [int(value) for value in
             (REPO / "src" / "agents" / "mega_starmie" / "deck.csv").read_text().split()[:60]]
-    return build_runtime(module.STRATEGY, deck, stats=None, functions=None, scout=None,
+    return build_runtime(module.STRATEGY, deck, stats=None, scout=None,
                          briefs=[])
 
 

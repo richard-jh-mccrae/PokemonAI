@@ -10,7 +10,6 @@ CARD = PokemonCard(
     evolves_from='Yungoos',
     weakness=FIGHTING,
     retreat_cost=1,
-    tags=frozenset(['draw']),
     abilities=(
         Ability(
             name='Evidence Gathering',

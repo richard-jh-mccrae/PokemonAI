@@ -9,7 +9,6 @@ CARD = PokemonCard(
     stage=BASIC,
     weakness=FIGHTING,
     retreat_cost=1,
-    tags=frozenset(['team_rocket']),
     abilities=(
         Ability(
             name='Smog Signals',

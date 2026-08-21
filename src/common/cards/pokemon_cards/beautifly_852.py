@@ -10,7 +10,6 @@ CARD = PokemonCard(
     evolves_from='Silcoon',
     weakness=FIRE,
     retreat_cost=1,
-    tags=frozenset(['paralyze']),
     attacks=(
         Attack(
             attack_id=1229,

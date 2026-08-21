@@ -11,7 +11,6 @@ CARD = PokemonCard(
     ex=True,
     weakness=FIRE,
     retreat_cost=2,
-    tags=frozenset(['poison', 'sleep']),
     abilities=(
         Ability(
             name='Lovely Fragrance',

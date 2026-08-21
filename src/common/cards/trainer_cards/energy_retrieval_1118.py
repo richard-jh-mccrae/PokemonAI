@@ -6,7 +6,6 @@ CARD = TrainerCard(
     name='Energy Retrieval',
     kind=ITEM,
     text='Put up to 2 Basic Energy cards from your discard pile into your hand.',
-    tags=frozenset(['recycle']),
     clauses=(Clause('fetch', target='basic_energy', zone='discard', amount=2),),
     covers='full',
 )

@@ -22,19 +22,14 @@ def test_manifest_describes_declarations_and_ledger_only():
     assert manifest["strategy"]["roles"]["1031"] == ["primary_attacker"]
     assert manifest["strategy"]["prize_plan"]["prizes_to_win"] == 6
     assert summary(manifest)["system"] == "ledger"
-    weights = manifest["ledger_weights"]
-    assert weights["identity"]
-    assert weights["scalars"]["zone_in_play"] == 1.0
-    assert "primary_attacker" in weights["roles"]
-    # Deck overrides must land in the resolved vector, not just be echoed back.
-    for name, value in weights["deck_overrides"].items():
-        group, _, key = name.partition(".")
-        resolved = {"role": weights["roles"], "tag": weights["tags"], "kind": weights["kinds"],
-                    "card": weights["card_worth"]}.get(group)
-        if resolved is None:
-            assert weights["scalars"][name] == value
-        else:
-            assert resolved[key] == value
+    configuration = manifest["valuation_configuration"]
+    assert configuration["identity"]
+    assert configuration["values"]["interaction.role.primary_attacker.in_play"] == 0.5
+    assert "role.primary_attacker" in configuration["values"]
+    assert configuration["deck_overlay"] == {
+        "demand.dead": 0.15, "energy.concentration": 0.02,
+        "kind.special_energy": 0.05}
+    assert manifest["compute_configuration"]["identity"]
 
 
 def test_brief_projects_the_same_weights_to_html_and_csv():
@@ -43,12 +38,12 @@ def test_brief_projects_the_same_weights_to_html_and_csv():
     html = render_brief(manifest)
     csv_text = render_brief_csv(manifest)
 
-    assert "<details><summary>scalars" in html
-    assert manifest["ledger_weights"]["identity"] in html
-    assert "ledger_weight" in csv_text
-    assert "scalars.zone_in_play" in csv_text
-    assert "roles.primary_attacker" in csv_text
-    assert "Ledger weights" in html
+    assert "<details><summary>values" in html
+    assert manifest["valuation_configuration"]["identity"] in html
+    assert "valuation_coefficient" in csv_text
+    assert "zone.in_play" in csv_text
+    assert "role.primary_attacker" in csv_text
+    assert "Valuation configuration" in html
 
 
 def test_package_contains_the_ledger_and_no_bellman_search(tmp_path):
@@ -59,6 +54,11 @@ def test_package_contains_the_ledger_and_no_bellman_search(tmp_path):
         assert "common/native_engine.py" in names
         assert "common/refresh.py" in names
         assert "common/ledger/decider.py" in names
+        assert "common/ledger/configuration.py" in names
+        assert "common/ledger/features.py" in names
+        assert "common/cards/function_catalog.py" in names
+        assert "common/scouting/traits.py" in names
+        assert "common/ledger/weights.py" not in names
         assert "common/ledger/seam.py" in names
         assert "common/observation/state.py" in names
         assert "common/observation/record.py" in names

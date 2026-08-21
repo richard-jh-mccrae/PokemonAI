@@ -6,5 +6,4 @@ CARD = TrainerCard(
     name='Deduction Kit',
     kind=ITEM,
     text='Look at the top 3 cards of your deck and put them back in any order, or shuffle them and put them on the bottom of your deck.',
-    tags=frozenset(['dig']),
 )

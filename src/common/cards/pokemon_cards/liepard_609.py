@@ -10,7 +10,6 @@ CARD = PokemonCard(
     evolves_from='Purrloin',
     weakness=GRASS,
     retreat_cost=1,
-    tags=frozenset(['hand_disruption']),
     attacks=(
         Attack(
             attack_id=876,

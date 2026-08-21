@@ -6,7 +6,6 @@ CARD = TrainerCard(
     name='Morty’s Conviction',
     kind=SUPPORTER,
     text='You can use this card only if you discard another card from your hand.\n\nDraw a card for each of your opponent’s Benched Pokémon.',
-    tags=frozenset(['draw']),
     clauses=(Clause('draw', amount=1, amount_per='their_bench', cost='discard_1', cost_required=True),),
     covers='full',
 )

@@ -10,7 +10,6 @@ CARD = PokemonCard(
     evolves_from='Toxel',
     weakness=FIGHTING,
     retreat_cost=2,
-    tags=frozenset(['energy_accel']),
     abilities=(
         Ability(
             name='Sinister Surge',

@@ -10,7 +10,6 @@ CARD = PokemonCard(
     evolves_from='Tepig',
     weakness=WATER,
     retreat_cost=3,
-    tags=frozenset(['burn']),
     attacks=(
         Attack(
             attack_id=1337,

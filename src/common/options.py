@@ -154,7 +154,9 @@ def recycled_card_ids(observation: Mapping, action: LegalAction, registry, root_
               player.get("bench") if area == _BENCH else ()) or ()
     body = bodies[index] if isinstance(index, int) and 0 <= index < len(bodies) else None
     card_id = int(body.get("id", 0)) if body else 0
-    if "recycle_line" not in registry.functions.get(card_id, ()):
+    facts = getattr(registry, "facts", None)
+    card_facts = facts.get(card_id) if facts is not None else None
+    if not getattr(card_facts, "recycles_line", False):
         return carried
     stack = tuple(int(card.get("id", 0)) for card in body.get("preEvolution") or ())
     return tuple(dict.fromkeys((*carried, *stack, card_id)))

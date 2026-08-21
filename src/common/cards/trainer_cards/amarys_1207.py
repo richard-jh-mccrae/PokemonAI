@@ -6,7 +6,6 @@ CARD = TrainerCard(
     name='Amarys',
     kind=SUPPORTER,
     text='Draw 4 cards. At the end of this turn, if you have 5 or more cards in your hand, discard your hand.',
-    tags=frozenset(['draw']),
     clauses=(Clause('draw', amount=4),),
     covers='partial',
 )

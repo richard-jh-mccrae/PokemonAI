@@ -10,7 +10,6 @@ CARD = PokemonCard(
     evolves_from="Team Rocket's Tarountula",
     weakness=FIRE,
     retreat_cost=2,
-    tags=frozenset(['team_rocket']),
     abilities=(
         Ability(
             name='Charging Up',

@@ -6,7 +6,6 @@ CARD = TrainerCard(
     name='Lana’s Aid',
     kind=SUPPORTER,
     text='Put up to 3 in any combination of Pokémon that don’t have a Rule Box and Basic Energy cards from your discard pile into your hand. (Pokémon {ex}, Pokémon {V}, etc. have Rule Boxes.)',
-    tags=frozenset(['recycle']),
     clauses=(Clause('fetch', target='basic_energy', zone='discard', amount=3, choice=True), Clause('fetch', target='pokemon', zone='discard', amount=3, no_rule_box=True, choice=True)),
     covers='full',
 )

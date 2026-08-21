@@ -32,9 +32,7 @@
     },
     {
       "card": "Fezandipiti ex",
-      "roles": [
-        "disruption_target"
-      ]
+      "roles": []
     },
     {
       "card": "Kyurem",
@@ -45,14 +43,14 @@
     {
       "card": "Latias ex",
       "roles": [
-        "disruption_target"
+        "retreat_assist",
+        "backup_attacker"
       ]
     },
     {
       "card": "Mega Kangaskhan ex",
       "roles": [
-        "primary_attacker",
-        "disruption_target"
+        "primary_attacker"
       ]
     },
     {
@@ -63,9 +61,7 @@
     },
     {
       "card": "Meowth ex",
-      "roles": [
-        "disruption_target"
-      ]
+      "roles": []
     },
     {
       "card": "Primeape",
@@ -88,8 +84,7 @@
     {
       "card": "Smoochum",
       "roles": [
-        "accel_source",
-        "disruption_target"
+        "accel_source"
       ]
     },
     {

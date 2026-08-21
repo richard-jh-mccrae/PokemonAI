@@ -5,8 +5,6 @@ same: degrade the way unknown ids already do, keep the decision, and where the d
 pricing-relevant, SAY SO as a gap — never absorb silently, never die."""
 from __future__ import annotations
 
-from observation_builders import build_observation, advance_observation
-
 import math
 from dataclasses import replace
 
@@ -16,8 +14,10 @@ from ledger_helpers import (DRAGAPULT, FIRE_E, LILLIES, ScriptedProvider, action
                             player, printout)
 
 from common.algebra import Terminal
-from common.observation import ObservationConstructionError, ObservationState
-from common.ledger import EvaluationModel, LedgerDecider, LedgerWeights, evaluate
+from common.observation import (KnownOwnPrizes, LegalKnowledge, ObservationConstructionError,
+                                ObservationStateBuilder)
+from common.ledger import (ComputeConfiguration, EvaluationModel, LedgerDecider,
+                           ValuationConfiguration, evaluate)
 from common.ledger.chance import refresh_value
 from common.ledger.decider import LedgerUnavailable
 from common.options import enumerate_legal_actions
@@ -25,35 +25,20 @@ from common.runtime import _last_resort_selection
 from deprecated.bellman.state import DecisionState
 
 
-def test_non_finite_weight_overrides_refuse_at_resolve_time():
-    """One NaN in a deck's ledger_overrides used to poison every swing into an unrankable
-    number and crash `_ranked` on every decision, all match long."""
+def test_non_finite_configuration_values_refuse_at_resolve_time():
+    """One NaN in configuration would poison every swing into an unrankable number."""
     for hostile in (float("nan"), float("inf"), "-inf"):
         with pytest.raises(ValueError):
-            LedgerWeights().resolve({"prize_race": hostile})
+            ValuationConfiguration.general().with_values({"prize.race": hostile})
         with pytest.raises(ValueError):
-            LedgerWeights().resolve({"card.121": hostile})
+            ValuationConfiguration.general().with_values({"kind.item": hostile})
 
 
 def test_a_non_finite_swing_scores_zero_and_logs_the_gap():
-    """Belt behind the weights guard: if a NaN/inf ever reaches a price anyway, the option
-    reads neutral and the gap names it — visible, never silently absorbed."""
-    weights = replace(LedgerWeights(), win_value=math.inf)   # bypasses resolve on purpose
-    won = printout(me=player(active=body(DRAGAPULT, 1), hand=[FIRE_E]))
-    won["current"]["result"] = 0
-    struck = DecisionState.from_observation(won, deck=(DRAGAPULT,) * 60, deck_name="test",
-                                            value_registry_identity="hostile")
-    root_obs = printout(me=player(active=body(DRAGAPULT, 1), hand=[FIRE_E]))
-    play, end = action("play", (0,)), action("end", (1,))
-    provider = ScriptedProvider(menus={"root": (play, end)},
-                                nodes={("root", play.identity): Terminal(struck, "won")})
-    decider = LedgerDecider((DRAGAPULT,) * 60, "test",
-                            EvaluationModel.build(weights=weights),
-                            provider_factory=lambda _s, **_kw: provider)
-    decision = decider.decide(root_obs)
-    assert any("non-finite price" in gap for gap in decision.diagnostics["gaps"])
-    prices = {entry["action"]: entry["swing"] for entry in decision.diagnostics["prices"]}
-    assert prices[str(play.identity)] == 0.0     # the promised NEUTRAL score, exactly
+    with pytest.raises(ValueError):
+        ValuationConfiguration(
+            {**dict(ValuationConfiguration.general()), "result.win": math.inf},
+            schema_version=1)
 
 
 def test_refresh_tolerates_idless_hand_rows():
@@ -61,17 +46,18 @@ def test_refresh_tolerates_idless_hand_rows():
     dropped the guard and died on `{"id": None}`."""
     obs = printout(me=player(active=body(DRAGAPULT, 1), hand=[LILLIES, FIRE_E]))
     obs["current"]["players"][0]["hand"].extend([{"id": None, "serial": 9}, {"serial": 10}])
-    board = build_observation(obs, decklist=(DRAGAPULT,) * 30)
-    value, _gaps = refresh_value(board, LILLIES, ((6, 0),), False,
-                                 lambda synthetic: evaluate(synthetic, EvaluationModel.build()))
+    board = ObservationStateBuilder((DRAGAPULT,) * 30).root(obs)
+    value, _gaps = refresh_value(obs, board, LILLIES, ((6, 0),), False,
+                                 lambda synthetic: evaluate(synthetic, EvaluationModel.build()),
+                                 ComputeConfiguration())
     assert math.isfinite(value)
 
 
-def test_observation_rejects_a_single_entry_players_list():
+def test_observation_boundary_rejects_a_single_entry_players_list():
     obs = printout(me=player(active=body(DRAGAPULT, 1), hand=[LILLIES]))
     obs["current"]["players"] = [obs["current"]["players"][0]]
     with pytest.raises(ObservationConstructionError):
-        build_observation(obs, decklist=(DRAGAPULT,) * 30)
+        ObservationStateBuilder((DRAGAPULT,) * 30).root(obs)
 
 
 def test_the_enumerator_survives_none_counts_and_junk_option_rows():
@@ -88,7 +74,7 @@ def test_the_enumerator_survives_none_counts_and_junk_option_rows():
     assert covered == {0, 1, 2}                  # junk keeps its index; every index covered
 
 
-def test_observation_construction_rejects_a_structurally_malformed_zone():
+def test_observation_boundary_rejects_malformed_zone_shapes():
     me = player(active=body(DRAGAPULT, 1), hand=[FIRE_E])
     me["hand"].extend([{"id": None, "serial": 8}, {"serial": 9}])
     me["discard"] = [{"id": None}, {"id": FIRE_E, "serial": 900}]
@@ -98,9 +84,9 @@ def test_observation_construction_rejects_a_structurally_malformed_zone():
         "option": [None, {"type": 14}], "deck": None, "contextCard": None, "effect": None,
         "remainDamageCounter": 0, "remainEnergyCost": 0})
     obs["current"]["players"][1]["active"] = {"id": DRAGAPULT}     # dict where a list belongs
-    obs["own_prizes"] = {FIRE_E: None, DRAGAPULT: 1, None: 2}
-    with pytest.raises(ObservationConstructionError, match="player.active"):
-        build_observation(obs, decklist=(DRAGAPULT,) * 30)
+    with pytest.raises(ObservationConstructionError):
+        ObservationStateBuilder((DRAGAPULT,) * 30).root(
+            obs, knowledge=LegalKnowledge(own_prizes=KnownOwnPrizes(((DRAGAPULT, 1),))))
 
 
 def test_a_raising_provider_close_does_not_mask_the_decision():
@@ -151,5 +137,5 @@ def test_the_last_resort_shell_is_total():
 def test_a_corrupt_bench_max_cannot_stall_the_evaluator():
     obs = printout(me=player(active=body(DRAGAPULT, 1)))
     obs["current"]["players"][0]["benchMax"] = 10 ** 9
-    valuation = evaluate(build_observation(obs), EvaluationModel.build())
+    valuation = evaluate(ObservationStateBuilder().root(obs), EvaluationModel.build())
     assert math.isfinite(valuation.total)

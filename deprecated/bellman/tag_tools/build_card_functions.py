@@ -16,20 +16,25 @@ import json
 import sys
 from pathlib import Path
 
-sys.path.insert(0, str(Path(__file__).resolve().parent))                          # meta_tracker
-sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))   # cg (lazy)
+REPO = Path(__file__).resolve().parents[3]
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+sys.path.insert(0, str(REPO / "tools"))
+sys.path.insert(0, str(REPO / "src"))
 
-from common.cards.tags import is_card_key                   # noqa: E402  the ONE reserved-key rule
-from meta_tracker.card_functions import accumulate_tables, build_function_table  # noqa: E402
+from card_functions import accumulate_tables, build_function_table  # noqa: E402
 from meta_tracker.cards import load_cards                     # noqa: E402
 from meta_tracker.probe_cards import (  # noqa: E402
     _ability_pokemon, probe_card, probe_evolution, probe_pokemon, probe_pokemon_ability)
 
-DEFAULT_OUT = Path(__file__).resolve().parent / "meta_tracker" / "measured_functions.json"
-DEFAULT_OVERRIDES = Path(__file__).resolve().parent / "meta_tracker" / "function_overrides.json"
+DEFAULT_OUT = Path(__file__).resolve().parent / "measured_functions.json"
+DEFAULT_OVERRIDES = Path(__file__).resolve().parent / "function_overrides.json"
 _TRAINER_CATS = {"item", "supporter", "stadium", "tool"}
 _COMBAT_PASSES = 4   # heal/damage align only ~1-in-N combat games -> probe several & union
 _KO_PASSES = 3       # attrition (recycle/energy_denial) aligns ~1-in-N too -> probe several & union
+
+
+def is_card_key(key) -> bool:
+    return str(key).lstrip("-").isdigit()
 
 
 def _merge(recs: list[dict]) -> dict:

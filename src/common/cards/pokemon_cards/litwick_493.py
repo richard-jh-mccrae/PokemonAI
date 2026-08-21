@@ -9,7 +9,6 @@ CARD = PokemonCard(
     stage=BASIC,
     weakness=WATER,
     retreat_cost=1,
-    tags=frozenset(['dig']),
     attacks=(
         Attack(
             attack_id=698,

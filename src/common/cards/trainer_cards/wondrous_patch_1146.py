@@ -6,7 +6,6 @@ CARD = TrainerCard(
     name='Wondrous Patch',
     kind=ITEM,
     text='Attach a Basic {P} Energy card from your discard pile to 1 of your Benched {P} Pokémon.',
-    tags=frozenset(['energy_accel']),
     clauses=(Clause('accel', amount=1, source='discard', target='benched', target_type=5, energy='basic', energy_type=PSYCHIC),),
     covers='full',
 )

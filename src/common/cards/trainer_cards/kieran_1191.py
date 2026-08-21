@@ -6,5 +6,4 @@ CARD = TrainerCard(
     name='Kieran',
     kind=SUPPORTER,
     text='Choose 1:\n\n• Switch your Active Pokémon with 1 of your Benched Pokémon.\n• During this turn, attacks used by your Pokémon do 30 more damage to your opponent’s Active Pokémon {ex} and Active Pokémon {V} (before applying Weakness and Resistance).',
-    tags=frozenset(['switch']),
 )

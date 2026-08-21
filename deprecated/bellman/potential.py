@@ -12,7 +12,7 @@ from dataclasses import dataclass
 from common.cards import card_store
 from common.cards.card_facts import BASIC_ENERGY, EnergyCard, PokemonCard, STAGE2
 from common.cards.functions.attack_lock import locked_attack_ids
-from common.card_worth import KNOWN_CARD_FLOOR, function_role
+from .card_worth import KNOWN_CARD_FLOOR, function_role
 from common.cards.functions.energy import ENERGY_COLORLESS, payment_fraction, provision_units
 from .belief import BellmanDeckProfile
 from common.cards.functions.damage import bench_reach, compute_active_damage
@@ -362,14 +362,13 @@ class BoardPotential:
         prizes = self._prizes(defender)
         context = self._context(attacker_facts, defender_facts)
         transient = self._defender_tool_transient(defender)
-        defender_tags = getattr(defender_card, "tags", frozenset())
         best = 0.0
         for attack in self._usable_attacks(body, card):
             readiness = _pay_fraction(codes, attack.cost)
             if require_ready and readiness < 1.0:
                 continue
             damage = max(float(compute_active_damage(
-                             attack, card, defender_card, defender_tags, context=context,
+                             attack, card, defender_card, context=context,
                              defender_transient=transient)),
                          float(bench_reach(attack)))
             best = max(best, prizes * min(1.0, damage / hp) * readiness)
@@ -519,14 +518,13 @@ class BoardPotential:
             return 0.0
         attacker_facts = self._side_facts(me, attacking_body=body)
         defender_facts = self._side_facts(opponent)
-        defender_tags = getattr(defender_card, "tags", frozenset())
         transient = self._defender_tool_transient(defender)
         best = 0.0
         for attack in self._usable_attacks(body, card):
             if _pay_fraction(codes, attack.cost) < 1.0:
                 continue
             damage = compute_active_damage(
-                attack, card, defender_card, defender_tags,
+                attack, card, defender_card,
                 context=self._context(attacker_facts, defender_facts),
                 defender_transient=transient)
             if damage < int(defender.get("hp", MINIMUM_HP)):
@@ -545,7 +543,6 @@ class BoardPotential:
         if defender_card is None:
             return 0.0
         defender_facts = self._side_facts(opponent)
-        defender_tags = getattr(defender_card, "tags", frozenset())
         transient = self._defender_tool_transient(defender)
         best = 0.0
         for body in _bodies(me):
@@ -559,7 +556,7 @@ class BoardPotential:
                 if _pay_fraction(codes, attack.cost) < 1.0:
                     continue
                 active_damage = compute_active_damage(
-                    attack, card, defender_card, defender_tags, context=context,
+                    attack, card, defender_card, context=context,
                     defender_transient=transient)
                 if active_damage < int(defender.get("hp", MINIMUM_HP)):
                     continue
@@ -580,7 +577,6 @@ class BoardPotential:
         active_card = self._card(active.get("id"))
         if active_card is None:
             return 0.0, frozenset()
-        active_tags = getattr(active_card, "tags", frozenset())
         defender_facts = self._side_facts(defender_side)
         attacker_active = next(
             (body for body in (attacker_side.get("active") or ()) if body), None)
@@ -601,7 +597,7 @@ class BoardPotential:
                 exposed = 0.0
                 lethal_active = False
                 active_damage = compute_active_damage(
-                    attack, card, active_card, active_tags, context=context,
+                    attack, card, active_card, context=context,
                     defender_transient=active_transient)
                 if active_damage >= int(active.get("hp", MINIMUM_HP)):
                     exposed += self._prizes(active)

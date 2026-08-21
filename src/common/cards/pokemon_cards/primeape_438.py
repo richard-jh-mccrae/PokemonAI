@@ -10,7 +10,6 @@ CARD = PokemonCard(
     evolves_from='Mankey',
     weakness=PSYCHIC,
     retreat_cost=2,
-    tags=frozenset([]),
     default_roles=('backup_attacker',),
     attacks=(
         Attack(

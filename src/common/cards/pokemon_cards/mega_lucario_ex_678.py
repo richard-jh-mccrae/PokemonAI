@@ -11,7 +11,6 @@ CARD = PokemonCard(
     mega_ex=True,
     weakness=PSYCHIC,
     retreat_cost=2,
-    tags=frozenset(['discard_energy_recur']),
     default_roles=('primary_attacker', 'accel_source'),
     covers='full',
     attacks=(

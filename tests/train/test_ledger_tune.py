@@ -21,18 +21,18 @@ def test_a_gain_that_regresses_one_frame_is_rejected(monkeypatch):
     }
 
     def fake_sweep(*, store, decks, workers, weight_overrides=None):
-        key = None if not weight_overrides else weight_overrides["zone_in_hand"]
+        key = None if not weight_overrides else weight_overrides["zone.in_hand"]
         return outcomes[key]
 
     monkeypatch.setattr(tune, "sweep", fake_sweep)
-    monkeypatch.setattr(tune.LedgerWeights, "resolve",
-                        lambda self, overrides: self, raising=True)
-    outcome = tune.run(levers={"zone_in_hand": [0.9, 0.7]}, store="unused",
+    monkeypatch.setattr(tune.ValuationConfiguration, "with_values",
+                        lambda self, replacements: self, raising=True)
+    outcome = tune.run(levers={"zone.in_hand": [0.9, 0.7]}, store="unused",
                        decks=("a_deck",), workers=1, log=lambda *_: None)
-    assert outcome["adopted"] == {"zone_in_hand": 0.7}
+    assert outcome["adopted"] == {"zone.in_hand": 0.7}
     verdicts = {(t["lever"], t["value"]): t["verdict"] for t in outcome["trials"]}
-    assert verdicts[("zone_in_hand", 0.9)] == "rejected"     # the regression gate fired
-    assert verdicts[("zone_in_hand", 0.7)] == "ADOPTED"
+    assert verdicts[("zone.in_hand", 0.9)] == "rejected"     # the regression gate fired
+    assert verdicts[("zone.in_hand", 0.7)] == "ADOPTED"
     assert tune._score(outcome["best"]) == (0.75, 3)
 
 
@@ -44,5 +44,5 @@ def test_an_unknown_lever_name_fails_before_any_sweep(monkeypatch):
 
     monkeypatch.setattr(tune, "sweep", exploding_sweep)
     with pytest.raises(KeyError):
-        tune.run(levers={"zone_in_hnad": [0.5]}, store="unused", decks=("a_deck",),
+        tune.run(levers={"zone.in_hnad": [0.5]}, store="unused", decks=("a_deck",),
                  workers=1, log=lambda *_: None)

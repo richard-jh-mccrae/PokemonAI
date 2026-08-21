@@ -6,7 +6,6 @@ CARD = TrainerCard(
     name="Emcee's Hype",
     kind=SUPPORTER,
     text='Draw 2 cards. If your opponent has 3 or fewer Prize cards remaining, draw 2 more cards.',
-    tags=frozenset(['draw']),
     clauses=(Clause('draw', amount=2, amount_if={'condition': 'opp_3_or_fewer_prizes', 'amount': 4}),),
     covers='full',
 )

@@ -10,7 +10,6 @@ CARD = PokemonCard(
     evolves_from='Eevee',
     weakness=METAL,
     retreat_cost=1,
-    tags=frozenset(['confuse']),
     default_roles=('backup_attacker',),
     attacks=(
         Attack(

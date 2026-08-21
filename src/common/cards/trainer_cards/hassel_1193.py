@@ -6,7 +6,6 @@ CARD = TrainerCard(
     name='Hassel',
     kind=SUPPORTER,
     text='You can use this card only if any of your Pokémon were Knocked Out during your opponent’s last turn.\n\nLook at the top 8 cards of your deck and put up to 3 of them into your hand. Shuffle the other cards back into your deck.',
-    tags=frozenset(['dig', 'draw']),
     clauses=(Clause('fetch', target='any', zone='deck', dig=8, amount=3, condition='pokemon_ko_last_turn'),),
     covers='full',
 )

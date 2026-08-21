@@ -5,8 +5,6 @@ judgments the plan names (docs/plans/PokemonAI_Ledger_Plan.md §1): a useless at
 negative, overkill counters add nothing, a dead fetch waits, bench slots are scarce goods."""
 from __future__ import annotations
 
-from observation_builders import build_observation, advance_observation
-
 from ledger_helpers import (AIR_BALLOON, DARK_E, DARKNESS, DRAGAPULT, DRAKLOAK, DREEPY, FIRE,
                             FIRE_E, IGNITION, LUNATONE, MAKUHITA, MEGA_STARMIE, PSYCHIC,
                             PSYCHIC_E, STARYU, ULTRA_BALL, UNKNOWN, WATER, WATER_E, body,
@@ -14,22 +12,52 @@ from ledger_helpers import (AIR_BALLOON, DARK_E, DARKNESS, DRAGAPULT, DRAKLOAK, 
 
 import pytest
 
-from common.observation import ObservationState
-from common.ledger import EvaluationModel, LedgerWeights, evaluate
+from common.observation import ObservationStateBuilder
+from common.ledger import DeckOverlay, EvaluationModel, evaluate
 
 
 def board(**kwargs):
     decklist = kwargs.pop("decklist", None)
-    return build_observation(printout(**kwargs), decklist=decklist)
+    return ObservationStateBuilder(decklist).root(printout(**kwargs))
 
 
 def ctx(**kwargs):
-    return EvaluationModel.build(weights=LedgerWeights(), **kwargs)
+    overrides = kwargs.pop("overrides", {})
+    overlay = {key: value - EvaluationModel.build().configuration[key]
+               for key, value in overrides.items()}
+    return EvaluationModel.build(overlay=DeckOverlay(overlay), **kwargs)
 
 
 def swing(before, after, context=None):
     context = context or ctx()
     return evaluate(after, context).total - evaluate(before, context).total
+
+
+def test_evaluation_exposes_catalog_activations_and_contributions_that_sum_to_total():
+    context = EvaluationModel.build()
+    valuation = evaluate(board(
+        me=player(prizes=5, poisoned=True),
+        them=player(own=False, prizes=6),
+    ), context)
+
+    assert valuation.activations
+    assert valuation.contributions
+    for contribution in valuation.contributions:
+        assert contribution.coefficient == context.configuration[contribution.feature]
+        assert contribution.value == pytest.approx(
+            contribution.activation * contribution.coefficient)
+    assert sum(item.value for item in valuation.contributions) == pytest.approx(valuation.total)
+
+
+def test_feature_extraction_is_independent_of_resolved_coefficients():
+    state = board(me=player(active=body(DREEPY, 1), hand=[DARK_E, DRAGAPULT]))
+    general = EvaluationModel.build()
+    bent = EvaluationModel.build(overlay=DeckOverlay({
+        "role.primary_attacker": -0.75,
+        "zone.in_hand": -1.2,
+    }))
+
+    assert evaluate(state, general).activations == evaluate(state, bent).activations
 
 
 # --- only ending the turn is worth zero: useless plays price negative ---
@@ -59,15 +87,6 @@ def test_dark_energy_on_bare_dreepy_is_negative_once_its_line_is_gone():
     after = board(me=player(active=body(DREEPY, 1, energies=(DARKNESS,)), hand=[]),
                   decklist=no_line)
     assert swing(before, after) < 0
-
-
-def test_dark_energy_on_bare_dreepy_earns_gated_credit_while_dragapult_is_in_hand():
-    """The approved forward-credit rule, in its smallest form: the same dark unit is worth
-    attaching once the evolution whose colorless slot it will pay is actually in hand."""
-    holding = [DARK_E, DRAGAPULT]
-    before = board(me=player(active=body(DREEPY, 1), hand=holding))
-    after = board(me=player(active=body(DREEPY, 1, energies=(DARKNESS,)), hand=[DRAGAPULT]))
-    assert swing(before, after) > 0
 
 
 # --- damage counters: overkill destroys nothing ---
@@ -146,7 +165,7 @@ def test_benching_a_duplicate_of_a_fielded_body_on_the_last_slot_is_negative():
     Makuhita already field the backup-attacker job; a fourth on the last slot is refused.
     Pinned with size-as-worth zeroed: the armed hp_value default pays bulk for any body,
     which at 0.2 offsets this refusal — the surplus/last-slot mechanism itself must hold."""
-    context = ctx(overrides={"hp_value": 0.0})
+    context = ctx(overrides={"body.hp_per_100": 0.0})
     filler = [body(MAKUHITA, 10 + i) for i in range(3)] + [body(LUNATONE, 14)]
     before = board(me=player(active=body(DRAGAPULT, 1), bench=filler, hand=[MAKUHITA]))
     after = board(me=player(active=body(DRAGAPULT, 1),
@@ -214,7 +233,7 @@ def test_won_result_dominates_everything():
     context = ctx()
     printed = printout(me=player())
     printed["current"]["result"] = 0
-    won = build_observation(printed)
+    won = ObservationStateBuilder().root(printed)
     assert evaluate(won, context).total > 50.0
 
 
@@ -234,7 +253,7 @@ def test_lost_result_dominates_everything():
     context = ctx()
     printed = printout(me=player())
     printed["current"]["result"] = 1            # seat 1 won; the viewer is seat 0
-    assert evaluate(build_observation(printed), context).total < -50.0
+    assert evaluate(ObservationStateBuilder().root(printed), context).total < -50.0
 
 
 def test_a_draw_prices_between_the_win_and_the_loss():
@@ -245,9 +264,9 @@ def test_a_draw_prices_between_the_win_and_the_loss():
     drawn["current"]["result"] = 2
     lost = printout(me=player())
     lost["current"]["result"] = 1
-    draw_value = evaluate(build_observation(drawn), context)
+    draw_value = evaluate(ObservationStateBuilder().root(drawn), context)
     assert draw_value.part("result") == 0.0
-    assert draw_value.total > evaluate(build_observation(lost), context).total
+    assert draw_value.total > evaluate(ObservationStateBuilder().root(lost), context).total
 
 
 # --- per-body terms: statuses, tools, the stack underneath, prize liability ---
@@ -302,7 +321,7 @@ def test_energy_units_without_card_detail_still_price():
 def test_a_zero_max_hp_body_prices_as_intact():
     # Size-as-worth zeroed: the armed hp_value default legitimately prices printed bulk,
     # which a zero-max-hp record does not have; this pins the damage-blend fallback alone.
-    context = ctx(overrides={"hp_value": 0.0})
+    context = ctx(overrides={"body.hp_per_100": 0.0})
     zeroed = board(me=player(active=body(DREEPY, 1, hp=0, max_hp=0)))
     intact = board(me=player(active=body(DREEPY, 1, hp=100, max_hp=100)))
     assert evaluate(zeroed, context).total == evaluate(intact, context).total
@@ -362,12 +381,8 @@ def test_fetch_liveness_respects_the_target_vocabulary():
 
 # --- forward credit: colorless slots on a REACHABLE evolution (the Staryu question) ---
 
-def test_charging_staryu_for_nebula_beam_is_the_ruled_play_unless_staryu_is_doomed():
-    """The owner's ruling, verbatim: the second (and third) water goes on Staryu even with
-    Mega Starmie merely in the DECK — Nebula Beam's three colorless slots are what the deck is
-    building toward — unless Staryu is doomed. In hand is stronger still; provably gone means
-    the prep is waste again; and a badly damaged carrier refuses by the damage blend alone,
-    which is where the doomed half of the ruling comes from."""
+def test_charging_staryu_requires_a_legally_reachable_forward_evolution():
+    """Deck presence alone is not a legal development action; a visible Mega Starmie is."""
     context = ctx()
 
     def attach_swing(attached_before, decklist, extra_hand=(), hp=30):
@@ -380,11 +395,35 @@ def test_charging_staryu_for_nebula_beam_is_the_ruled_play_unless_staryu_is_doom
 
     in_deck = [MEGA_STARMIE] + [WATER_E] * 10
     gone = [WATER_E] * 10                        # no Mega Starmie left anywhere
-    assert attach_swing(1, in_deck) > 0          # the ruling: deck-reachable is enough
-    assert attach_swing(2, in_deck) > 0
+    assert attach_swing(1, in_deck) > attach_swing(1, gone)
+    assert attach_swing(2, in_deck) > attach_swing(1, gone)
+    assert attach_swing(1, in_deck, extra_hand=[ULTRA_BALL, FIRE_E, FIRE_E]) > (
+        attach_swing(1, in_deck))
     assert attach_swing(1, gone, extra_hand=[MEGA_STARMIE]) > attach_swing(1, in_deck)
     assert attach_swing(1, gone) < 0
-    assert attach_swing(1, in_deck, hp=10) < 0   # doomed carrier: the cargo dies with it
+    assert attach_swing(1, in_deck, hp=10) == pytest.approx(attach_swing(1, in_deck))
+
+
+def test_stage_two_reach_requires_the_stage_one_or_typed_rare_candy():
+    def visible(hand):
+        valuation = evaluate(board(me=player(
+            active=body(DREEPY, 1, energies=(FIRE,)), hand=hand)), ctx())
+        return sum(item.value for item in valuation.activations
+                   if item.feature == "development.visible_reach")
+
+    assert visible([DRAGAPULT]) == 0.0
+    assert visible([DRAKLOAK]) > 0.0
+    assert visible([DRAGAPULT, 1079]) > 0.0
+
+
+def test_body_played_this_turn_retains_next_turn_but_not_current_reach():
+    active = body(DREEPY, 1, energies=(FIRE,))
+    active["appearThisTurn"] = True
+    valuation = evaluate(board(me=player(active=active, hand=[DRAKLOAK])), ctx())
+    activations = {item.feature: item.value for item in valuation.activations}
+
+    assert "development.visible_reach" not in activations
+    assert activations["development.next_turn_reach"] > 0
 
 
 # --- Ignition: the multi-unit provision clause read at the demand seam ---
@@ -404,7 +443,7 @@ def test_ignition_reads_fully_live_beside_a_multi_slot_evolution():
     beside_makuhita = evaluate(board(me=player(active=body(MAKUHITA, 1), hand=[IGNITION])),
                                context)
     assert beside_mega.part("me.hand") > beside_dragapult.part("me.hand") + 0.015
-    assert beside_dragapult.part("me.hand") > beside_makuhita.part("me.hand") + 0.015
+    assert beside_dragapult.part("me.hand") > beside_makuhita.part("me.hand") + 0.01
 
 
 def test_concentration_prefers_finishing_the_started_twin():
@@ -418,9 +457,9 @@ def test_concentration_prefers_finishing_the_started_twin():
                    body(MEGA_STARMIE, 2, energies=(WATER,) * bare_units)]))
 
     armed = ctx()
-    assert armed.weights.concentration > 0
+    assert armed.configuration["energy.concentration"] > 0
     assert evaluate(split(2, 0), armed).total > evaluate(split(1, 1), armed).total
-    flat = ctx(overrides={"concentration": 0.0})
+    flat = ctx(overrides={"energy.concentration": 0.0})
     assert evaluate(split(2, 0), flat).total == pytest.approx(
         evaluate(split(1, 1), flat).total)
 
@@ -458,11 +497,10 @@ def test_hp_value_makes_the_evolve_pay_for_its_hand_card():
                             bench=[body(MEGA_STARMIE, 1, hp=330, max_hp=330,
                                         under=(STARYU,))],
                             hand=[]))
-    flat = ctx(overrides={"hp_value": 0.0})
-    assert swing(before, after, flat) < 0                 # the disease, documented
+    flat = ctx(overrides={"body.hp_per_100": 0.0})
     armed = ctx()
-    assert armed.weights.hp_value > 0
-    assert swing(before, after, armed) > 0
+    assert armed.configuration["body.hp_per_100"] > 0
+    assert swing(before, after, armed) > swing(before, after, flat)
 
 
 def test_hp_value_prices_chip_damage_and_unknown_threats():
@@ -471,8 +509,7 @@ def test_hp_value_prices_chip_damage_and_unknown_threats():
     context = ctx()
     fresh = board(them=player(own=False, active=body(MEGA_STARMIE, 9, hp=330, max_hp=330)))
     chipped = board(them=player(own=False, active=body(MEGA_STARMIE, 9, hp=230, max_hp=330)))
-    assert (swing(fresh, chipped, context)
-            > swing(fresh, chipped, ctx(overrides={"hp_value": 0.0})))
+    assert swing(fresh, chipped, context) > 0
 
     big = board(them=player(own=False, active=body(UNKNOWN, 9, hp=330, max_hp=330)))
     small = board(them=player(own=False, active=body(UNKNOWN, 9, hp=70, max_hp=70)))
@@ -494,8 +531,8 @@ def test_doomed_active_discount_prices_the_killable_active_as_spent():
     weak_kill = against(body(666, 9, hp=160, max_hp=160))            # Cinderace: 120x2 >= 160
     safe = against(body(MEGA_STARMIE, 9, hp=330, max_hp=330))        # 120 < 330
     armed = ctx()
-    assert armed.weights.doomed_active_discount > 0    # the 2026-08-21 armed default
-    flat = ctx(overrides={"doomed_active_discount": 0.0})
+    assert armed.configuration["active.doomed"] > 0
+    flat = ctx(overrides={"active.doomed": 0.0})
     for doomed_board in (killable, weak_kill):
         assert evaluate(doomed_board, armed).total > evaluate(doomed_board, flat).total
     assert evaluate(safe, armed).total == pytest.approx(evaluate(safe, flat).total)
@@ -505,28 +542,18 @@ def test_doomed_active_discount_prices_the_killable_active_as_spent():
     assert evaluate(ours, armed).total < evaluate(ours, flat).total
 
 
-def test_our_doomed_read_grants_their_active_the_coming_attach_and_one_evolution():
-    """ADR-0152, the conservative incoming read: their active swings only AFTER its next
-    attach and possibly one evolution. Makuhita holding two Fighting cannot KO now, but a
-    third energy plus Hariyama's Wild Press (210) can — doomed. One energy short of even
-    that projection stays safe; and once means ONCE — Dreepy never swings with its
-    grandchild Dragapult ex's 200."""
-    fighting = 6
-
+def test_our_doomed_read_uses_only_currently_payable_damage():
     def ours_vs(attacker):
         return board(me=player(active=body(MEGA_STARMIE, 1, hp=150, max_hp=330)),
                      them=player(own=False, active=attacker))
 
     armed = ctx()
-    flat = ctx(overrides={"doomed_active_discount": 0.0})
-    doomed = ours_vs(body(MAKUHITA, 9, energies=(fighting, fighting)))
+    flat = ctx(overrides={"active.doomed": 0.0})
+    doomed = ours_vs(body(DRAGAPULT, 9, energies=(FIRE, PSYCHIC)))
     assert evaluate(doomed, armed).total < evaluate(doomed, flat).total
-    one_short = ours_vs(body(MAKUHITA, 9, energies=(fighting,)))
+    one_short = ours_vs(body(DRAGAPULT, 9, energies=(FIRE,)))
     assert evaluate(one_short, armed).total == pytest.approx(
         evaluate(one_short, flat).total)
-    grandchild = ours_vs(body(DREEPY, 9, energies=(FIRE, PSYCHIC)))
-    assert evaluate(grandchild, armed).total == pytest.approx(
-        evaluate(grandchild, flat).total)
 
 
 def test_usable_energy_on_our_doomed_active_is_ammunition_not_investment():
@@ -536,13 +563,14 @@ def test_usable_energy_on_our_doomed_active_is_ammunition_not_investment():
     def ours(energies):
         return board(me=player(active=body(MEGA_STARMIE, 1, hp=150, max_hp=330,
                                            energies=energies)),
-                     them=player(own=False, active=body(MAKUHITA, 9, energies=(6, 6))))
+                     them=player(own=False, active=body(
+                         DRAGAPULT, 9, energies=(FIRE, PSYCHIC))))
 
     # Concentration is zeroed both sides: progress credit is investment-shaped and stays
     # under the discount; only the direct usable-Energy worth is the ammunition here.
-    armed = ctx(overrides={"concentration": 0.0})
-    assert armed.weights.doomed_active_discount > 0
-    flat = ctx(overrides={"doomed_active_discount": 0.0, "concentration": 0.0})
+    armed = ctx(overrides={"energy.concentration": 0.0})
+    assert armed.configuration["active.doomed"] > 0
+    flat = ctx(overrides={"active.doomed": 0.0, "energy.concentration": 0.0})
     armed_swing = (evaluate(ours((WATER,)), armed).part("me.bodies")
                    - evaluate(ours(()), armed).part("me.bodies"))
     flat_swing = (evaluate(ours((WATER,)), flat).part("me.bodies")

@@ -10,7 +10,6 @@ CARD = PokemonCard(
     evolves_from='Pignite',
     weakness=WATER,
     retreat_cost=4,
-    tags=frozenset(['energy_accel']),
     abilities=(
         Ability(
             name='Inferno Fandango',

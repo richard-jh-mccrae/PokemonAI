@@ -10,7 +10,6 @@ CARD = PokemonCard(
     evolves_from='Arrokuda',
     weakness=LIGHTNING,
     retreat_cost=1,
-    tags=frozenset([]),
     attacks=(
         Attack(
             attack_id=594,

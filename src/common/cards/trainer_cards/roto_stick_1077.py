@@ -6,7 +6,6 @@ CARD = TrainerCard(
     name='Roto-Stick',
     kind=ITEM,
     text='Look at the top 4 cards of your deck. You may reveal any number of Supporter cards you find there and put them into your hand. Shuffle the other cards back into your deck.',
-    tags=frozenset(['dig', 'draw']),
     clauses=(Clause('fetch', target='supporter', zone='deck', dig=4, amount='all'),),
     covers='full',
 )

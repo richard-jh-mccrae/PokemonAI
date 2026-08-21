@@ -11,7 +11,6 @@ CARD = PokemonCard(
     weakness=DARKNESS,
     resistance=FIGHTING,
     retreat_cost=3,
-    tags=frozenset(['team_rocket']),
     abilities=(
         Ability(
             name='Power Saver',

@@ -10,7 +10,6 @@ CARD = PokemonCard(
     evolves_from="Team Rocket's Porygon",
     weakness=FIGHTING,
     retreat_cost=1,
-    tags=frozenset(['team_rocket']),
     attacks=(
         Attack(
             attack_id=670,

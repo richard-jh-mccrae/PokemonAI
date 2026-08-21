@@ -10,7 +10,6 @@ CARD = PokemonCard(
     evolves_from='Skorupi',
     weakness=FIGHTING,
     retreat_cost=3,
-    tags=frozenset(['paralyze', 'poison']),
     attacks=(
         Attack(
             attack_id=1531,

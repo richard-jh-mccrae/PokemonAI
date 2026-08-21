@@ -10,7 +10,6 @@ CARD = PokemonCard(
     evolves_from='Quaxwell',
     weakness=LIGHTNING,
     retreat_cost=2,
-    tags=frozenset(['draw']),
     abilities=(
         Ability(
             name='Up-Tempo',

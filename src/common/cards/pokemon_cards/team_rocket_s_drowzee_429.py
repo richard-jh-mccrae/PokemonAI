@@ -10,7 +10,6 @@ CARD = PokemonCard(
     weakness=DARKNESS,
     resistance=FIGHTING,
     retreat_cost=2,
-    tags=frozenset(['sleep', 'team_rocket']),
     attacks=(
         Attack(
             attack_id=605,

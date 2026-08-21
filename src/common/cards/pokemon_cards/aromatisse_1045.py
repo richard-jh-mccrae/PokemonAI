@@ -10,7 +10,6 @@ CARD = PokemonCard(
     evolves_from='Spritzee',
     weakness=METAL,
     retreat_cost=1,
-    tags=frozenset(['search']),
     abilities=(
         Ability(
             name='Scent Collection',

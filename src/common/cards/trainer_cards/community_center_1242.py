@@ -6,7 +6,6 @@ CARD = TrainerCard(
     name='Community Center',
     kind=STADIUM,
     text='Once during each player’s turn, if they played a Supporter card from their hand this turn, they may heal 10 damage from each of their Pokémon.',
-    tags=frozenset([]),
     clauses=(Clause('heal', amount=10, target='any_pokemon', each_of=True, condition='played_supporter_this_turn'),),
     covers='partial',
 )

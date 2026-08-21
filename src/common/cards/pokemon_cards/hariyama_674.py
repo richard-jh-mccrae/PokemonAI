@@ -10,7 +10,6 @@ CARD = PokemonCard(
     evolves_from='Makuhita',
     weakness=PSYCHIC,
     retreat_cost=3,
-    tags=frozenset(['gust']),
     default_roles=('backup_attacker', 'gust'),
     covers='full',
     abilities=(

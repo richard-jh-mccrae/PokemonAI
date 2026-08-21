@@ -11,7 +11,6 @@ CARD = PokemonCard(
     ex=True,
     weakness=FIGHTING,
     retreat_cost=2,
-    tags=frozenset(['energy_accel']),
     abilities=(
         Ability(
             name='Electric Streamer',

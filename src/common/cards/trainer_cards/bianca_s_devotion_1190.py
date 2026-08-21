@@ -6,7 +6,6 @@ CARD = TrainerCard(
     name='Bianca’s Devotion',
     kind=SUPPORTER,
     text='Heal all damage from 1 of your Pokémon that has 30 HP or less remaining.',
-    tags=frozenset(['heal']),
     clauses=(Clause('heal', amount='all', condition='remaining_hp_30_or_less'),),
     covers='full',
 )

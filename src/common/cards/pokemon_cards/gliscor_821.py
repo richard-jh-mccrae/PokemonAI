@@ -10,7 +10,6 @@ CARD = PokemonCard(
     evolves_from='Gligar',
     weakness=GRASS,
     retreat_cost=1,
-    tags=frozenset(['poison']),
     attacks=(
         Attack(
             attack_id=1183,

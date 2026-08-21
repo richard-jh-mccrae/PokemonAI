@@ -6,7 +6,6 @@ CARD = TrainerCard(
     name='Buddy-Buddy Poffin',
     kind=ITEM,
     text='Search your deck for up to 2 Basic Pokémon with 70 HP or less and put them onto your Bench. Then, shuffle your deck.',
-    tags=frozenset(['bench_fill', 'search']),
     clauses=(Clause('fetch', target='basic_pokemon', zone='deck', hp_max=70, amount=2, dest='bench'),),
     covers='full',
 )

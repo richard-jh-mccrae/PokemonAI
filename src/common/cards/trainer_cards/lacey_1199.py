@@ -6,7 +6,6 @@ CARD = TrainerCard(
     name='Lacey',
     kind=SUPPORTER,
     text='Shuffle your hand into your deck. Then, draw 4 cards. If your opponent has 3 or fewer Prize cards remaining, draw 8 cards instead.',
-    tags=frozenset(['draw', 'shuffle_hand']),
     clauses=(Clause('draw', amount=4, amount_if={'condition': 'opp_3_or_fewer_prizes', 'amount': 8}, rider='shuffle_own_hand_in'),),
     covers='full',
 )

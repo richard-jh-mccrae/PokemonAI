@@ -10,8 +10,7 @@ CARD = PokemonCard(
     evolves_from="Cynthia's Gible",
     weakness=GRASS,
     retreat_cost=1,
-    tags=frozenset(['search']),
-    default_roles=('primary_attacker', 'disruption_target'),
+    default_roles=('primary_attacker',),
     covers='partial',
     abilities=(
         Ability(

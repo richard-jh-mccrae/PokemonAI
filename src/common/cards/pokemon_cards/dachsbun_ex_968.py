@@ -11,7 +11,6 @@ CARD = PokemonCard(
     ex=True,
     weakness=METAL,
     retreat_cost=2,
-    tags=frozenset(['confuse']),
     abilities=(
         Ability(
             name='Time to Chow Down',

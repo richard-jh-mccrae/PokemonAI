@@ -1,4 +1,4 @@
-"""The unified per-card records: printed facts, tags, and machine-readable effect Clauses.
+"""The unified per-card records: printed facts and machine-readable effect Clauses.
 
 One frozen record per printing — `PokemonCard` under `pokemon_cards/`, `TrainerCard` under
 `trainer_cards/` — served as one dict by `common.cards.card_store()`. Every field is stored,
@@ -118,7 +118,6 @@ class PokemonCard:
     weakness: int | None = None
     resistance: int | None = None
     retreat_cost: int = 0
-    tags: frozenset = frozenset()
     #: This body's own job, authored from its text — see `pokemon_roles.POKEMON_ROLES`. A deck
     #: that wants a different job for it overrides; prize count never enters this.
     default_roles: tuple[str, ...] = ()
@@ -152,7 +151,6 @@ class TrainerCard:
     kind: str
     text: str = ""
     ace_spec: bool = False
-    tags: frozenset = frozenset()
     clauses: tuple[Clause, ...] = ()
     covers: str | None = None
 
@@ -168,7 +166,6 @@ class EnergyCard:
     kind: str
     provides: int = COLORLESS
     text: str = ""
-    tags: frozenset = frozenset()
     clauses: tuple[Clause, ...] = ()
     covers: str | None = None
 

@@ -7,5 +7,4 @@ CARD = TrainerCard(
     kind=ITEM,
     text='Your opponent’s Active Pokémon is now Burned and Confused.',
     ace_spec=True,
-    tags=frozenset(['burn', 'confuse']),
 )

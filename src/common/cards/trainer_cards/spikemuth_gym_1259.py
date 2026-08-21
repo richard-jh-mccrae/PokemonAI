@@ -6,6 +6,5 @@ CARD = TrainerCard(
     name='Spikemuth Gym',
     kind=STADIUM,
     text='Once during each player’s turn, that player may search their deck for a Marnie’s Pokémon, reveal it, and put it into their hand. Then, that player shuffles their deck.',
-    tags=frozenset([]),
     clauses=(Clause('fetch', target='pokemon', zone='deck', amount=1, name_family="Marnie's"),),
 )

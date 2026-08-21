@@ -6,7 +6,6 @@ CARD = TrainerCard(
     name='Risky Ruins',
     kind=STADIUM,
     text='Whenever any player puts a Basic non-{D} Pokémon onto their Bench during their turn, place 2 damage counters on that Pokémon.',
-    tags=frozenset([]),
     clauses=(Clause('stadium_trigger', on='bench_play', effect='damage_counters', amount=2, applies_to='basic_non_dark', symmetric=True),),
     covers='full',
 )

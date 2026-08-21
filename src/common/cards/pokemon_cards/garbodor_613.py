@@ -10,7 +10,6 @@ CARD = PokemonCard(
     evolves_from='Trubbish',
     weakness=FIGHTING,
     retreat_cost=3,
-    tags=frozenset(['poison']),
     attacks=(
         Attack(
             attack_id=882,

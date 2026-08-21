@@ -8,7 +8,6 @@ CARD = PokemonCard(
     energy_type=DRAGON,
     stage=BASIC,
     retreat_cost=2,
-    tags=frozenset([]),
     default_roles=('support_pokemon',),
     attacks=(
         Attack(

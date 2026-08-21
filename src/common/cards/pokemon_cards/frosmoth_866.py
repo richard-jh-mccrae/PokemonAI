@@ -10,7 +10,6 @@ CARD = PokemonCard(
     evolves_from='Snom',
     weakness=METAL,
     retreat_cost=2,
-    tags=frozenset(['draw']),
     abilities=(
         Ability(
             name='Alluring Wings',

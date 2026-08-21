@@ -10,7 +10,6 @@ CARD = PokemonCard(
     evolves_from='Lampent',
     weakness=WATER,
     retreat_cost=2,
-    tags=frozenset(['dig:1', 'draw']),
     abilities=(
         Ability(
             name='Alluring Light',

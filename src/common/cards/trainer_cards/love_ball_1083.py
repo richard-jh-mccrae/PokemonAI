@@ -6,5 +6,4 @@ CARD = TrainerCard(
     name='Love Ball',
     kind=ITEM,
     text='Search your deck for a Pokémon with the same name as 1 of your opponent’s Pokémon in play, reveal it, and put it into your hand. Then, shuffle your deck.',
-    tags=frozenset(['search']),
 )

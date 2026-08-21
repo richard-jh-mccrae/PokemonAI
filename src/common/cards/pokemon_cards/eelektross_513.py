@@ -10,7 +10,6 @@ CARD = PokemonCard(
     evolves_from='Eelektrik',
     weakness=FIGHTING,
     retreat_cost=3,
-    tags=frozenset([]),
     attacks=(
         Attack(
             attack_id=727,

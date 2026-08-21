@@ -6,7 +6,6 @@ CARD = TrainerCard(
     name='Canari',
     kind=SUPPORTER,
     text='You can use this card only if you discard another card from your hand.\n\nSearch your deck for up to 4 {L} Pokémon, reveal them, and put them into your hand. Then, shuffle your deck.',
-    tags=frozenset(['search']),
     clauses=(Clause('fetch', target='pokemon', zone='deck', amount=4, energy_type=LIGHTNING, cost='discard_1', cost_required=True),),
     covers='full',
 )

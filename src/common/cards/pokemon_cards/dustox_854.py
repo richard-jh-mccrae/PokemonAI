@@ -10,7 +10,6 @@ CARD = PokemonCard(
     evolves_from='Cascoon',
     weakness=FIRE,
     retreat_cost=1,
-    tags=frozenset(['poison', 'sleep']),
     abilities=(
         Ability(
             name='Boisterous Wind',

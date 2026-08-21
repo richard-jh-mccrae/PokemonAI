@@ -6,7 +6,6 @@ CARD = TrainerCard(
     name="Team Rocket's Ariana",
     kind=SUPPORTER,
     text='Draw cards until you have 5 cards in your hand. If all of your Pokémon in play are Team Rocket’s Pokémon, draw cards until you have 8 cards in your hand instead.',
-    tags=frozenset(['draw']),
     clauses=(Clause('draw', to_hand_size=5, amount_if={'condition': 'all_own_pokemon_team_rocket', 'to_hand_size': 8}),),
     covers='full',
 )

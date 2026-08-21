@@ -6,7 +6,6 @@ CARD = TrainerCard(
     name='Fennel',
     kind=SUPPORTER,
     text='Heal 40 damage from each of your Pokémon.',
-    tags=frozenset(['heal']),
     clauses=(Clause('heal', amount=40, target='any_pokemon', each_of=True),),
     covers='full',
 )

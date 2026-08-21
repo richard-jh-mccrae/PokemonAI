@@ -9,7 +9,6 @@ CARD = PokemonCard(
     stage=BASIC,
     weakness=LIGHTNING,
     retreat_cost=1,
-    tags=frozenset(['paralyze']),
     attacks=(
         Attack(
             attack_id=498,

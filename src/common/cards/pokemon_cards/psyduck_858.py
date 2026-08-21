@@ -9,7 +9,6 @@ CARD = PokemonCard(
     stage=BASIC,
     weakness=LIGHTNING,
     retreat_cost=1,
-    tags=frozenset([]),
     default_roles=('support_pokemon',),
     covers='partial',
     abilities=(

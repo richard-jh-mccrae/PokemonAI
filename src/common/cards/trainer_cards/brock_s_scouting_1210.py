@@ -6,7 +6,6 @@ CARD = TrainerCard(
     name='Brock’s Scouting',
     kind=SUPPORTER,
     text='Search your deck for up to 2 Basic Pokémon or 1 Evolution Pokémon, reveal them, and put them into your hand. Then, shuffle your deck.',
-    tags=frozenset(['search']),
     clauses=(Clause('fetch', target='basic_pokemon', zone='deck', amount=2, choice=True), Clause('fetch', target='evolution', zone='deck', amount=1, choice=True)),
     covers='full',
 )

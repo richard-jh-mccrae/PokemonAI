@@ -10,7 +10,6 @@ CARD = PokemonCard(
     evolves_from='Applin',
     weakness=FIRE,
     retreat_cost=3,
-    tags=frozenset([]),
     default_roles=('primary_attacker',),
     attacks=(
         Attack(

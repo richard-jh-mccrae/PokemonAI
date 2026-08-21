@@ -6,7 +6,6 @@ CARD = TrainerCard(
     name='Waitress',
     kind=SUPPORTER,
     text='Look at the top 6 cards of your deck and attach a Basic Energy card you find there to 1 of your Pokémon. Shuffle the other cards back into your deck.',
-    tags=frozenset(['dig', 'energy_accel']),
     clauses=(Clause('accel', amount=1, source='deck', dig=6, target='any_pokemon', energy='basic'),),
     covers='full',
 )

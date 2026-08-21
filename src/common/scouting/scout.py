@@ -35,7 +35,7 @@ class Scout:
                 targets = self._merge_intel(targets, self._dossier_intel(arch, "targets"))
             expected = self._expected_cards(top)
             evolution = self._evolution_paths(top)
-            return Read(candidates=top, unknown_mass=unknown_mass,
+            return Read(candidates=candidates, unknown_mass=unknown_mass,
                         confidence=self._confidence(top), evolution_paths=evolution,
                         expected_cards=expected, threats=threats, targets=targets)
         except Exception:

@@ -6,7 +6,6 @@ CARD = TrainerCard(
     name='Premium Power Pro',
     kind=ITEM,
     text='During this turn, attacks used by your {F} Pokémon do 30 more damage to your opponent’s Active Pokémon (before applying Weakness and Resistance).',
-    tags=frozenset([]),
     clauses=(Clause('damage_boost'),),
     covers='full',
 )

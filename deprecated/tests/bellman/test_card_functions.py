@@ -5,7 +5,7 @@ Lib-free: feeds synthetic card / probe dicts (the probe shape mirrors cg/api.py 
 """
 import pytest
 
-from meta_tracker.card_functions import (
+from deprecated.bellman.tag_tools.card_functions import (
     DERIVED_TAGS, accumulate_tables, build_function_table, classify_functions)
 
 

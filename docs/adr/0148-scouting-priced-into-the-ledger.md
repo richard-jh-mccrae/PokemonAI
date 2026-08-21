@@ -1,6 +1,6 @@
 # ADR-0148 — Scouting priced into the Ledger: opponent roles, Brief overrides, turn ordering
 
-Status: Accepted (2026-08-20); BUILT. Follows ADR-0145/0146/0147.
+Status: Superseded by Issue #582. Follows ADR-0145/0146/0147.
 
 ## Context
 

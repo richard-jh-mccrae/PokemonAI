@@ -9,7 +9,6 @@ CARD = PokemonCard(
     stage=STAGE1,
     evolves_from='Dratini',
     retreat_cost=2,
-    tags=frozenset(['search']),
     abilities=(
         Ability(
             name='Evolutionary Guidance',

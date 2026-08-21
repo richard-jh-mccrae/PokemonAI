@@ -4,12 +4,20 @@ Board value = each visible card's worth × a multiplier for where it sits, my si
 plus the prize race. A decision's price is the swing it causes; only ending the turn is worth
 zero. Plan: docs/plans/PokemonAI_Ledger_Plan.md."""
 from .decider import LedgerDecider, LedgerUnavailable
-from .evaluate import Valuation, evaluate
+from .configuration import (BehaviorIdentity, ComputeConfiguration, DeckOverlay,
+                            ValuationConfiguration)
+from .evaluate import FeatureActivation, FeatureContribution, Valuation, evaluate
+from .features import FEATURE_CATALOG, FeatureCatalog, FeatureSpec
+from .preview import ContinuationFootprint
 from .seam import (LedgerNativeProvider, PreviewState, preview_provider_factory,
                    register_preview_variant)
-from .weights import LedgerWeights
-from .worth import EvaluationModel, OpponentEvaluation
+from .worth import ArchetypeBelief, EvaluationModel, OpponentBeliefs
 
-__all__ = ("EvaluationModel", "LedgerDecider", "LedgerNativeProvider", "LedgerUnavailable",
-           "LedgerWeights", "OpponentEvaluation", "PreviewState", "Valuation", "evaluate",
-           "preview_provider_factory", "register_preview_variant")
+__all__ = ("ArchetypeBelief", "BehaviorIdentity", "ComputeConfiguration",
+           "ContinuationFootprint", "DeckOverlay",
+           "FEATURE_CATALOG",
+           "FeatureActivation", "FeatureCatalog", "FeatureContribution", "FeatureSpec",
+           "EvaluationModel", "LedgerDecider", "LedgerNativeProvider", "LedgerUnavailable",
+           "OpponentBeliefs", "PreviewState", "Valuation",
+           "ValuationConfiguration", "evaluate", "preview_provider_factory",
+           "register_preview_variant")

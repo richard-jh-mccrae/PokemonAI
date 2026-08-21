@@ -6,7 +6,6 @@ CARD = TrainerCard(
     name='Potion',
     kind=ITEM,
     text='Heal 30 damage from 1 of your Pokémon.',
-    tags=frozenset(['heal']),
     clauses=(Clause('heal', amount=30),),
     covers='full',
 )

@@ -7,7 +7,6 @@ CARD = TrainerCard(
     kind=ITEM,
     text='Draw a card for each of your Ancient Pokémon in play.',
     ace_spec=True,
-    tags=frozenset([]),
     clauses=(Clause('draw', amount=1, amount_per='my_ancient'),),
     covers='partial',
 )

@@ -10,7 +10,6 @@ CARD = PokemonCard(
     evolves_from='Spinarak',
     weakness=FIRE,
     retreat_cost=1,
-    tags=frozenset(['poison']),
     attacks=(
         Attack(
             attack_id=1462,

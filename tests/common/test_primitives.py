@@ -4,7 +4,6 @@ import json
 
 from common import RootDecision
 from deprecated.bellman.state import DecisionState
-from common.card_worth import ACE_SPEC_TIER, ENERGY_TIER, ROLE_TIER, function_role, role_value
 from common.option_equivalence import (
     class_representatives, fan_out, fingerprint_source_card_id, option_in_play_source_id,
     option_source_card, semantic_option_fingerprint,
@@ -35,20 +34,6 @@ def test_roles_resolve_reads_the_store_records_across_an_evolution_line():
     assert roles[120] == ["primary_attacker", "draw_engine"]
     assert roles[121] == ["primary_attacker"]        # declared, so the authored sniper is gone
     assert roles.lines[0].path == (119, 120, 121)
-
-
-def test_portable_worth_is_independent_of_a_legacy_value_stack():
-    assert role_value(["primary_attacker", "engine"]) == ROLE_TIER["primary_attacker"]
-    assert role_value([], is_typed_basic_energy=True) == ENERGY_TIER
-    assert role_value(["engine"], is_ace_spec=True) == ACE_SPEC_TIER
-    assert role_value([]) == 0.0
-    assert role_value(["primary_attacker"]) > role_value(["support_pokemon"])
-
-
-def test_intrinsic_card_functions_resolve_to_general_roles():
-    assert function_role(("search", "tutor_pokemon")) == "tutor"
-    assert function_role(("energy_denial", "coin")) == "disruption"
-    assert function_role(("draw", "dig")) is None
 
 
 def test_option_equivalence_helpers_preserve_the_best_member():

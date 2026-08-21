@@ -6,7 +6,6 @@ CARD = TrainerCard(
     name='Brave Bangle',
     kind=TOOL,
     text='If the Pokémon this card is attached to doesn’t have a Rule Box, the attacks it uses do 30 more damage to your opponent’s Active Pokémon {ex}\xa0(before applying Weakness and Resistance).\xa0(Pokémon {ex}, Pokémon {V}, etc. have Rule Boxes.)',
-    tags=frozenset([]),
     clauses=(Clause('damage_boost', amount=30, applies_to='attached_body', no_rule_box=True, target='opponent_active', target_class='ex', timing='before_weakness_resistance'),),
     covers='full',
 )

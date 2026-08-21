@@ -11,24 +11,69 @@ from __future__ import annotations
 
 import hashlib
 import random
-from collections import Counter
-from dataclasses import replace
+from collections import defaultdict
 
-from common.observation import ObservationState, UnknownDeckTop, VisibleHand
-from common.observation.nodes import Card, CardBag, digest
+from common.observation import ObservationState, ObservationStateBuilder
 from common.cards import card_store
 from common.cards.card_facts import SUPPORTER
+from common.ledger.evaluate import FeatureActivation, FeatureContribution, Valuation
 
-SAMPLE_BUDGET = 24
+
+def refresh_valuation(observation, board: ObservationState, card_id: int,
+                      draws, opponent_shuffles: bool, evaluate_fn, compute):
+    samples, gaps = _refresh_samples(
+        observation, board, card_id, draws, opponent_shuffles, evaluate_fn, compute)
+    return _average(samples, gaps)
 
 
-def refresh_value(board: ObservationState, card_id: int,
-                  draws, opponent_shuffles: bool, evaluate_fn):
+def _average(samples, gaps):
+    valuations = tuple(valuation for valuation, _board, _observation in samples)
+    if not valuations:
+        return Valuation(0.0, (), tuple(gaps)), tuple(gaps)
+    activations = defaultdict(float)
+    provenance = defaultdict(set)
+    for valuation in valuations:
+        for item in valuation.activations:
+            activations[item.feature] += item.value / len(valuations)
+            provenance[item.feature].update(item.provenance)
+    averaged = tuple(FeatureActivation(feature, value, tuple(sorted(provenance[feature])))
+                     for feature, value in sorted(activations.items()) if value)
+    coefficients = {item.feature: item.coefficient
+                    for valuation in valuations for item in valuation.contributions}
+    contributions = tuple(FeatureContribution(
+        item.feature, item.value, coefficients[item.feature],
+        item.value * coefficients[item.feature], item.provenance) for item in averaged)
+    result = Valuation(sum(item.value for item in contributions), (), tuple(gaps),
+                       averaged, contributions)
+    return result, tuple(gaps)
+
+
+def refresh_outcomes(observation, board: ObservationState, card_id: int,
+                     draws, opponent_shuffles: bool, evaluate_fn, compute):
+    samples, gaps = _refresh_samples(
+        observation, board, card_id, draws, opponent_shuffles, evaluate_fn, compute)
+    valuation, _ = _average(samples, gaps)
+    probability = 1.0 / len(samples) if samples else 0.0
+    outcomes = tuple((probability, successor, synthetic)
+                     for _valuation, successor, synthetic in samples)
+    return valuation, gaps, outcomes
+
+def refresh_value(observation, board: ObservationState, card_id: int,
+                  draws, opponent_shuffles: bool, evaluate_fn, compute):
     """Expected VALUE of the board after playing shuffle-draw supporter `card_id` (absolute,
     not a swing — the preview differences it against its own baseline), plus the gaps met."""
+    valuation, gaps = refresh_valuation(
+        observation, board, card_id, draws, opponent_shuffles, evaluate_fn, compute)
+    return valuation.total, gaps
+
+
+def _refresh_samples(observation, board: ObservationState, card_id: int,
+                     draws, opponent_shuffles: bool, evaluate_fn, compute):
     gaps: list[str] = []
     seat = board.seat
-    hand_ids = [card.card_id for card in board.me.hand]
+    mine = _player(observation, seat)
+    hand_ids = [int(card["id"]) for card in (mine.get("hand") or ())
+                if card and card.get("id") is not None]
     if int(card_id) in hand_ids:
         hand_ids.remove(int(card_id))
     else:
@@ -40,22 +85,23 @@ def refresh_value(board: ObservationState, card_id: int,
     else:
         gaps.append("refresh: own deck contents unknown; sampling hand-only pool")
 
-    rng = random.Random(_seed(board, card_id))
-    total, weight = 0.0, 0
+    rng = random.Random(_seed(board, card_id, compute.chance_seed))
+    samples = []
     for own_draw, opponent_draw in draws:
-        for _ in range(max(1, SAMPLE_BUDGET // max(1, len(draws)))):
+        for _ in range(max(1, compute.chance_sample_budget // max(1, len(draws)))):
             sampled = _sample(rng, pool, int(own_draw))
-            synthetic = _synthesize(board, sampled, len(pool) - len(sampled),
+            synthetic = _synthesize(observation, seat, sampled, len(pool) - len(sampled),
                                     int(card_id), int(opponent_draw), opponent_shuffles)
-            valuation = evaluate_fn(synthetic)
+            successor = ObservationStateBuilder(board.decklist).root(
+                synthetic, knowledge=board.knowledge)
+            valuation = evaluate_fn(successor)
             gaps.extend(valuation.gaps)
-            total += valuation.total
-            weight += 1
-    return (total / weight if weight else 0.0), tuple(gaps)
+            samples.append((valuation, successor, synthetic))
+    return tuple(samples), tuple(gaps)
 
 
-def _seed(board: ObservationState, card_id: int) -> int:
-    digest = hashlib.blake2b(f"{board.key}:{int(card_id)}".encode("ascii"),
+def _seed(board: ObservationState, card_id: int, seed: int) -> int:
+    digest = hashlib.blake2b(f"{seed}:{board.key}:{int(card_id)}".encode("ascii"),
                              digest_size=8).digest()
     return int.from_bytes(digest, "big")
 
@@ -66,37 +112,48 @@ def _sample(rng: random.Random, pool: list, count: int) -> list:
     return rng.sample(pool, count)
 
 
-def _bag(cards) -> CardBag:
-    cards = tuple(cards)
-    counts = tuple(sorted(Counter(card.card_id for card in cards).items()))
-    return CardBag(cards, counts, digest(counts))
+def _player(observation, seat: int) -> dict:
+    players = (observation.get("current") or {}).get("players") or ()
+    return players[seat] if 0 <= seat < len(players) and players[seat] else {}
 
 
-def _synthesize(board: ObservationState, hand_ids, deck_count: int, played_id: int,
-                opponent_draw: int, opponent_shuffles: bool) -> ObservationState:
-    seat = board.seat
-    hand = VisibleHand(_bag(Card(int(card_id), None, seat) for card_id in hand_ids))
-    discard = _bag((*board.me.discard.cards, Card(int(played_id), None, seat)))
-    mine = replace(board.me, hand=hand, hand_count=len(hand_ids),
-                   deck_count=max(0, int(deck_count)), discard=discard)
-    other = board.them
+def _synthesize(observation, seat: int, hand_ids, deck_count: int, played_id: int,
+                opponent_draw: int, opponent_shuffles: bool) -> dict:
+    """The post-shuffle printout: my sampled hand, the played Supporter in the discard, the
+    opponent's counts moved. Serials are synthetic — the evaluator never reads them."""
+    root = dict(observation)
+    current = dict(root.get("current") or {})
+    players = list(current.get("players") or ())
+    while len(players) < max(2, seat + 1):         # both seats must exist to be rewritten
+        players.append({})
+    mine = dict(players[seat] or {})
+    mine["hand"] = [{"id": int(card_id), "serial": None, "playerIndex": seat}
+                    for card_id in hand_ids]
+    mine["handCount"] = len(hand_ids)
+    mine["deckCount"] = max(0, int(deck_count))
+    mine["discard"] = list(mine.get("discard") or ()) + [
+        {"id": int(played_id), "serial": None, "playerIndex": seat}]
+    players[seat] = mine
+
+    other = dict(players[1 - seat] or {})
     if opponent_shuffles:
-        other_deck = max(0, other.deck_count + other.hand_count - int(opponent_draw))
+        previous = int(other.get("handCount") or 0)
+        other["deckCount"] = max(0, int(other.get("deckCount") or 0) + previous
+                                 - int(opponent_draw))
+        other["handCount"] = int(opponent_draw)
     else:
-        other_deck = max(0, other.deck_count - int(opponent_draw))
-    other_hand = int(opponent_draw) if opponent_shuffles else other.hand_count + int(opponent_draw)
-    other = replace(other, hand=replace(other.hand, count=other_hand),
-                    hand_count=other_hand, deck_count=other_deck)
-    supporter = getattr(card_store().get(int(played_id)), "kind", None) == SUPPORTER
-    turn = replace(board.turn, supporter_played=board.turn.supporter_played or supporter)
-    remaining = Counter(card_id for card_id, count in board.deck_counts or ()
-                        for _ in range(count))
-    remaining.subtract(hand_ids)
-    knowledge = replace(board.knowledge, known_top=UnknownDeckTop())
-    return replace(board, me=mine, them=other, turn=turn, select=None, legal_actions=(),
-                   knowledge=knowledge,
-                   deck_counts=tuple(sorted((card_id, count) for card_id, count in remaining.items()
-                                            if count > 0)), events=())
+        other["handCount"] = int(other.get("handCount") or 0) + int(opponent_draw)
+        other["deckCount"] = max(0, int(other.get("deckCount") or 0) - int(opponent_draw))
+    other["hand"] = None
+    players[1 - seat] = other
+
+    current["players"] = players
+    # Only a Supporter spends the Supporter allowance; an Item-borne shuffle-refresh must not.
+    if getattr(card_store().get(int(played_id)), "kind", None) == SUPPORTER:
+        current["supporterPlayed"] = True
+    root["current"] = current
+    root["select"] = None
+    return root
 
 
-__all__ = ("SAMPLE_BUDGET", "refresh_value")
+__all__ = ("refresh_outcomes", "refresh_value", "refresh_valuation")

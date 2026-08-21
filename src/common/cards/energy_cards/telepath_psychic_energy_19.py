@@ -7,7 +7,6 @@ CARD = EnergyCard(
     kind=SPECIAL_ENERGY,
     provides=PSYCHIC,
     text='As long as this card is attached to a Pokémon, it provides {P} Energy.\nWhen you attach this card from your hand to a {P} Pokémon, search your deck for up to 2 Basic {P} Pokémon and put them onto your Bench. Then, shuffle your deck.',
-    tags=frozenset(['provides:1', 'search']),
     clauses=(Clause('energy_provide', amount=1, type='psychic'), Clause('fetch', target='basic_pokemon', zone='deck', amount=2, energy_type=PSYCHIC, target_type=5, dest='bench', trigger='on_attach')),
     covers='full',
 )

@@ -6,7 +6,6 @@ CARD = TrainerCard(
     name="Team Rocket's Transceiver",
     kind=ITEM,
     text='Search your deck for a Supporter card that has “Team Rocket” in its name, reveal it, and put it into your hand. Then, shuffle your deck.',
-    tags=frozenset(['search']),
     clauses=(Clause('fetch', target='supporter', zone='deck', name_family='Team Rocket'),),
     covers='partial',
 )

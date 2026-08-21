@@ -11,7 +11,6 @@ CARD = PokemonCard(
     ex=True,
     weakness=WATER,
     retreat_cost=1,
-    tags=frozenset(['burn', 'poison']),
     attacks=(
         Attack(
             attack_id=1480,

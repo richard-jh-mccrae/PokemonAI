@@ -1,7 +1,7 @@
 # Training evidence and the Ledger's rounds
 
 Human Corrections are the evidence base. The Ledger's manual training rounds (plan §7,
-ADR-0147/0148) tune its weight vector against them; the quarantined Bellman teacher keeps them
+ADR-0147/0148) tune its closed Valuation Configuration against them; the quarantined Bellman teacher keeps them
 as its frozen acceptance evidence (ADR-0149).
 
 - `blunder/`: correction schema, replay decisions, labels, provenance, telemetry joins, and storage.
@@ -12,6 +12,6 @@ as its frozen acceptance evidence (ADR-0149).
   runtime; per-deck agreement, the generality floor, misses with their rationales, gap census,
   regressions vs a prior baseline (ADR-0145); prize-anchor stamping + retired rulings (ADR-0147).
 - `ledger_tune.py`: the §7 nudge / keep-best / adoption-gate loop over the Ledger's general
-  weight vector; every trial lands in `docs/tuning/runs/`.
+  Valuation Configuration; every trial lands in `docs/tuning/runs/`.
 
 Deck behavior changes in shared runtime code or declarative deck Roles, not generated `tuned.json`.

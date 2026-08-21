@@ -6,7 +6,6 @@ CARD = TrainerCard(
     name='Surfer',
     kind=SUPPORTER,
     text='Switch your Active Pokémon with 1 of your Benched Pokémon. If you do, draw cards until you have 5 cards in your hand.',
-    tags=frozenset(['draw', 'switch']),
     clauses=(Clause('draw', to_hand_size=5, rider='self_switch'),),
     covers='full',
 )

@@ -10,7 +10,6 @@ CARD = PokemonCard(
     evolves_from='Dragonair',
     mega_ex=True,
     retreat_cost=2,
-    tags=frozenset(['switch']),
     abilities=(
         Ability(
             name='Sky Transport',

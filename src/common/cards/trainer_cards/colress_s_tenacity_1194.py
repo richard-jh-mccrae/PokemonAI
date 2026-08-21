@@ -6,7 +6,6 @@ CARD = TrainerCard(
     name='Colress’s Tenacity',
     kind=SUPPORTER,
     text='Search your deck for a Stadium card and an Energy card, reveal them, and put them into your hand. Then, shuffle your deck.',
-    tags=frozenset(['search', 'tutor_energy']),
     clauses=(Clause('fetch', target='energy', zone='deck'), Clause('fetch', target='stadium', zone='deck')),
     covers='full',
 )
