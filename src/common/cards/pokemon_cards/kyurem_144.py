@@ -10,6 +10,7 @@ CARD = PokemonCard(
     retreat_cost=2,
     tags=frozenset([]),
     default_roles=('backup_attacker',),
+    covers='full',
     abilities=(
         Ability(
             name='Plasma Bane',

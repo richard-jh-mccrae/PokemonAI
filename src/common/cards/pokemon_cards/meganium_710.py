@@ -12,6 +12,7 @@ CARD = PokemonCard(
     retreat_cost=2,
     tags=frozenset([]),
     default_roles=('backup_attacker', 'accel_source', 'disruption_target', 'support_pokemon'),
+    covers='full',
     abilities=(
         Ability(
             name='Wild Growth',

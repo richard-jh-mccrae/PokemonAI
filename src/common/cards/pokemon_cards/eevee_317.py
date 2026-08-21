@@ -11,6 +11,7 @@ CARD = PokemonCard(
     retreat_cost=1,
     tags=frozenset([]),
     default_roles=('backup_attacker',),
+    covers='full',
     abilities=(
         Ability(
             name='Boosted Evolution',

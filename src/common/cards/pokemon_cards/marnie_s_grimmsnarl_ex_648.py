@@ -13,6 +13,7 @@ CARD = PokemonCard(
     retreat_cost=2,
     tags=frozenset(['energy_accel']),
     default_roles=('primary_attacker',),
+    covers='full',
     abilities=(
         Ability(
             name='Punk Up',

@@ -8,4 +8,5 @@ CARD = TrainerCard(
     text='Search your deck for a Mega Evolution Pokémon {ex}, reveal it, and put it into your hand. Then, shuffle your deck.',
     tags=frozenset(['search', 'tutor_mega']),
     clauses=(Clause('fetch', target='mega', zone='deck'),),
+    covers='full',
 )

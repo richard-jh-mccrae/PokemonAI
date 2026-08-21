@@ -119,7 +119,7 @@ def build_manifest(agent_dir, *, when=None, git_hash=None, agent_name=None, card
         },
         "capabilities": {
             "ledger": True,
-            "card_functions": (agent_dir / "common" / "card_functions.json").exists(),
+            "card_store": (agent_dir / "common" / "cards" / "card_facts.py").exists(),
             "scouting": (agent_dir / "common" / "scouting" / "artifact.json").exists(),
             "native_engine": (agent_dir / "cg").exists(),
         },

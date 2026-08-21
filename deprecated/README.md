@@ -12,6 +12,8 @@ rounds retire it — but the dependency is one-way: this tree may import `src/`,
   extends the live `common.runtime.AgentRuntime`; `build_teacher_runtime(...)` is the drop-in
   for the old `build_runtime(..., brain="bellman")`. `providers.py` restores the search-only
   provider hooks (`footprint`, the lethal gate, `resolve_end`) on the live engine seams.
+- `bellman/card_effects.json`: the teacher's FROZEN effect table (ADR-0153) — the live tree
+  bakes clauses into card records instead; this copy is deliberately never regenerated.
 - `tests/`: the moved suites — the Bellman milestone/policy contracts, the beam/strategy grading
   suites, and the six mega_starmie correction pins that freeze the teacher's rulings.
 

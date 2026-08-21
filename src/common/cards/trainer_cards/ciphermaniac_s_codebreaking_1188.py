@@ -8,4 +8,5 @@ CARD = TrainerCard(
     text='Search your deck for 2 cards, shuffle your deck, then put those cards on top of it in any order.',
     tags=frozenset(['dig']),
     clauses=(Clause('fetch', target='any', zone='deck', amount=2, dest='deck_top', rider='shuffle_before_place'),),
+    covers='full',
 )

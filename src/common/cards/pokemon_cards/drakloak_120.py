@@ -11,6 +11,7 @@ CARD = PokemonCard(
     retreat_cost=1,
     tags=frozenset(['dig', 'dig:2', 'draw']),
     default_roles=('primary_attacker', 'draw_engine'),
+    covers='full',
     abilities=(
         Ability(
             name='Recon Directive',

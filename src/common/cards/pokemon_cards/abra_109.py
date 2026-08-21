@@ -12,6 +12,7 @@ CARD = PokemonCard(
     retreat_cost=1,
     tags=frozenset([]),
     default_roles=('primary_attacker', 'support_pokemon'),
+    covers='full',
     abilities=(
         Ability(
             name='Teleporter',

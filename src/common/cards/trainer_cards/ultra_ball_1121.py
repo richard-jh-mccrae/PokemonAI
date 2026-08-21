@@ -8,4 +8,5 @@ CARD = TrainerCard(
     text='You can use this card only if you discard 2 other cards from your hand.\n\nSearch your deck for a Pokémon, reveal it, and put it into your hand. Then, shuffle your deck.',
     tags=frozenset(['cost_discard', 'search', 'tutor_pokemon']),
     clauses=(Clause('fetch', target='pokemon', zone='deck', cost='discard_2', cost_required=True),),
+    covers='full',
 )

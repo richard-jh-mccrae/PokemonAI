@@ -12,6 +12,7 @@ CARD = PokemonCard(
     retreat_cost=1,
     tags=frozenset(['search']),
     default_roles=('backup_attacker', 'support_pokemon'),
+    covers='partial',
     abilities=(
         Ability(
             name='Bonded by the Journey',

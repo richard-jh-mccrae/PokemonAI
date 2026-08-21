@@ -13,6 +13,7 @@ CARD = PokemonCard(
     retreat_cost=2,
     tags=frozenset(['draw']),
     default_roles=('primary_attacker',),
+    covers='full',
     abilities=(
         Ability(
             name='Trade',

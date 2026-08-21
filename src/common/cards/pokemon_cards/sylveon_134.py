@@ -20,6 +20,8 @@ CARD = PokemonCard(
             damage=0,
             text='Flip a coin. If heads, choose 1 of your opponent’s Benched Pokémon. Shuffle that Pokémon and all attached cards into their deck.',
             clauses=(Clause('coin', effect='shuffle_into_deck', target='opp_bench', amount=1, rider='attached_cards_too'),),
+            damage_min=0,
+            damage_max=0,
         ),
         Attack(
             attack_id=174,

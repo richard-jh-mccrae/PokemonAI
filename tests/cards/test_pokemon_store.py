@@ -11,7 +11,7 @@ from pathlib import Path
 import pytest
 from cards_helpers import REPO, engine_attacks, engine_cards, engine_stage  # noqa: F401  fixtures
 
-from common.cards import CardFunctions, attack_index, pokemon_card_store, pokemon_default_roles
+from common.cards import attack_index, pokemon_card_store, pokemon_default_roles
 from common.cards.card_facts import Clause
 from common.cards.pokemon_roles import resolve_pokemon_roles
 
@@ -39,14 +39,16 @@ def test_card_facts_match_the_engine_defs(engine_cards, engine_attacks):
 
 
 def test_tags_match_the_shipped_tag_table():
-    functions = CardFunctions.load()
+    measured = json.loads((REPO / "tools" / "meta_tracker" / "measured_functions.json")
+                          .read_text(encoding="utf-8"))
     for card_id, card in pokemon_card_store().items():
-        assert card.tags == frozenset(functions.tags(card_id)), card_id
+        assert card.tags == frozenset(measured.get(str(card_id), [])), card_id
 
 
 def test_ability_clauses_stay_synced_with_the_clause_store():
-    effects = json.loads(
-        (REPO / "src" / "common" / "card_effects.json").read_text(encoding="utf-8"))
+    from build_card_effects import load_effects
+
+    effects = {str(card_id): clauses for card_id, clauses in load_effects()[0].items()}
     for card_id, card in pokemon_card_store().items():
         shipped = effects.get(str(card_id))
         if shipped is None or not card.abilities:
@@ -86,8 +88,13 @@ def test_cinderace_setup_active_ability_pins_to_its_printed_text():
     assert explosiveness.clauses == (Clause("setup_active", trigger="setup"),)
 
 
-def test_every_effect_text_carries_a_clause_encoding():
-    for card in pokemon_card_store().values():
+def test_every_core_effect_text_carries_a_clause_encoding():
+    from cards_helpers import core_card_ids
+
+    for card_id in sorted(core_card_ids()):
+        card = pokemon_card_store().get(card_id)
+        if card is None:
+            continue
         for attack in card.attacks:
             assert not attack.text or attack.clauses, (card.card_id, attack.name)
         for ability in card.abilities:

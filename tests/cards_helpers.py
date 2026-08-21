@@ -68,8 +68,35 @@ def brief_card_ids() -> frozenset:
     return frozenset(ids)
 
 
-def all_covered_card_ids() -> frozenset:
+def core_card_ids() -> frozenset:
+    """The strict tier: decks + Brief printings, owed complete records (roles, clauses)."""
     return all_deck_card_ids() | brief_card_ids()
+
+
+@lru_cache(maxsize=1)
+def tail_card_ids() -> frozenset:
+    """The honest-partial tier (ADR-0153): every id the authoring inputs know something about —
+    tags, effect clauses, coverage verdicts, or attack stat corrections."""
+    import sys
+
+    sys.path.insert(0, str(REPO / "tools"))
+    from build_card_effects import load_effects
+
+    functions = json.loads((REPO / "tools" / "meta_tracker" / "measured_functions.json")
+                           .read_text(encoding="utf-8"))
+    overrides = json.loads((REPO / "tools" / "meta_tracker" / "attack_overrides.json")
+                           .read_text(encoding="utf-8"))
+    effects, covers = load_effects()
+    overridden = {int(attack_id) for attack_id in overrides}
+    owners = {card_id for card_id, card in engine_card_defs().items()
+              if any(int(attack_id) in overridden for attack_id in card.get("attacks") or ())}
+    ids = ({int(key) for key in functions if str(key).lstrip("-").isdigit()}
+           | set(effects) | set(covers) | owners)
+    return frozenset(ids - core_card_ids())
+
+
+def all_covered_card_ids() -> frozenset:
+    return core_card_ids() | tail_card_ids()
 
 
 def deck_card_ids_of_kind(*card_types: int) -> set:

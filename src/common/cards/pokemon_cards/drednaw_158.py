@@ -12,6 +12,7 @@ CARD = PokemonCard(
     retreat_cost=3,
     tags=frozenset([]),
     default_roles=('backup_attacker',),
+    covers='full',
     abilities=(
         Ability(
             name='Impervious Shell',

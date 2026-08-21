@@ -8,4 +8,5 @@ CARD = TrainerCard(
     text='Each player’s {G} Pokémon can evolve into {G} Pokémon during the turn they play those Pokémon, except during their first turn.',
     tags=frozenset([]),
     clauses=(Clause('stadium_static', effect='evolve_early', applies_to='grass', evolves_into_type=1, condition='not_first_turn', symmetric=True),),
+    covers='full',
 )

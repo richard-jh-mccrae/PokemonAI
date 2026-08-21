@@ -14,6 +14,7 @@ CARD = PokemonCard(
     retreat_cost=2,
     tags=frozenset(['discard_energy_recur']),
     default_roles=('primary_attacker',),
+    covers='full',
     abilities=(
         Ability(
             name='Assemble Alloy',

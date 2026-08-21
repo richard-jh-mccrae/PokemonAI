@@ -1,8 +1,10 @@
-"""Generate the `src/common/cards/` card modules — one module per card in our decks' lists.
+"""Generate the `src/common/cards/` card modules — the one definition per card (ADR-0153).
 
-Printed facts come from the engine-twin defs (`src/cgpy/defs/*.json`), tags from the shipped
-`card_functions.json`, effect clauses from the audited `card_effects.json` where present, and
-the Clause tables below for the rest. Fails loud on any effect left un-encoded.
+Printed facts come from the engine-twin defs (`src/cgpy/defs/*.json`); tags, effect clauses,
+coverage verdicts, and attack stat corrections come from the authoring inputs under
+`tools/meta_tracker/`. CORE cards (our decks + every Brief-named printing) fail loud on any
+effect left un-encoded; TAIL cards (tag/override-only meta cards) are honestly partial — a
+missing clause set reads as a hole, exactly as an absent record does.
 
 Usage:
     python tools/build_pokemon_cards.py"""
@@ -295,8 +297,23 @@ def _module(card: dict, needed: set, lines: list[str], record: str) -> tuple[str
     return f"{_slug(card['name'])}_{card['cardId']}.py", body
 
 
+#: Attack.field name per engine-override key (`tools/meta_tracker/attack_overrides.json`).
+OVERRIDE_FIELDS = {"damage": "damage_fix", "damageMin": "damage_min", "damageMax": "damage_max",
+                   "scaleVar": "scale_var", "scalePerUnit": "scale_per_unit",
+                   "scaleFilter": "scale_filter"}
+
+
+def _override_lines(patch: dict) -> list[str]:
+    lines = []
+    for key, field in OVERRIDE_FIELDS.items():
+        if key in patch:
+            value = tuple(patch[key]) if key == "scaleFilter" else patch[key]
+            lines.append(f"            {field}={value!r},")
+    return lines
+
+
 def _emit_pokemon(card: dict, attacks: dict, tags: list, ability_clauses: tuple,
-                  roles: tuple[str, ...]):
+                  roles: tuple[str, ...] | None, covers, overrides: dict):
     needed = {"PokemonCard", STAGE_NAME[card["stage"]], ENERGY_NAME[card["energyType"]]}
     lines = [f"    card_id={card['cardId']},",
              f"    name={card['name']!r},",
@@ -314,7 +331,10 @@ def _emit_pokemon(card: dict, attacks: dict, tags: list, ability_clauses: tuple,
             lines.append(f"    {side}={ENERGY_NAME[card[side]]},")
     lines.append(f"    retreat_cost={card['retreatCost']},")
     lines.append(f"    tags=frozenset({sorted(tags)!r}),")
-    lines.append(f"    default_roles={roles!r},")
+    if roles:
+        lines.append(f"    default_roles={tuple(roles)!r},")
+    if covers:
+        lines.append(f"    covers={covers!r},")
     if card["cardId"] in SYNERGY:
         lines.append(f"    synergy={SYNERGY[card['cardId']]!r},")
     if card.get("skills"):
@@ -345,12 +365,13 @@ def _emit_pokemon(card: dict, attacks: dict, tags: list, ability_clauses: tuple,
                 lines.append(f"            text={attack['text']!r},")
             if attack_id in ATTACK_CLAUSES:
                 lines.extend(_clause_block(ATTACK_CLAUSES[attack_id], needed, " " * 12))
+            lines.extend(_override_lines(overrides.get(int(attack_id), {})))
             lines.append("        ),")
         lines.append("    ),")
     return _module(card, needed, lines, "PokemonCard")
 
 
-def _emit_energy(card: dict, tags: list, clauses: tuple):
+def _emit_energy(card: dict, tags: list, clauses: tuple, covers):
     kind = ENERGY_KIND[card["cardType"]]
     needed = {"EnergyCard", kind, ENERGY_NAME[card["energyType"]]}
     skills = card.get("skills") or []
@@ -363,10 +384,12 @@ def _emit_energy(card: dict, tags: list, clauses: tuple):
     lines.append(f"    tags=frozenset({sorted(tags)!r}),")
     if clauses:
         lines.extend(_clause_block(clauses, needed, " " * 4))
+    if covers:
+        lines.append(f"    covers={covers!r},")
     return _module(card, needed, lines, "EnergyCard")
 
 
-def _emit_trainer(card: dict, tags: list, clauses: tuple):
+def _emit_trainer(card: dict, tags: list, clauses: tuple, covers):
     kind = TRAINER_KIND[card["cardType"]]
     needed = {"TrainerCard", kind}
     skills = card.get("skills") or []
@@ -378,7 +401,10 @@ def _emit_trainer(card: dict, tags: list, clauses: tuple):
     if card.get("aceSpec"):
         lines.append("    ace_spec=True,")
     lines.append(f"    tags=frozenset({sorted(tags)!r}),")
-    lines.extend(_clause_block(clauses, needed, " " * 4))
+    if clauses:
+        lines.extend(_clause_block(clauses, needed, " " * 4))
+    if covers:
+        lines.append(f"    covers={covers!r},")
     return _module(card, needed, lines, "TrainerCard")
 
 
@@ -387,10 +413,25 @@ def main() -> None:
              json.loads((REPO / "src" / "cgpy" / "defs" / "card_data.json").read_text("utf-8"))}
     attacks = {str(a["attackId"]): a for a in
                json.loads((REPO / "src" / "cgpy" / "defs" / "attack_data.json").read_text("utf-8"))}
-    functions = json.loads((REPO / "src" / "common" / "card_functions.json").read_text("utf-8"))
-    effects = json.loads((REPO / "src" / "common" / "card_effects.json").read_text("utf-8"))
+    functions = json.loads(
+        (REPO / "tools" / "meta_tracker" / "measured_functions.json").read_text("utf-8"))
+    from build_card_effects import load_effects
+    effects, covers = load_effects()
+    attack_overrides = {
+        int(attack_id): patch for attack_id, patch in json.loads(
+            (REPO / "tools" / "meta_tracker" / "attack_overrides.json").read_text("utf-8")
+        ).items()}
+    override_owners = {
+        card_id for card_id, card in cards.items()
+        if any(int(attack_id) in attack_overrides for attack_id in card.get("attacks") or ())}
     brief_ids, brief_roles = _brief_cards(cards)
-    all_ids = _deck_ids() | brief_ids
+    core = _deck_ids() | brief_ids
+    tail = ({int(k) for k in functions if str(k).lstrip("-").isdigit()}
+            | set(effects) | set(covers) | override_owners) - core
+    missing = sorted(i for i in core | tail if i not in cards)
+    if missing:
+        raise SystemExit(f"ids absent from the engine defs: {missing}")
+    all_ids = core | tail
     pokemon = sorted(i for i in all_ids if cards[i]["cardType"] == 0)
     trainers = sorted(i for i in all_ids if cards[i]["cardType"] in TRAINER_KIND)
     energies = sorted(i for i in all_ids if cards[i]["cardType"] in ENERGY_KIND)
@@ -399,36 +440,41 @@ def main() -> None:
     for card_id in pokemon:
         card = cards[card_id]
         card["stage"] = ("stage2" if card["stage2"] else "stage1" if card["stage1"] else "basic")
+        strict = card_id in core
         roles = DEFAULT_ROLES.get(card_id) or brief_roles.get(card_id)
-        if not roles:
+        if not roles and strict:
             raise SystemExit(f"pokemon {card_id} ({card['name']}) has no authored default role")
         ability_clauses = ()
         if card.get("skills"):
-            source = effects.get(str(card_id)) or ABILITY_CLAUSES.get(card_id)
-            if not source:
+            source = effects.get(card_id) or ABILITY_CLAUSES.get(card_id)
+            if not source and strict:
                 raise SystemExit(f"card {card_id} has an Ability with no clause encoding")
-            ability_clauses = tuple(source)
+            ability_clauses = tuple(source or ())
         for attack_id in card.get("attacks") or []:
-            if attacks[str(attack_id)].get("text") and attack_id not in ATTACK_CLAUSES:
+            if (strict and attacks[str(attack_id)].get("text")
+                    and attack_id not in ATTACK_CLAUSES):
                 raise SystemExit(f"attack {attack_id} has effect text with no clause encoding")
         name, body = _emit_pokemon(card, attacks, functions.get(str(card_id), []),
-                                   ability_clauses, roles)
+                                   ability_clauses, roles, covers.get(card_id),
+                                   attack_overrides)
         emitted.append((POKEMON_OUT, name, body))
 
     for card_id in trainers:
         card = cards[card_id]
-        source = effects.get(str(card_id)) or TOOL_CLAUSES.get(card_id)
-        if not source:
+        source = effects.get(card_id) or TOOL_CLAUSES.get(card_id)
+        if not source and card_id in core:
             raise SystemExit(f"trainer {card_id} has no clause encoding")
-        name, body = _emit_trainer(card, functions.get(str(card_id), []), tuple(source))
+        name, body = _emit_trainer(card, functions.get(str(card_id), []), tuple(source or ()),
+                                   covers.get(card_id))
         emitted.append((TRAINER_OUT, name, body))
 
     for card_id in energies:
         card = cards[card_id]
-        source = effects.get(str(card_id)) or ()
-        if card["cardType"] == 6 and not source:
+        source = effects.get(card_id) or ()
+        if card["cardType"] == 6 and not source and card_id in core:
             raise SystemExit(f"special energy {card_id} has no clause encoding")
-        name, body = _emit_energy(card, functions.get(str(card_id), []), tuple(source))
+        name, body = _emit_energy(card, functions.get(str(card_id), []), tuple(source),
+                                  covers.get(card_id))
         emitted.append((ENERGY_OUT, name, body))
 
     for out in (POKEMON_OUT, TRAINER_OUT, ENERGY_OUT):

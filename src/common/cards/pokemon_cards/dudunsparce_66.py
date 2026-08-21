@@ -12,6 +12,7 @@ CARD = PokemonCard(
     retreat_cost=3,
     tags=frozenset(['dig:3', 'draw', 'recycle_line', 'stall']),
     default_roles=('draw_engine',),
+    covers='full',
     abilities=(
         Ability(
             name='Run Away Draw',

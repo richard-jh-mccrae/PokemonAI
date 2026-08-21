@@ -8,4 +8,5 @@ CARD = TrainerCard(
     text='Each player shuffles their hand into their deck. Then, flip a coin. If heads, you draw 5 cards,\xa0and your opponent draws 3 cards. If tails, you draw 3 cards,\xa0and your opponent draws 5 cards.',
     tags=frozenset(['draw', 'hand_disruption', 'shuffle_hand']),
     clauses=(Clause('draw', amount=5, amount_if={'condition': 'coin_tails', 'amount': 3}, opponent_amount=3, opponent_amount_if={'condition': 'coin_tails', 'amount': 5}, rider='shuffle_both_hands'),),
+    covers='full',
 )

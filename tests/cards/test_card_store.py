@@ -22,9 +22,12 @@ def test_every_card_in_every_deck_has_a_record(deck):
     assert missing == [], f"{deck}: no card record for {missing}"
 
 
-def test_every_pokemon_has_at_least_one_role():
+def test_every_core_pokemon_has_at_least_one_role():
+    from cards_helpers import core_card_ids
+
     roles = pokemon_default_roles()
-    unroled = sorted(card_id for card_id in pokemon_card_store() if not roles.get(card_id))
+    unroled = sorted(card_id for card_id in pokemon_card_store()
+                     if card_id in core_card_ids() and not roles.get(card_id))
     assert unroled == [], f"Pokémon with no default Role: {unroled}"
 
 

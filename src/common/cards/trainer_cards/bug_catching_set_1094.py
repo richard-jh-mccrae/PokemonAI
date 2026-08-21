@@ -8,4 +8,5 @@ CARD = TrainerCard(
     text='Look at the top 7 cards of your deck. You may reveal up to 2 in any combination of {G} Pokémon and Basic {G} Energy cards you find there and put them into your hand. Shuffle the other cards back into your deck.',
     tags=frozenset(['dig', 'draw']),
     clauses=(Clause('fetch', target='basic_energy', zone='deck', dig=7, amount=2, energy_type=GRASS, choice=True), Clause('fetch', target='pokemon', zone='deck', dig=7, amount=2, energy_type=GRASS, choice=True)),
+    covers='full',
 )

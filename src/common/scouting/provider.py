@@ -258,13 +258,19 @@ class AttackStat:
         return self.scalePerUnit if self.scaleVar == "atk_hand" else 0
 
 
-def load_attack_overrides(path=None) -> dict:
-    """Fail-safe: a missing or unreadable file -> {}, i.e. parsed seeds only."""
-    import json
-    from pathlib import Path
-    p = Path(path) if path is not None else Path(__file__).resolve().parents[1] / "attack_overrides.json"
+def load_attack_overrides() -> dict:
+    """Engine stat corrections authored on the card records (ADR-0153/ADR-0108). Fail-safe:
+    an unloadable store -> {}, i.e. parsed seeds only."""
     try:
-        return {int(k): v for k, v in json.loads(p.read_text(encoding="utf-8")).items()}
+        from common.cards import card_store
+
+        overrides: dict[int, dict] = {}
+        for record in card_store().values():
+            for attack in getattr(record, "attacks", ()) or ():
+                patch = attack.engine_overrides()
+                if patch:
+                    overrides[int(attack.attack_id)] = patch
+        return overrides
     except Exception:
         return {}
 

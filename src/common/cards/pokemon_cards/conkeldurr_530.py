@@ -12,6 +12,7 @@ CARD = PokemonCard(
     retreat_cost=3,
     tags=frozenset([]),
     default_roles=('backup_attacker',),
+    covers='full',
     abilities=(
         Ability(
             name='Craftsmanship',
@@ -27,6 +28,8 @@ CARD = PokemonCard(
             damage=100,
             text='Flip 2 coins. This attack does 50 more damage for each heads.',
             clauses=(Clause('coin', count=2, effect='damage_boost', amount=50, per='heads'),),
+            damage_min=100,
+            damage_max=200,
         ),
     ),
 )

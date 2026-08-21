@@ -9,4 +9,5 @@ CARD = TrainerCard(
     ace_spec=True,
     tags=frozenset(['gust', 'switch']),
     clauses=(Clause('gust', target='any', rider='self_switch'),),
+    covers='full',
 )

@@ -12,6 +12,7 @@ CARD = PokemonCard(
     retreat_cost=3,
     tags=frozenset(['gust']),
     default_roles=('backup_attacker', 'gust'),
+    covers='full',
     abilities=(
         Ability(
             name='Heave-Ho Catcher',

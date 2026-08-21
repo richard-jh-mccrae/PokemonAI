@@ -8,4 +8,5 @@ CARD = TrainerCard(
     text='Search your deck for a Pokémon that doesn’t have a Rule Box, reveal it, and put it into your hand. Then, shuffle your deck. (Pokémon {ex}, Pokémon {V}, etc. have Rule Boxes.)',
     tags=frozenset(['search', 'tutor_pokemon']),
     clauses=(Clause('fetch', target='pokemon', zone='deck', no_rule_box=True),),
+    covers='full',
 )

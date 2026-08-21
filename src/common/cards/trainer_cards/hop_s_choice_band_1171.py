@@ -8,4 +8,5 @@ CARD = TrainerCard(
     text='Attacks used by the Hop’s Pokémon this card is attached to cost {C} less and do 30 more damage to your opponent’s Active Pokémon\xa0(before applying Weakness and Resistance).',
     tags=frozenset([]),
     clauses=(Clause('attack_cost_reduction', amount=1, energy_type=COLORLESS, applies_to='attached_body', name_family="Hop's"), Clause('damage_boost', amount=30, applies_to='attached_body', name_family="Hop's", target='opponent_active', timing='before_weakness_resistance')),
+    covers='full',
 )

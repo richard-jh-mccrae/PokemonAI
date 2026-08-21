@@ -8,4 +8,5 @@ CARD = TrainerCard(
     text='During this turn, attacks used by your Pokémon do 40 more damage to your opponent’s Active Pokémon {ex} (before applying Weakness and Resistance).',
     tags=frozenset([]),
     clauses=(Clause('damage_boost'),),
+    covers='full',
 )

@@ -20,6 +20,8 @@ CARD = PokemonCard(
             damage=10,
             text='Flip a coin. If heads, during your opponent’s next turn, prevent all damage from and effects of attacks done to this Pokémon.',
             clauses=(Clause('coin', effect='damage_protection', duration='opp_next_turn', includes_effects=True),),
+            damage_min=10,
+            damage_max=10,
         ),
     ),
 )

@@ -13,6 +13,7 @@ CARD = PokemonCard(
     retreat_cost=2,
     tags=frozenset([]),
     default_roles=('disruption_target',),
+    covers='full',
     abilities=(
         Ability(
             name='Skyliner',

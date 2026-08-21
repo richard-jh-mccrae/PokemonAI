@@ -12,6 +12,7 @@ CARD = PokemonCard(
     retreat_cost=1,
     tags=frozenset(['search', 'supporter_tutor']),
     default_roles=('supporter_tutor',),
+    covers='full',
     abilities=(
         Ability(
             name='Last-Ditch Catch',

@@ -142,7 +142,7 @@ fires, the first-merged-keeps-it convention established above still applies: ref
 recompute, rename again. See `.claude/skills/grill-with-docs/SKILL.md` and
 `.claude/skills/open-pr/SKILL.md` for the full mechanics.
 
-**Next free number: 0153.**
+**Next free number: 0154.**
 
 ## Index
 
@@ -301,3 +301,4 @@ recompute, rename again. See `.claude/skills/grill-with-docs/SKILL.md` and
 | [0150](0150-concentration-and-rental-energy.md) | Energy concentration and rental energy: the spread-vs-concentrate ruling priced | Accepted (2026-08-20); BUILT. Owner's ruling: concentrate to the big attack by default, diversify only as a threat-read tempo exception (planner scope). `concentration` weight × squared progress toward `top_attack_cost` (default 0.0 = off); `discard_eot` energy on a benched body prices zero. Both re-ruled twin-attach frames agree at defaults; starmie 148→152, zero regressions. |
 | [0151](0151-evolution-underpricing.md) | Evolution underpricing: line continuity under the body, size as a dark lever | Accepted (2026-08-20); BUILT. Every evolve priced negative (hand pays full, board credits role parity). `zone_under_body` 0.10→0.65 adopted — evolving is a zone transfer, not a spend: floor 40.9%→44.2%, starmie 50.0%, zero regressions. New `hp_value` (size-as-worth, chip damage real) ships DARK. Four maneuver rulings owner-dispositioned deferred-multi-turn. |
 | [0152](0152-brief-deck-store-and-doomed-active.md) | Brief-deck store records and the doomed-active read | Accepted (2026-08-20); BUILT. Store 50→180 (every Brief-named printing; roles derive from the Briefs; 96 attacks + 47 ability/trainer cards clause-encoded with _covers verdicts). Agreement net flat — the ADR-0148 layer already carried the worth; value = gap census 275→208 + their-side facts + the new dark `doomed_active_discount` (floor 48.1% at 0.4, 11 flips). One tie-accident frame deferred by the owner. |
+| [0153](0153-card-store-absorbs-the-json-tables.md) | The card store absorbs the JSON tables; a card is one record module | Accepted (2026-08-21); BUILT. Owner's directive: one class definition per card, no long JSON. Store 197→~493 (CORE strict / TAIL honest-partial); `Attack` carries typed engine corrections; `covers` verdicts on records; `CardFunctions` + `load_attack_overrides` = store views (equivalence proven pre-deletion: 0 tag / 0 verdict mismatches, 117/117 patches identical, teacher pins exact). Authoring inputs live under `tools/meta_tracker/`; teacher's table frozen in `deprecated/`. |

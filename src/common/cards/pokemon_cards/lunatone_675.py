@@ -11,6 +11,7 @@ CARD = PokemonCard(
     retreat_cost=1,
     tags=frozenset(['draw']),
     default_roles=('draw_engine',),
+    covers='full',
     synergy=('Solrock',),
     abilities=(
         Ability(

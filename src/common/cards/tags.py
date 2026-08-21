@@ -1,11 +1,6 @@
-"""`CardFunctions` wraps the shipped `card_functions.json`. **Partial and additive**: an unknown card
-has no tags and a missing file degrades to empty, so the table can grow without runtime changes."""
+"""`CardFunctions` serves each card's behavior tags off its record (ADR-0153). **Partial and
+additive**: an unknown card has no tags, so the store can grow without runtime changes."""
 from __future__ import annotations
-
-import json
-from pathlib import Path
-
-_DEFAULT = Path(__file__).resolve().parents[1] / "card_functions.json"
 
 
 def is_card_key(key) -> bool:
@@ -46,8 +41,7 @@ class CardFunctions:
         return 0
 
     @classmethod
-    def load(cls, path=None) -> "CardFunctions":
-        p = Path(path) if path is not None else _DEFAULT
-        if p.exists():
-            return cls(json.loads(p.read_text(encoding="utf-8")))
-        return cls({})
+    def load(cls) -> "CardFunctions":
+        from common.cards import card_store
+        return cls({card_id: sorted(getattr(record, "tags", ()) or ())
+                    for card_id, record in card_store().items()})

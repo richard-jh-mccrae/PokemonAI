@@ -499,8 +499,8 @@ def test_measured_attacks_ignores_a_run_that_only_ledgered_errors():
 def test_a_regenerate_with_nothing_measured_reproduces_both_committed_files_byte_for_byte(tmp_path):
     """Three claims at once: the merge never regresses an unmeasured fact, the table is emitted from
     the sidecar's own `fields`, and the writer's format matches what is committed on either OS."""
-    committed_table = REPO / "src" / "common" / "attack_overrides.json"
-    committed_prov = REPO / "src" / "common" / "attack_overrides.provenance.json"
+    committed_table = REPO / "tools" / "meta_tracker" / "attack_overrides.json"
+    committed_prov = REPO / "tools" / "meta_tracker" / "attack_overrides.provenance.json"
     empty = tmp_path / "measurements.json"
     empty.write_text(json.dumps({"measurements": []}), encoding="utf-8")
     # everything under tmp_path: a test that CAN write over a committed store eventually does
@@ -540,8 +540,8 @@ def test_the_generator_HALTS_on_the_pool_as_it_stands_today(tmp_path):
     assert fits == {120: {"scaleVar": "atk_active_energy", "scalePerUnit": 30},
                     425: {"scaleVar": "def_bench", "scalePerUnit": 60}}
 
-    committed_table = REPO / "src" / "common" / "attack_overrides.json"
-    committed_prov = REPO / "src" / "common" / "attack_overrides.provenance.json"
+    committed_table = REPO / "tools" / "meta_tracker" / "attack_overrides.json"
+    committed_prov = REPO / "tools" / "meta_tracker" / "attack_overrides.provenance.json"
     src = tmp_path / "measurements.json"
     src.write_text(json.dumps({"measurements": records}), encoding="utf-8")
     out, prov = tmp_path / "table.json", tmp_path / "prov.json"
@@ -703,8 +703,8 @@ def test_the_widened_axes_reproduce_BOTH_shipped_rulings_against_the_real_parsed
     assert fits == {425: {"scaleVar": "def_ex_in_play", "scalePerUnit": 60},
                     120: {"scaleVar": "both_active_energy", "scalePerUnit": 30}}
 
-    committed_prov = REPO / "src" / "common" / "attack_overrides.provenance.json"
-    committed_table = REPO / "src" / "common" / "attack_overrides.json"
+    committed_prov = REPO / "tools" / "meta_tracker" / "attack_overrides.provenance.json"
+    committed_table = REPO / "tools" / "meta_tracker" / "attack_overrides.json"
     src = tmp_path / "measurements.json"
     src.write_text(json.dumps({"measurements": records}), encoding="utf-8")
     out, prov = tmp_path / "table.json", tmp_path / "prov.json"

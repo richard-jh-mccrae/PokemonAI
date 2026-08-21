@@ -9,4 +9,5 @@ CARD = TrainerCard(
     ace_spec=True,
     tags=frozenset(['draw', 'hand_disruption', 'shuffle_hand']),
     clauses=(Clause('draw', amount=5, condition='pokemon_ko_last_turn', opponent_amount=2, rider='shuffle_both_hands'),),
+    covers='full',
 )

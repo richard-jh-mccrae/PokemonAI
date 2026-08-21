@@ -1,4 +1,4 @@
-"""The pre-store effect-clause table; the teacher's transition reconstruction reads it."""
+"""The pre-store effect-clause table, FROZEN here with the teacher (ADR-0153)."""
 from __future__ import annotations
 
 import json
@@ -7,7 +7,7 @@ from pathlib import Path
 from common.cards.tags import is_card_key
 
 
-_DEFAULT = Path(__file__).resolve().parents[2] / "src" / "common" / "card_effects.json"
+_DEFAULT = Path(__file__).with_name("card_effects.json")
 
 
 class CardEffects:

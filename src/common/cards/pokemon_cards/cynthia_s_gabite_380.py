@@ -12,6 +12,7 @@ CARD = PokemonCard(
     retreat_cost=1,
     tags=frozenset(['search']),
     default_roles=('primary_attacker', 'disruption_target'),
+    covers='partial',
     abilities=(
         Ability(
             name='Champion’s Call',

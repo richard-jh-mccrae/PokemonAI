@@ -8,4 +8,5 @@ CARD = TrainerCard(
     text='Heal all damage from 1 of your Mega Evolution Pokémon {ex}. If you healed any damage in this way, put all Energy attached to that Pokémon into your hand.',
     tags=frozenset(['clutch_heal', 'heal']),
     clauses=(Clause('heal', amount='all', restriction='mega_only', rider='bounce_energy_to_hand'),),
+    covers='full',
 )

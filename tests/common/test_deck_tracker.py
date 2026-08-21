@@ -1,13 +1,10 @@
 from __future__ import annotations
 
-import json
-
 from cg.api import AreaType, LogType
 
 from common.cards.card_facts import Clause, ITEM, TrainerCard
 from common.deck_tracker import OwnCardModel
 from deprecated.bellman.state import DecisionState
-from build_card_effects import DEFAULT_MEASURED, DEFAULT_OUT, DEFAULT_OVERRIDES, render
 
 
 ME = 0
@@ -97,10 +94,9 @@ def test_known_top_participates_in_the_bellman_semantic_key():
     assert blind.semantic_key != known.semantic_key
 
 
-def test_known_top_producers_are_generated_from_source_metadata():
-    table = json.loads((DEFAULT_OUT).read_text(encoding="utf-8"))
-    for card_id in ("1188", "1248"):
-        assert any(clause.get("dest") == "deck_top" for clause in table[card_id])
-    source = json.loads(DEFAULT_MEASURED.read_text(encoding="utf-8"))
-    overrides = json.loads(DEFAULT_OVERRIDES.read_text(encoding="utf-8"))
-    assert DEFAULT_OUT.read_bytes() == render(source, overrides)
+def test_known_top_producers_are_baked_into_their_records():
+    from common.cards import card_store, play_clauses
+
+    for card_id in (1188, 1248):
+        clauses = play_clauses(card_store()[card_id])
+        assert any(clause.params.get("dest") == "deck_top" for clause in clauses), card_id

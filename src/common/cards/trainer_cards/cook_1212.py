@@ -8,4 +8,5 @@ CARD = TrainerCard(
     text='Heal 70 damage from your Active Pokémon.',
     tags=frozenset(['heal']),
     clauses=(Clause('heal', amount=70, restriction='active_only'),),
+    covers='full',
 )

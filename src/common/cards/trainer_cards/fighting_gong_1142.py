@@ -8,4 +8,5 @@ CARD = TrainerCard(
     text='Search your deck for a Basic {F} Energy card or a Basic {F} Pokémon, reveal it, and put it into your hand. Then, shuffle your deck.',
     tags=frozenset(['search', 'tutor_energy', 'tutor_pokemon']),
     clauses=(Clause('fetch', target='basic_energy', zone='deck', energy_type=FIGHTING, choice=True), Clause('fetch', target='basic_pokemon', zone='deck', energy_type=FIGHTING, choice=True)),
+    covers='full',
 )

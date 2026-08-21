@@ -8,4 +8,5 @@ CARD = TrainerCard(
     text='Choose 1 of your Basic Pokémon in play. If you have a Stage 2 card in your hand that evolves from that Pokémon, put that card onto the Basic Pokémon to evolve it, skipping the Stage 1. You can’t use this card during your first turn or on a Basic Pokémon that was put into play this turn.',
     tags=frozenset(['rare_candy']),
     clauses=(Clause('fetch', target='stage2', zone='hand', dest='in_play', rider='skip_stage1', condition='not_first_turn', target_condition='not_played_this_turn'),),
+    covers='full',
 )

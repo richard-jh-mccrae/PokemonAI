@@ -6,19 +6,17 @@ import json
 from cards_helpers import ENERGY_KINDS, REPO, engine_cards  # noqa: F401  engine_cards is a fixture
 from cgpy.schema import CardType, EnergyType
 
-from common.cards import CardFunctions, energy_card_store
+from common.cards import energy_card_store
 from common.cards import card_facts
 
 
 def test_energy_facts_match_the_engine_defs(engine_cards):
-    functions = CardFunctions.load()
     for card_id, card in energy_card_store().items():
         source = engine_cards[card_id]
         skills = source.get("skills") or []
         assert (card.name, card.kind, card.provides) == (
             source["name"], ENERGY_KINDS[source["cardType"]], source["energyType"]), card_id
         assert card.text == (skills[0]["text"] if skills else ""), card_id
-        assert card.tags == frozenset(functions.tags(card_id)), card_id
 
 
 def test_card_facts_energy_codes_match_the_engine_wire_enum():
@@ -38,12 +36,15 @@ def test_card_facts_energy_codes_match_the_engine_wire_enum():
 
 
 def test_special_energy_clauses_stay_synced_with_the_clause_store(engine_cards):
-    effects = json.loads(
-        (REPO / "src" / "common" / "card_effects.json").read_text(encoding="utf-8"))
+    from build_card_effects import load_effects
+
+    effects = {str(card_id): clauses for card_id, clauses in load_effects()[0].items()}
     for card_id, card in energy_card_store().items():
         shipped = effects.get(str(card_id))
         if shipped is not None:
             assert [{"kind": c.kind, **c.params} for c in card.clauses] == shipped, card_id
-        # A Basic Energy needs no clause: its whole behaviour is the colour it provides.
-        if engine_cards[card_id]["cardType"] == CardType.SPECIAL_ENERGY:
+        # A Basic Energy needs no clause; a TAIL special energy may be honestly bare
+        # (ADR-0153) — but a coverage VERDICT implies its encoding shipped.
+        if (engine_cards[card_id]["cardType"] == CardType.SPECIAL_ENERGY
+                and card.covers is not None):
             assert card.clauses, card_id
