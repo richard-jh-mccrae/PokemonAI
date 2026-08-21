@@ -224,6 +224,28 @@ def unit_fills_a_slot(unit: int, body_facts, attached, ctx: LedgerContext, reach
     return _slot_fill(unit, body_facts, attached, ctx, reach) != "dead"
 
 
+def best_payable_damage(attacker_facts, attached, defender_facts) -> int:
+    """Largest damage the attacker can land THIS turn on the defender: fully-paid printed
+    attacks only, weakness doubled / resistance -30 where the defender's record shows them."""
+    counts = Counter(attached)
+    attacker_type = getattr(attacker_facts, "energy_type", None)
+    best = 0
+    for attack in getattr(attacker_facts, "attacks", ()) or ():
+        open_typed, open_colorless = _unfilled(attack.cost, counts)
+        if open_typed or open_colorless:
+            continue
+        damage = int(getattr(attack, "damage", 0) or 0)
+        if damage <= 0:
+            continue
+        if defender_facts is not None and attacker_type is not None:
+            if getattr(defender_facts, "weakness", None) == attacker_type:
+                damage *= 2
+            if getattr(defender_facts, "resistance", None) == attacker_type:
+                damage = max(0, damage - 30)
+        best = max(best, damage)
+    return best
+
+
 def top_attack_cost(body_facts, ctx: LedgerContext, reach=None) -> int:
     """The largest attack cost this body can grow into: its own attacks in full, a line
     evolution's only through a positive reach gate (ADR-0150's concentration target)."""

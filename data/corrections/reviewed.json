@@ -232,5 +232,10 @@
     "disposition": "deferred-multi-turn",
     "reason": "owner ruling 2026-08-20: the rationale is a multi-action maneuver no 1-ply price can see (snipe target driven by multi-prize math ('requires planning out prize math')); returns to grading when the turn planner grades maneuvers",
     "round": "2026-08-20"
+  },
+  "82523164-55": {
+    "disposition": "deferred-multi-turn",
+    "reason": "owner ruling 2026-08-20: the rationale is a two-KO maneuver (gust the 70 HP Dwebble -> Jetting Blow KOs it AND snipes the 20 HP Dwebble) that lives in the attack AFTER the gust — invisible at 1-ply; the prior agree was an all-zero-price tie accident exposed by the brief-deck store records. Returns when the planner grades maneuvers.",
+    "round": "2026-08-20"
   }
 }

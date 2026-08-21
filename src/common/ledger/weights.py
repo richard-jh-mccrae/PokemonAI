@@ -124,6 +124,10 @@ class LedgerWeights:
     #: squared — so finishing a started attacker outprices starting a fresh one. 0.0 = off.
     concentration: float = 0.0
 
+    #: Fraction of its worth THEIR active loses when OUR active's payable attack can KO it
+    #: outright (weakness applied) — the 1-ply doomed read: gust up what you can kill.
+    doomed_active_discount: float = 0.0
+
     # The Active Spot: worth extra when its occupant can actually pay an attack.
     active_premium: float = 0.08
     #: 0.15 adopted 2026-08-20 (docs/tuning/runs/ledger_20260820_145141.md): an unready

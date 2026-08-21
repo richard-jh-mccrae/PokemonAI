@@ -465,3 +465,25 @@ def test_hp_value_prices_chip_damage_and_unknown_threats():
     big = board(them=player(own=False, active=body(UNKNOWN, 9, hp=330, max_hp=330)))
     small = board(them=player(own=False, active=body(UNKNOWN, 9, hp=70, max_hp=70)))
     assert evaluate(big, context).total < evaluate(small, context).total
+
+
+def test_doomed_active_discount_prices_the_killable_active_as_spent():
+    """ADR-0152: an opponent active OUR paid-up active can KO outright is mostly spent — so
+    gusting up the killable body beats gusting up the safe one. Weakness doubles the reach:
+    Mega Starmie's 120 covers a 160 HP Cinderace only through its {W} weakness. 0.0 = off."""
+    def against(defender):
+        return board(me=player(active=body(MEGA_STARMIE, 1, energies=(WATER,))),
+                     them=player(own=False, active=defender))
+
+    killable = against(body(STARYU, 9, hp=70, max_hp=70))            # 120 >= 70
+    weak_kill = against(body(666, 9, hp=160, max_hp=160))            # Cinderace: 120x2 >= 160
+    safe = against(body(MEGA_STARMIE, 9, hp=330, max_hp=330))        # 120 < 330
+    armed = ctx(overrides={"doomed_active_discount": 0.5})
+    flat = ctx()
+    for doomed_board in (killable, weak_kill):
+        assert evaluate(doomed_board, armed).total > evaluate(doomed_board, flat).total
+    assert evaluate(safe, armed).total == pytest.approx(evaluate(safe, flat).total)
+    # Symmetric: OUR killable active reads as mostly spent too.
+    ours = board(me=player(active=body(STARYU, 1, hp=70, max_hp=70)),
+                 them=player(own=False, active=body(MEGA_STARMIE, 9, energies=(WATER,))))
+    assert evaluate(ours, armed).total < evaluate(ours, flat).total

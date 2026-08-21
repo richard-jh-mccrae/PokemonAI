@@ -104,10 +104,13 @@ def test_default_roles_pin():
 
 
 def test_no_role_is_assigned_by_prize_count():
-    """The multi-prize bodies do not share a Role, and two of them never attack for the deck."""
+    """OUR decks' multi-prize bodies do not share a Role, and two of them never attack for the
+    deck. Scoped to the shipped decks: the Brief-deck records carry archetype roles instead."""
+    from cards_helpers import all_deck_card_ids
+
     roles = pokemon_default_roles()
     multi_prize = {card_id for card_id, card in pokemon_card_store().items()
-                   if card.prize_value > 1}
+                   if card.prize_value > 1 and card_id in all_deck_card_ids()}
     assert multi_prize == {121, 140, 678, 1031, 1071}
     # A Mega Evolution ex gives up three prizes; a plain ex two.
     assert {card.prize_value for card in map(pokemon_card_store().get, (678, 1031))} == {3}
