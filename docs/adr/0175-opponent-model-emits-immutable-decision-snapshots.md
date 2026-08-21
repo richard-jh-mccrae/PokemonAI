@@ -1,4 +1,4 @@
-# ADR-TEMP-559 — The Opponent Model emits immutable decision snapshots
+# ADR-0175 — The Opponent Model emits immutable decision snapshots
 
 Status: Accepted and BUILT (2026-08-22).
 
