@@ -44,8 +44,7 @@ def test_generic_support_pokemon_roles_preserve_their_purpose(name, purpose):
 
 def _write_brief(d, slug, covers, **extra):
     brief = {"slug": slug, "covers": covers, "opponent_properties": extra.get("opponent_properties", {}),
-             "pokemon": extra.get("pokemon", []), "key_cards": extra.get("key_cards", []),
-             "strategies": extra.get("strategies", [])}
+             "pokemon": extra.get("pokemon", []), "key_cards": extra.get("key_cards", [])}
     (d / f"{slug}.json").write_text(json.dumps(brief), encoding="utf-8")
 
 
@@ -60,23 +59,7 @@ def test_load_briefs_reads_a_well_formed_brief(tmp_path):
     assert len(briefs) == 1
     assert briefs[0].slug == "alakazam"
     assert "Alakazam / Frillish" in briefs[0].covers
-
-
-def test_load_briefs_parses_opponent_strategies(tmp_path):
-    _write_brief(tmp_path, "alakazam", ["Alakazam"], strategies=[{
-        "identifier": "opponent.pressure_engine",
-        "conditions": [],
-        "desired_facts": [{"kind": "damage_setup",
-                           "recipient": "opponent.bench.highest_role"}],
-        "recipient_selector": "opponent.bench.highest_role",
-        "deadline": "this_turn",
-        "confidence": "medium",
-    }])
-
-    strategy = load_briefs(tmp_path)[0].strategies[0]
-
-    assert strategy.scope == "opponent"
-    assert strategy.provenance == "scouting.brief:alakazam"
+    assert not hasattr(briefs[0], "strategies")
 
 
 def test_load_briefs_is_fail_safe(tmp_path):

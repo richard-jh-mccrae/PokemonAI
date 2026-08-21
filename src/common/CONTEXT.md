@@ -62,8 +62,6 @@ from them and `ledger_overrides`, and sends every normal-turn decision to `commo
 Deck-local policy is data in `src/agents/<deck>/strategy.py`:
 
 - Pokémon Roles; evolution relationships are derived from card facts;
-- Deck Strategies and explicit General Strategy overrides — authored in the declaration
-  language `strategy/strategies.py` keeps; the activation engine lives with the teacher;
 - starter priority and preferred first/second turn;
 - partner dependencies;
 - prize routes;

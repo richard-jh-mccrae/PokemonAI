@@ -4,15 +4,6 @@ Re-exports the surface `src/common/__init__.py` used to carry for these modules,
 teacher-side consumer rewrites `from common import X` to `from deprecated.bellman import X`.
 """
 
-from .activation import (
-    ActivatedStrategy,
-    GENERAL_STRATEGIES,
-    ResolvedStrategies,
-    StrategySnapshot,
-    activate_strategies,
-    general_card_strategies,
-    resolve_strategies,
-)
 from .belief import BellmanDeckProfile, opponent_belief
 from .budget_prototype import DecisionClock, FairBudgetPrototype
 from .demand import (
@@ -44,15 +35,14 @@ from .terminal import ProofStep, TerminalLimits, TerminalProof, TerminalProver
 from .value import CardFacts, Potential, ValueOracle, ValueRegistry, WorthSeeds
 
 __all__ = (
-    "ActionFocus", "ActivatedStrategy", "BellmanCgpyProvider", "BellmanDeckProfile", "BellmanNativeProvider",
+    "ActionFocus", "BellmanCgpyProvider", "BellmanDeckProfile", "BellmanNativeProvider",
     "BellmanTeacherRuntime", "BellmanTurnPlanner", "BoardPotential", "CardFacts",
     "CoverageEdge", "DEFAULT_PILOT_PROFILE", "DEFINITIONS", "DecisionClock", "DemandModel",
-    "DecisionState", "DemandSlot", "FairBudgetPrototype", "GENERAL_STRATEGIES", "OpponentBelief", "PilotProfile", "Potential", "ProductionLimits",
+    "DecisionState", "DemandSlot", "FairBudgetPrototype", "OpponentBelief", "PilotProfile", "Potential", "ProductionLimits",
     "ProductionSolver", "ProofStep", "ReferenceSolver", "RefreshEvaluator",
     "ResolvedAssignment", "RetainedAssignment", "RetainedOption", "SearchLimits",
-    "ResolvedStrategies", "StrategyBeam", "StrategySnapshot", "TerminalLimits", "TerminalProof", "TerminalProver",
+    "StrategyBeam", "TerminalLimits", "TerminalProof", "TerminalProver",
     "TransitionProvider", "TurnBudgets", "UtilityScale", "ValueOracle", "ValueRegistry", "WorthSeeds",
-    "access_probability", "activate_strategies", "bellman_provider_factory", "build_teacher_runtime",
-    "general_card_strategies", "resolve_strategies",
+    "access_probability", "bellman_provider_factory", "build_teacher_runtime",
     "opponent_belief",
 )

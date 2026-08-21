@@ -10,7 +10,6 @@ from pathlib import Path
 
 from common.card_worth import role_value
 from .pokemon_roles import general_pokemon_roles
-from common.strategy.strategies import StrategyHint, strategy_hint_from_dict
 
 from .read import Read
 
@@ -26,7 +25,6 @@ class Brief:
     opponent_properties: dict = field(default_factory=dict)  # lever keys (opponent_properties.json, same dir)
     pokemon: list[dict] = field(default_factory=list)         # {card, roles: [compact doctrine roles]}
     key_cards: list[dict] = field(default_factory=list)       # {card, role}
-    strategies: tuple[StrategyHint, ...] = ()
     #: Ledger weight overrides scoped to THIS archetype's side of the board — same dotted-key
     #: format as a deck's `Strategy.ledger_overrides`; validated at use, so a typo fails loud.
     ledger_overrides: dict = field(default_factory=dict)
@@ -37,19 +35,11 @@ def _brief_from(raw: dict) -> Brief | None:
     slug, covers = raw.get("slug"), raw.get("covers")
     if not slug or not isinstance(covers, list) or not covers:
         return None
-    provenance = f"scouting.brief:{slug}"
-    try:
-        strategies = tuple(
-            strategy_hint_from_dict(row, scope="opponent", provenance=provenance)
-            for row in raw.get("strategies") or ())
-    except (KeyError, TypeError, ValueError):
-        return None
     return Brief(
         slug=slug, label=raw.get("label", slug), covers=[str(c) for c in covers],
         opponent_properties=raw.get("opponent_properties") or {},
         pokemon=raw.get("pokemon") or [],
         key_cards=raw.get("key_cards") or [],
-        strategies=strategies,
         ledger_overrides=raw.get("ledger_overrides") or {},
     )
 

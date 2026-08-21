@@ -39,11 +39,9 @@ one-way: `deprecated/` may ride `src/`, never the reverse.
 - **Splits at the seam**: `refresh.py` keeps the printed-counts `Refresh` transition (the Ledger
   prices those nodes); the Bellman valuation became `refresh_evaluator.py`. `information.py`
   keeps the exact draw/reveal outcome classes (the offline provider's chance modelling); deck
-  profiles and opponent beliefs became `belief.py`. `strategy/strategies.py` keeps only the
-  declaration language (hint/condition/override dataclasses and their closed vocabularies —
-  decks and Briefs author in it and it ships in the bundle); the activation engine, the
-  `GENERAL_STRATEGIES` catalog, and the card-fact hint minting became `activation.py`.
-  `state.py` (DecisionState, the providers' canonical-state build) moved whole: the live path
+  profiles and opponent beliefs became `belief.py`; the strategy declaration/activation catalog
+  was deleted once the Ledger became the live decider. `state.py` (DecisionState, the providers'
+  canonical-state build) moved whole: the live path
   constructs none (ADR-0146's pin) and both providers are duck-typed over the state shape, so
   the ADR-0146 heavy-vs-light parity tests now import it from the quarantine — honestly, since
   that pin is precisely a comparison against the quarantined binding.
@@ -71,11 +69,10 @@ one-way: `deprecated/` may ride `src/`, never the reverse.
 
 ## Consequences
 
-Crash-time decisions degrade from a strategy-beam pick to the last-resort ranked pick, under the
-backend id `last-resort-fallback` (the teacher keeps `strategy-fallback`); ADR-0145's loud-crash
-regime is what makes that acceptable. `AGENT_OVERLAY`, `AGENT_STRATEGY_ENABLED`, and
-`AGENT_DECISION_SECONDS` no longer affect the live shell — they configure only the teacher — and
+Crash-time decisions degrade to the last-resort ranked pick under the backend id
+`last-resort-fallback`; ADR-0145's loud-crash regime is what makes that acceptable.
+`AGENT_OVERLAY` and `AGENT_DECISION_SECONDS` no longer affect the live shell — they configure only
+the teacher — and
 the packager's `--overlay`/`--strategy` flags are gone with the `runtime_config.json` they wrote.
 `Strategy.potential_factory` left the live dataclass; deck potential subclasses are a teacher-side
-map. Strategy declarations (`common/strategy/`) stay live as authored data for the phase-2 search
-and the deck files that ship. When the teacher finally retires, `deprecated/` deletes whole.
+map. When the teacher finally retires, `deprecated/` deletes whole.
