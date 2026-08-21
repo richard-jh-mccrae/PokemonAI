@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import json
 import os
-from copy import deepcopy
 from pathlib import Path
 
 from common.api import PlanRequest, RootDecision
@@ -153,26 +152,8 @@ def _pilot_overlay() -> tuple[dict[str, float], str]:
 class BellmanTeacherRuntime(AgentRuntime):
     """The deployment shell with the Bellman planner as its brain, exactly as it shipped."""
 
-    fallback_backend = "strategy-fallback"
+    fallback_backend = "bellman-fallback"
     fallback_action = "bellman_fallback"
-
-    def decide(self, observation):
-        normalized = deepcopy(observation)
-        current = normalized.setdefault("current", {})
-        for field, default in {
-            "energyAttached": False, "firstPlayer": 0, "looking": None,
-            "result": None, "retreated": False, "stadium": [],
-            "stadiumPlayed": False, "supporterPlayed": False,
-        }.items():
-            current.setdefault(field, default)
-        for player in current.get("players", ()):
-            for field, default in {
-                "asleep": False, "benchMax": 3, "burned": False,
-                "confused": False, "deckCount": 0, "handCount": 0,
-                "paralyzed": False, "poisoned": False,
-            }.items():
-                player.setdefault(field, default)
-        return super().decide(normalized)
 
     def __init__(self, strategy, deck, **kwargs):
         teacher_functions = kwargs.pop("functions", None)

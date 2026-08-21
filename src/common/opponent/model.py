@@ -210,7 +210,7 @@ def _public_event(turn, sequence, raw_kind, fields, recognized):
     values = dict(fields)
     from_area, to_area = values.get("fromArea"), values.get("toArea")
     if raw_kind in {6, 7}:
-        kind = (OpponentEventKind.KNOCKOUT if from_area == 4 and to_area == 3
+        kind = (OpponentEventKind.KNOCKOUT if from_area in {4, 5} and to_area == 3
                 else OpponentEventKind.MOVEMENT)
     else:
         kind = {0: OpponentEventKind.SHUFFLE, 4: OpponentEventKind.DRAW,

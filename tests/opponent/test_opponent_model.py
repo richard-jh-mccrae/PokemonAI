@@ -127,7 +127,7 @@ def test_inference_failure_is_typed_degradation_and_strict_mode_reraises():
 def test_public_movement_and_knockout_events_are_typed_with_provenance():
     evidence = OpponentEvidence.from_state(make_obs(turn=2, logs=[
         {"type": 6, "playerIndex": 1, "cardId": RIOLU, "fromArea": 5, "toArea": 4},
-        {"type": 6, "playerIndex": 1, "cardId": SOLROCK, "fromArea": 4, "toArea": 3},
+        {"type": 6, "playerIndex": 1, "cardId": SOLROCK, "fromArea": 5, "toArea": 3},
     ]))
     snapshot = OpponentModel(OpponentKnowledgeBase.compile(
         tiny_artifact(), (), _provider()), provider=_provider()).update(evidence)

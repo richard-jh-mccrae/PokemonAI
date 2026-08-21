@@ -17,6 +17,7 @@ from scouting_helpers import make_obs
 
 
 REPLAY = Path(__file__).resolve().parents[1] / "fixtures" / "episode-81364540-replay.json.gz"
+ARTIFACT = Path(__file__).resolve().parents[2] / "src" / "common" / "scouting" / "artifact.json"
 NOW = "2026-06-23T00:00:00"
 
 
@@ -47,5 +48,15 @@ def test_strict_artifact_loader_rejects_an_empty_schema(tmp_path):
     source = tmp_path / "artifact.json"
     source.write_text("{}", encoding="utf-8")
 
-    with pytest.raises(ValueError, match="required fields"):
+    with pytest.raises(ValueError, match="top-level schema"):
+        load_artifact(source, strict=True)
+
+
+def test_strict_artifact_loader_rejects_dossier_schema_drift(tmp_path):
+    payload = json.loads(ARTIFACT.read_text(encoding="utf-8"))
+    next(iter(payload["dossiers"].values()))["unknown"] = True
+    source = tmp_path / "artifact.json"
+    source.write_text(json.dumps(payload), encoding="utf-8")
+
+    with pytest.raises(ValueError, match="dossier"):
         load_artifact(source, strict=True)
