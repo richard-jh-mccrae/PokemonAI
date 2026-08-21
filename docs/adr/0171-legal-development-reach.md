@@ -1,4 +1,4 @@
-# ADR-TEMP-582 — Projected development becomes legal reach
+# ADR-0171 — Projected development becomes legal reach
 
 Ledger represents current and next-turn Development Reach from the validated evolution graph, ordinary turn allowances,
 explicit Card Functions, visible resources, and candidate-conditioned opponent resource beliefs. Unknown resources remain

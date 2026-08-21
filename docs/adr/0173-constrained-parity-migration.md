@@ -1,4 +1,4 @@
-# ADR-TEMP-582 — Additive defaults migrate under constrained parity
+# ADR-0173 — Additive defaults migrate under constrained parity
 
 The additive model seeds general coefficients and then deck residuals against a frozen pre-migration corpus baseline.
 Unaffected feature contributions and choices must preserve intended behavior; every accepted flip is explicitly tied to a

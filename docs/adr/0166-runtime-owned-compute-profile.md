@@ -1,4 +1,4 @@
-# ADR-TEMP-582 — Deployment owns a separate compute profile
+# ADR-0166 — Deployment owns a separate compute profile
 
 Preview limits, sampling controls, deterministic seeds, and numerical tolerances form a complete versioned Compute
 Configuration selected by the runtime deployment. Deck overlays cannot alter it: allowing decks to buy different search

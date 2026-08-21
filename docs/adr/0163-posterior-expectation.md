@@ -1,4 +1,4 @@
-# ADR-TEMP-582 — Opponent beliefs price by posterior expectation
+# ADR-0163 — Opponent beliefs price by posterior expectation
 
 Ledger values every candidate-conditioned opponent feature by its posterior probability and represents unknown posterior
 mass separately. Observed facts remain full-strength; top-candidate selection and confidence gates would discard evidence

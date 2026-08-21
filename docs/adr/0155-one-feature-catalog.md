@@ -1,4 +1,4 @@
-# ADR-TEMP-582 — One catalog owns the valuation vocabulary
+# ADR-0155 — One catalog owns the valuation vocabulary
 
 A single typed Feature Catalog is the authority for every Valuation Feature Ledger may emit. Each entry defines stable
 identity, activation shape, and whether valuation requires a coefficient. Treating configuration fields or distributed

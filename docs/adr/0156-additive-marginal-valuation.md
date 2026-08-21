@@ -1,4 +1,4 @@
-# ADR-TEMP-582 — Ledger valuation uses additive marginal features
+# ADR-0156 — Ledger valuation uses additive marginal features
 
 Ledger valuation becomes the sum of independently active, typed Valuation Features. The current maximum-tier rule masks
 all but the largest Role, Card Function, or kind signal, leaving valid configuration entries unable to influence a card

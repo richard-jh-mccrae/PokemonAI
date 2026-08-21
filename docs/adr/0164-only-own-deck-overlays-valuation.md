@@ -1,4 +1,4 @@
-# ADR-TEMP-582 — Only our deck overlays valuation
+# ADR-0164 — Only our deck overlays valuation
 
 Ledger resolves one Valuation Configuration from general coefficients plus our deck's sparse residuals. Opponent candidates
 describe uncertain facts through typed Roles and traits; they do not carry a second set of preferences. Mixing candidate

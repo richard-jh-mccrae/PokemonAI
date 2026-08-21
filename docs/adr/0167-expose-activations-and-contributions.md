@@ -1,4 +1,4 @@
-# ADR-TEMP-582 — Evaluation exposes activations and contributions
+# ADR-0167 — Evaluation exposes activations and contributions
 
 Ledger evaluation returns the canonical sparse Feature Activation vector, each activation's contribution under the
 resolved Valuation Configuration, and their total. A scalar or contribution-only result cannot distinguish changed game

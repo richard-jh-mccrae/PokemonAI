@@ -1,4 +1,4 @@
-# ADR-TEMP-582 — Pokémon Roles are strategic jobs
+# ADR-0160 — Pokémon Roles are strategic jobs
 
 Pokémon Roles remain authored deck or scouting doctrine because identical cards can serve different jobs in different
 decks. The shared typed vocabulary admits precise jobs, rejects ambiguous umbrella aliases, and excludes opponent-target

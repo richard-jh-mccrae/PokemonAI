@@ -1,4 +1,4 @@
-# ADR-TEMP-582 — Opponent traits compile to contextual features
+# ADR-0162 — Opponent traits compile to contextual features
 
 The #559 Opponent Snapshot supplies typed, parameterized, candidate-conditioned traits as evidence claims rather than
 valuation entries. Giving a broad trait a direct price would make its meaning depend on unstated board context and blur

@@ -1,4 +1,4 @@
-# ADR-TEMP-582 — Shared features use explicit context interactions
+# ADR-0158 — Shared features use explicit context interactions
 
 The same generic Valuation Feature has one baseline meaning for either player and enters evaluation with signed activation:
 own presence adds it and opponent presence subtracts it. Duplicating the whole vocabulary by side would weaken feature

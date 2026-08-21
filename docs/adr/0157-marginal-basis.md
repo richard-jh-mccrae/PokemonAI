@@ -1,4 +1,4 @@
-# ADR-TEMP-582 — Strategic shaping uses explicit marginal basis features
+# ADR-0157 — Strategic shaping uses explicit marginal basis features
 
 Ledger replaces hand-authored strategic curves with a stable Marginal Basis of scalar, boolean, and explicit interaction
 features. Each marginal contribution is independently tunable and appears in valuation diagnostics, avoiding masked or

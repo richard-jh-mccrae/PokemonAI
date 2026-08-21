@@ -1,4 +1,4 @@
-# ADR-TEMP-582 — The valuation model cuts over atomically
+# ADR-0174 — The valuation model cuts over atomically
 
 #582 replaces current Ledger weights, feature extraction, ordering branches, and evaluation together on the production
 path. The legacy evaluator remains available only through a frozen offline Parity Oracle used before merge; production

@@ -1,4 +1,4 @@
-# ADR-TEMP-582 — Schema errors fail; game uncertainty stays explicit
+# ADR-0168 — Schema errors fail; game uncertainty stays explicit
 
 Unknown Roles, Card Functions, traits, Feature keys, overlays, and shipped artifact declarations are software or authoring
 errors and fail during construction. Runtime invariant violations produce typed degradation in live mode and re-raise in

@@ -1,4 +1,4 @@
-# ADR-TEMP-582 — Valuation coefficients are freely signed
+# ADR-0159 — Valuation coefficients are freely signed
 
 Valuation Features describe neutral facts and their coefficients may be any finite real number. A general or deck-resolved
 configuration may therefore strengthen, erase, or reverse a preference without changing feature extraction. Encoding

@@ -1,4 +1,4 @@
-# ADR-TEMP-582 — Action ordering prices generic continuation persistence
+# ADR-0169 — Action ordering prices generic continuation persistence
 
 Ledger replaces mechanic-specific ordering with additive features describing whether an action's gains and remaining
 opportunities survive other currently legal actions. Typed Continuation Footprints expose created or replaced zones,

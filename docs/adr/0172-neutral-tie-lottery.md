@@ -1,4 +1,4 @@
-# ADR-TEMP-582 — Residual ties use a deterministic neutral lottery
+# ADR-0172 — Residual ties use a deterministic neutral lottery
 
 Actions equal within configured numerical tolerance form an explicit Indifference Set. Ledger resolves that set with a
 deterministic lottery whose seed and tolerance belong to Compute Configuration, and records the tied option ordinals in

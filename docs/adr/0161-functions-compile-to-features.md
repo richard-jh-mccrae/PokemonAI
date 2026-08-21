@@ -1,4 +1,4 @@
-# ADR-TEMP-582 — Card Functions compile into marginal features
+# ADR-0161 — Card Functions compile into marginal features
 
 Card records describe intrinsic capabilities through typed, parameterized Card Functions. Ledger combines those facts
 with board state to emit Marginal Basis features; a capability label carries no standing value by itself. Rule affordances

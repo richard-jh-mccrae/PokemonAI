@@ -1,4 +1,4 @@
-# ADR-TEMP-582 — Effective configuration is typed, versioned, and residual
+# ADR-0165 — Effective configuration is typed, versioned, and residual
 
 The code-owned configuration schema defines stable feature names, valuation parameters, compute bounds, and canonical
 serialization. Behavior identity hashes the complete resolved configuration and its schema version; source provenance is

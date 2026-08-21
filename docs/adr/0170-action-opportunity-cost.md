@@ -1,4 +1,4 @@
-# ADR-TEMP-582 — Action caution is a decomposed valuation feature
+# ADR-0170 — Action caution is a decomposed valuation feature
 
 The current `act_threshold` changes whether a turn-continuing action is selected after valuation, so it expresses a
 strategic preference while remaining absent from contribution decomposition. #582 replaces it with an Action Opportunity
