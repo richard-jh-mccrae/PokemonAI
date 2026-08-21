@@ -6,7 +6,7 @@ from __future__ import annotations
 
 import pytest
 from cards_helpers import (
-    DECKS, ENERGY_KINDS, REPO, TRAINER_KINDS, all_deck_card_ids, deck_card_ids,
+    DECKS, ENERGY_KINDS, REPO, TRAINER_KINDS, all_covered_card_ids, deck_card_ids,
     deck_card_ids_of_kind, engine_card_defs)
 from cgpy.schema import CardType
 
@@ -51,7 +51,7 @@ def test_the_union_is_the_three_stores_with_no_overlap_and_no_stray():
     union = card_store()
     assert len(union) == sum(
         len(store()) for store in (pokemon_card_store, trainer_card_store, energy_card_store))
-    assert set(union) == all_deck_card_ids()
+    assert set(union) == all_covered_card_ids()
 
 
 def test_the_record_type_matches_what_the_engine_calls_the_card():

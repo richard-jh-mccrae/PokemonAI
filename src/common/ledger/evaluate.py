@@ -15,8 +15,9 @@ from dataclasses import dataclass
 from common.board import BoardState
 from common.board.nodes import Body, Side
 
-from .worth import (Demand, LedgerContext, any_attack_payable, base_worth, demand_scale,
-                    line_reach, top_attack_cost, usable_units)
+from .worth import (Demand, LedgerContext, any_attack_payable, base_worth, best_payable_damage,
+                    demand_scale, line_reach, projected_incoming_damage, top_attack_cost,
+                    usable_units)
 
 
 @dataclass(frozen=True)
@@ -47,7 +48,13 @@ def evaluate(board: BoardState, ctx: LedgerContext) -> Valuation:
 
     for label, side, sign in (("me", board.me, 1.0), ("them", board.them, -1.0)):
         own = sign > 0
-        for name, value in _side_parts(side, ctx, gaps, own=own,
+        # Asymmetric on purpose (ADR-0152): THEIR active is doomed only if we can pay the KO
+        # right now; OURS is doomed under the conservative next-turn read — their attacker
+        # gets an attach and one evolution before it swings.
+        doomed = (_active_doomed(board.them if own else board.me, side, ctx,
+                                 next_turn=own)
+                  if ctx.weights.doomed_active_discount else False)
+        for name, value in _side_parts(side, ctx, gaps, own=own, active_doomed=doomed,
                                        deck_counts=board.deck_counts if own else None):
             parts.append((f"{label}.{name}", sign * value))
 
@@ -57,7 +64,22 @@ def evaluate(board: BoardState, ctx: LedgerContext) -> Valuation:
                      parts=tuple(parts), gaps=tuple(gaps))
 
 
-def _side_parts(side: Side, ctx: LedgerContext, gaps: list, *, own: bool, deck_counts):
+def _active_doomed(attacker: Side, defender: Side, ctx: LedgerContext, *,
+                   next_turn: bool) -> bool:
+    """Can the attacker's active KO the defender's active outright (ADR-0152)? ``next_turn``
+    grants the attacker its coming attach plus one evolution — the conservative incoming read."""
+    if attacker.active is None or defender.active is None:
+        return False
+    read = projected_incoming_damage if next_turn else \
+        (lambda facts, attached, defender_facts, _ctx:
+         best_payable_damage(facts, attached, defender_facts))
+    damage = read(attacker.active.card.facts, attacker.active.energies,
+                  defender.active.card.facts, ctx)
+    return 0 < defender.active.hp <= damage
+
+
+def _side_parts(side: Side, ctx: LedgerContext, gaps: list, *, own: bool, deck_counts,
+                active_doomed: bool = False):
     weights = ctx.weights
     demand = Demand.read(side, ctx)
     # The reach gate for this side's evolution lines: an opponent's hand and deck are unknown,
@@ -67,8 +89,10 @@ def _side_parts(side: Side, ctx: LedgerContext, gaps: list, *, own: bool, deck_c
     bodies_value = 0.0
     for body in side.bodies:
         # The Nth fielded copy of the same card saturates: its role is already being done.
+        is_active = body is side.active
         bodies_value += _body_value(body, ctx, gaps, reach=reach, own=own,
-                                    is_active=body is side.active,
+                                    is_active=is_active,
+                                    doomed=is_active and active_doomed,
                                     discount=weights.surplus_copy ** copies[body.card.card_id])
         copies[body.card.card_id] += 1
     yield "bodies", bodies_value
@@ -119,7 +143,8 @@ def _side_parts(side: Side, ctx: LedgerContext, gaps: list, *, own: bool, deck_c
 
 
 def _body_value(body: Body, ctx: LedgerContext, gaps: list, *, reach=None,
-                discount: float = 1.0, own: bool = True, is_active: bool = False) -> float:
+                discount: float = 1.0, own: bool = True, is_active: bool = False,
+                doomed: bool = False) -> float:
     weights = ctx.weights
     worth, gap = base_worth(body.card.card_id, body.card.facts, ctx, own=own)
     if gap:
@@ -129,10 +154,12 @@ def _body_value(body: Body, ctx: LedgerContext, gaps: list, *, reach=None,
     usable = usable_units(body.card.facts, body.energies, ctx, reach)
     useless = len(body.energies) - usable
     energy_worth = 0.0
+    rentals = 0
     for card in body.energy_cards:
         # An end-of-turn-discarding Energy on a BENCHED body evaporates before the body can
         # ever attack (ADR-0150): its worth is a rental nobody rides, priced zero.
         if not is_active and "discard_eot" in (getattr(card.facts, "tags", ()) or ()):
+            rentals += 1
             continue
         unit_worth, gap = base_worth(card.card_id, card.facts, ctx, own=own)
         if gap:
@@ -146,7 +173,9 @@ def _body_value(body: Body, ctx: LedgerContext, gaps: list, *, reach=None,
     if weights.concentration and body.energies:
         cost = top_attack_cost(body.card.facts, ctx, reach)
         if cost > 0:
-            progress = min(1.0, usable / cost)
+            # A benched rental evaporates before the attack it would pay for (ADR-0150),
+            # so it is no progress toward that attack either.
+            progress = min(1.0, max(0, usable - rentals) / cost)
             value += weights.concentration * worth * discount * progress * progress
 
     for card in body.tools:
@@ -165,7 +194,15 @@ def _body_value(body: Body, ctx: LedgerContext, gaps: list, *, reach=None,
     # constant real loss per HP on any body.
     value += weights.hp_value * (body.max_hp / 100.0)
     hp_fraction = (max(0, body.hp) / body.max_hp) if body.max_hp > 0 else 1.0
-    return value * (weights.damage_floor + (1.0 - weights.damage_floor) * hp_fraction)
+    blend = weights.damage_floor + (1.0 - weights.damage_floor) * hp_fraction
+    value *= blend
+    if doomed:
+        # An active the opposing active can KO outright is mostly spent (ADR-0152) — but
+        # ammunition is not investment (the d98fc4c74107 ruling): usable Energy on OUR
+        # doomed active converts to damage this very turn, so the discount spares it.
+        ammo = per_unit * usable * weights.zone_attached_usable * blend if own else 0.0
+        value = ammo + (value - ammo) * (1.0 - ctx.weights.doomed_active_discount)
+    return value
 
 
 def _bag_value(bag, zone: float, demand: Demand, ctx: LedgerContext, gaps: list,

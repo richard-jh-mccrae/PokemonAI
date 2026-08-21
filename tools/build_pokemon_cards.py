@@ -44,6 +44,125 @@ ATTACK_CLAUSES: dict[int, tuple[dict, ...]] = {
     1487: ({"kind": "bench_snipe", "amount": 50, "target": "opp_bench"},),
     1488: ({"kind": "ignores_wr"}, {"kind": "ignores_effects"}),
     1546: ({"kind": "self_return", "dest": "hand"},),
+    118: ({"kind": "fetch", "target": "basic_energy", "zone": "deck", "amount": 2},),
+    119: ({"kind": "damage_boost", "amount": 20, "per": "opp_bench"},),
+    307: ({"kind": "damage_boost", "amount": 150, "condition": "other_ancient_attacked_last_turn"},),
+    694: ({"kind": "requires_bench_count", "amount": 5},),
+    1037: ({"kind": "coin", "count": 2, "effect": "discard_opp_energy", "amount": 1, "per": "heads"},),
+    # Cascade batch: representative-build bodies pulled in by the cover additions.
+    60: ({"kind": 'damage_counters', "amount": 2, "target": 'opp_bench'},),
+    69: ({"kind": 'damage_boost', "amount": 30, "per": 'my_ancient'},),
+    70: ({"kind": 'ignores_effects'},),
+    71: ({"kind": 'draw', "amount": 6, "cost": 'discard_hand'},),
+    72: ({"kind": 'self_discard_energy', "amount": 'any'}, {"kind": 'damage_boost', "amount": 70, "per": 'energy_discarded_this_way'},),
+    135: ({"kind": 'retreat_lock', "target": 'defending', "duration": 'opp_next_turn'},),
+    136: ({"kind": 'bench_snipe', "amount": 120, "target": 'opp_bench', "optional": True, "cost": 'shuffle_3_energy_into_deck'},),
+    371: ({"kind": 'damage_boost', "amount": 20, "per": 'all_bench'},),
+    484: ({"kind": 'accel', "amount": 1, "zone": 'deck', "energy": 'basic', "energy_type": 1, "target": 'any_pokemon'},),
+    485: ({"kind": 'same_attack_lock', "duration": 'next_turn'},),
+    488: ({"kind": 'self_discard_energy', "amount": 1},),
+    490: ({"kind": 'damage_boost', "amount": 60, "per": 'ethans_adventure_in_own_discard'},),
+    901: ({"kind": 'ignores_effects'},),
+    902: ({"kind": 'coin', "effect": 'damage_boost', "amount": 60},),
+    1341: ({"kind": 'bench_spread', "amount": 30, "target": 'own_bench'},),
+    # --- Brief-deck attacks (2026-08-20 authoring sweep; encoded from the
+    # engine's own printed text, batch files under the session scratchpad) ---
+    37: ({"kind": "fetch", "target": "pokemon", "zone": "deck"},),
+    39: ({"kind": "fetch", "target": "evolution", "zone": "deck", "dest": "in_play", "restriction": "evolves_from_self"},),
+    40: ({"kind": "coin", "effect": "damage_boost", "amount": 20},),
+    42: ({"kind": "bench_snipe", "amount": 60, "target": "opp_bench", "restriction": "ex_or_v_only"},),
+    75: ({"kind": "coin", "effect": "damage_protection", "scope": "damage_and_effects", "duration": "opp_next_turn"},),
+    87: ({"kind": "recoil", "amount": 10},),
+    88: ({"kind": "damage_boost", "amount": 30, "per": "energy_on_opp_active"},),
+    107: ({"kind": "first_turn_attack_permission", "condition": "went_first"}, {"kind": "fetch", "target": "basic_pokemon", "zone": "deck", "amount": 2, "dest": "bench"},),
+    108: ({"kind": "damage_boost", "amount": 60, "condition": "bench_has_named", "named": "Illumise"},),
+    114: ({"kind": "coin", "effect": "damage_boost", "amount": 20},),
+    115: ({"kind": "damage_boost", "amount": 20, "per": "own_bench"},),
+    120: ({"kind": "damage_boost", "amount": 30, "per": "energy_on_both_actives"},),
+    126: ({"kind": "coin", "effect": "discard_opp_energy", "amount": 1},),
+    127: ({"kind": "fetch", "target": "basic_pokemon", "zone": "deck", "dest": "bench"}, {"kind": "move_energy", "amount": 1, "source": "self", "dest": "new_benched", "trigger": "on_fetch_success"},),
+    130: ({"kind": "opp_hand_to_deck", "amount": 1, "random": True},),
+    142: ({"kind": "coin", "effect": "attack_fails_on_tails"},),
+    144: ({"kind": "damage_boost", "amount": 30, "optional": True, "rider": "recoil", "rider_amount": 30},),
+    145: ({"kind": "confuse", "target": "self"},),
+    146: ({"kind": "cost_reduction", "amount": "all", "condition": "self_special_condition"},),
+    148: ({"kind": "ignores_wr"}, {"kind": "ignores_effects"},),
+    169: ({"kind": "fetch", "target": "pokemon", "zone": "discard", "amount": 3, "dest": "bench", "name_family": "Duskull"},),
+    172: ({"kind": "retreat_lock", "target": "defending", "duration": "opp_next_turn"},),
+    173: ({"kind": "coin", "effect": "shuffle_into_deck", "target": "opp_bench", "amount": 1, "rider": "attached_cards_too"},),
+    174: ({"kind": "confuse", "target": "opp_active"},),
+    184: ({"kind": "damage_boost", "amount": 60, "per": "opp_prizes_taken"},),
+    188: ({"kind": "self_discard_energy", "amount": "all"}, {"kind": "bench_snipe", "amount": 110, "target": "opp_any", "count": 3},),
+    189: ({"kind": "fetch", "target": "basic_energy", "zone": "deck", "amount": 3, "distinct_types": True},),
+    195: ({"kind": "damage_boost", "amount": 30, "per": "energy_on_own_all", "energy_type": 1},),
+    206: ({"kind": "damage_boost", "amount": 80, "condition": "opp_active_damaged"},),
+    211: ({"kind": "fetch", "target": "pokemon", "zone": "discard"},),
+    213: ({"kind": "self_mill", "amount": 1}, {"kind": "copy_attack", "source": "milled_pokemon", "no_rule_box": True},),
+    224: ({"kind": "damage_boost", "amount": 10, "per": "damage_counter_on_self"},),
+    230: ({"kind": "requires_stadium"},),
+    242: ({"kind": "accel", "amount": 2, "zone": "deck", "energy_type": 5, "target": "bench_only"},),
+    243: ({"kind": "attack_lock", "duration": "next_turn"},),
+    253: ({"kind": "no_weakness", "duration": "opp_next_turn"},),
+    304: ({"kind": "confuse", "target": "self"},),
+    305: ({"kind": "ko", "target": "both_actives"},),
+    330: ({"kind": "draw", "amount": 2},),
+    338: ({"kind": "confuse", "target": "opp_active"}, {"kind": "move_damage", "amount": "any", "zone": "opp_any", "dest": "opp_any", "optional": True},),
+    339: ({"kind": "damage_boost", "amount": 50, "per": "energy_on_opp_active"},),
+    355: ({"kind": "damage_boost", "amount": 30, "per": "basic_energy_in_opp_discard"},),
+    356: ({"kind": "self_discard_energy", "amount": "all"}, {"kind": "bench_snipe", "amount": 90, "target": "opp_bench"},),
+    403: ({"kind": "copy_attack", "source": "own_bench", "name_family": "N's"},),
+    420: ({"kind": "damage_boost", "amount": 20, "per": "damage_counter_on_self"},),
+    422: ({"kind": "recoil", "amount": 80},),
+    442: ({"kind": "recoil", "amount": 10},),
+    464: ({"kind": "coin", "effect": "damage_boost", "amount": 20},),
+    478: ({"kind": "fetch", "target": "evolution", "zone": "deck", "dest": "in_play", "restriction": "evolves_from_self"},),
+    479: ({"kind": "ignores_effects"},),
+    480: ({"kind": "heal", "amount": 10, "restriction": "self"},),
+    481: ({"kind": "energy_bounce", "amount": 1, "target": "self", "dest": "hand"},),
+    529: ({"kind": "ignores_wr", "scope": "resistance"},),
+    531: ({"kind": "draw", "to_hand_size": 6},),
+    532: ({"kind": "self_discard_energy", "amount": "all"},),
+    540: ({"kind": "damage_boost", "amount": 10, "per": "damage_counter_own_bench", "name_family": "Cynthia's"}, {"kind": "ignores_wr", "scope": "weakness"},),
+    583: ({"kind": "damage_boost", "amount": 60, "condition": "team_rocket_energy_attached"},),
+    616: ({"kind": "coin", "effect": "attack_fails_on_tails"},),
+    617: ({"kind": "gust", "target": "any", "rider": "damage_new_active", "amount": 30},),
+    618: ({"kind": "same_attack_lock", "duration": "next_turn"},),
+    757: ({"kind": "mill", "amount": 1, "target": "opponent"},),
+    758: ({"kind": "coin", "count": 2, "effect": "damage_boost", "amount": 50, "per": "heads"},),
+    760: ({"kind": "damage_boost", "amount": 10, "per": "damage_counter_self"},),
+    762: ({"kind": "coin", "effect": "damage_boost", "amount": 60},),
+    858: ({"kind": "item_lock", "duration": "opp_next_turn"},),
+    934: ({"kind": "draw", "amount": 1},),
+    937: ({"kind": "bench_snipe", "amount": 30, "target": "opp_bench"},),
+    945: ({"kind": "fetch", "target": "pokemon", "zone": "deck", "amount": 3, "energy_type": 1, "choice": True}, {"kind": "fetch", "target": "stadium", "zone": "deck", "amount": 3, "choice": True},),
+    1027: ({"kind": "push_out", "chooser": "opponent"},),
+    1042: ({"kind": "damage_boost", "amount": 20, "per": "basic_energy_own_discard", "energy_type": 3, "rider": "shuffle_counted_into_deck"},),
+    1043: ({"kind": "self_discard_energy", "amount": 2},),
+    1046: ({"kind": "mill", "amount": 6, "target": "self"}, {"kind": "damage_boost", "amount": 100, "per": "basic_energy_discarded_this_way", "energy_type": 3},),
+    1047: ({"kind": "damage_reduction", "amount": 30, "duration": "opp_next_turn", "timing": "after_weakness_resistance"},),
+    1070: ({"kind": "switch_self"},),
+    1072: ({"kind": "damage_counters", "amount": 2, "per": "card_in_own_hand", "target": "opp_active"},),
+    1073: ({"kind": "damage_boost", "amount": 30, "per": "energy_on_opp_active"},),
+    1092: ({"kind": "coin", "count": "until_tails", "effect": "damage_boost", "amount": 50, "per": "heads"},),
+    1095: ({"kind": "attack_debuff", "amount": 20, "target": "defending", "duration": "opp_next_turn", "timing": "before_weakness_resistance"},),
+    1143: ({"kind": "damage_boost", "amount": 90, "condition": "opp_active_ex"},),
+    1211: ({"kind": "discard_opp_energy", "amount": 1},),
+    1223: ({"kind": "switch_self"},),
+    1225: ({"kind": "damage_boost", "amount": 170, "condition": "moved_to_active_this_turn"},),
+    1226: ({"kind": "ignores_effects"},),
+    1240: ({"kind": "damage_boost", "amount": 50, "per": "card_in_opp_hand"},),
+    1241: ({"kind": "sleep", "target": "opp_active"},),
+    1266: ({"kind": "coin", "effect": "damage_protection", "duration": "opp_next_turn", "includes_effects": True},),
+    1267: ({"kind": "damage_boost", "amount": 100, "condition": "pokemon_ko_last_turn", "name_family": "Hop's"},),
+    1268: ({"kind": "no_retreat", "target": "defending", "duration": "opp_next_turn"},),
+    1305: ({"kind": "ignores_effects"},),
+    1306: ({"kind": "attack_lock", "duration": "next_turn"},),
+    1322: ({"kind": "attack_debuff", "amount": 20, "target": "defending", "duration": "opp_next_turn", "timing": "before_weakness_resistance"},),
+    1326: ({"kind": "recoil", "amount": 30},),
+    1327: ({"kind": "damage_protection", "duration": "opp_next_turn", "source_class": "basic"},),
+    1433: ({"kind": "self_discard_energy", "amount": 2},),
+    1463: ({"kind": "accel", "amount": 1, "zone": "deck", "target": "bench_only", "target_type": 1},),
+    1524: ({"kind": "damage_boost", "amount": 60, "condition": "own_bench_damaged"},),
 }
 
 # Ability clauses for Pokémon `card_effects.json` does not cover yet.
@@ -74,6 +193,9 @@ DEFAULT_ROLES: dict[int, tuple[str, ...]] = {
     1030: ("primary_attacker",),
     1031: ("primary_attacker", "sniper"),
     1071: ("supporter_tutor",),
+    # Brief-deck bodies whose briefs declare no role (the other ~107 derive from the briefs).
+    65: ("draw_engine",),                # Dunsparce: the Dudunsparce draw line's base
+    174: ("support_pokemon",),           # Fan Rotom: Fan Call opener, never an attacker
 }
 
 # Bodies whose OWN text names another card to function. Symmetric, and asserted so.
@@ -95,6 +217,49 @@ def _deck_ids() -> set[int]:
         text = (REPO / "src" / "agents" / deck / "deck.csv").read_text(encoding="utf-8")
         ids.update(int(line) for line in text.splitlines() if line.strip())
     return ids
+
+
+BRIEFS_DIR = REPO / "src" / "common" / "scouting" / "briefs"
+
+
+def _brief_rows():
+    """(card name, roles) for every card a scouting Brief names (pokemon and key_cards)."""
+    for path in sorted(BRIEFS_DIR.glob("*.json")):
+        brief = json.loads(path.read_text(encoding="utf-8"))
+        for row in (brief.get("pokemon") or []) + (brief.get("key_cards") or []):
+            if row.get("card"):
+                yield row["card"], tuple(row.get("roles") or ())
+
+
+def _name_index(cards: dict) -> dict[str, list[int]]:
+    index: dict[str, list[int]] = {}
+    for card_id, card in cards.items():
+        index.setdefault(card["name"], []).append(card_id)
+    return index
+
+
+def _brief_cards(cards: dict) -> tuple[set[int], dict[int, tuple[str, ...]]]:
+    """Every printing a Brief names, plus the Brief-declared roles per id (opponent bodies:
+    the archetype's own doctrine is the role authority, same as a deck's strategy.py)."""
+    index = _name_index(cards)
+    ids: set[int] = set()
+    roles: dict[int, tuple[str, ...]] = {}
+    for name, declared in _brief_rows():
+        resolved = (index.get(name) or index.get(name.replace("'", "’"))
+                    or index.get(name.replace("’", "'")))
+        if not resolved:
+            raise SystemExit(f"brief card {name!r} resolves to no printing")
+        for card_id in resolved:
+            ids.add(card_id)
+            if declared:
+                merged = dict.fromkeys((*roles.get(card_id, ()), *declared))
+                roles[card_id] = tuple(merged)
+    from common.cards.pokemon_roles import POKEMON_ROLES
+
+    # Records carry only vocabulary roles; a Brief's free-form tail stays the Brief's own.
+    roles = {card_id: tuple(r for r in declared if r in POKEMON_ROLES) or None
+             for card_id, declared in roles.items()}
+    return ids, {card_id: declared for card_id, declared in roles.items() if declared}
 
 
 def _clause_src(clause: dict, needed: set) -> str:
@@ -130,7 +295,8 @@ def _module(card: dict, needed: set, lines: list[str], record: str) -> tuple[str
     return f"{_slug(card['name'])}_{card['cardId']}.py", body
 
 
-def _emit_pokemon(card: dict, attacks: dict, tags: list, ability_clauses: tuple):
+def _emit_pokemon(card: dict, attacks: dict, tags: list, ability_clauses: tuple,
+                  roles: tuple[str, ...]):
     needed = {"PokemonCard", STAGE_NAME[card["stage"]], ENERGY_NAME[card["energyType"]]}
     lines = [f"    card_id={card['cardId']},",
              f"    name={card['name']!r},",
@@ -148,7 +314,7 @@ def _emit_pokemon(card: dict, attacks: dict, tags: list, ability_clauses: tuple)
             lines.append(f"    {side}={ENERGY_NAME[card[side]]},")
     lines.append(f"    retreat_cost={card['retreatCost']},")
     lines.append(f"    tags=frozenset({sorted(tags)!r}),")
-    lines.append(f"    default_roles={DEFAULT_ROLES[card['cardId']]!r},")
+    lines.append(f"    default_roles={roles!r},")
     if card["cardId"] in SYNERGY:
         lines.append(f"    synergy={SYNERGY[card['cardId']]!r},")
     if card.get("skills"):
@@ -223,16 +389,18 @@ def main() -> None:
                json.loads((REPO / "src" / "cgpy" / "defs" / "attack_data.json").read_text("utf-8"))}
     functions = json.loads((REPO / "src" / "common" / "card_functions.json").read_text("utf-8"))
     effects = json.loads((REPO / "src" / "common" / "card_effects.json").read_text("utf-8"))
-    deck_ids = _deck_ids()
-    pokemon = sorted(i for i in deck_ids if cards[i]["cardType"] == 0)
-    trainers = sorted(i for i in deck_ids if cards[i]["cardType"] in TRAINER_KIND)
-    energies = sorted(i for i in deck_ids if cards[i]["cardType"] in ENERGY_KIND)
+    brief_ids, brief_roles = _brief_cards(cards)
+    all_ids = _deck_ids() | brief_ids
+    pokemon = sorted(i for i in all_ids if cards[i]["cardType"] == 0)
+    trainers = sorted(i for i in all_ids if cards[i]["cardType"] in TRAINER_KIND)
+    energies = sorted(i for i in all_ids if cards[i]["cardType"] in ENERGY_KIND)
 
     emitted: list[tuple[Path, str, str]] = []
     for card_id in pokemon:
         card = cards[card_id]
         card["stage"] = ("stage2" if card["stage2"] else "stage1" if card["stage1"] else "basic")
-        if not DEFAULT_ROLES.get(card_id):
+        roles = DEFAULT_ROLES.get(card_id) or brief_roles.get(card_id)
+        if not roles:
             raise SystemExit(f"pokemon {card_id} ({card['name']}) has no authored default role")
         ability_clauses = ()
         if card.get("skills"):
@@ -244,7 +412,7 @@ def main() -> None:
             if attacks[str(attack_id)].get("text") and attack_id not in ATTACK_CLAUSES:
                 raise SystemExit(f"attack {attack_id} has effect text with no clause encoding")
         name, body = _emit_pokemon(card, attacks, functions.get(str(card_id), []),
-                                   ability_clauses)
+                                   ability_clauses, roles)
         emitted.append((POKEMON_OUT, name, body))
 
     for card_id in trainers:

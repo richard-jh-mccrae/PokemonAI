@@ -37,3 +37,13 @@ one accounting hole.
   as honest threat weight on the opponent's evolved bodies.
 - `hp_value` and `concentration` (ADR-0150) are the two dark levers awaiting a round that
   can afford their trades — likely after the planner absorbs the maneuver frames.
+
+## Addendum 2026-08-21
+
+`hp_value` armed at 0.2 by owner order under the bootstrap lens: the Ledger is the
+SearchAlgo's leaf evaluation, and bulk is a LEAF property search inherits, while the corpus
+flips it costs (13 out, 13 in vs the 217/422 baseline) flow through 1-ply policy channels —
+retreat-doom laundering chief among them (decomposed on frame d98fc4c74107: both attach
+prices identical, the flip rides Retreat +0.012 -> +0.137) — that search replaces. Floor
+46.5% -> 50.8%, every deck above half. The duplicate-on-last-slot refusal is now offset at
+defaults (its mechanism stays pinned with the lever zeroed).

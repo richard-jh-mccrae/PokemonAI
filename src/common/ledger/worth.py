@@ -224,6 +224,59 @@ def unit_fills_a_slot(unit: int, body_facts, attached, ctx: LedgerContext, reach
     return _slot_fill(unit, body_facts, attached, ctx, reach) != "dead"
 
 
+def _wr_adjusted(damage: int, attacker_type, defender_facts) -> int:
+    """Printed damage through the defender's weakness (x2) / resistance (-30) record."""
+    if defender_facts is not None and attacker_type is not None:
+        if getattr(defender_facts, "weakness", None) == attacker_type:
+            damage *= 2
+        if getattr(defender_facts, "resistance", None) == attacker_type:
+            damage = max(0, damage - 30)
+    return damage
+
+
+def best_payable_damage(attacker_facts, attached, defender_facts) -> int:
+    """Largest damage the attacker can land THIS turn on the defender: fully-paid printed
+    attacks only, weakness doubled / resistance -30 where the defender's record shows them."""
+    counts = Counter(attached)
+    attacker_type = getattr(attacker_facts, "energy_type", None)
+    best = 0
+    for attack in getattr(attacker_facts, "attacks", ()) or ():
+        open_typed, open_colorless = _unfilled(attack.cost, counts)
+        if open_typed or open_colorless:
+            continue
+        damage = int(getattr(attack, "damage", 0) or 0)
+        if damage > 0:
+            best = max(best, _wr_adjusted(damage, attacker_type, defender_facts))
+    return best
+
+
+def projected_incoming_damage(attacker_facts, attached, defender_facts,
+                              ctx: LedgerContext) -> int:
+    """The conservative next-turn read (ADR-0152): before the opponent's active attacks it
+    gets ONE more Energy (of whatever color is still missing) and may evolve ONCE, attached
+    units carried up. Largest damage any such attacker lands on the defender."""
+    counts = Counter(attached)
+    candidates = [attacker_facts]
+    name = getattr(attacker_facts, "name", None)
+    if name:
+        for evo_id in _forward_lines().get(name, ()):
+            evo = ctx.facts(evo_id)
+            # Once means the DIRECT evolution only — a Basic does not become the stage 2.
+            if evo is not None and getattr(evo, "evolves_from", None) == name:
+                candidates.append(evo)
+    best = 0
+    for facts in candidates:
+        attacker_type = getattr(facts, "energy_type", None)
+        for attack in getattr(facts, "attacks", ()) or ():
+            open_typed, open_colorless = _unfilled(attack.cost, counts)
+            if sum(open_typed.values()) + open_colorless > 1:
+                continue
+            damage = int(getattr(attack, "damage", 0) or 0)
+            if damage > 0:
+                best = max(best, _wr_adjusted(damage, attacker_type, defender_facts))
+    return best
+
+
 def top_attack_cost(body_facts, ctx: LedgerContext, reach=None) -> int:
     """The largest attack cost this body can grow into: its own attacks in full, a line
     evolution's only through a positive reach gate (ADR-0150's concentration target)."""

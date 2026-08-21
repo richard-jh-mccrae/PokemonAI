@@ -232,5 +232,30 @@
     "disposition": "deferred-multi-turn",
     "reason": "owner ruling 2026-08-20: the rationale is a multi-action maneuver no 1-ply price can see (snipe target driven by multi-prize math ('requires planning out prize math')); returns to grading when the turn planner grades maneuvers",
     "round": "2026-08-20"
+  },
+  "82523164-55": {
+    "disposition": "deferred-multi-turn",
+    "reason": "owner ruling 2026-08-20: the rationale is a two-KO maneuver (gust the 70 HP Dwebble -> Jetting Blow KOs it AND snipes the 20 HP Dwebble) that lives in the attack AFTER the gust — invisible at 1-ply; the prior agree was an all-zero-price tie accident exposed by the brief-deck store records. Returns when the planner grades maneuvers.",
+    "round": "2026-08-20"
+  },
+  "81905522-47": {
+    "disposition": "deferred",
+    "reason": "doom-driven retreat outprices the ruled attach: our 30/160 Cinderace is doomed and retreating hides it from the active-only doom read; the real cost (next-turn damage, tempo) is invisible at 1-ply. Owner set-aside 2026-08-21 after the armed-doom review.",
+    "round": "2026-08-21"
+  },
+  "82867148-87": {
+    "disposition": "deferred",
+    "reason": "same retreat-laundering shape as 81905522-47: retreat recovers the doomed active's discount at 1-ply while the attach ruling grades the first pick. Owner set-aside 2026-08-21.",
+    "round": "2026-08-21"
+  },
+  "81905522-64": {
+    "disposition": "deferred",
+    "reason": "first-pick ordering quirk: Boss's Orders (gust up their killable body, priced by the armed doom read) jumps the queue over the still-positive ruled attach the pilot would make later this turn. Owner set-aside 2026-08-21.",
+    "round": "2026-08-21"
+  },
+  "82228640-53": {
+    "disposition": "deferred",
+    "reason": "first-pick ordering quirk: Crushing Hammer un-dooms our 190/430 active (breaks their projected KO) and outprices the near-zero attach (damage blend on a hurt carrier). Owner set-aside 2026-08-21.",
+    "round": "2026-08-21"
   }
 }

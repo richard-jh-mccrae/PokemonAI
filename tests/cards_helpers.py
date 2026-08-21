@@ -45,10 +45,37 @@ def all_deck_card_ids() -> frozenset:
     return frozenset(card_id for deck in DECKS for card_id in deck_card_ids(deck))
 
 
+BRIEFS_DIR = REPO / "src" / "common" / "scouting" / "briefs"
+
+
+@lru_cache(maxsize=1)
+def brief_card_ids() -> frozenset:
+    """Every printing a scouting Brief names (pokemon and key_cards) — the store's second
+    coverage promise since the 2026-08-20 brief-deck authoring sweep."""
+    by_name: dict = {}
+    for card_id, card in engine_card_defs().items():
+        by_name.setdefault(card["name"], []).append(card_id)
+    ids = set()
+    for path in sorted(BRIEFS_DIR.glob("*.json")):
+        brief = json.loads(path.read_text(encoding="utf-8"))
+        for row in (brief.get("pokemon") or []) + (brief.get("key_cards") or []):
+            name = row.get("card")
+            if not name:
+                continue
+            resolved = (by_name.get(name) or by_name.get(name.replace("'", "’"))
+                        or by_name.get(name.replace("’", "'")) or ())
+            ids.update(resolved)
+    return frozenset(ids)
+
+
+def all_covered_card_ids() -> frozenset:
+    return all_deck_card_ids() | brief_card_ids()
+
+
 def deck_card_ids_of_kind(*card_types: int) -> set:
-    """The deck ids the engine calls one of ``card_types`` — how each store's owed set is stated."""
+    """The covered ids the engine calls one of ``card_types`` — each store's owed set."""
     defs = engine_card_defs()
-    return {card_id for card_id in all_deck_card_ids()
+    return {card_id for card_id in all_covered_card_ids()
             if defs[card_id]["cardType"] in card_types}
 
 

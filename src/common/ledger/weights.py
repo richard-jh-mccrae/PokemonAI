@@ -114,15 +114,24 @@ class LedgerWeights:
     damage_floor: float = 0.30
     #: Prizes per 100 printed max HP, on every body, inside the damage multiplier (ADR-0151):
     #: SIZE becomes worth, so an evolution out-values its basic and chip damage prices real.
-    hp_value: float = 0.0
+    #: Armed at 0.2 by owner order 2026-08-21 under the bootstrap lens: bulk is a LEAF
+    #: property the SearchAlgo inherits; the corpus flips it costs are 1-ply policy artifacts.
+    hp_value: float = 0.2
 
     # The scarce goods and liabilities of having bodies in play.
     bench_slot_value: float = 0.06
     prize_liability: float = 0.04
 
     #: Concentration (ADR-0150): extra credit for a body's progress toward its LARGEST attack,
-    #: squared — so finishing a started attacker outprices starting a fresh one. 0.0 = off.
-    concentration: float = 0.0
+    #: squared — so finishing a started attacker outprices starting a fresh one. Armed at the
+    #: owner-ordered seed; the flips it buys are accepted, not gate-clean (2026-08-21 ruling).
+    concentration: float = 0.1
+
+    #: Fraction of its worth a doomed active loses. THEIR active is doomed when OUR paid-up
+    #: attack can KO it outright (weakness applied). OURS is doomed under the conservative
+    #: next-turn read: their active gets one attach and one evolution before it swings.
+    #: Armed at 0.4 by owner order 2026-08-21; the flips it buys are accepted, not gate-clean.
+    doomed_active_discount: float = 0.4
 
     # The Active Spot: worth extra when its occupant can actually pay an attack.
     active_premium: float = 0.08

@@ -141,12 +141,15 @@ def test_benching_the_wincon_basic_is_positive_even_on_the_last_slot():
 
 def test_benching_a_duplicate_of_a_fielded_body_on_the_last_slot_is_negative():
     """Every basic in the store carries a Role, so 'redundant' means DUPLICATED: three
-    Makuhita already field the backup-attacker job; a fourth on the last slot is refused."""
+    Makuhita already field the backup-attacker job; a fourth on the last slot is refused.
+    Pinned with size-as-worth zeroed: the armed hp_value default pays bulk for any body,
+    which at 0.2 offsets this refusal — the surplus/last-slot mechanism itself must hold."""
+    context = ctx(overrides={"hp_value": 0.0})
     filler = [body(MAKUHITA, 10 + i) for i in range(3)] + [body(LUNATONE, 14)]
     before = board(me=player(active=body(DRAGAPULT, 1), bench=filler, hand=[MAKUHITA]))
     after = board(me=player(active=body(DRAGAPULT, 1),
                             bench=filler + [body(MAKUHITA, 20)], hand=[]))
-    assert swing(before, after) < 0
+    assert swing(before, after, context) < 0
 
 
 def test_benching_a_filler_on_an_empty_bench_is_positive():
@@ -295,7 +298,9 @@ def test_energy_units_without_card_detail_still_price():
 
 
 def test_a_zero_max_hp_body_prices_as_intact():
-    context = ctx()
+    # Size-as-worth zeroed: the armed hp_value default legitimately prices printed bulk,
+    # which a zero-max-hp record does not have; this pins the damage-blend fallback alone.
+    context = ctx(overrides={"hp_value": 0.0})
     zeroed = board(me=player(active=body(DREEPY, 1, hp=0, max_hp=0)))
     intact = board(me=player(active=body(DREEPY, 1, hp=100, max_hp=100)))
     assert evaluate(zeroed, context).total == evaluate(intact, context).total
@@ -401,18 +406,19 @@ def test_ignition_reads_fully_live_beside_a_multi_slot_evolution():
 
 
 def test_concentration_prefers_finishing_the_started_twin():
-    """ADR-0150: with the lever armed, 2-and-0 across twin attackers out-values 1-and-1 —
-    the second energy toward Nebula Beam's three slots beats the first on a fresh body.
-    At the 0.0 default the term is off and the splits price identically."""
+    """ADR-0150: with the lever armed (the 2026-08-21 default), 2-and-0 across twin attackers
+    out-values 1-and-1 — the second energy toward Nebula Beam's three slots beats the first on
+    a fresh body. Zeroed, the term is off and the splits price identically."""
     def split(started_units, bare_units):
         return board(me=player(
             active=body(STARYU, 9),
             bench=[body(MEGA_STARMIE, 1, energies=(WATER,) * started_units),
                    body(MEGA_STARMIE, 2, energies=(WATER,) * bare_units)]))
 
-    armed = ctx(overrides={"concentration": 0.1})
+    armed = ctx()
+    assert armed.weights.concentration > 0
     assert evaluate(split(2, 0), armed).total > evaluate(split(1, 1), armed).total
-    flat = ctx()
+    flat = ctx(overrides={"concentration": 0.0})
     assert evaluate(split(2, 0), flat).total == pytest.approx(
         evaluate(split(1, 1), flat).total)
 
@@ -441,7 +447,8 @@ def test_rental_energy_on_the_bench_prices_zero():
 def test_hp_value_makes_the_evolve_pay_for_its_hand_card():
     """ADR-0151: evolving reads NEGATIVE at defaults (the hand pays full worth while the
     board credits role parity — the diagnosed evolution underpricing); with size priced,
-    the 260-HP jump out-pays the spend. Default 0.0 must keep today's sign."""
+    the 260-HP jump out-pays the spend. The armed default (0.2, 2026-08-21) must keep
+    the cure; the zeroed control documents the disease."""
     before = board(me=player(active=body(DRAGAPULT, 9),
                              bench=[body(STARYU, 1, hp=70, max_hp=70)],
                              hand=[MEGA_STARMIE]))
@@ -449,19 +456,95 @@ def test_hp_value_makes_the_evolve_pay_for_its_hand_card():
                             bench=[body(MEGA_STARMIE, 1, hp=330, max_hp=330,
                                         under=(STARYU,))],
                             hand=[]))
-    assert swing(before, after) < 0                       # the disease, documented
-    armed = ctx(overrides={"hp_value": 0.2})
+    flat = ctx(overrides={"hp_value": 0.0})
+    assert swing(before, after, flat) < 0                 # the disease, documented
+    armed = ctx()
+    assert armed.weights.hp_value > 0
     assert swing(before, after, armed) > 0
 
 
 def test_hp_value_prices_chip_damage_and_unknown_threats():
     """Size needs no store record: chipping 100 off a big body is a real gain, and a
     store-unknown 330 HP opponent body carries more threat weight than a 70 HP one."""
-    context = ctx(overrides={"hp_value": 0.2})
+    context = ctx()
     fresh = board(them=player(own=False, active=body(MEGA_STARMIE, 9, hp=330, max_hp=330)))
     chipped = board(them=player(own=False, active=body(MEGA_STARMIE, 9, hp=230, max_hp=330)))
-    assert swing(fresh, chipped, context) > swing(fresh, chipped, ctx())
+    assert (swing(fresh, chipped, context)
+            > swing(fresh, chipped, ctx(overrides={"hp_value": 0.0})))
 
     big = board(them=player(own=False, active=body(UNKNOWN, 9, hp=330, max_hp=330)))
     small = board(them=player(own=False, active=body(UNKNOWN, 9, hp=70, max_hp=70)))
     assert evaluate(big, context).total < evaluate(small, context).total
+
+
+def test_doomed_active_discount_prices_the_killable_active_as_spent():
+    """ADR-0152: an opponent active OUR paid-up active can KO outright is mostly spent — so
+    gusting up the killable body beats gusting up the safe one. Weakness doubles the reach:
+    Mega Starmie's 120 covers a 160 HP Cinderace only through its {W} weakness. 0.0 = off."""
+    def against(defender):
+        # Our active sits at full 330 so the conservative incoming read (their side's
+        # projected attach + evolution) never dooms US — this test isolates THEIR side.
+        return board(me=player(active=body(MEGA_STARMIE, 1, energies=(WATER,),
+                                           hp=330, max_hp=330)),
+                     them=player(own=False, active=defender))
+
+    killable = against(body(STARYU, 9, hp=70, max_hp=70))            # 120 >= 70
+    weak_kill = against(body(666, 9, hp=160, max_hp=160))            # Cinderace: 120x2 >= 160
+    safe = against(body(MEGA_STARMIE, 9, hp=330, max_hp=330))        # 120 < 330
+    armed = ctx()
+    assert armed.weights.doomed_active_discount > 0    # the 2026-08-21 armed default
+    flat = ctx(overrides={"doomed_active_discount": 0.0})
+    for doomed_board in (killable, weak_kill):
+        assert evaluate(doomed_board, armed).total > evaluate(doomed_board, flat).total
+    assert evaluate(safe, armed).total == pytest.approx(evaluate(safe, flat).total)
+    # Symmetric: OUR killable active reads as mostly spent too.
+    ours = board(me=player(active=body(STARYU, 1, hp=70, max_hp=70)),
+                 them=player(own=False, active=body(MEGA_STARMIE, 9, energies=(WATER,))))
+    assert evaluate(ours, armed).total < evaluate(ours, flat).total
+
+
+def test_our_doomed_read_grants_their_active_the_coming_attach_and_one_evolution():
+    """ADR-0152, the conservative incoming read: their active swings only AFTER its next
+    attach and possibly one evolution. Makuhita holding two Fighting cannot KO now, but a
+    third energy plus Hariyama's Wild Press (210) can — doomed. One energy short of even
+    that projection stays safe; and once means ONCE — Dreepy never swings with its
+    grandchild Dragapult ex's 200."""
+    fighting = 6
+
+    def ours_vs(attacker):
+        return board(me=player(active=body(MEGA_STARMIE, 1, hp=150, max_hp=330)),
+                     them=player(own=False, active=attacker))
+
+    armed = ctx()
+    flat = ctx(overrides={"doomed_active_discount": 0.0})
+    doomed = ours_vs(body(MAKUHITA, 9, energies=(fighting, fighting)))
+    assert evaluate(doomed, armed).total < evaluate(doomed, flat).total
+    one_short = ours_vs(body(MAKUHITA, 9, energies=(fighting,)))
+    assert evaluate(one_short, armed).total == pytest.approx(
+        evaluate(one_short, flat).total)
+    grandchild = ours_vs(body(DREEPY, 9, energies=(FIRE, PSYCHIC)))
+    assert evaluate(grandchild, armed).total == pytest.approx(
+        evaluate(grandchild, flat).total)
+
+
+def test_usable_energy_on_our_doomed_active_is_ammunition_not_investment():
+    """The d98fc4c74107 ruling: a doomed active converts usable Energy into damage this very
+    turn, so the doom discount spares that Energy — attaching to the doomed carrier prices
+    the same swing armed or not, while the body itself still reads mostly spent."""
+    def ours(energies):
+        return board(me=player(active=body(MEGA_STARMIE, 1, hp=150, max_hp=330,
+                                           energies=energies)),
+                     them=player(own=False, active=body(MAKUHITA, 9, energies=(6, 6))))
+
+    # Concentration is zeroed both sides: progress credit is investment-shaped and stays
+    # under the discount; only the direct usable-Energy worth is the ammunition here.
+    armed = ctx(overrides={"concentration": 0.0})
+    assert armed.weights.doomed_active_discount > 0
+    flat = ctx(overrides={"doomed_active_discount": 0.0, "concentration": 0.0})
+    armed_swing = (evaluate(ours((WATER,)), armed).part("me.bodies")
+                   - evaluate(ours(()), armed).part("me.bodies"))
+    flat_swing = (evaluate(ours((WATER,)), flat).part("me.bodies")
+                  - evaluate(ours(()), flat).part("me.bodies"))
+    assert armed_swing == pytest.approx(flat_swing)
+    assert (evaluate(ours(()), armed).part("me.bodies")
+            < evaluate(ours(()), flat).part("me.bodies"))

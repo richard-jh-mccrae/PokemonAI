@@ -416,8 +416,224 @@
 "1248": {
 "covers": "full",
 "reason": "granted action places one hand card on top; ordered Known Top owns the destination"
+},
+"57": {
+"covers": "full",
+"reason": "the grant IS the whole Ability — \"can use any attack from its previous Evolutions\" over my evolved bodies; the previous-Evolution set is structural (the evo line is homed), and \"(You still need the necessary Energy)\" is the attack rule restated, not a leg"
+},
+"74": {
+"covers": "full",
+"reason": "\"Prevent all damage from and effects of attacks\" done to my Bench — both the damage leg and the effects leg carried (`includes_effects`), source pinned to the opponent's attacks"
+},
+"90": {
+"covers": "full",
+"reason": "fetch ANY card from deck (`target: any`, the 1185/1193 class) + the \"if your Active Pokemon has the Festival Lead Ability\" gate — decidable, an Ability is structural on an in-play body — + the once-per-turn `body` allowance (66's convention)"
+},
+"93": {
+"covers": "full",
+"reason": "\"may use an attack it has twice\" gated on Festival Grounds in play (a named-Stadium check, 675's solrock_in_play shape); the KO-then-\"attack again after your opponent chooses a new Active\" sentence is the double-attack's own timing, one leg, not a second effect"
+},
+"96": {
+"covers": "full",
+"reason": "attach a Basic {G} from HAND to this Pokemon (`source: hand`, `target: self`, `energy_type` 1) + \"If you attached Energy ... draw a card\" as the `draw_1` rider + the once-per-turn body allowance — both legs carried"
+},
+"100": {
+"covers": "full",
+"reason": "same printed text as 93 Dipplin's Festival Lead, same clause, same ruling — one store cannot hold two verdicts for one text"
+},
+"104": {
+"covers": "full",
+"reason": "1 counter on EACH Ability-holder both sides at Checkup — `each_of` distributes (Issue #349), `symmetric` means one modifier over both boards at once, which this IS; \"except any Froslass\" is a name test on IN-PLAY bodies, decidable (1255 Postwick's ruling)"
+},
+"109": {
+"covers": "full",
+"reason": "\"shuffle it and all attached cards into your deck\" gated on being Active — the whole Ability; the write is 66 Dudunsparce's shuffle_self_in rider promoted to the clause's own kind because here it is the entire effect"
+},
+"117": {
+"covers": "full",
+"reason": "prevent all DAMAGE (effects deliberately not claimed — the card does not print them) from attackers that have an Ability — `source_class: has_ability` is structural, the engine dump homes skills"
+},
+"132": {
+"covers": "full",
+"reason": "\"put 5 damage counters on 1 of your opponent's Pokemon\" + \"If you use this Ability, this Pokemon is Knocked Out\" as the `self_ko` rider — both legs carried, once-per-turn body allowance"
+},
+"133": {
+"covers": "full",
+"reason": "13 counters + the `self_ko` rider — 132 Dusclops's exact shape at the bigger magnitude, and the two cannot read one text two ways"
+},
+"141": {
+"covers": "full",
+"reason": "the switch restricted to a Benched {D} body (`target_type` 7) \"except any Pecharunt {ex}\" (an in-play name test, decidable) + \"the new Active Pokemon is now Poisoned\" as the `poison_new_active` rider + the printed \"can't use more than 1 ... each turn\" as the `card` allowance (140/675's convention)"
+},
+"144": {
+"covers": "full",
+"reason": "\"can use the Trifrost attack for {C}\" — the cost override carried as `cost_units: [0]`; the \"Colress\" gate is a SUBSTRING name test (1134's kind of test, recorded verbatim) but over the opponent's DISCARD, a VISIBLE pool whose names we hold, so it is decided, not merely recorded"
+},
+"150": {
+"covers": "full",
+"reason": "attach a Basic {G} from hand to ANY of my Pokemon + \"heal 30 damage from that Pokemon\" as the `heal_30_target` rider + the once-per-turn body allowance — both legs carried"
+},
+"158": {
+"covers": "full",
+"reason": "prevention gated on the magnitude — \"if that damage is 200 or more\" carried as `condition: damage_200_plus`; nothing else is printed"
+},
+"174": {
+"covers": "full",
+"reason": "fetch up to 3 {C} Pokemon with \"100 HP or less\" (`hp_max`, Poffin's field) gated on \"your first turn\" + the printed \"can't use more than 1 Fan Call Ability\" as the `card` allowance — every printed gate is a field"
+},
+"184": {
+"covers": "full",
+"reason": "\"Your Basic Pokemon in play have no Retreat Cost\" — retreat_reduction (1174's Tool kind) with `amount: all` over `own_basic`; one leg, fully carried"
+},
+"240": {
+"covers": "full",
+"reason": "same printed text as 93 Dipplin's Festival Lead, same clause, same ruling"
+},
+"293": {
+"covers": "full",
+"reason": "draw 2 once per turn (`body` allowance) + \"You must discard a card from your hand in order to use this Ability\" as `cost: discard_1` WITH `cost_required` — a restriction on PAYING, the _note_playability_gate biconditional's own test, not merely an expensive cost"
+},
+"304": {
+"covers": "full",
+"reason": "+30 from my Hop's attackers to the opponent's Active, before Weakness/Resistance — 1255 Postwick's field set minus `symmetric` (this card says YOUR Hop's Pokemon, not both players'), plus `no_stack` for \"doesn't stack\"; the Hop's family is DECIDED, bodies in play (1255's ruling)"
+},
+"317": {
+"covers": "full",
+"reason": "\"can evolve during your first turn or the turn you play it\" while in the Active Spot — both the legality widening and its Active-Spot gate carried; a rule-legality clause, minted because nothing else can say it"
+},
+"330": {
+"covers": "full",
+"reason": "prevent all damage from the opponent's Pokemon {ex} — `source_class: ex` is structural (ex/megaEx are dump fields, 1247's measurement); the whole Ability"
+},
+"342": {
+"covers": "full",
+"reason": "+30 from my Cynthia's attackers to the opponent's Active, before Weakness/Resistance — 304's shape without the no-stack sentence, and the Cynthia's family is decided on in-play bodies"
+},
+"343": {
+"covers": "full",
+"reason": "prevention scoped to my Bench AND to no-Rule-Box bodies — both predicates carried, and `no_rule_box` is the predicate 1152/1247 are already ruled full on"
+},
+"345": {
+"covers": "full",
+"reason": "same printed text as 330 Sylveon's Safeguard, same clause — one predicate, one verdict"
+},
+"380": {
+"covers": "partial",
+"reason": "the fetch + once-per-turn body allowance are carried, but the Cynthia's NAME family ranges over a hidden DECK — recorded and UNDECIDED, so the clause deliberately reaches nothing rather than fetching any Pokemon (the 1115/1134/1215/1220 ruling verbatim)"
+},
+"414": {
+"covers": "full",
+"reason": "prevent all EFFECTS (damage deliberately not claimed — \"Damage is not an effect\" is the card's own parenthetical) done to my Basic Team Rocket's bodies; the family is decided, bodies IN PLAY (1216/1255's ruling), and `basic` is structural"
+},
+"439": {
+"covers": "full",
+"reason": "+120 to the opponent's Active before Weakness/Resistance, gated on \"2 or more damage counters\" on this body — `damage_counters` is homed, so the gate is decidable"
+},
+"530": {
+"covers": "full",
+"reason": "+40 HP per attached {F} Energy — `amount_per` AGGREGATES (Issue #349's key) over a homed set (attached Energy), landing on the one body"
+},
+"533": {
+"covers": "full",
+"reason": "both halves of the survival — the \"full HP\" gate and \"remaining HP becomes 10\" — carried; source pinned to attack damage as printed"
+},
+"710": {
+"covers": "full",
+"reason": "\"Each Basic {G} Energy attached to all of your Pokemon provides {G}{G}\" + `no_stack` for the doesn't-stack sentence — the whole Ability, over a homed set (my attached Energy)"
+},
+"742": {
+"covers": "full",
+"reason": "draw 2 riding the evolve that played the card (`trigger: on_evolve` — Issue #305: a triggered Ability RIDES the option); the once-per-turn cap is vacuous on an on-evolve trigger (674's shipped ruling)"
+},
+"743": {
+"covers": "full",
+"reason": "742 Kadabra's exact shape at draw 3 — same text, same ruling"
+},
+"756": {
+"covers": "full",
+"reason": "draw 2 gated on this body being Active + the printed \"can't use more than 1 Run Errand Ability each turn\" as the `card` allowance"
+},
+"858": {
+"covers": "partial",
+"reason": "the suppression's SHAPE is carried — both sides' in-play bodies lose the named Ability class — but \"any Ability that requires the Pokemon using it to Knock Out itself\" is a trait with NO structural field in the engine's own dump (it lives only in printed TEXT); our own `self_ko` rider on 132/133 indexes the encoded pool only, not the pool at large, so the ranged-over set is recorded and UNDECIDED, fail-closed (1085/1089's ruling)"
+},
+"11": {
+"covers": "full",
+"reason": "both printed legs — \"provides {C}\" as energy_provide (17 Ignition's kind, string type per its committed convention) and \"Prevent all effects of attacks ... done to the Pokemon this card is attached to\"; damage is deliberately not claimed, the card's own parenthetical says \"Damage is not an effect\""
+},
+"20": {
+"covers": "full",
+"reason": "provides {F} + the effects-prevention restricted to \"the {F} Pokemon this card is attached to\" — the recipient type gate carried as `target_type: 6`, the same recipient-gate field 19 Telepath Psychic Energy ships"
+},
+"1079": {
+"covers": "full",
+"reason": "the evolve — a Stage 2 from HAND onto a matching Basic, \"skipping the Stage 1\" (`rider: skip_stage1`), `dest: in_play` (1189 Salvatore's destination) — plus BOTH printed restrictions: \"can't use this card during your first turn\" (a TURN condition, the _note_playability_gate (b) class, so a `condition` and never a `cost`) and \"or on a Basic Pokemon that was put into play this turn\" (`target_condition`)"
+},
+"1081": {
+"covers": "full",
+"reason": "\"Discard a Special Energy from 1 of your opponent's Pokemon\" — 1120 Crushing Hammer's discard_opp_energy effect WITHOUT the coin, so it is stated as the certainty it is, with the Special-only lock carried"
+},
+"1158": {
+"covers": "full",
+"reason": "+50, attached body's attacks only, and only \"to your opponent's Active Pokemon {ex}\" — the target class carried as `target_class: ex` (structural), timing before Weakness/Resistance as printed; TOOL_CLAUSES passive-modifier shape"
+},
+"1171": {
+"covers": "full",
+"reason": "BOTH legs — \"cost {C} less\" as attack_cost_reduction and \"do 30 more damage\" as damage_boost, each gated on the attached body being a Hop's Pokemon (decided: the body is in play, 1255's ruling)"
+},
+"1173": {
+"covers": "full",
+"reason": "+70 HP on the attached body (1159's hp_bonus shape); the Cynthia's gate is decided on the in-play body it is attached to"
+},
+"1175": {
+"covers": "full",
+"reason": "+30 to the opponent's Active {ex}, gated on the attached body having no Rule Box — `no_rule_box` (1152/1247's predicate) and `target_class: ex` both structural, timing as printed"
+},
+"1235": {
+"covers": "full",
+"reason": "a top-6 dig (`dig: 6`) attaching one Basic Energy found there to any of my Pokemon — the accel carries the attach, and shuffling the rest back is the dig's own convention (1077's ruling)"
+},
+"1245": {
+"covers": "full",
+"reason": "both legs on the one status clause — \"recovers from all Special Conditions\" (`rider: cure_existing`) and \"can't be affected\" (the immunity), scoped to bodies with any Energy attached, both sides at once, which is exactly what `symmetric` means on the five shipped stadium_static clauses"
+},
+"1261": {
+"covers": "full",
+"reason": "the legality widening — {G} bodies may evolve into {G} \"during the turn they play those Pokemon\" — with the {G}-to-{G} pair carried (`applies_to` + `evolves_into_type`) and \"except during their first turn\" as the condition; both players, so `symmetric`"
+},
+"1264": {
+"covers": "full",
+"reason": "prevention of damage-COUNTER placement on Benched bodies, both sides, sourced to \"effects of attacks and Abilities from the opponent's Pokemon\" — the effect-not-attack-damage distinction the card's own parenthetical draws (\"Damage from attacks is still taken\") is carried by the minted effect value, not blurred into prevent_damage"
+},
+"56": {
+"covers": "full",
+"reason": "the Active-Spot-gated opponent-active Ability suppression is the whole Ability"
+},
+"353": {
+"covers": "partial",
+"reason": "the once-per-turn deck fetch is carried, but 'Ethan's Adventure' is a name family with no structural field in the engine dump — recorded and UNDECIDED, the 1115/1134 ruling; a filter nothing can evaluate fails CLOSED"
+},
+"202": {
+"covers": "full",
+"reason": "the static +10 for evolved {R} attackers against the opponent's Active is the whole Ability"
+},
+"272": {
+"covers": "full",
+"reason": "the {N}-weakness rewrite to {P} x2 is the whole Ability"
 }
 },
+"11": [
+{
+"kind": "energy_provide",
+"amount": 1,
+"type": "colorless"
+},
+{
+"kind": "prevent_effects",
+"applies_to": "attached_body",
+"source": "opponent_attack"
+}
+],
 "17": [
 {
 "kind": "energy_provide",
@@ -444,12 +660,105 @@
 "trigger": "on_attach"
 }
 ],
+"20": [
+{
+"kind": "energy_provide",
+"amount": 1,
+"type": "fighting"
+},
+{
+"kind": "prevent_effects",
+"applies_to": "attached_body",
+"target_type": 6,
+"source": "opponent_attack"
+}
+],
+"56": [
+{
+"kind": "ability_suppression",
+"target": "opp_active",
+"condition": "self_active"
+}
+],
+"57": [
+{
+"kind": "grant_prevo_attacks",
+"applies_to": "own_evolved"
+}
+],
 "66": [
 {
 "kind": "draw",
 "amount": 3,
 "allowance": "body",
 "rider": "shuffle_self_in"
+}
+],
+"74": [
+{
+"kind": "prevent_damage",
+"applies_to": "own_bench",
+"source": "opponent_attack",
+"includes_effects": true
+}
+],
+"90": [
+{
+"kind": "fetch",
+"target": "any",
+"zone": "deck",
+"condition": "active_has_festival_lead",
+"allowance": "body"
+}
+],
+"93": [
+{
+"kind": "attack_twice",
+"condition": "festival_grounds_in_play"
+}
+],
+"96": [
+{
+"kind": "accel",
+"amount": 1,
+"source": "hand",
+"target": "self",
+"energy": "basic",
+"energy_type": 1,
+"allowance": "body",
+"rider": "draw_1"
+}
+],
+"100": [
+{
+"kind": "attack_twice",
+"condition": "festival_grounds_in_play"
+}
+],
+"104": [
+{
+"kind": "checkup_trigger",
+"effect": "damage_counters",
+"amount": 1,
+"applies_to": "has_ability",
+"exclude_name": "Froslass",
+"each_of": true,
+"symmetric": true
+}
+],
+"109": [
+{
+"kind": "self_shuffle_in",
+"condition": "self_active",
+"allowance": "body"
+}
+],
+"117": [
+{
+"kind": "prevent_damage",
+"applies_to": "self",
+"source": "opponent_attack",
+"source_class": "has_ability"
 }
 ],
 "120": [
@@ -461,12 +770,90 @@
 "rider": "other_to_bottom"
 }
 ],
+"132": [
+{
+"kind": "damage_counters",
+"amount": 5,
+"target": "opp_any",
+"rider": "self_ko",
+"allowance": "body"
+}
+],
+"133": [
+{
+"kind": "damage_counters",
+"amount": 13,
+"target": "opp_any",
+"rider": "self_ko",
+"allowance": "body"
+}
+],
 "140": [
 {
 "kind": "draw",
 "amount": 3,
 "condition": "pokemon_ko_last_turn",
 "allowance": "card"
+}
+],
+"141": [
+{
+"kind": "self_switch",
+"target": "benched",
+"target_type": 7,
+"exclude_name": "Pecharunt ex",
+"rider": "poison_new_active",
+"allowance": "card"
+}
+],
+"144": [
+{
+"kind": "attack_cost_reduction",
+"attack": "Trifrost",
+"cost_units": [
+0
+],
+"condition": "name_in_opp_discard",
+"name_family": "Colress"
+}
+],
+"150": [
+{
+"kind": "accel",
+"amount": 1,
+"source": "hand",
+"target": "any_pokemon",
+"energy": "basic",
+"energy_type": 1,
+"allowance": "body",
+"rider": "heal_30_target"
+}
+],
+"158": [
+{
+"kind": "prevent_damage",
+"applies_to": "self",
+"source": "opponent_attack",
+"condition": "damage_200_plus"
+}
+],
+"174": [
+{
+"kind": "fetch",
+"target": "pokemon",
+"zone": "deck",
+"amount": 3,
+"energy_type": 0,
+"hp_max": 100,
+"condition": "first_turn",
+"allowance": "card"
+}
+],
+"184": [
+{
+"kind": "retreat_reduction",
+"amount": "all",
+"applies_to": "own_basic"
 }
 ],
 "190": [
@@ -479,11 +866,144 @@
 "target": "own_type"
 }
 ],
+"202": [
+{
+"kind": "damage_boost",
+"amount": 10,
+"applies_to": "own_evolution_r_pokemon",
+"target": "opp_active"
+}
+],
+"240": [
+{
+"kind": "attack_twice",
+"condition": "festival_grounds_in_play"
+}
+],
+"272": [
+{
+"kind": "weakness_override",
+"target": "opp_dragon_pokemon",
+"new_weakness": 5
+}
+],
+"293": [
+{
+"kind": "draw",
+"amount": 2,
+"cost": "discard_1",
+"cost_required": true,
+"allowance": "body"
+}
+],
+"304": [
+{
+"kind": "damage_boost",
+"amount": 30,
+"applies_to": "name_family",
+"name_family": "Hop's",
+"target": "opponent_active",
+"timing": "before_weakness_resistance",
+"no_stack": true
+}
+],
 "310": [
 {
 "kind": "gust",
 "target": "any",
 "trigger": "on_evolve"
+}
+],
+"317": [
+{
+"kind": "evolve_early",
+"condition": "self_active"
+}
+],
+"330": [
+{
+"kind": "prevent_damage",
+"applies_to": "self",
+"source": "opponent_attack",
+"source_class": "ex"
+}
+],
+"342": [
+{
+"kind": "damage_boost",
+"amount": 30,
+"applies_to": "name_family",
+"name_family": "Cynthia's",
+"target": "opponent_active",
+"timing": "before_weakness_resistance"
+}
+],
+"343": [
+{
+"kind": "prevent_damage",
+"applies_to": "own_bench",
+"no_rule_box": true,
+"source": "opponent_attack"
+}
+],
+"345": [
+{
+"kind": "prevent_damage",
+"applies_to": "self",
+"source": "opponent_attack",
+"source_class": "ex"
+}
+],
+"353": [
+{
+"kind": "fetch",
+"target": "trainer",
+"zone": "deck",
+"name_family": "Ethan's Adventure",
+"allowance": "body"
+}
+],
+"380": [
+{
+"kind": "fetch",
+"target": "pokemon",
+"zone": "deck",
+"name_family": "Cynthia's",
+"allowance": "body"
+}
+],
+"414": [
+{
+"kind": "prevent_effects",
+"applies_to": "own_basic",
+"name_family": "Team Rocket's",
+"source": "opponent_attack"
+}
+],
+"439": [
+{
+"kind": "damage_boost",
+"amount": 120,
+"applies_to": "self",
+"target": "opponent_active",
+"timing": "before_weakness_resistance",
+"condition": "self_damage_counters_2_plus"
+}
+],
+"530": [
+{
+"kind": "hp_bonus",
+"amount": 40,
+"amount_per": "attached_fighting_energy",
+"energy_type": 6
+}
+],
+"533": [
+{
+"kind": "survive_ko",
+"condition": "full_hp",
+"remaining_hp": 10,
+"source": "attack_damage"
 }
 ],
 "648": [
@@ -526,6 +1046,44 @@
 "target": "bench_only"
 }
 ],
+"710": [
+{
+"kind": "energy_double",
+"energy": "basic",
+"energy_type": 1,
+"applies_to": "own_pokemon",
+"no_stack": true
+}
+],
+"742": [
+{
+"kind": "draw",
+"amount": 2,
+"trigger": "on_evolve"
+}
+],
+"743": [
+{
+"kind": "draw",
+"amount": 3,
+"trigger": "on_evolve"
+}
+],
+"756": [
+{
+"kind": "draw",
+"amount": 2,
+"condition": "self_active",
+"allowance": "card"
+}
+],
+"858": [
+{
+"kind": "ability_suppression",
+"applies_to": "self_ko_abilities",
+"symmetric": true
+}
+],
 "1071": [
 {
 "kind": "fetch",
@@ -543,6 +1101,17 @@
 "amount": "all"
 }
 ],
+"1079": [
+{
+"kind": "fetch",
+"target": "stage2",
+"zone": "hand",
+"dest": "in_play",
+"rider": "skip_stage1",
+"condition": "not_first_turn",
+"target_condition": "not_played_this_turn"
+}
+],
 "1080": [
 {
 "kind": "draw",
@@ -550,6 +1119,13 @@
 "condition": "pokemon_ko_last_turn",
 "opponent_amount": 2,
 "rider": "shuffle_both_hands"
+}
+],
+"1081": [
+{
+"kind": "discard_opp_energy",
+"amount": 1,
+"energy": "special"
 }
 ],
 "1082": [
@@ -905,6 +1481,51 @@
 "kind": "heal",
 "amount": 20,
 "restriction": "active_only"
+}
+],
+"1158": [
+{
+"kind": "damage_boost",
+"amount": 50,
+"applies_to": "attached_body",
+"target": "opponent_active",
+"target_class": "ex",
+"timing": "before_weakness_resistance"
+}
+],
+"1171": [
+{
+"kind": "attack_cost_reduction",
+"amount": 1,
+"energy_type": 0,
+"applies_to": "attached_body",
+"name_family": "Hop's"
+},
+{
+"kind": "damage_boost",
+"amount": 30,
+"applies_to": "attached_body",
+"name_family": "Hop's",
+"target": "opponent_active",
+"timing": "before_weakness_resistance"
+}
+],
+"1173": [
+{
+"kind": "hp_bonus",
+"amount": 70,
+"name_family": "Cynthia's"
+}
+],
+"1175": [
+{
+"kind": "damage_boost",
+"amount": 30,
+"applies_to": "attached_body",
+"no_rule_box": true,
+"target": "opponent_active",
+"target_class": "ex",
+"timing": "before_weakness_resistance"
 }
 ],
 "1181": [
@@ -1287,6 +1908,16 @@
 "cost_required": true
 }
 ],
+"1235": [
+{
+"kind": "accel",
+"amount": 1,
+"source": "deck",
+"dig": 6,
+"target": "any_pokemon",
+"energy": "basic"
+}
+],
 "1236": [
 {
 "kind": "draw",
@@ -1365,6 +1996,15 @@
 "symmetric": true
 }
 ],
+"1245": [
+{
+"kind": "stadium_static",
+"effect": "special_condition_immunity",
+"applies_to": "has_energy_attached",
+"rider": "cure_existing",
+"symmetric": true
+}
+],
 "1247": [
 {
 "kind": "stadium_static",
@@ -1431,6 +2071,25 @@
 "effect": "damage_counters",
 "amount": 2,
 "applies_to": "basic_non_dark",
+"symmetric": true
+}
+],
+"1261": [
+{
+"kind": "stadium_static",
+"effect": "evolve_early",
+"applies_to": "grass",
+"evolves_into_type": 1,
+"condition": "not_first_turn",
+"symmetric": true
+}
+],
+"1264": [
+{
+"kind": "stadium_static",
+"effect": "prevent_damage_counters",
+"applies_to": "benched",
+"source": "opponent_effects_and_abilities",
 "symmetric": true
 }
 ]

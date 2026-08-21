@@ -23,6 +23,11 @@ POKEMON_ROLES: dict[str, str] = {
     "item_locker": "denies the opponent their Item cards",
     "retreat_assist": "moves a body out of the Active Spot without paying full Retreat",
     "gust": "drags a benched opponent into the Active Spot",
+    # The Brief target vocabulary (ADR-0148): carried by scouted OPPONENT bodies, priced by
+    # the Ledger's role tiers; our own decks' bodies never declare these.
+    "support_pokemon": "does its work from the bench without attacking",
+    "disruption_target": "the body whose removal collapses the opponent's plan",
+    "engine": "the body whose Ability keeps the opponent's hand flowing",
 }
 
 

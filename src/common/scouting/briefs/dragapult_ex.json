@@ -1,6 +1,11 @@
 {
   "slug": "dragapult_ex",
-  "covers": ["Dragapult ex", "Dragapult ex / Dusknoir", "Dragapult ex / Dusknoir / N's Zoroark ex"],
+  "covers": [
+    "Dragapult ex",
+    "Dragapult ex / Dusknoir",
+    "Dragapult ex / Dusknoir / N's Zoroark ex",
+    "Drakloak / Ethan's Typhlosion"
+  ],
   "opponent_properties": {
     "opp_tempo": "midrange",
     "opp_spreads_bench": true,
@@ -8,18 +13,114 @@
     "opp_comeback_disruptor": true
   },
   "pokemon": [
-    {"card": "Budew", "roles": []},
-    {"card": "Dragapult ex", "roles": ["primary_attacker"]},
-    {"card": "Drakloak", "roles": ["primary_attacker"]},
-    {"card": "Dreepy", "roles": ["primary_attacker"]},
-    {"card": "Fezandipiti ex", "roles": ["disruption_target"]},
-    {"card": "Latias ex", "roles": ["disruption_target"]},
-    {"card": "Meowth ex", "roles": ["disruption_target"]},
-    {"card": "Munkidori", "roles": []},
-    {"card": "Duskull", "roles": ["backup_attacker"]},
-    {"card": "Dusclops", "roles": ["backup_attacker"]},
-    {"card": "Dusknoir", "roles": ["backup_attacker"]},
-    {"card": "Hawlucha", "roles": ["backup_attacker"]}
+    {
+      "card": "Budew",
+      "roles": []
+    },
+    {
+      "card": "Dragapult ex",
+      "roles": [
+        "primary_attacker"
+      ]
+    },
+    {
+      "card": "Drakloak",
+      "roles": [
+        "primary_attacker"
+      ]
+    },
+    {
+      "card": "Dreepy",
+      "roles": [
+        "primary_attacker"
+      ]
+    },
+    {
+      "card": "Fezandipiti ex",
+      "roles": [
+        "disruption_target"
+      ]
+    },
+    {
+      "card": "Latias ex",
+      "roles": [
+        "disruption_target"
+      ]
+    },
+    {
+      "card": "Meowth ex",
+      "roles": [
+        "disruption_target"
+      ]
+    },
+    {
+      "card": "Munkidori",
+      "roles": []
+    },
+    {
+      "card": "Duskull",
+      "roles": [
+        "backup_attacker"
+      ]
+    },
+    {
+      "card": "Dusclops",
+      "roles": [
+        "backup_attacker"
+      ]
+    },
+    {
+      "card": "Dusknoir",
+      "roles": [
+        "backup_attacker"
+      ]
+    },
+    {
+      "card": "Hawlucha",
+      "roles": [
+        "backup_attacker"
+      ]
+    },
+    {
+      "card": "Ethan's Cyndaquil",
+      "roles": [
+        "backup_attacker"
+      ]
+    },
+    {
+      "card": "Ethan's Quilava",
+      "roles": [
+        "backup_attacker",
+        "support_pokemon"
+      ]
+    },
+    {
+      "card": "Ethan's Typhlosion",
+      "roles": [
+        "backup_attacker"
+      ]
+    },
+    {
+      "card": "Moltres",
+      "roles": [
+        "support_pokemon"
+      ]
+    },
+    {
+      "card": "Victini",
+      "roles": [
+        "support_pokemon"
+      ]
+    }
   ],
-  "key_cards": [{"card": "Rare Candy", "role": "rush_evolve"}, {"card": "Buddy-Buddy Poffin", "role": "setup"}]
+  "key_cards": [
+    {
+      "card": "Rare Candy",
+      "role": "rush_evolve"
+    },
+    {
+      "card": "Buddy-Buddy Poffin",
+      "role": "setup"
+    }
+  ]
 }
