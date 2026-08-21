@@ -10,8 +10,8 @@ and a last-resort crash fallback. The pre-Ledger Bellman planner is quarantined 
 ## Language
 
 **Ledger**:
-The live decider: board value = card worth × zone multiplier, both sides, prizes; an option's
-price is the swing it causes and only ending the turn is worth zero.
+The live decider: board value is the sum of Feature Activations multiplied once by resolved
+Valuation Coefficients; an option's price is its resulting swing and only ending the turn is zero.
 _Avoid_: Evaluator stack, value families
 
 **Swing**:
