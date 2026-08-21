@@ -119,8 +119,7 @@
     {
       "card": "Lillie’s Clefairy ex",
       "roles": [
-        "support_pokemon",
-        "disruption_target"
+        "primary_attacker"
       ]
     }
   ],

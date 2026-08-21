@@ -11,7 +11,7 @@ CARD = PokemonCard(
     weakness=METAL,
     retreat_cost=1,
     tags=frozenset([]),
-    default_roles=('support_pokemon', 'disruption_target'),
+    default_roles=('primary_attacker',),
     abilities=(
         Ability(
             name='Fairy Zone',
