@@ -50,30 +50,6 @@ def _compact_family(candidate: dict) -> dict:
     }
 
 
-def _compact_strategy_beam(beam: dict) -> dict:
-    focused = beam.get("focused") or ()
-    safety = beam.get("safety") or ()
-    return {
-        "focused": [{
-            "action_key": row.get("action_key"), "family": row.get("family"),
-            "score": row.get("score"), "reason": row.get("reason"),
-            "path_count": len(row.get("path_ids") or ()),
-        } for row in focused],
-        "safety": [{
-            "action_key": row.get("action_key"), "family": row.get("family"),
-            "reason": row.get("reason"),
-        } for row in safety],
-        "unknown": list(beam.get("unknown") or ()),
-        "held": [{"action_key": row.get("action_key"), "family": row.get("family"),
-                  "reason": row.get("reason")} for row in beam.get("held") or ()],
-        "inactive": [{"action_key": row.get("action_key"), "family": row.get("family"),
-                      "reason": row.get("reason")} for row in beam.get("inactive") or ()],
-        "features": list(beam.get("features") or ()),
-        "path_count": len(beam.get("paths") or ()),
-        "elapsed_ms": beam.get("elapsed_ms"), "exhausted": beam.get("exhausted"),
-    }
-
-
 def _compact_diagnostics(diagnostics: dict) -> dict:
     compact = {key: value for key, value in diagnostics.items()
                if key not in {"root", "production"}}
@@ -100,9 +76,6 @@ def _compact_diagnostics(diagnostics: dict) -> dict:
             } for row in prunes if isinstance(row, dict)],
             "family_candidates": [_compact_family(row) for row in family],
         }
-    strategy_beam = diagnostics.get("strategy_beam")
-    if isinstance(strategy_beam, dict):
-        compact["strategy_beam"] = _compact_strategy_beam(strategy_beam)
     return compact
 
 

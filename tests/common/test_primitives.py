@@ -165,7 +165,7 @@ def test_search_session_resume_blob_is_not_part_of_plan_suffix_identity():
     assert with_blob.plan_key == without_blob.plan_key
 
 
-def test_live_telemetry_compacts_paths_without_losing_family_evidence():
+def test_live_telemetry_compacts_production_evidence():
     candidate = {
         "action": "ActionIdentity(kind='attach', parts=('" + "x" * 10_000 + "',))",
         "family": "attachment", "features": {"ready": 1.0},
@@ -180,16 +180,6 @@ def test_live_telemetry_compacts_paths_without_losing_family_evidence():
             "proof_type": "commutativity", "pruned": candidate["action"],
             "retained_event": "attach:active",
         }]},
-        "strategy_beam": {
-            "focused": [{"action_key": "focus", "family": "attachment", "score": 0.8,
-                         "reason": "strategy_hint", "path_ids": ["path"] * 100}],
-            "safety": [],
-            "unknown": [{"action_key": "unknown", "card_id": 999, "context": 0,
-                         "reason": "no_strategy_hint"}],
-            "paths": [{"large": "x" * 10_000}] * 20,
-            "features": [{"outcome": "take_prize", "deadline": 0}],
-            "elapsed_ms": 2.0, "exhausted": False,
-        },
     })
 
     record = to_record(decision, compact=True)
@@ -206,7 +196,3 @@ def test_live_telemetry_compacts_paths_without_losing_family_evidence():
         "proof_type": "commutativity", "retained_event": "attach:active",
         "pruned_key": evidence[0]["action_key"],
     }]
-    strategy_beam = record["diagnostics"]["strategy_beam"]
-    assert strategy_beam["path_count"] == 20
-    assert strategy_beam["focused"][0]["path_count"] == 100
-    assert strategy_beam["unknown"][0]["card_id"] == 999

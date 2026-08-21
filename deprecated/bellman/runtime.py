@@ -8,20 +8,14 @@ from pathlib import Path
 
 from common.api import PlanRequest, RootDecision
 from common.card_worth import role_value
-from common.options import enumerate_legal_actions
 from common.runtime import AgentRuntime, _int_field, _last_resort_selection
 from common.scouting.pokemon_roles import general_pokemon_roles
 from common.strategy import Roles
 from common.scouting.briefs import resolve_scouted_role_worth
 from .state import DecisionState
-from common.strategy.context import _TO_HAND
-from .activation import (
-    GENERAL_STRATEGIES, activate_strategies, general_card_strategies, resolve_strategies,
-)
 
 from .belief import BellmanDeckProfile, opponent_belief
 from .budget_prototype import DecisionClock
-from .demand import StrategyBeamBuilder, semantic_action_key
 from .effects import CardEffects
 from .dragapult_potential import DragapultPotential
 from .pilot_profile import PilotProfile
@@ -87,21 +81,14 @@ def _pilot_overlay() -> tuple[dict[str, float], str]:
             raise ValueError("AGENT_OVERLAY.pilot must be an object")
         values = {**values, **overrides}
         provenance = str(Path(path).resolve())
-    strategy_enabled = os.environ.get("AGENT_STRATEGY_ENABLED")
-    if strategy_enabled is not None:
-        if strategy_enabled not in {"0", "1"}:
-            raise ValueError("AGENT_STRATEGY_ENABLED must be 0 or 1")
-        values = {**values, "strategy.focus_enabled": float(strategy_enabled)}
-        marker = f"strategy:{strategy_enabled}"
-        provenance = f"{provenance};{marker}" if provenance else marker
     return {str(name): float(value) for name, value in values.items()}, provenance
 
 
 class BellmanTeacherRuntime(AgentRuntime):
     """The deployment shell with the Bellman planner as its brain, exactly as it shipped."""
 
-    fallback_backend = "strategy-fallback"
-    fallback_action = "strategy_fallback"
+    fallback_backend = "bellman-fallback"
+    fallback_action = "bellman_fallback"
 
     def __init__(self, strategy, deck, **kwargs):
         super().__init__(strategy, deck, **kwargs)
@@ -132,12 +119,6 @@ class BellmanTeacherRuntime(AgentRuntime):
             provenance=(f"overlay:{experiment_path}" if experiment_path
                         else f"strategy:{strategy.name}"),
         )
-        self.strategies = None
-        self._strategy_snapshot = None
-        self._strategy_history = ()
-        self._strategy_ko_window_turn = -1
-        self._strategy_previous_turn = -1
-        self._strategy_previous_bodies = frozenset()
         self.opponent_role_worth = {}
         self._plan_suffix = ()
         self._proof_suffix = ()
@@ -149,7 +130,6 @@ class BellmanTeacherRuntime(AgentRuntime):
         self._plan_suffix = ()
         self._proof_suffix = ()
         self._proof_id = ""
-        self._strategy_snapshot = None
 
     def _invalidate_plans(self) -> None:
         self._plan_suffix = ()
@@ -194,54 +174,6 @@ class BellmanTeacherRuntime(AgentRuntime):
             registry=self.registry, family_evaluator=potential,
             effects=self.effects, stats=self.stats, belief=belief,
             profile=self.pilot_profile, **planner_kwargs)
-
-    def _planning_epoch_strategy(self, observation):
-        current = observation.get("current") or {}
-        turn = int(current.get("turn", 0))
-        seat = int(current.get("yourIndex", 0))
-        players = current.get("players") or ()
-        player = players[seat] if 0 <= seat < len(players) else {}
-        bodies = tuple(player.get("active") or ()) + tuple(player.get("bench") or ())
-        serials = frozenset(int(body.get("serial", -1)) for body in bodies if body)
-        lost_between_turns = (
-            self._strategy_previous_turn >= 0
-            and turn > self._strategy_previous_turn
-            and bool(self._strategy_previous_bodies - serials)
-        )
-        if lost_between_turns:
-            self._strategy_ko_window_turn = turn
-        self._strategy_previous_turn = turn
-        self._strategy_previous_bodies = serials
-        if self._strategy_ko_window_turn == turn:
-            observation["strategyPokemonKoWindow"] = True
-        # Default-on: card facts mint their own hints for every deck; a deck opts OUT, not in.
-        # Opt-in left dragapult_ex the only deck whose Abilities and gusts the beam ever saw.
-        card_strategies = general_card_strategies(
-            self.deck, self.roles, self.functions, self.stats, self.effects
-        ) if self.strategy.params.get("use_general_card_strategies", True) else ()
-        self.strategies = resolve_strategies(
-            (*GENERAL_STRATEGIES, *card_strategies),
-            getattr(self.strategy, "strategies", ()),
-            getattr(self.last_brief, "strategies", ()) if self.last_brief is not None else (),
-            getattr(self.strategy, "strategy_overrides", ()),
-        )
-        candidate = activate_strategies(
-            observation, self.strategies, deck=self.deck, roles=self.roles, stats=self.stats,
-            effects=self.effects,
-            opponent_role_worth=self.opponent_role_worth)
-        if any(hint.strategy_id.endswith(".deploy_after_ko") for hint in candidate.hints):
-            self._strategy_ko_window_turn = turn
-        history = tuple(json.dumps(row, sort_keys=True, separators=(",", ":"))
-                        for row in observation.get("logs") or ())
-        same_history = (len(history) >= len(self._strategy_history)
-                        and history[:len(self._strategy_history)] == self._strategy_history)
-        if (self._strategy_snapshot is not None
-                and self._strategy_snapshot.snapshot_id == candidate.snapshot_id
-                and same_history):
-            return self._strategy_snapshot
-        self._strategy_snapshot = candidate
-        self._strategy_history = history
-        return candidate
 
     def _cached_decision(self, planner, request):
         stats = getattr(self, "_plan_reuse_stats", None)
@@ -356,9 +288,6 @@ class BellmanTeacherRuntime(AgentRuntime):
             planner.discard_precheck()
             return self._with_proof_invalidation(cached, _proof_invalidation)
         self._plan_reuse_stats["planner_calls"] += 1
-        planner.strategy_snapshot = (
-            self._planning_epoch_strategy(observation)
-            if self.pilot_profile.get("strategy.focus_enabled") >= 0.5 else None)
         decision = planner.decide(request, terminal_checked=True)
         self._proof_suffix = ()
         self._proof_id = ""
@@ -382,38 +311,7 @@ class BellmanTeacherRuntime(AgentRuntime):
                             decision.complete, diagnostics, decision.plan_suffix)
 
     def _fallback_selection(self, observation: dict) -> list[int]:
-        default = _last_resort_selection(observation)
-        try:
-            snapshot = self._planning_epoch_strategy(observation)
-            state = DecisionState.from_observation(
-                observation, deck=self.deck, deck_name=self.strategy.name,
-                value_registry_identity=self.registry.identity)
-            actions = enumerate_legal_actions(observation)
-            builder = StrategyBeamBuilder(
-                snapshot, registry=self.registry,
-                width=int(self.pilot_profile.get("strategy.focus_width")),
-                information_partition=(self.pilot_profile.get(
-                    "strategy.information_partition_enabled") >= 0.5))
-            ranked = builder.rank_legal(state, actions)
-            focused = builder.last_beam.focused if builder.last_beam is not None else ()
-            if not focused:
-                return default
-            focused_keys = {row.action_key for row in focused}
-            action = next((row for row in ranked
-                           if semantic_action_key(row) in focused_keys), None)
-            if action is None:
-                return default
-            select = observation.get("select") or {}
-            context = int(select.get("context", -1))
-            if context == _TO_HAND:
-                maximum = min(len(select.get("option") or ()),
-                              int(select.get("maxCount", len(action.selection))))
-                remainder = [index for index in range(len(select.get("option") or ()))
-                             if index not in action.selection]
-                return list((*action.selection, *remainder)[:maximum])
-            return list(action.selection) if action.selection else default
-        except Exception:
-            return default
+        return _last_resort_selection(observation)
 
 
 def build_teacher_runtime(strategy, deck, **kwargs) -> BellmanTeacherRuntime:

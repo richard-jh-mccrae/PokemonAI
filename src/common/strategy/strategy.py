@@ -11,9 +11,6 @@ from common.cards import card_store
 from common.cards.card_facts import PokemonCard
 from common.cards.pokemon_roles import resolve_pokemon_roles
 
-from .strategies import StrategyHint, StrategyOverride
-
-
 STANDARD_PRIZES_TO_WIN = 6
 
 
@@ -137,7 +134,7 @@ class Roles(dict):
 
 @dataclass
 class Strategy:
-    """Complete deck-specific input to the shared Bellman system."""
+    """Complete deck-specific input to the shared runtime."""
 
     name: str = ""
     roles: Roles = field(default_factory=Roles)
@@ -149,8 +146,6 @@ class Strategy:
     #: The deck's dissents from the Ledger's general weights (`LedgerWeights.resolve` keys).
     ledger_overrides: dict[str, float] = field(default_factory=dict)
     prize_plan: PrizePlan | None = None
-    strategies: tuple[StrategyHint, ...] = ()
-    strategy_overrides: tuple[StrategyOverride, ...] = ()
     lines: tuple[Line, ...] = field(init=False)
 
     def __post_init__(self) -> None:
@@ -163,8 +158,6 @@ class Strategy:
                                 for name, value in self.pilot_overrides.items()}
         self.ledger_overrides = {str(name): float(value)
                                  for name, value in self.ledger_overrides.items()}
-        self.strategies = tuple(self.strategies)
-        self.strategy_overrides = tuple(self.strategy_overrides)
         self.lines = tuple(self.roles.lines)
 
 

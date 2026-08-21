@@ -12,15 +12,5 @@
     {"card": "Team Rocket's Articuno", "roles": ["support_pokemon"]}
   ],
   "key_cards": [{"card": "Boss's Orders", "role": "gust"},
-    {"card": "Enhanced Hammer", "role": "special_energy_denial"}],
-  "strategies": [
-    {
-      "identifier": "opponent.alakazam.disrupt_the_swelling_hand",
-      "conditions": [{"fact": "opponent.hand.count", "operator": "ge", "value": 6}],
-      "desired_facts": [{"kind": "play_card", "recipient": "own.active", "target_card_ids": [1213, 1080]}],
-      "recipient_selector": "own.active",
-      "deadline": "this_turn",
-      "conviction": "high"
-    }
-  ]
+    {"card": "Enhanced Hammer", "role": "special_energy_denial"}]
 }

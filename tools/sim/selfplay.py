@@ -23,14 +23,12 @@ def episode_id(run_stem: str, index: int) -> int:
     return int(hashlib.sha1(f"{run_stem}:{index}".encode("utf-8")).hexdigest()[:12], 16)
 
 
-def run_stem(agent: str, when, sha: str, overlay=None, strategy_enabled=None) -> str:
+def run_stem(agent: str, when, sha: str, overlay=None) -> str:
     """The provenance stem, matching `provenance.build_identity` so self-play Corrections file under
     a real build folder. The overlay digest keeps a candidate-config corpus off the baseline's."""
     marker = "selfplay"
     if overlay:
         marker += "-" + hashlib.sha1(str(overlay).encode("utf-8")).hexdigest()[:8]
-    if strategy_enabled is not None:
-        marker += "-strategy-on" if strategy_enabled else "-strategy-off"
     return f"{agent}_{when:%Y%m%d-%H%M%S}_{sha}-{marker}"
 
 
@@ -57,19 +55,14 @@ def _save_telemetry(run_dir: Path, eid: int, captured: list[dict]) -> None:
 
 
 @contextmanager
-def _overlay_env(overlay, strategy_enabled=None):
+def _overlay_env(overlay):
     """Expose `overlay` as `AGENT_OVERLAY` for the in-process `env.run` games, then restore.
     ``overlay=None`` CLEARS any inherited one, so a baseline corpus is truly the default."""
     prev = os.environ.get("AGENT_OVERLAY")
-    previous_strategy = os.environ.get("AGENT_STRATEGY_ENABLED")
     if overlay:
         os.environ["AGENT_OVERLAY"] = str(Path(overlay).resolve())
     else:
         os.environ.pop("AGENT_OVERLAY", None)
-    if strategy_enabled is None:
-        os.environ.pop("AGENT_STRATEGY_ENABLED", None)
-    else:
-        os.environ["AGENT_STRATEGY_ENABLED"] = "1" if strategy_enabled else "0"
     try:
         yield
     finally:
@@ -77,24 +70,20 @@ def _overlay_env(overlay, strategy_enabled=None):
             os.environ.pop("AGENT_OVERLAY", None)
         else:
             os.environ["AGENT_OVERLAY"] = prev
-        if previous_strategy is None:
-            os.environ.pop("AGENT_STRATEGY_ENABLED", None)
-        else:
-            os.environ["AGENT_STRATEGY_ENABLED"] = previous_strategy
 
 
 def generate_corpus(agent: str, n: int, *, agents_root, out_root, when, sha, overlay=None,
-                    syspath_roots=(), configuration=None, strategy_enabled=None) -> Path:
+                    syspath_roots=(), configuration=None) -> Path:
     """Run `n` mirror games of `agent`, saving each as a tagged replay -> the run dir. Uses
     `check_agent._run_match`, the cabt-env path whose `env.toJSON()` carries the per-frame `obs`."""
     from sim.check_agent import _run_match  # lazy: pulls in kaggle_environments only when generating
 
-    stem = run_stem(agent, when, sha, overlay, strategy_enabled)
+    stem = run_stem(agent, when, sha, overlay)
     run_dir = Path(out_root) / "selfplay" / stem
     run_dir.mkdir(parents=True, exist_ok=True)
     agent_dir = Path(agents_root) / agent
     team_names = [f"{stem}#0", f"{stem}#1"]
-    with _overlay_env(overlay, strategy_enabled):
+    with _overlay_env(overlay):
         for i in range(n):
             from common.telemetry import capture_records
             started = perf_counter()
@@ -131,8 +120,6 @@ def main(argv=None) -> int:
     ap.add_argument("agent", help="agent under src/agents/ to self-play")
     ap.add_argument("-n", "--games", type=int, default=20, help="games to generate (default 20)")
     ap.add_argument("--overlay", default=None, help="experiment overlay JSON -> corpus of that config")
-    ap.add_argument("--strategy", choices=("on", "off"), default=None,
-                    help="canonical Strategy beam A/B toggle; Odds remains enabled")
     ap.add_argument("--agents-root", default=str(repo / "src" / "agents"))
     ap.add_argument("--out", default=str(repo / "data" / "replays"),
                     help="corpus root (the run lands under <out>/selfplay/<stem>/)")
@@ -149,8 +136,7 @@ def main(argv=None) -> int:
         configuration["runTimeout"] = 1e100
     run_dir = generate_corpus(args.agent, args.games, agents_root=args.agents_root, out_root=args.out,
                               when=datetime.now(), sha=_git_short(), overlay=args.overlay,
-                              syspath_roots=[repo / "src"], configuration=configuration or None,
-                              strategy_enabled=(None if args.strategy is None else args.strategy == "on"))
+                              syspath_roots=[repo / "src"], configuration=configuration or None)
     saved = len([path for path in Path(run_dir).glob("*.json") if "-logs" not in path.name])
     print(f"Self-play Corpus: {saved} games -> {run_dir}")
     return 0
