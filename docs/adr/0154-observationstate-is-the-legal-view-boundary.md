@@ -1,4 +1,6 @@
-# ADR-TEMP-556 — ObservationState is the legal-view boundary
+# ADR-0154 — ObservationState is the legal-view boundary
+
+Status: Accepted (2026-08-21); BUILT for Issue #556.
 
 The Observation State exposes a Position Key that excludes the current question and a Decision Key
 that adds the exact question and legal actions. Search reuse therefore identifies equivalent

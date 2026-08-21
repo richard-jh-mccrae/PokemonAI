@@ -1,6 +1,6 @@
 # ADR-0144 — BoardState: the observable board as reusable typed pieces
 
-Superseded by ADR-TEMP-556. The historical `BoardState` name and `common.board` package are retired.
+Superseded by ADR-0154. The historical `BoardState` name and `common.board` package are retired.
 
 Status: Accepted (2026-08-19); LIVE since 2026-08-20 — the Ledger (ADR-0145) is the production
 consumer: every live decision builds/advances BoardState, and the preview seam (ADR-0146)
