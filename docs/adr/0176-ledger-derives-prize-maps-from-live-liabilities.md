@@ -1,4 +1,4 @@
-# ADR-TEMP-555 — Ledger derives Prize Maps from live liabilities
+# ADR-0176 — Ledger derives Prize Maps from live liabilities
 
 Decks declare sparse Prize Plan constraints for bodies they prefer to preserve or sacrifice; they
 do not enumerate knockout routes. Ledger derives the live Prize Map from remaining prizes and

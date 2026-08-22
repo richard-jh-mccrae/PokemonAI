@@ -142,7 +142,7 @@ fires, the first-merged-keeps-it convention established above still applies: ref
 recompute, rename again. See `.claude/skills/grill-with-docs/SKILL.md` and
 `.claude/skills/open-pr/SKILL.md` for the full mechanics.
 
-**Next free number: 0176.**
+**Next free number: 0177.**
 
 ## Index
 
@@ -324,3 +324,4 @@ recompute, rename again. See `.claude/skills/grill-with-docs/SKILL.md` and
 | [0173](0173-constrained-parity-migration.md) | Additive defaults migrate under constrained parity | Accepted; built for Issue #582. |
 | [0174](0174-atomic-ledger-cutover.md) | The valuation model cuts over atomically | Accepted; built for Issue #582. |
 | [0175](0175-opponent-model-emits-immutable-decision-snapshots.md) | The Opponent Model emits immutable decision snapshots | Accepted; built for Issue #559. |
+| [0176](0176-ledger-derives-prize-maps-from-live-liabilities.md) | Ledger derives Prize Maps from live liabilities | Accepted; built for Issue #555. |
