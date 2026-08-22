@@ -20,4 +20,5 @@ def test_every_deck_builds_the_shared_ledger_runtime(name):
     assert len(runtime.deck) == 60
     assert runtime.ledger is not None
     assert runtime.ledger.ctx.configuration.identity
-    assert runtime.ledger.ctx.compute.identity
+    assert runtime.ledger.compute.search.identity
+    assert runtime.ledger.compute.policy.identity

@@ -142,7 +142,7 @@ fires, the first-merged-keeps-it convention established above still applies: ref
 recompute, rename again. See `.claude/skills/grill-with-docs/SKILL.md` and
 `.claude/skills/open-pr/SKILL.md` for the full mechanics.
 
-**Next free number: 0177.**
+**Next free number: 0182.**
 
 ## Index
 
@@ -325,3 +325,8 @@ recompute, rename again. See `.claude/skills/grill-with-docs/SKILL.md` and
 | [0174](0174-atomic-ledger-cutover.md) | The valuation model cuts over atomically | Accepted; built for Issue #582. |
 | [0175](0175-opponent-model-emits-immutable-decision-snapshots.md) | The Opponent Model emits immutable decision snapshots | Accepted; built for Issue #559. |
 | [0176](0176-ledger-derives-prize-maps-from-live-liabilities.md) | Ledger derives Prize Maps from live liabilities | Accepted; built for Issue #555. |
+| [0177](0177-search-owns-decision-deltas.md) | Search owns decision deltas; value evaluators own state value | Accepted; built for Issue #583. |
+| [0178](0178-decision-results-preserve-explicit-outcomes.md) | Decision results preserve explicit outcomes | Accepted; built for Issue #583. |
+| [0179](0179-deployment-separates-search-and-policy-configuration.md) | Deployment separates search and policy configuration | Accepted; built for Issue #583. |
+| [0180](0180-opponent-evidence-stays-in-observation.md) | Opponent evidence stays in the observation | Accepted; built for Issue #583. |
+| [0181](0181-ledger-contract-cutover-is-atomic.md) | The Ledger contract cutover is atomic | Accepted; built for Issue #583. |

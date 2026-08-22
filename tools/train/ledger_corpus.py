@@ -40,6 +40,7 @@ from common.runtime import build_runtime  # noqa: E402
 from train.blunder.store import load_corrections  # noqa: E402
 from train.blunder.decode import option_label  # noqa: E402
 from train.blunder.reviewed import load_reviewed, partition_reviewed  # noqa: E402
+from train.ledger_parity import assert_runtime_parity  # noqa: E402
 
 
 DECKS = ("mega_starmie", "mega_lucario", "dragapult_ex")
@@ -65,7 +66,8 @@ def _build_runtime(deck_name: str, weight_overrides=None):
         valuation_configuration = ValuationConfiguration.general().with_values(weight_overrides)
     replay_provider = partial(CgpyTransitionProvider, effects=CardEffects.load())
     return build_runtime(module.STRATEGY, deck, provider_factory=replay_provider,
-                         valuation_configuration=valuation_configuration)
+                         valuation_configuration=valuation_configuration,
+                         decision_parity_oracle=assert_runtime_parity)
 
 
 def _satisfies_one(chosen, correct, equivalence) -> bool:
@@ -130,6 +132,7 @@ def _replay_one(deck_name: str, correction, weight_overrides=None) -> dict:
         "rationale": correction.rationale,
         "gaps": sorted(set(diagnostics.get("gaps", ()))),
         "stamped_prizes": stamped,
+        "decision_parity": diagnostics.get("decision_parity", False),
         "elapsed_seconds": elapsed,
     }
     if diagnostics.get("fallback"):                # a crashed brain must be visible, not a miss
@@ -265,7 +268,9 @@ def render_markdown(result: dict) -> str:
                   f"- ruling was `{row['correct']}` {row['correct_label']}",
                   f"- rationale: {row['rationale']}"]
         for price in (row.get("ledger") or {}).get("prices", ())[:3]:
-            lines.append(f"- priced {price['swing']:+.4f} {price['action']}")
+            swing = price["swing"]
+            rendered = "unavailable" if swing is None else f"{swing:+.4f}"
+            lines.append(f"- priced {rendered} {price['action']}")
         lines.append("")
     return "\n".join(lines)
 

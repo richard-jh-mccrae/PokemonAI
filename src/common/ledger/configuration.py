@@ -4,10 +4,11 @@ import hashlib
 import json
 import math
 from collections.abc import Iterator, Mapping
-from dataclasses import dataclass, field, fields
+from dataclasses import dataclass, field
 from types import MappingProxyType
 
 from .features import FEATURE_CATALOG, FeatureCatalog
+from common.decision import ComputeConfiguration
 
 
 def _finite(key, value) -> float:
@@ -100,35 +101,13 @@ class ValuationConfiguration(Mapping[str, float]):
 
 
 @dataclass(frozen=True, slots=True)
-class ComputeConfiguration:
-    schema_version: int = 1
-    chain_depth_cap: int = 16
-    chain_node_cap: int = 128
-    noise_tolerance: float = 1e-9
-    tie_seed: int = 1178
-    chance_sample_budget: int = 24
-    chance_seed: int = 582
-
-    def __post_init__(self):
-        if self.schema_version <= 0:
-            raise ValueError("compute schema version must be positive")
-        if (self.chain_depth_cap <= 0 or self.chain_node_cap <= 0
-                or self.chance_sample_budget <= 0):
-            raise ValueError("compute caps must be positive")
-        _finite("noise_tolerance", self.noise_tolerance)
-        if self.noise_tolerance <= 0:
-            raise ValueError("noise tolerance must be positive")
-
-    @property
-    def identity(self) -> str:
-        payload = {field.name: getattr(self, field.name) for field in fields(self)}
-        blob = json.dumps(payload, sort_keys=True).encode("utf-8")
-        return hashlib.blake2b(blob, digest_size=8).hexdigest()
-
-
-@dataclass(frozen=True, slots=True)
 class BehaviorIdentity:
-    valuation: str
+    evaluator: str
+    evaluation_model: str
+    search: str
+    policy_model: str
+    decision_policy: str
+    provider: str
     compute: str
     prize_plan: str
 

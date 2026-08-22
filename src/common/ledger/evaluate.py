@@ -14,8 +14,8 @@ from .prizes import PrizeMap, derive_prize_map
 from .worth import (Demand, DemandState, EvaluationModel, _liveness, _unfilled,
                     any_attack_payable,
                     development_reach_units,
-                    legal_line_reach, line_reach, opponent_line_reach, best_payable_damage,
-                    usable_units)
+                    legal_line_reach, line_reach, opponent_evaluation,
+                    opponent_line_reach, best_payable_damage, usable_units)
 
 
 @dataclass(frozen=True)
@@ -82,13 +82,16 @@ class _Trace:
 
 def evaluate(board: ObservationState, ctx: EvaluationModel) -> Valuation:
     trace = _Trace(ctx)
-    _opponent_traits(trace, ctx, board)
+    opponent = opponent_evaluation(board, ctx)
+    if opponent is not None:
+        trace.gaps.extend(opponent.failures)
+    _opponent_traits(trace, ctx, board, opponent)
     result = board.turn.result
     if isinstance(result, int) and not isinstance(result, bool) and result >= 0 and result != 2:
         trace.add("result", "result.win", 1.0 if result == board.seat else -1.0)
 
     for label, side, sign in (("me", board.me, 1.0), ("them", board.them, -1.0)):
-        _side(trace, label, side, sign, ctx, board,
+        _side(trace, label, side, sign, ctx, board, opponent,
               deck_counts=board.deck_counts if sign > 0 else None)
 
     trace.add("prize_race", "prize.race",
@@ -100,10 +103,11 @@ def evaluate(board: ObservationState, ctx: EvaluationModel) -> Valuation:
                      result.contributions, prize_map)
 
 
-def _opponent_traits(trace: _Trace, ctx: EvaluationModel, board: ObservationState) -> None:
-    if ctx.opponent is None:
+def _opponent_traits(trace: _Trace, ctx: EvaluationModel, board: ObservationState,
+                     opponent) -> None:
+    if opponent is None:
         return
-    for candidate in ctx.opponent.candidates:
+    for candidate in opponent.candidates:
         for trait in candidate.traits:
             if trait.value is False:
                 continue
@@ -119,7 +123,7 @@ def _opponent_traits(trace: _Trace, ctx: EvaluationModel, board: ObservationStat
                 "opponent.mechanics", f"mechanic.{mechanic.name}",
                 candidate.probability * mechanic.probability * context,
                 provenance=f"cards:{candidate.archetype or 'anonymous'}:{mechanic.name}")
-    trace.add("opponent.beliefs", "belief.unknown_archetype", ctx.opponent.unknown_mass)
+    trace.add("opponent.beliefs", "belief.unknown_archetype", opponent.unknown_mass)
 
 
 def _trait_context(name: str, board: ObservationState, ctx: EvaluationModel,
@@ -189,21 +193,22 @@ def _mechanic_context(name: str, board: ObservationState, ctx: EvaluationModel) 
 
 
 def _side(trace: _Trace, label: str, side: Side, sign: float, ctx: EvaluationModel,
-          board: ObservationState, *, deck_counts) -> None:
+          board: ObservationState, opponent, *, deck_counts) -> None:
     doomed = _active_doomed(board.them if sign > 0 else board.me, side, ctx)
     demand = Demand.read(side, ctx, board.turn)
     reach = (line_reach(
         demand.hand_name_counts, deck_counts, ctx, hand=demand.hand, turn=board.turn)
-        if sign > 0 else opponent_line_reach(ctx))
+        if sign > 0 else opponent_line_reach(ctx, opponent))
     seen: dict[int, int] = {}
     for body in side.bodies:
         body_reach = legal_line_reach(body, reach, ctx, demand.hand, board.turn)
         _body(trace, f"{label}.bodies", body, sign, ctx, own=sign > 0,
               active=body is side.active, doomed=doomed and body is side.active,
-              reach=body_reach)
-        opponent = board.them if sign > 0 else board.me
+              reach=body_reach, opponent=opponent)
+        opposing_side = board.them if sign > 0 else board.me
         _situational_functions(
-            trace, f"{label}.bodies", ctx.facts(body.card.card_id), side, opponent, demand, ctx,
+            trace, f"{label}.bodies", ctx.facts(body.card.card_id), side, opposing_side,
+            demand, ctx,
             deck_counts, sign=sign)
         copies = seen.get(body.card.card_id, 0)
         if copies:
@@ -245,7 +250,7 @@ def _side(trace: _Trace, label: str, side: Side, sign: float, ctx: EvaluationMod
                 "copy.surplus": "in_hand_surplus",
             }[feature]
             _card(trace, f"{label}.hand", card.card_id, facts, sign, ctx, own=True,
-                  placement=placement)
+                  placement=placement, opponent=opponent)
             _situational_functions(
                 trace, f"{label}.hand", facts, side, board.them, demand, ctx,
                 deck_counts, sign=sign)
@@ -263,7 +268,7 @@ def _side(trace: _Trace, label: str, side: Side, sign: float, ctx: EvaluationMod
         for card_id, count in deck_counts:
             facts = ctx.facts(card_id)
             _card(trace, f"{label}.deck", card_id, facts, sign * count, ctx, own=True,
-                  placement="in_deck")
+                  placement="in_deck", opponent=opponent)
             trace.add(f"{label}.deck", "zone.in_deck", sign * count)
     else:
         unknown = ("belief.unknown_deck_card" if sign > 0
@@ -272,8 +277,8 @@ def _side(trace: _Trace, label: str, side: Side, sign: float, ctx: EvaluationMod
         trace.add(f"{label}.deck", "zone.in_deck", sign * side.deck_count)
 
     for card in side.discard:
-        _card(trace, f"{label}.discard", card.card_id, ctx.facts(card.card_id), sign, ctx, own=sign > 0,
-              placement="in_discard")
+        _card(trace, f"{label}.discard", card.card_id, ctx.facts(card.card_id), sign, ctx,
+              own=sign > 0, placement="in_discard", opponent=opponent)
         trace.add(f"{label}.discard", "zone.in_discard", sign)
 
     for status in ("asleep", "paralyzed", "confused", "poisoned", "burned"):
@@ -282,10 +287,10 @@ def _side(trace: _Trace, label: str, side: Side, sign: float, ctx: EvaluationMod
 
 
 def _body(trace: _Trace, part: str, body: Body, sign: float, ctx: EvaluationModel, *,
-          own: bool, active: bool, doomed: bool, reach) -> None:
+          own: bool, active: bool, doomed: bool, reach, opponent) -> None:
     body_facts = ctx.facts(body.card.card_id)
     _card(trace, part, body.card.card_id, body_facts, sign, ctx, own=own,
-          placement="in_play")
+          placement="in_play", opponent=opponent)
     trace.add(part, "zone.in_play", sign)
     trace.add(part, "body.hp_per_100", sign * body.max_hp / 100.0)
     missing = 0.0
@@ -310,7 +315,8 @@ def _body(trace: _Trace, part: str, body: Body, sign: float, ctx: EvaluationMode
             rentals += 1
             continue
         _card(trace, part, card.card_id, facts, sign, ctx, own=own,
-              placement="attached_usable", interaction_amount=interaction_amount)
+              placement="attached_usable", interaction_amount=interaction_amount,
+              opponent=opponent)
     if body.energies and not body.energy_cards:
         trace.add(part, "kind.energy", sign * len(body.energies))
     usable = max(0, usable - rentals)
@@ -323,31 +329,31 @@ def _body(trace: _Trace, part: str, body: Body, sign: float, ctx: EvaluationMode
 
     for card in body.tools:
         _card(trace, part, card.card_id, ctx.facts(card.card_id), sign, ctx, own=own,
-              placement="tool_attached")
+              placement="tool_attached", opponent=opponent)
         trace.add(part, "zone.tool_attached", sign)
     for card in body.pre_evolution:
         _card(trace, part, card.card_id, ctx.facts(card.card_id), sign, ctx, own=own,
-              placement="under_body")
+              placement="under_body", opponent=opponent)
         trace.add(part, "zone.under_body", sign)
 
 
 def _card(trace: _Trace, part: str, card_id: int, facts, amount: float,
           ctx: EvaluationModel, *, own: bool, placement: str,
-          interaction_amount: float | None = None) -> None:
+          interaction_amount: float | None = None, opponent=None) -> None:
     situated = amount if interaction_amount is None else interaction_amount
     declared = ctx.card_roles(card_id) if own else ()
     roles = set(declared or getattr(facts, "default_roles", ()) or ())
     expected: dict[str, float] = {role: 1.0 for role in roles}
-    if not own and ctx.opponent is not None:
-        observed = set(ctx.opponent.observed_roles.get(int(card_id), ()))
+    if not own and opponent is not None:
+        observed = set(opponent.observed_roles.get(int(card_id), ()))
         for role in observed:
             expected[role] = 1.0
     for role, probability in expected.items():
         trace.add(part, f"role.{role}", amount * probability)
         trace.add(part, f"interaction.role.{role}.{placement}", situated * probability)
-    if not own and ctx.opponent is not None:
-        observed = set(ctx.opponent.observed_roles.get(int(card_id), ()))
-        for candidate in ctx.opponent.candidates:
+    if not own and opponent is not None:
+        observed = set(opponent.observed_roles.get(int(card_id), ()))
+        for candidate in opponent.candidates:
             for role in candidate.roles.get(int(card_id), ()):
                 if role not in observed and role not in roles:
                     trace.add(

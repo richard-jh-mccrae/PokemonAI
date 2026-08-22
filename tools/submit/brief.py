@@ -9,6 +9,7 @@ import json
 import sys
 from collections import Counter
 from datetime import datetime
+from dataclasses import asdict
 from pathlib import Path
 
 from submit.package import REPO, _git_hash, artifact_stem
@@ -85,6 +86,7 @@ def build_manifest(agent_dir, *, when=None, git_hash=None, agent_name=None, card
     cards = _card_index() if cards is None else cards
     deck = _deck(agent_dir, cards)
     deck_ids = tuple(card["id"] for card in deck["cards"] for _ in range(card["count"]))
+    compute = ComputeConfiguration()
     return {
         "schema_version": 9,
         "provenance": {
@@ -98,10 +100,10 @@ def build_manifest(agent_dir, *, when=None, git_hash=None, agent_name=None, card
         "strategy": _strategy(strategy, deck_ids),
         "valuation_configuration": _ledger_configuration(strategy),
         "compute_configuration": {
-            "identity": ComputeConfiguration().identity,
-            **{field: getattr(ComputeConfiguration(), field) for field in (
-                "schema_version", "chain_depth_cap", "chain_node_cap", "noise_tolerance",
-                "tie_seed", "chance_sample_budget", "chance_seed")},
+            "identity": compute.identity,
+            "schema_version": compute.schema_version,
+            "search": {"identity": compute.search.identity, **asdict(compute.search)},
+            "policy": {"identity": compute.policy.identity, **asdict(compute.policy)},
         },
         "safety_bounds": {
             "callback_watchdog_seconds": {

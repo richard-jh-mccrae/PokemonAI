@@ -50,9 +50,74 @@ class KnownAttackLocks:
 
 
 @dataclass(frozen=True, slots=True)
+class OpponentCandidatePosterior:
+    archetype: str
+    probability: str
+
+
+@dataclass(frozen=True, slots=True)
+class OpponentDecisionEvidence:
+    snapshot_identity: str
+    candidates: tuple[OpponentCandidatePosterior, ...]
+    observed_roles: tuple[tuple[int, tuple[str, ...]], ...]
+    unknown_mass: str
+    failures: tuple[tuple[str, str], ...] = ()
+    public_events: tuple[tuple[object, tuple, bool], ...] = ()
+
+    @property
+    def identity(self) -> tuple:
+        return (
+            self.snapshot_identity,
+            tuple((item.archetype, item.probability) for item in self.candidates),
+            self.observed_roles,
+            self.unknown_mass,
+            self.failures,
+            self.public_events,
+        )
+
+
+@dataclass(frozen=True, slots=True)
 class OpponentBelief:
     evidence: tuple[tuple[str, object], ...] = ()
     probabilities: tuple[tuple[int, int], ...] = ()
+    decision_evidence: OpponentDecisionEvidence | None = None
+
+    @classmethod
+    def from_snapshot(cls, snapshot) -> "OpponentBelief":
+        scale = PROBABILITY_SCALE
+        card_ids = {card_id for candidate in snapshot.candidates
+                    for card_id in candidate.resources}
+        expected = tuple((card_id, round(sum(
+            candidate.probability * candidate.resources.get(card_id, 0.0)
+            for candidate in snapshot.candidates) * scale))
+                         for card_id in sorted(card_ids))
+        observed_roles = tuple((int(card_id), tuple(roles))
+                               for card_id, roles in getattr(
+                                   snapshot, "observed_roles", {}).items())
+        archetypes = tuple((candidate.archetype, round(candidate.probability * scale))
+                           for candidate in snapshot.candidates)
+        posterior = tuple(OpponentCandidatePosterior(
+            candidate.archetype, repr(candidate.probability))
+            for candidate in snapshot.candidates)
+        decision_evidence = OpponentDecisionEvidence(
+            snapshot.identity,
+            posterior,
+            observed_roles,
+            repr(snapshot.unknown_mass),
+            tuple((item.subsystem.value, item.error)
+                  for item in getattr(snapshot, "failures", ())),
+            tuple((event.kind, event.public_fields, event.recognized)
+                  for event in getattr(getattr(snapshot, "evidence", None),
+                                       "events", ())),
+        )
+        return cls(
+            evidence=(
+                ("snapshot", snapshot.identity),
+                ("archetypes", archetypes),
+            ),
+            probabilities=expected,
+            decision_evidence=decision_evidence,
+        )
 
     def __post_init__(self):
         evidence = tuple(sorted((str(key), _freeze(value)) for key, value in self.evidence))
@@ -62,6 +127,9 @@ class OpponentBelief:
             raise ValueError("duplicate opponent belief card")
         if any(value < 0 or value > PROBABILITY_SCALE for _card_id, value in probabilities):
             raise ValueError("belief probability outside fixed-point range")
+        if (self.decision_evidence is not None
+                and not isinstance(self.decision_evidence, OpponentDecisionEvidence)):
+            raise TypeError("decision_evidence must be OpponentDecisionEvidence")
         object.__setattr__(self, "evidence", evidence)
         object.__setattr__(self, "probabilities", probabilities)
 
@@ -115,5 +183,6 @@ class TransitionTrace:
 
 
 __all__ = ("KnownAttackLocks", "KnownDeckTop", "KnownOwnPrizes", "LegalKnowledge",
-           "OpponentBelief", "PROBABILITY_SCALE", "TransitionTrace", "UnknownAttackLocks",
+           "OpponentBelief", "OpponentCandidatePosterior", "OpponentDecisionEvidence",
+           "PROBABILITY_SCALE", "TransitionTrace", "UnknownAttackLocks",
            "UnknownDeckTop", "UnknownOwnPrizes", "reduce_knowledge")

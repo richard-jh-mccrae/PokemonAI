@@ -5,8 +5,9 @@ import pytest
 
 from ledger_helpers import DRAGAPULT, body, player, printout
 
-from common.observation import ObservationStateBuilder
-from common.ledger import DeckOverlay, EvaluationModel, evaluate
+from common.observation import LegalKnowledge, ObservationStateBuilder, OpponentBelief
+from common.ledger import (DeckOverlay, EvaluationModel, evaluate,
+                           opponent_profiles_from_snapshot)
 from common.opponent import ArchetypeBelief, OpponentEvidence, OpponentSnapshot
 
 UNKNOWN_ID = 424242
@@ -22,6 +23,11 @@ def _snapshot(*, observed_roles=None, candidates=(), unknown_mass=1.0):
         OpponentEvidence.from_state(state), observed_roles or {}, candidates, unknown_mass)
 
 
+def _board(observation, snapshot):
+    knowledge = LegalKnowledge(opponent=OpponentBelief.from_snapshot(snapshot))
+    return ObservationStateBuilder().root(observation, knowledge=knowledge)
+
+
 def test_observed_claims_activate_fully_and_candidates_by_probability():
     beliefs = _snapshot(
         observed_roles={UNKNOWN_ID: ("support_pokemon",)},
@@ -29,9 +35,10 @@ def test_observed_claims_activate_fully_and_candidates_by_probability():
             0.5, {UNKNOWN_ID: ("primary_attacker",)}, archetype="candidate"),),
         unknown_mass=0.5,
     )
-    context = EvaluationModel.build().with_opponent(beliefs)
-    valuation = evaluate(ObservationStateBuilder().root(printout(
-        them=player(own=False, active=body(UNKNOWN_ID, 1)))), context)
+    context = EvaluationModel.build(
+        opponent_profiles=opponent_profiles_from_snapshot(beliefs))
+    valuation = evaluate(_board(printout(
+        them=player(own=False, active=body(UNKNOWN_ID, 1))), beliefs), context)
 
     assert _activation(valuation, "role.support_pokemon") == -1.0
     assert _activation(valuation, "role.primary_attacker") == -0.5
@@ -46,9 +53,10 @@ def test_opponent_evidence_cannot_change_valuation_coefficients():
         unknown_mass=0.0,
     )
     context = EvaluationModel.build(
-        overlay=DeckOverlay({"role.primary_attacker": 0.4})).with_opponent(beliefs)
-    valuation = evaluate(ObservationStateBuilder().root(printout(
-        them=player(own=False, active=body(UNKNOWN_ID, 1)))), context)
+        overlay=DeckOverlay({"role.primary_attacker": 0.4}),
+        opponent_profiles=opponent_profiles_from_snapshot(beliefs))
+    valuation = evaluate(_board(printout(
+        them=player(own=False, active=body(UNKNOWN_ID, 1))), beliefs), context)
     contribution = next(item for item in valuation.contributions
                         if item.feature == "role.primary_attacker")
 
@@ -81,8 +89,20 @@ def test_opponent_development_reach_is_candidate_resource_conditioned():
     absent = evaluate(board, EvaluationModel.build())
     beliefs = _snapshot(candidates=(ArchetypeBelief(
         1.0, archetype="starmie", resources={1031: 1.0}),), unknown_mass=0.0)
-    expected = evaluate(board, EvaluationModel.build().with_opponent(beliefs))
+    expected_board = _board(printout(
+        them=player(own=False, active=body(1030, 1, energies=(3,)))), beliefs)
+    expected = evaluate(expected_board, EvaluationModel.build(
+        opponent_profiles=opponent_profiles_from_snapshot(beliefs)))
 
     assert not any(item.feature == "development.next_turn_reach"
                    for item in absent.activations)
     assert _activation(expected, "development.next_turn_reach") < 0
+
+
+def test_missing_static_opponent_profile_is_explicitly_estimated():
+    beliefs = _snapshot(candidates=(ArchetypeBelief(
+        1.0, archetype="missing-profile"),), unknown_mass=0.0)
+
+    valuation = evaluate(_board(printout(), beliefs), EvaluationModel.build())
+
+    assert "missing opponent profile: missing-profile" in valuation.gaps
