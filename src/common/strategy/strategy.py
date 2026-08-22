@@ -1,6 +1,8 @@
 """Deck declarations consumed by the live Ledger runtime."""
 from __future__ import annotations
 
+import hashlib
+import json
 from dataclasses import dataclass, field
 
 from common.cards import card_store
@@ -37,6 +39,12 @@ class PrizePlan:
     def __post_init__(self) -> None:
         object.__setattr__(self, "protect", _selectors(self.protect))
         object.__setattr__(self, "offer", _selectors(self.offer))
+
+    @property
+    def identity(self) -> str:
+        payload = {"protect": self.protect, "offer": self.offer}
+        return hashlib.blake2b(
+            json.dumps(payload, sort_keys=True).encode("utf-8"), digest_size=8).hexdigest()
 
 
 class Roles(dict):

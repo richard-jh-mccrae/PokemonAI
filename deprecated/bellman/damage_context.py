@@ -115,3 +115,4 @@ def damage_context(attacker: SideFacts, defender: SideFacts) -> dict:
 
 
 __all__ = ("SideFacts", "bench_gate_context", "damage_context")
+

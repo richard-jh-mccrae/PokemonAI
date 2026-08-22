@@ -6,4 +6,5 @@ effort would confound valuation comparisons, tuning results, and runtime-cost gu
 
 Compute Configuration has its own canonical identity because changing a cap or sample can change a ruling even when all
 preferences remain fixed. Each decision records a Behavior Identity pairing the resolved valuation identity with the
-compute identity. Strategic thresholds are excluded from compute and must instead be decomposed Valuation Features.
+compute and Prize Plan identities. Strategic thresholds are excluded from compute and must instead be decomposed
+Valuation Features.

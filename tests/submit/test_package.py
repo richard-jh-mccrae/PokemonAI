@@ -78,7 +78,7 @@ def test_package_contains_the_ledger_and_no_bellman_search(tmp_path):
         for retired in ("common/planner.py", "common/solver.py", "common/demand.py",
                         "common/potential.py", "common/value.py", "common/value_equations.py",
                         "common/pilot_profile.py", "common/terminal.py", "common/engine.py",
-                        "common/state.py"):
+                        "common/state.py", "common/cards/functions/damage_context.py"):
             assert retired not in names, retired
         assert any(name.startswith("cg/") for name in names)
         assert "brief.html" in names and "brief.csv" in names

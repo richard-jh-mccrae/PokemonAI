@@ -43,8 +43,10 @@ def _average(samples, gaps):
     contributions = tuple(FeatureContribution(
         item.feature, item.value, coefficients[item.feature],
         item.value * coefficients[item.feature], item.provenance) for item in averaged)
+    prize_maps = {valuation.prize_map for valuation in valuations}
+    prize_map = next(iter(prize_maps)) if len(prize_maps) == 1 else None
     result = Valuation(sum(item.value for item in contributions), (), tuple(gaps),
-                       averaged, contributions)
+                       averaged, contributions, prize_map)
     return result, tuple(gaps)
 
 

@@ -64,7 +64,8 @@ class EvaluationModel:
 
     @property
     def behavior_identity(self) -> BehaviorIdentity:
-        return BehaviorIdentity(self.configuration.identity, self.compute.identity)
+        return BehaviorIdentity(
+            self.configuration.identity, self.compute.identity, self.prize_plan.identity)
 
     def with_opponent(self, layer: OpponentSnapshot | None) -> "EvaluationModel":
         return self if layer is self.opponent else replace(self, opponent=layer)

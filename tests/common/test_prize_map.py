@@ -3,7 +3,9 @@ from types import SimpleNamespace
 from ledger_helpers import ScriptedProvider, action, body, player, printout
 
 from common.algebra import Deterministic
-from common.ledger import ValuationConfiguration
+from common.ledger import PrizeMap, ValuationConfiguration
+from common.ledger.chance import _average
+from common.ledger.evaluate import Valuation
 from common.runtime import AgentRuntime
 from common.strategy import PrizePlan, Roles, Strategy
 from deprecated.bellman.state import DecisionState
@@ -61,6 +63,14 @@ def test_runtime_prefers_forcing_the_opponent_to_overrun_its_last_three_prizes(m
         "remaining": 3, "route": [CINDERACE, MEGA_STARMIE],
         "printed_prizes": 4, "overrun": 1,
     }
+    assert decision.diagnostics["prize_plan"] == strategy.prize_plan.identity
+    activations = {
+        item["feature"]: item["activation"]
+        for row in decision.diagnostics["prices"]
+        if row["action"] == str(offer.identity)
+        for item in row["continuation"]["contributions"]
+    }
+    assert activations["prize.race"] == 1.0
 
 
 def test_prize_plan_breaks_only_an_equal_structural_tie(monkeypatch):
@@ -130,3 +140,13 @@ def test_prize_plan_cannot_override_superior_ledger_value(monkeypatch):
         them=player(own=False, prizes=3), select=select)
 
     assert runtime.decide(root).action == fund.identity
+
+
+def test_refresh_average_preserves_a_prize_map_shared_by_every_sample():
+    prize_map = PrizeMap(3, (CINDERACE, MEGA_STARMIE), 4, 1, (1,))
+    valuation = Valuation(1.0, (), (), prize_map=prize_map)
+
+    averaged, _gaps = _average(((valuation, object(), object()),
+                                (valuation, object(), object())), ())
+
+    assert averaged.prize_map == prize_map

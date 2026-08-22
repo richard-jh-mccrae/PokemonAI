@@ -78,6 +78,7 @@ class LedgerDecider:
                 "backend": "ledger", "deck": self.deck_name,
                 "valuation": self.ctx.configuration.identity,
                 "compute": self.ctx.compute.identity,
+                "prize_plan": self.ctx.prize_plan.identity,
                 "position_key": board.position_key,
                 "decision_key": board.decision_key,
                 "prize_map": (chosen.prize_map.as_dict()
@@ -134,9 +135,10 @@ class LedgerDecider:
             best = max(price.swing for _index, price in remaining)
             tied = [(index, price) for index, price in remaining
                     if best - price.swing <= tolerance]
+            exact = all(price.swing == best for _index, price in tied)
             tied.sort(key=lambda indexed: (
-                tuple(-value for value in (indexed[1].prize_map.preference
-                                           if indexed[1].prize_map is not None else ())),
+                (indexed[1].prize_map.plan_rank_key()
+                 if exact and indexed[1].prize_map is not None else ()),
                 hashlib.blake2b(f"{seed}:{indexed[0]}".encode("utf-8"),
                                 digest_size=8).digest()))
             ranked.extend(price for _index, price in tied)

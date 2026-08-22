@@ -15,6 +15,9 @@ class PrizeMap:
     overrun: int
     preference: tuple[int, ...] = field(default=(), repr=False)
 
+    def plan_rank_key(self) -> tuple[int, ...]:
+        return tuple(-value for value in self.preference)
+
     def as_dict(self) -> dict:
         return {
             "remaining": self.remaining,

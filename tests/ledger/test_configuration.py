@@ -15,6 +15,7 @@ from common.ledger.worth import _compile_forward_lines, usable_units
 from common.opponent import (
     ArchetypeBelief, OpponentEvidence, OpponentMechanic, OpponentSnapshot, OpponentTrait,
 )
+from common.strategy import PrizePlan
 from common.observation import ObservationStateBuilder
 from ledger_helpers import ULTRA_BALL, body, player, printout
 from common.ledger import evaluate
@@ -60,10 +61,19 @@ def test_behavior_identity_pairs_valuation_with_a_separate_compute_profile():
     faster = EvaluationModel.build(compute=replace(context.compute, chain_node_cap=64))
 
     assert context.behavior_identity == BehaviorIdentity(
-        context.configuration.identity, context.compute.identity)
+        context.configuration.identity, context.compute.identity, PrizePlan().identity)
     assert faster.configuration.identity == context.configuration.identity
     assert faster.compute.identity != context.compute.identity
     assert faster.behavior_identity != context.behavior_identity
+
+
+def test_behavior_identity_includes_the_effective_prize_plan():
+    general = EvaluationModel.build(prize_plan=PrizePlan())
+    offered = EvaluationModel.build(prize_plan=PrizePlan(offer=(666,)))
+
+    assert offered.configuration.identity == general.configuration.identity
+    assert offered.compute.identity == general.compute.identity
+    assert offered.behavior_identity != general.behavior_identity
 
 
 def test_catalog_contains_the_complete_generic_surface_without_tags_or_card_pins():

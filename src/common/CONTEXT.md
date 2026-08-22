@@ -73,7 +73,7 @@ The versioned limits, sampling controls, and tolerances bounding Ledger work.
 _Avoid_: Valuation weight, policy preference
 
 **Behavior Identity**:
-The resolved Valuation Configuration and Compute Configuration identities recorded together.
+The resolved Valuation Configuration, Compute Configuration, and Prize Plan identities recorded together.
 _Avoid_: Weights-only hash, deck name
 
 **Indifference Set**:
