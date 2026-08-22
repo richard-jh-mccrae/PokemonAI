@@ -19,7 +19,7 @@ def test_successful_check_always_reaches_upload_then_records_history(tmp_path):
         "agent": "mega_starmie",
         "artifact": artifact,
         "git_hash": "36d885f2",
-        "summary": {"roles": 2, "lines": 1, "scouting": False},
+        "summary": {"roles": 2, "prize_selectors": 2, "scouting": False},
     }) + "\n")
     history = tmp_path / "agent_history.jsonl"
     checked, uploaded = [], []
@@ -52,7 +52,7 @@ def test_failed_check_reports_stage_reason_and_upload_status(tmp_path):
         "agent": "mega_starmie",
         "artifact": "failed",
         "git_hash": "clean",
-        "summary": {"roles": 2, "lines": 1, "scouting": False},
+        "summary": {"roles": 2, "prize_selectors": 2, "scouting": False},
     }) + "\n")
 
     def failed_check(agent, agents_root):

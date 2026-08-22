@@ -50,22 +50,14 @@ def _deck(agent_dir: Path, cards: dict | None = None) -> dict:
 def _strategy(strategy, deck) -> dict:
     resolved_roles = strategy.roles.resolve(deck)
     roles = {str(card_id): list(names) for card_id, names in sorted(resolved_roles.items())}
-    lines = [{"path": list(line.path), "payoff": line.payoff, "role": line.role,
-              "ready": {"energy": line.ready.energy}}
-             for line in resolved_roles.lines]
-    prize_plan = None if strategy.prize_plan is None else {
-        "routes": [list(route) for route in strategy.prize_plan.routes],
-        "prizes_to_win": strategy.prize_plan.prizes_to_win,
+    prize_plan = {
+        "protect": list(strategy.prize_plan.protect),
+        "offer": list(strategy.prize_plan.offer),
     }
     return {
         "name": strategy.name,
         "roles": roles,
-        "lines": lines,
         "starter_priority": list(strategy.starter_priority),
-        "partners": {str(card_id): list(partners)
-                     for card_id, partners in sorted(strategy.partners.items())},
-        "worth_overrides": {str(card_id): value
-                            for card_id, value in sorted(strategy.worth_overrides.items())},
         "prize_plan": prize_plan,
         "params": dict(strategy.params),
     }
@@ -94,7 +86,7 @@ def build_manifest(agent_dir, *, when=None, git_hash=None, agent_name=None, card
     deck = _deck(agent_dir, cards)
     deck_ids = tuple(card["id"] for card in deck["cards"] for _ in range(card["count"]))
     return {
-        "schema_version": 8,
+        "schema_version": 9,
         "provenance": {
             "agent": agent_name,
             "built_at": when.isoformat(timespec="seconds"),

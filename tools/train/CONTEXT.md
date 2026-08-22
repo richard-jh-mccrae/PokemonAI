@@ -15,3 +15,10 @@ as its frozen acceptance evidence (ADR-0149).
   Valuation Configuration; every trial lands in `docs/tuning/runs/`.
 
 Deck behavior changes in shared runtime code or declarative deck Roles, not generated `tuned.json`.
+
+## Language
+
+**Off-policy Correction**:
+A Correction whose observed decision would not exist after an already-adjudicated correct
+predecessor, so it cannot grade the live policy.
+_Avoid_: Refuted Correction, wrong ruling

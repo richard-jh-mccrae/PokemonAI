@@ -10,6 +10,7 @@ from common.cards import card_clauses
 from common.cards.card_facts import EnergyCard, PokemonCard
 
 from .features import FEATURE_CATALOG
+from .prizes import PrizeMap, derive_prize_map
 from .worth import (Demand, DemandState, EvaluationModel, _liveness, _unfilled,
                     any_attack_payable,
                     development_reach_units,
@@ -40,6 +41,7 @@ class Valuation:
     gaps: tuple[str, ...]
     activations: tuple[FeatureActivation, ...] = ()
     contributions: tuple[FeatureContribution, ...] = ()
+    prize_map: PrizeMap | None = None
 
     def part(self, name: str) -> float:
         return next((value for label, value in self.parts if label == name), 0.0)
@@ -91,7 +93,11 @@ def evaluate(board: ObservationState, ctx: EvaluationModel) -> Valuation:
 
     trace.add("prize_race", "prize.race",
               board.them.prize_count - board.me.prize_count)
-    return trace.finish()
+    prize_map = derive_prize_map(board, ctx)
+    trace.add("prize_map", "prize.race", prize_map.overrun)
+    result = trace.finish()
+    return Valuation(result.total, result.parts, result.gaps, result.activations,
+                     result.contributions, prize_map)
 
 
 def _opponent_traits(trace: _Trace, ctx: EvaluationModel, board: ObservationState) -> None:

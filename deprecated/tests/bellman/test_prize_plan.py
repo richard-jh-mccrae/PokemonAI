@@ -3,7 +3,8 @@ from __future__ import annotations
 from types import SimpleNamespace
 
 from deprecated.bellman import BellmanDeckProfile, BoardPotential, CardFacts, ValueRegistry
-from common.strategy import PrizePlan, Strategy
+from deprecated.bellman.declarations import BellmanDeclarations
+from common.strategy import Strategy
 
 
 CINDERACE, STARYU, MEGA_STARMIE = 666, 1030, 1031
@@ -75,17 +76,18 @@ def test_prize_plan_counts_a_directly_held_body_needed_by_the_remaining_route():
 
 
 def test_strategy_prize_plan_reaches_the_bellman_deck_profile():
-    strategy = Strategy(prize_plan=PrizePlan(routes=(
-        (CINDERACE, MEGA_STARMIE, MEGA_STARMIE),
-        (MEGA_STARMIE, CINDERACE, MEGA_STARMIE),
-    )))
+    strategy = Strategy()
+    declarations = BellmanDeclarations(
+        prize_routes=((CINDERACE, MEGA_STARMIE, MEGA_STARMIE),
+                      (MEGA_STARMIE, CINDERACE, MEGA_STARMIE)),
+        prizes_to_win=6)
     registry = ValueRegistry.from_strategy(
         strategy=strategy, functions=None,
-        deck=(CINDERACE, STARYU, MEGA_STARMIE))
+        deck=(CINDERACE, STARYU, MEGA_STARMIE), declarations=declarations)
 
     profile = BellmanDeckProfile.from_registry(registry)
-    assert profile.prize_routes == strategy.prize_plan.routes
-    assert profile.prizes_to_win == strategy.prize_plan.prizes_to_win
+    assert profile.prize_routes == declarations.prize_routes
+    assert profile.prizes_to_win == declarations.prizes_to_win
 
 
 def test_declared_engine_partner_controls_board_resource_value():

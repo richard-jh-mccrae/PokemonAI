@@ -1,7 +1,72 @@
 {
-  "_note": "Corrections already reviewed in blunder-busting — excluded from fresh work in tune.py and /blunder-buster (so each round surfaces only NEW patterns). Hand-editable; append with tools/train/review_correction.py. Key = the Correction's ADR-0049 SCOPE SUBJECT, which is the id the reports print — decision: '<episode_id>-<frame>'; turn: '<episode_id>-t<turn>s<seat>'; match: '<episode_id>-m<seat>'. All three, not just the first: this note documented only the decision shape, so a turn-scoped record was ruled under its Anchor frame and the entry reached nothing (Issue #250). review_correction.py now RESOLVES what you give it against the corpus and refuses an unreachable one, and gates.orphan_rulings asserts empty over this file. disposition: 'refuted' (a bad correction, e.g. it forgoes a Knock Out — also dropped from the weight fit), 'deferred' (valid but needs new infrastructure), 'covered' (already handled by an existing rule). Keys starting with '_' are comments. NB keyed by decision (episode+frame), so a conflicting re-tag of the same decision is covered by one entry. DESIGN: this is a SET-ASIDES ledger — it lists ONLY corrections held off fresh work by human judgment. Corrections satisfied by a shipped rule, and tactical / no-obs skips, are handled automatically by the tuner and are intentionally NOT listed here — which is why this file stays small even after a whole build has been reviewed (see _reviewed_builds).",
+  "_note": "Corrections already reviewed in blunder-busting — excluded from fresh work in tune.py and /blunder-buster (so each round surfaces only NEW patterns). Hand-editable; append with tools/train/review_correction.py. Key = the Correction's ADR-0049 SCOPE SUBJECT, which is the id the reports print — decision: '<episode_id>-<frame>'; turn: '<episode_id>-t<turn>s<seat>'; match: '<episode_id>-m<seat>'. All three, not just the first: this note documented only the decision shape, so a turn-scoped record was ruled under its Anchor frame and the entry reached nothing (Issue #250). review_correction.py now RESOLVES what you give it against the corpus and refuses an unreachable one, and gates.orphan_rulings asserts empty over this file. disposition: 'refuted' (a bad correction, e.g. it forgoes a Knock Out — also dropped from the weight fit), 'deferred' (valid but needs new infrastructure), 'off-policy' (its observed decision disappears under a ruled predecessor), 'covered' (already handled by an existing rule). Keys starting with '_' are comments. NB keyed by decision (episode+frame), so a conflicting re-tag of the same decision is covered by one entry. DESIGN: this is a SET-ASIDES ledger — it lists ONLY corrections held off fresh work by human judgment. Corrections satisfied by a shipped rule, and tactical / no-obs skips, are handled automatically by the tuner and are intentionally NOT listed here — which is why this file stays small even after a whole build has been reviewed (see _reviewed_builds).",
   "_reviewed_builds": {
     "mega_starmie_20260625_bde590c": "fully reviewed 2026-06-28 — all 36 corrections processed: 7 set-asides listed below + 25 satisfied by shipped rules + 4 tactical skips (tuner-handled); 0 open. No other build has been reviewed yet."
+  },
+  "82224509-31": {
+    "disposition": "off-policy",
+    "reason": "Frame 29's ruled evolution changes the recipient set before this Energy-routing menu.",
+    "round": "2026-08-06"
+  },
+  "82224509-47": {
+    "disposition": "off-policy",
+    "reason": "Frame 46's ruled Boss's Orders moves the named Riolu out of this Bench-target menu.",
+    "round": "2026-08-06"
+  },
+  "82228640-9": {
+    "disposition": "off-policy",
+    "reason": "Frame 7 rules that this Ultra Ball should be saved, so its search menu never opens.",
+    "round": "2026-08-06"
+  },
+  "82749168-38": {
+    "disposition": "off-policy",
+    "reason": "Frame 29's ruled Nebula Beam line has no Bench-damage selection.",
+    "round": "2026-08-06"
+  },
+  "82753102-16": {
+    "disposition": "off-policy",
+    "reason": "Frame 9's ruled Pokegear play can change the Supporter hand this discard ruling ranks.",
+    "round": "2026-08-06"
+  },
+  "82754241-45": {
+    "disposition": "off-policy",
+    "reason": "Frame 41 rules Turbo Flare instead of Crushing Hammer, so this Bench-snipe menu never opens.",
+    "round": "2026-08-06"
+  },
+  "83661652-31": {
+    "disposition": "off-policy",
+    "reason": "Frame 29 rules that this Ultra Ball should be saved, so its search menu never opens.",
+    "round": "2026-08-06"
+  },
+  "83686860-18": {
+    "disposition": "off-policy",
+    "reason": "Frame 13 rules End instead of Lillie's Determination, so its discard menu never opens.",
+    "round": "2026-08-06"
+  },
+  "83966968-79": {
+    "disposition": "off-policy",
+    "reason": "Frame 78 rules Harlequin instead of Boss's Orders, so this switch menu never opens.",
+    "round": "2026-08-06"
+  },
+  "84071010-53": {
+    "disposition": "off-policy",
+    "reason": "Frame 41 already supplies the Solrock this ruling assumes is absent.",
+    "round": "2026-08-06"
+  },
+  "84889011-7": {
+    "disposition": "off-policy",
+    "reason": "The ruled line benches Riolu instead of playing the search that opens this menu.",
+    "round": "2026-08-06"
+  },
+  "84889011-12": {
+    "disposition": "off-policy",
+    "reason": "The turn diverges at frame 7 before this follow-up board can exist.",
+    "round": "2026-08-06"
+  },
+  "85045840-14": {
+    "disposition": "off-policy",
+    "reason": "Frame 12 rules that Ultra Ball should not be played, so its search menu never opens.",
+    "round": "2026-08-06"
   },
   "83037962-70": {
     "disposition": "covered",

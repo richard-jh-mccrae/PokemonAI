@@ -17,6 +17,7 @@ from common.cards.functions.energy import provision_units
 from common.cards.functions.fetch import DEADNESS, fetch_target_matches
 from common.cards.pokemon_roles import undeclared_pokemon_roles
 from common.opponent import OpponentSnapshot
+from common.strategy import PrizePlan
 
 from .configuration import (BehaviorIdentity, ComputeConfiguration, DeckOverlay,
                             ValuationConfiguration)
@@ -30,6 +31,7 @@ class EvaluationModel:
     compute: ComputeConfiguration
     roles: Mapping[int, tuple[str, ...]]
     store: Mapping[int, object] = field(repr=False)
+    prize_plan: PrizePlan = PrizePlan()
     #: Posterior beliefs used for the opponent side; None means unknown archetype.
     opponent: OpponentSnapshot | None = None
 
@@ -37,7 +39,8 @@ class EvaluationModel:
     def build(cls, *, roles: Mapping[int, tuple[str, ...]] | None = None,
               configuration: ValuationConfiguration | None = None,
               overlay: DeckOverlay | None = None,
-              compute: ComputeConfiguration | None = None) -> "EvaluationModel":
+              compute: ComputeConfiguration | None = None,
+              prize_plan: PrizePlan | None = None) -> "EvaluationModel":
         configured = (configuration or ValuationConfiguration.general()).resolve(
             overlay or DeckOverlay())
         merged = dict(pokemon_default_roles())
@@ -57,7 +60,7 @@ class EvaluationModel:
                 clauses.extend(attack.clauses)
             FUNCTION_CATALOG.compile(clauses)
         return cls(configuration=configured, compute=compute or ComputeConfiguration(), roles=merged,
-                   store=store)
+                   store=store, prize_plan=prize_plan or PrizePlan())
 
     @property
     def behavior_identity(self) -> BehaviorIdentity:

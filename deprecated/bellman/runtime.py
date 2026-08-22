@@ -20,6 +20,7 @@ from .belief import BellmanDeckProfile, opponent_belief
 from .budget_prototype import DecisionClock
 from .effects import CardEffects
 from .dragapult_potential import DragapultPotential
+from .declarations import bellman_declarations
 from .pilot_profile import PilotProfile
 from .planner import BellmanTurnPlanner
 from .potential import BoardPotential
@@ -95,39 +96,11 @@ def legacy_roles_resolve(declared: Roles, deck, stats, functions=None) -> Roles:
     """The pre-store resolution the teacher shipped with: stats-name evolution inference plus
     tag-inferred roles, deck declarations EXTENDING rather than replacing."""
     card_ids = tuple(sorted(set(int(card_id) for card_id in deck)))
-    names = {}
-    for card_id in card_ids:
-        stat = stats.get(card_id) if stats is not None else None
-        name = getattr(stat, "name", None)
-        if name:
-            names.setdefault(str(name), []).append(card_id)
-    evolves = dict(declared.evolves)
-    if not evolves:
-        for target in card_ids:
-            stat = stats.get(target) if stats is not None else None
-            parents = names.get(str(getattr(stat, "evolvesFrom", "")), ())
-            if len(parents) == 1:
-                evolves[int(parents[0])] = target
     cards = general_pokemon_roles(card_ids, stats)
     for card_id, card_roles in declared.items():
         resolved = cards.setdefault(int(card_id), [])
         resolved.extend(role for role in card_roles if role not in resolved)
-    relevant = {
-        card_id for card_id, card_roles in cards.items()
-        if any(role in card_roles for role in Roles._LINE_ROLE_PRIORITY)
-    }
-    changed = True
-    while changed:
-        changed = False
-        for source, target in evolves.items():
-            if target in relevant and source not in relevant:
-                relevant.add(source)
-                changed = True
-    evolves = {
-        source: target for source, target in evolves.items()
-        if source in relevant and target in relevant
-    }
-    return Roles(cards, evolves=evolves, ready=declared.ready)
+    return Roles(cards)
 
 
 #: Deck-specific potential subclasses, keyed by strategy name (Strategy.potential_factory
@@ -172,12 +145,13 @@ class BellmanTeacherRuntime(AgentRuntime):
         # re-resolve with the inference it shipped with before anything reads self.roles.
         self.roles = legacy_roles_resolve(strategy.roles, self.deck, self.stats, self.functions)
         self.potential_type = DECK_POTENTIALS.get(strategy.name, BoardPotential)
+        self.declarations = bellman_declarations(strategy.name)
         self.registry = ValueRegistry.from_strategy(
             strategy=self.strategy, functions=self.functions, deck=self.deck,
-            roles=self.roles)
+            roles=self.roles, declarations=self.declarations)
         self.profile = BellmanDeckProfile.from_registry(self.registry)
         experiment, experiment_path = _pilot_overlay()
-        pilot_overrides = dict(getattr(strategy, "pilot_overrides", {}))
+        pilot_overrides = dict(self.declarations.pilot_overrides)
         decision_seconds = os.environ.get("AGENT_DECISION_SECONDS")
         self.decision_clock = DecisionClock(float(decision_seconds)) \
             if decision_seconds is not None else None

@@ -12,6 +12,7 @@ from .card_worth import (
     ACE_SPEC_TIER, ATTACKER_LINE_BASE_TIER, ENERGY_TIER, FUNCTION_TIER, KNOWN_CARD_FLOOR,
     ROLE_TIER, TAG_TIER, role_value,
 )
+from .declarations import BellmanDeclarations
 
 from common.algebra import BellmanLedger
 from common.api import ActionIdentity
@@ -25,6 +26,34 @@ from .state import DecisionState
 
 WORTH_PER_PRIZE = 120.0
 MIN_EVOLUTION_LINE_LENGTH = 2
+
+
+def _deck_lines(card_ids, records, roles) -> tuple[tuple[int, ...], ...]:
+    pokemon = {card_id: records.get(card_id) for card_id in card_ids
+               if isinstance(records.get(card_id), PokemonCard)}
+    by_name: dict[str, tuple[int, ...]] = {}
+    for card_id, card in pokemon.items():
+        by_name[card.name] = (*by_name.get(card.name, ()), card_id)
+    children: dict[int, list[int]] = {}
+    for card_id, card in pokemon.items():
+        for parent in by_name.get(card.evolves_from or "", ()):
+            children.setdefault(parent, []).append(card_id)
+    child_ids = {card_id for values in children.values() for card_id in values}
+    lines = []
+
+    def walk(path):
+        next_ids = children.get(path[-1], ())
+        if not next_ids:
+            if len(path) >= MIN_EVOLUTION_LINE_LENGTH and any(role in roles.get(path[-1], ())
+                   for role in ("primary_attacker", "backup_attacker")):
+                lines.append(tuple(path))
+            return
+        for card_id in sorted(next_ids):
+            walk((*path, card_id))
+
+    for root in sorted(set(pokemon) - child_ids):
+        walk((root,))
+    return tuple(lines)
 
 
 def worth_to_prizes(worth: float) -> float:
@@ -142,7 +171,7 @@ class ValueRegistry:
 
     @classmethod
     def from_strategy(cls, *, strategy, functions, deck, roles=None,
-                      cards=None) -> "ValueRegistry":
+                      cards=None, declarations: BellmanDeclarations | None = None) -> "ValueRegistry":
         records = card_store() if cards is None else cards
         card_ids = set(int(card_id) for card_id in deck)
         roles = roles or getattr(strategy, "roles", {}) or {}
@@ -165,20 +194,18 @@ class ValueRegistry:
                 bench_damage=max((bench_reach(attack)
                                   for attack in getattr(card, "attacks", ()) or ()), default=0),
             )
-        declarations = tuple(line for line in getattr(roles, "lines", ()) if line.path)
-        lines = tuple(tuple(line.path) for line in declarations)
-        line_bases = tuple(line.path[0] for line in declarations
-                           if getattr(line, "role", "primary_attacker") == "primary_attacker")
+        lines = _deck_lines(card_ids, records, role_rows)
+        line_bases = tuple(line[0] for line in lines
+                           if "primary_attacker" in role_rows.get(line[-1], ()))
         line_pairs = tuple((line[0], line[-1]) for line in lines
                            if len(line) >= MIN_EVOLUTION_LINE_LENGTH)
-        prize_plan = getattr(strategy, "prize_plan", None)
+        declarations = declarations or BellmanDeclarations()
         return cls(roles=role_rows, functions=tags, facts=facts,
-                   overrides=getattr(strategy, "worth_overrides", {}) or {},
+                   overrides=declarations.worth_overrides,
                    line_bases=line_bases, line_pairs=line_pairs, lines=lines,
-                   partners=getattr(strategy, "partners", {}) or {},
-                   prize_routes=(getattr(prize_plan, "routes", ()) if prize_plan else ()),
-                   prizes_to_win=(getattr(prize_plan, "prizes_to_win", None)
-                                  if prize_plan else None))
+                   partners=declarations.partners,
+                   prize_routes=declarations.prize_routes,
+                   prizes_to_win=declarations.prizes_to_win)
 
     def worth(self, card_id: int) -> float:
         card_id = int(card_id)

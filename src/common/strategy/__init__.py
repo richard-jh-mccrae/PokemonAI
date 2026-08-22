@@ -1,7 +1,7 @@
 """Declarative deck inputs for the shared runtime."""
 
-from .strategy import Line, PrizePlan, Ready, Roles, Strategy
+from .strategy import PrizePlan, PrizeSelector, Roles, Strategy
 
 __all__ = [
-    "Line", "PrizePlan", "Ready", "Roles", "Strategy",
+    "PrizePlan", "PrizeSelector", "Roles", "Strategy",
 ]

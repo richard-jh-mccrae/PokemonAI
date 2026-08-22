@@ -147,6 +147,16 @@ _Avoid_: Generic value
 Own-deck doctrine that may add to or explicitly override General Strategies.
 _Avoid_: Card Role, hard-coded line
 
+**Prize Plan**:
+Deck doctrine naming stable preservation and sacrifice preferences without enumerating every
+possible knockout sequence.
+_Avoid_: Exhaustive route list
+
+**Prize Map**:
+The live, state-dependent projection of how the opponent can take its remaining prizes from our
+reachable bodies, including any forced prize overrun.
+_Avoid_: Static Prize Route, Prize Plan
+
 **Opponent Strategy**:
 Scouting doctrine activated by an **Archetype Belief**, including target and avoidance priorities.
 _Avoid_: Opponent Role, matchup value
@@ -196,8 +206,7 @@ Deck-local policy is data in `src/agents/<deck>/strategy.py`:
 
 - Pokémon Roles; evolution relationships are derived from card facts;
 - starter priority and preferred first/second turn;
-- partner dependencies;
-- prize routes;
+- sparse Prize Plan preservation/sacrifice selectors;
 - a sparse additive Ledger overlay over shared Valuation Features.
 
 The live decision path:
