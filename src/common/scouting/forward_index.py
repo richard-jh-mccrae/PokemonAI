@@ -10,7 +10,7 @@ if TYPE_CHECKING:
 
 class _ForwardIndex:
     """Deck-agnostic forward-evolution map: inverts ``CardStat.evolvesFrom`` (a *name*). Keyed by
-    name, folding MAX over every printing. Distinct from the Read's opponent-specific ``EvoPath``."""
+    name, folding MAX over every printing. Distinct from opponent-specific observed evolution lines."""
 
     def __init__(self, cache: dict[int, CardStat]):
         self._maxdmg: dict[str, int] = {}

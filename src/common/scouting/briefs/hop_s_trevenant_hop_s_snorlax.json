@@ -6,11 +6,8 @@
     "Hop's Trevenant / Hop's Cramorant / Hop's Snorlax",
     "Hop's Trevenant / Hop's Snorlax"
   ],
-  "opponent_properties": {
-    "opp_single_prize": true,
-    "opp_tempo": "midrange",
-    "opp_special_energy_fragile": true,
-    "opp_effect_immune_bodies": true
+  "traits": {
+    "tempo": "midrange"
   },
   "pokemon": [
     {"card": "Hop's Phantump", "roles": ["primary_attacker"]},

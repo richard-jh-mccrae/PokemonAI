@@ -3,7 +3,7 @@
   "label": "Hydrapple ex / Meganium / Teal Mask Ogerpon ex",
   "covers": ["Hydrapple ex / Meganium / Teal Mask Ogerpon ex", "Teal Mask Ogerpon ex"],
   "authored": "2026-08-12",
-  "opponent_properties": {"opp_tempo": "midrange", "opp_comeback_disruptor": true},
+  "traits": {"tempo": "midrange"},
   "pokemon": [
     {"card": "Applin", "roles": ["primary_attacker"]},
     {"card": "Bayleef", "roles": ["backup_attacker", "support_pokemon"]},

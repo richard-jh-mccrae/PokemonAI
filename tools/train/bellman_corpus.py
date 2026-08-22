@@ -77,7 +77,7 @@ def _retest(correction, runtime) -> dict:
     started = time.perf_counter()
     decision = runtime.decide(correction.obs)
     elapsed = time.perf_counter() - started
-    after = to_record(decision, read=runtime.last_read)
+    after = to_record(decision, opponent=runtime.opponent_snapshot)
     return {"after": after, "chosen_after": after["chosen"], "elapsed_seconds": elapsed}
 
 

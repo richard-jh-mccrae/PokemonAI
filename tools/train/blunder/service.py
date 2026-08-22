@@ -177,7 +177,7 @@ def list_corrections(replay: dict, store_path: Path | str = DEFAULT_PATH) -> lis
             "seat": c.seat, "source": c.source, "category": c.category,
             "correct": c.correct, "correct_label": c.correct_label, "rationale": c.rationale,
             "decision_seconds": c.decision.get("decision_seconds"),
-            "posture_mismatch": c.posture_mismatch,   # human flagged the opponent Read wrong (ADR-0041)
+            "posture_mismatch": c.posture_mismatch,   # human flagged the opponent belief wrong (ADR-0041)
             "scope": c.scope, "subject": c.subject,   # what the tag is ABOUT (ADR-0049) — a Turn
             "span_len": len(c.span or []),            # Correction and the Decision Corrections inside
             "turn_plan": c.turn_plan,                 # the human's ideal-line note (edit-restore)

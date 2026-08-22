@@ -4,10 +4,10 @@
     "Archaludon ex / Cinderace",
     "Archaludon ex / Relicanth"
   ],
-  "opponent_properties": {
-    "opp_is_heal_wall": true,
-    "opp_accel_dependent": true,
-    "opp_tempo": "slow"
+  "traits": {
+    "heal_wall": true,
+    "setup_dependency": ["accel_source"],
+    "tempo": "slow"
   },
   "pokemon": [
     {

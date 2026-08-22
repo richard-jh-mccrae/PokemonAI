@@ -9,9 +9,11 @@ from pathlib import Path
 from common.api import PlanRequest, RootDecision
 from .card_worth import role_value
 from common.runtime import AgentRuntime, _int_field, _last_resort_selection
+from common.scouting.artifact import load_artifact
 from common.scouting.pokemon_roles import general_pokemon_roles
 from common.strategy import Roles
-from common.scouting.briefs import _evolution_line, resolve_brief_cards
+from .scouting import (LegacyRead, LegacyScout, evolution_line, load_legacy_briefs,
+                       match_legacy_brief, resolve_brief_cards)
 from .state import DecisionState
 
 from .belief import BellmanDeckProfile, opponent_belief
@@ -52,7 +54,7 @@ def resolve_scouted_role_worth(read, artifact, stats, *, briefs=(), functions=No
                     candidate_worth[card_id] = max(
                         candidate_worth.get(card_id, 0.0), role_value(combined))
                 if "primary_attacker" in roles:
-                    line_ids = _evolution_line(
+                    line_ids = evolution_line(
                         row_ids, ids_for_name, getattr(stats, "get", None),
                         getattr(stats, "forward_card_ids", None))
                     payoff_rank = max((_stage_rank(stats, card_id) for card_id in line_ids),
@@ -155,7 +157,15 @@ class BellmanTeacherRuntime(AgentRuntime):
 
     def __init__(self, strategy, deck, **kwargs):
         teacher_functions = kwargs.pop("functions", None)
+        legacy_scout = kwargs.pop("scout", "default")
+        legacy_briefs = kwargs.pop("briefs", "default")
         super().__init__(strategy, deck, **kwargs)
+        self.scout = (LegacyScout(load_artifact(strict=True))
+                      if legacy_scout == "default" else legacy_scout)
+        self.briefs = (load_legacy_briefs()
+                       if legacy_briefs == "default" else list(legacy_briefs or ()))
+        self.last_read = LegacyRead()
+        self.last_brief = None
         self.functions = teacher_functions
         self.effects = CardEffects.load()
         # The teacher's frozen contract predates the store-based resolution (ADR-0149):
@@ -192,6 +202,8 @@ class BellmanTeacherRuntime(AgentRuntime):
 
     def _reset_for_pregame(self) -> None:
         super()._reset_for_pregame()
+        self.last_read = LegacyRead()
+        self.last_brief = None
         self._plan_suffix = ()
         self._proof_suffix = ()
         self._proof_id = ""
@@ -200,6 +212,10 @@ class BellmanTeacherRuntime(AgentRuntime):
         self._plan_suffix = ()
         self._proof_suffix = ()
         self._proof_id = ""
+
+    def _observe_matchup(self, state):
+        self.last_read = self.scout.observe(state) if self.scout is not None else LegacyRead()
+        self.last_brief = match_legacy_brief(self.briefs, self.last_read)
 
     def _planner(self, observation):
         self._observe_matchup(observation)
@@ -323,23 +339,23 @@ class BellmanTeacherRuntime(AgentRuntime):
             decision.chosen, decision.action, decision.value, decision.complete,
             diagnostics, decision.plan_suffix)
 
-    def _decide_core(self, observation: dict) -> RootDecision:
+    def _decide_core(self, state, observation: dict) -> RootDecision:
         planner = self._planner(observation)
         request = PlanRequest(observation, self.deck, self.strategy.name)
         try:
-            return self._planner_epoch(planner, request, observation)
+            return self._planner_epoch(planner, request, observation, state)
         except Exception:
             planner.discard_precheck()               # release the retained native session
             raise
 
-    def _planner_epoch(self, planner, request, observation) -> RootDecision:
+    def _planner_epoch(self, planner, request, observation, state) -> RootDecision:
         self.last_decision_limit = (
             self.decision_clock.external_seconds if self.decision_clock is not None
             else planner._epoch_seconds(request))
         proof_cached, _proof_invalidation = self._cached_proof_decision(planner, request)
         if proof_cached is not None:
             return proof_cached
-        forced = self._forced_selection(observation)
+        forced = self._forced_selection(state)
         if forced is not None:
             return forced
         proof = planner.prove(request)

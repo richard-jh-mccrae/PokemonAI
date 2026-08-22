@@ -3,7 +3,7 @@
   "label": "N's Zekrom / N’s Reshiram / N’s Zoroark ex",
   "covers": ["N's Zekrom / N’s Reshiram / N’s Zoroark ex", "N’s Reshiram / N’s Zoroark ex"],
   "authored": "2026-08-16",
-  "opponent_properties": {"opp_is_engine_dependent": true},
+  "traits": {"setup_dependency": ["draw_engine"]},
   "pokemon": [
     {"card": "Budew", "roles": ["support_pokemon"]},
     {"card": "Buneary", "roles": ["backup_attacker"]},

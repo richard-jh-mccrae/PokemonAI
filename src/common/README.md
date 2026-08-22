@@ -4,7 +4,7 @@ Shared live agent runtime.
 
 | path | purpose |
 |---|---|
-| `runtime.py` | Agent hook, setup policy, Scouting integration, Ledger invocation |
+| `runtime.py` | Agent hook, setup policy, Opponent Model integration, Ledger invocation |
 | `ledger/` | Feature Catalog, evaluation, option preview, and live decider |
 | `observation/` | Immutable legal view, knowledge, keys, and provider state |
 | `cards/` | Typed card records, Functions, and mechanics |

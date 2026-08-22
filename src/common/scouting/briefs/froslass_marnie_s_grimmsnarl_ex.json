@@ -3,7 +3,7 @@
   "label": "Froslass / Marnie's Grimmsnarl ex",
   "covers": ["Froslass / Marnie's Grimmsnarl ex"],
   "authored": "2026-08-12",
-  "opponent_properties": {"opp_tempo": "midrange", "opp_spreads_bench": true, "opp_comeback_disruptor": true},
+  "traits": {"tempo": "midrange"},
   "pokemon": [
     {"card": "Froslass", "roles": ["backup_attacker", "support_pokemon"]},
     {"card": "Marnie's Grimmsnarl ex", "roles": ["primary_attacker"]},

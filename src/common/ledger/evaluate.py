@@ -101,80 +101,85 @@ def _opponent_traits(trace: _Trace, ctx: EvaluationModel, board: ObservationStat
         for trait in candidate.traits:
             if trait.value is False:
                 continue
-            feature = (f"trait.{trait.name}.{trait.value}" if isinstance(trait.value, str)
-                       else f"trait.{trait.name}")
-            context = _trait_context(trait.name, board, ctx, trait.value)
+            feature = (f"trait.{trait.name}.{trait.value}"
+                       if isinstance(trait.value, str) else f"trait.{trait.name}")
+            context = _trait_context(trait.name, board, ctx, candidate, trait.value)
             trace.add(
                 "opponent.traits", feature, candidate.probability * context,
                 provenance=f"belief:{candidate.archetype or 'anonymous'}:{trait.name}")
+        for mechanic in candidate.mechanics:
+            context = _mechanic_context(mechanic.name, board, ctx)
+            trace.add(
+                "opponent.mechanics", f"mechanic.{mechanic.name}",
+                candidate.probability * mechanic.probability * context,
+                provenance=f"cards:{candidate.archetype or 'anonymous'}:{mechanic.name}")
     trace.add("opponent.beliefs", "belief.unknown_archetype", ctx.opponent.unknown_mass)
 
 
-def _trait_context(name: str, board: ObservationState, ctx: EvaluationModel, value=None) -> float:
+def _trait_context(name: str, board: ObservationState, ctx: EvaluationModel,
+                   candidate, value=None) -> float:
     """Observable exposure that makes an opponent claim relevant on this board."""
-    if name == "opp_item_locks":
+    if name == "deckout_vulnerability":
+        return max(0, 10 - board.them.deck_count)
+    if name == "heal_wall":
+        return sum(max(0, body.max_hp - body.hp) for body in board.them.bodies) / 100.0
+    if name == "opening_fragility":
+        return float(len(board.them.bench) == 0)
+    if name == "setup_dependency":
+        return sum(value in candidate.roles.get(body.card.card_id, ())
+                   for body in board.them.bodies)
+    if name == "tempo":
+        turn = max(0, board.turn.number)
+        return {"fast": 1.0 / (turn + 1.0), "midrange": 1.0,
+                "slow": turn / (turn + 1.0)}[value]
+    raise KeyError(f"opponent Trait {name!r} has no context compiler")
+
+
+def _mechanic_context(name: str, board: ObservationState, ctx: EvaluationModel) -> float:
+    if name == "item_lock":
         return sum(getattr(ctx.facts(card.card_id), "kind", None) == "item"
                    for card in (board.me.hand or ()))
-    if name == "opp_spreads_bench":
+    if name == "spread":
         return len(board.me.bench)
-    if name == "opp_hand_size_attacker":
+    if name == "hand_size_attack":
         return board.me.hand_count
-    if name == "opp_special_energy_fragile":
+    if name == "special_energy_only":
         return sum(getattr(ctx.facts(card.card_id), "kind", None) == "special_energy"
-                   for body in board.me.bodies for card in body.energy_cards)
-    if name == "opp_deckout_vulnerable":
-        return max(0, 10 - board.them.deck_count)
-    if name == "opp_is_engine_dependent":
-        return sum(bool(
-            {"draw_engine", "search_engine"}.intersection(
-                getattr(ctx.facts(body.card.card_id), "default_roles", ()) or ())
-            or {"draw", "fetch"}.intersection(
-                clause.kind for clause in card_clauses(ctx.facts(body.card.card_id))))
-                   for body in board.them.bodies)
-    if name == "opp_donk_vulnerable":
-        return float(len(board.them.bench) == 0)
-    if name == "opp_no_pivot":
+                   for body in board.them.bodies for card in body.energy_cards)
+    if name == "no_pivot":
         active = board.them.active
         if active is None:
             return 0.0
         pressured = any(getattr(board.them, status) for status in (
             "asleep", "paralyzed", "confused", "poisoned", "burned"))
         return float(pressured or getattr(ctx.facts(active.card.card_id), "retreat_cost", 0) > 0)
-    if name == "opp_is_heal_wall":
-        return sum(max(0, body.max_hp - body.hp) for body in board.them.bodies) / 100.0
-    if name == "opp_single_prize":
+    if name == "single_prize":
         return sum(_prize_value(body, ctx) == 1 for body in board.them.bodies)
-    if name == "opp_accel_dependent":
-        return sum(len(body.energies) for body in board.them.bodies)
-    if name == "opp_caps_big_hits":
+    if name == "damage_cap":
         return max((attack.damage for body in board.me.bodies
                     for attack in getattr(ctx.facts(body.card.card_id), "attacks", ()) or ()), default=0) / 100.0
-    if name == "opp_comeback_disruptor":
+    if name == "comeback_disruption":
         return max(0, board.them.prize_count - board.me.prize_count)
-    if name == "opp_effect_immune_bodies":
+    if name == "effect_immunity":
         effect_kinds = {
             "attack_debuff", "attack_lock", "burn", "confuse", "damage_counters",
             "discard_opp_energy", "no_retreat", "poison", "push_out", "retreat_lock",
             "sleep",
         }
-        return sum(bool(effect_kinds.intersection(
+        effect_attacks = sum(bool(effect_kinds.intersection(
             clause.kind for clause in attack.clauses))
                    for body in board.me.bodies
                    for attack in getattr(ctx.facts(body.card.card_id), "attacks", ()) or ())
-    if name == "opp_ex_damage_immune":
-        return sum(bool(getattr(ctx.facts(body.card.card_id), "ex", False)
-                        or getattr(ctx.facts(body.card.card_id), "mega_ex", False))
-                   for body in board.me.bodies)
-    if name == "opp_pierces_active_effects":
+        ex_bodies = sum(bool(getattr(ctx.facts(body.card.card_id), "ex", False)
+                             or getattr(ctx.facts(body.card.card_id), "mega_ex", False))
+                        for body in board.me.bodies)
+        return effect_attacks + ex_bodies
+    if name == "piercing":
         active = board.me.active
         statuses = sum(bool(getattr(board.me, status)) for status in (
             "asleep", "paralyzed", "confused", "poisoned", "burned"))
         return statuses + (len(active.tools) if active is not None else 0)
-    if name == "opp_tempo":
-        turn = max(0, board.turn.number)
-        return {"fast": 1.0 / (turn + 1.0), "midrange": 1.0,
-                "slow": turn / (turn + 1.0)}[value]
-    raise KeyError(f"opponent Trait {name!r} has no context compiler")
+    raise KeyError(f"opponent Mechanic {name!r} has no context compiler")
 
 
 def _side(trace: _Trace, label: str, side: Side, sign: float, ctx: EvaluationModel,

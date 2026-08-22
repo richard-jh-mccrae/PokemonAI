@@ -1,7 +1,7 @@
 {
   "slug": "cinderace_mega_starmie_ex",
   "covers": ["Cinderace / Mega Froslass ex / Mega Starmie ex", "Cinderace / Mega Starmie ex"],
-  "opponent_properties": {"opp_tempo": "fast", "opp_pierces_active_effects": true},
+  "traits": {"tempo": "fast"},
   "pokemon": [
     {"card": "Cinderace", "roles": ["backup_attacker", "support_pokemon"]},
     {"card": "Mega Starmie ex", "roles": ["primary_attacker"]},

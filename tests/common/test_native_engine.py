@@ -191,7 +191,7 @@ def test_production_runtime_returns_a_legal_native_action_without_fallback():
         assert start.errorPlayer == -1
         observation = _first_main(observation)
         runtime = build_runtime(
-            _strategy(), deck, scout=None, briefs=[],
+            _strategy(), deck,
             provider_factory=partial(NativeCgTransitionProvider, world_count=1),
         )
         legal_selections = {action.selection for action in enumerate_legal_actions(observation)}

@@ -12,8 +12,7 @@ AGENTS = ("dragapult_ex", "mega_lucario", "mega_starmie")
 
 @pytest.mark.parametrize("name", AGENTS)
 def test_every_deck_builds_the_shared_ledger_runtime(name):
-    runtime = build_runtime(
-        strategy(name), deck(name), stats=None, scout=None, briefs=[])
+    runtime = build_runtime(strategy(name), deck(name), stats=None)
     assert isinstance(runtime, AgentRuntime)
     assert runtime.strategy.name == name
     assert not hasattr(runtime.strategy, "strategies")

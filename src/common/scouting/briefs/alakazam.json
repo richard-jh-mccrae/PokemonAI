@@ -1,7 +1,7 @@
 {
   "slug": "alakazam",
   "covers": ["Alakazam", "Alakazam / Frillish"],
-  "opponent_properties": {"opp_hand_size_attacker": true, "opp_single_prize": true, "opp_tempo": "midrange"},
+  "traits": {"tempo": "midrange"},
   "pokemon": [
     {"card": "Abra", "roles": ["primary_attacker"]},
     {"card": "Alakazam", "roles": ["primary_attacker"]},

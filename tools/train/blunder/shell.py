@@ -232,7 +232,7 @@ class _Handler(BaseHTTPRequestHandler):
                 live_records_by_seat=game.get("live_records_by_seat"),
                 replace_id=form.get("editing_id") or None,
                 attribution=form.get("attribution") or None,
-                posture_mismatch=bool(form.get("posture_mismatch", False)),  # opp Read wrong (ADR-0041)
+                posture_mismatch=bool(form.get("posture_mismatch", False)),  # opponent belief wrong (ADR-0041)
                 scope=form.get("scope", "decision"),   # decision | turn (ADR-0049); the Span
                 turn_plan=_turn_plan_from_form(form),   # the human's ideal-line note
             )                                          # is assembled server-side from the Anchor
@@ -351,7 +351,7 @@ _SHELL_HTML = """<!doctype html><html><head><meta charset="utf-8"><title>blunder
   <button id="next">▶</button>
  </div>
  <div class="now" id="now"></div>
- <label class="pmark" title="Flags the agent's opponent Read/Posture as wrong at this decision. /blunder-buster ties it to the believed archetype's Matchup Brief / recognition, not a generic weight."><input type="checkbox" id="posture_wrong"> Opponent read was wrong<span class="h">— tie this blunder to the matchup (archetype above)</span></label>
+ <label class="pmark" title="Flags the agent's opponent belief as wrong at this decision. /blunder-buster ties it to the believed archetype's matchup recognition, not a generic weight."><input type="checkbox" id="posture_wrong"> Opponent belief was wrong<span class="h">— tie this blunder to the matchup (archetype above)</span></label>
  <label>Scope — what this tag is about (ADR-0049)</label><select id="scope"></select>
  <div class="scopehint" id="scopehint"></div>
  <label>Category (the blunder identifier)</label><select id="category"></select>
@@ -752,7 +752,7 @@ $('save').onclick=async()=>{
     counterfactual:CFPAYLOAD,
     source:$('source').value, agent: own?META.agent:pname(f.seat),
     submission_id: own?META.submission_id:null, attribution:$('attribution').value,
-    posture_mismatch:$('posture_wrong').checked,   // opponent Read flagged wrong (ADR-0041)
+    posture_mismatch:$('posture_wrong').checked,   // opponent belief flagged wrong (ADR-0041)
     editing_id: editingId||''};   // edit flow: lets the server allow replacing this same tag
   const r=await fetch('/correction',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
   const j=await r.json(); $('msg').className=j.ok?'ok':'ko';

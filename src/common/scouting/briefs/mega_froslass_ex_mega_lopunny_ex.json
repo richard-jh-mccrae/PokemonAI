@@ -7,11 +7,9 @@
     "Mega Froslass ex / Mega Starmie ex"
   ],
   "authored": "2026-08-12",
-  "opponent_properties": {
-    "opp_tempo": "fast",
-    "opp_is_heal_wall": true,
-    "opp_pierces_active_effects": true,
-    "opp_effect_immune_bodies": true
+  "traits": {
+    "tempo": "fast",
+    "heal_wall": true
   },
   "pokemon": [
     {

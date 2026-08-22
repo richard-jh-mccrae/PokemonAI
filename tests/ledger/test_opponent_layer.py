@@ -6,8 +6,8 @@ import pytest
 from ledger_helpers import DRAGAPULT, body, player, printout
 
 from common.observation import ObservationStateBuilder
-from common.ledger import (ArchetypeBelief, DeckOverlay, EvaluationModel, OpponentBeliefs,
-                           evaluate)
+from common.ledger import DeckOverlay, EvaluationModel, evaluate
+from common.opponent import ArchetypeBelief, OpponentEvidence, OpponentSnapshot
 
 UNKNOWN_ID = 424242
 
@@ -16,8 +16,14 @@ def _activation(valuation, feature):
     return next(item.value for item in valuation.activations if item.feature == feature)
 
 
+def _snapshot(*, observed_roles=None, candidates=(), unknown_mass=1.0):
+    state = ObservationStateBuilder().root(printout())
+    return OpponentSnapshot(
+        OpponentEvidence.from_state(state), observed_roles or {}, candidates, unknown_mass)
+
+
 def test_observed_claims_activate_fully_and_candidates_by_probability():
-    beliefs = OpponentBeliefs(
+    beliefs = _snapshot(
         observed_roles={UNKNOWN_ID: ("support_pokemon",)},
         candidates=(ArchetypeBelief(
             0.5, {UNKNOWN_ID: ("primary_attacker",)}, archetype="candidate"),),
@@ -34,7 +40,7 @@ def test_observed_claims_activate_fully_and_candidates_by_probability():
 
 
 def test_opponent_evidence_cannot_change_valuation_coefficients():
-    beliefs = OpponentBeliefs(
+    beliefs = _snapshot(
         candidates=(ArchetypeBelief(
             1.0, {UNKNOWN_ID: ("primary_attacker",)}, archetype="candidate"),),
         unknown_mass=0.0,
@@ -73,7 +79,7 @@ def test_opponent_development_reach_is_candidate_resource_conditioned():
     board = ObservationStateBuilder().root(printout(
         them=player(own=False, active=body(1030, 1, energies=(3,)))))
     absent = evaluate(board, EvaluationModel.build())
-    beliefs = OpponentBeliefs(candidates=(ArchetypeBelief(
+    beliefs = _snapshot(candidates=(ArchetypeBelief(
         1.0, archetype="starmie", resources={1031: 1.0}),), unknown_mass=0.0)
     expected = evaluate(board, EvaluationModel.build().with_opponent(beliefs))
 

@@ -8,7 +8,6 @@ from __future__ import annotations
 from collections import Counter
 from dataclasses import dataclass, field, replace
 from functools import lru_cache
-from types import MappingProxyType
 from enum import Enum
 from typing import Mapping
 
@@ -17,62 +16,10 @@ from common.cards.card_facts import COLORLESS, SUPPORTER, EnergyCard, PokemonCar
 from common.cards.functions.energy import provision_units
 from common.cards.functions.fetch import DEADNESS, fetch_target_matches
 from common.cards.pokemon_roles import undeclared_pokemon_roles
-from common.scouting.traits import TRAIT_CATALOG
+from common.opponent import OpponentSnapshot
 
 from .configuration import (BehaviorIdentity, ComputeConfiguration, DeckOverlay,
                             ValuationConfiguration)
-
-
-def _validated_roles(roles) -> Mapping[int, tuple[str, ...]]:
-    normalized = {int(card_id): tuple(dict.fromkeys(card_roles))
-                  for card_id, card_roles in (roles or {}).items()}
-    unknown = undeclared_pokemon_roles(
-        role for card_roles in normalized.values() for role in card_roles)
-    if unknown:
-        raise KeyError(f"unknown Pokemon Role {unknown[0]!r}")
-    return MappingProxyType(normalized)
-
-
-@dataclass(frozen=True)
-class ArchetypeBelief:
-    probability: float
-    roles: Mapping[int, tuple[str, ...]] = field(default_factory=dict)
-    traits: tuple = ()
-    archetype: str = ""
-    resources: Mapping[int, float] = field(default_factory=dict)
-
-    def __post_init__(self):
-        probability = float(self.probability)
-        if not 0.0 <= probability <= 1.0:
-            raise ValueError("archetype probability must be between zero and one")
-        object.__setattr__(self, "probability", probability)
-        object.__setattr__(self, "roles", _validated_roles(self.roles))
-        object.__setattr__(self, "traits", TRAIT_CATALOG.validate(self.traits))
-        object.__setattr__(self, "archetype", str(self.archetype))
-        resources = {int(card_id): float(chance)
-                     for card_id, chance in self.resources.items()}
-        if any(not 0.0 <= chance <= 1.0 for chance in resources.values()):
-            raise ValueError("opponent resource probabilities must be between zero and one")
-        object.__setattr__(self, "resources", MappingProxyType(resources))
-
-
-@dataclass(frozen=True)
-class OpponentBeliefs:
-    observed_roles: Mapping[int, tuple[str, ...]] = field(default_factory=dict)
-    candidates: tuple[ArchetypeBelief, ...] = ()
-    unknown_mass: float = 1.0
-
-    def __post_init__(self):
-        unknown_mass = float(self.unknown_mass)
-        if not 0.0 <= unknown_mass <= 1.0:
-            raise ValueError("unknown posterior mass must be between zero and one")
-        candidates = tuple(self.candidates)
-        total = unknown_mass + sum(candidate.probability for candidate in candidates)
-        if abs(total - 1.0) > 1e-6:
-            raise ValueError("candidate probabilities plus unknown mass must equal one")
-        object.__setattr__(self, "unknown_mass", unknown_mass)
-        object.__setattr__(self, "candidates", candidates)
-        object.__setattr__(self, "observed_roles", _validated_roles(self.observed_roles))
 
 
 @dataclass(frozen=True)
@@ -84,7 +31,7 @@ class EvaluationModel:
     roles: Mapping[int, tuple[str, ...]]
     store: Mapping[int, object] = field(repr=False)
     #: Posterior beliefs used for the opponent side; None means unknown archetype.
-    opponent: OpponentBeliefs | None = None
+    opponent: OpponentSnapshot | None = None
 
     @classmethod
     def build(cls, *, roles: Mapping[int, tuple[str, ...]] | None = None,
@@ -116,7 +63,7 @@ class EvaluationModel:
     def behavior_identity(self) -> BehaviorIdentity:
         return BehaviorIdentity(self.configuration.identity, self.compute.identity)
 
-    def with_opponent(self, layer: OpponentBeliefs | None) -> "EvaluationModel":
+    def with_opponent(self, layer: OpponentSnapshot | None) -> "EvaluationModel":
         return self if layer is self.opponent else replace(self, opponent=layer)
 
     def facts(self, card_id: int):
@@ -500,6 +447,6 @@ def _fetch_liveness(fetches, demand: Demand, ctx: EvaluationModel, deck_counts) 
             break
     return best
 
-__all__ = ("ArchetypeBelief", "Demand", "EvaluationModel", "OpponentBeliefs",
+__all__ = ("Demand", "EvaluationModel",
            "any_attack_payable", "legal_line_reach", "line_reach", "opponent_line_reach",
            "unit_fills_a_slot", "usable_units")

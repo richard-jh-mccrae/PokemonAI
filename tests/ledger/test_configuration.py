@@ -1,11 +1,9 @@
 from common.ledger import (
-    ArchetypeBelief,
     BehaviorIdentity,
     ComputeConfiguration,
     FEATURE_CATALOG,
     DeckOverlay,
     EvaluationModel,
-    OpponentBeliefs,
     ValuationConfiguration,
 )
 from dataclasses import replace
@@ -14,11 +12,18 @@ from common.cards import (FUNCTION_CATALOG, FUNCTION_FEATURES, Attack, Clause, P
                           card_store)
 from common.cards.pokemon_roles import POKEMON_ROLES
 from common.ledger.worth import _compile_forward_lines, usable_units
-from common.scouting.briefs import load_briefs
-from common.scouting.traits import OpponentTrait, TRAIT_CATALOG
+from common.opponent import (
+    ArchetypeBelief, OpponentEvidence, OpponentMechanic, OpponentSnapshot, OpponentTrait,
+)
 from common.observation import ObservationStateBuilder
 from ledger_helpers import ULTRA_BALL, body, player, printout
 from common.ledger import evaluate
+
+
+def _snapshot(*, observed_roles=None, candidates=(), unknown_mass=1.0):
+    state = ObservationStateBuilder().root(printout())
+    return OpponentSnapshot(
+        OpponentEvidence.from_state(state), observed_roles or {}, candidates, unknown_mass)
 
 
 def test_runtime_context_resolves_the_complete_catalog_with_a_deck_residual():
@@ -98,7 +103,7 @@ def test_partial_known_card_emits_coverage_unknown_activation_and_gap():
 
 def test_opponent_roles_use_observed_facts_plus_continuous_posterior_expectation():
     card_id = 999_998
-    beliefs = OpponentBeliefs(
+    beliefs = _snapshot(
         observed_roles={card_id: ("support_pokemon",)},
         candidates=(
             ArchetypeBelief(0.25, roles={card_id: ("primary_attacker",)}),
@@ -196,31 +201,25 @@ def test_posterior_forward_reach_scales_typed_energy_usability(monkeypatch):
 
 
 def test_every_opponent_trait_compiles_against_the_closed_typed_schema():
-    for brief in load_briefs():
-        TRAIT_CATALOG.compile(brief.opponent_properties)
-
-    with pytest.raises(KeyError, match="unknown opponent Trait"):
-        TRAIT_CATALOG.compile({"opp_typo": True})
-
     with pytest.raises(TypeError, match="OpponentTrait"):
         ArchetypeBelief(1.0, traits=(object(),))
     with pytest.raises(KeyError, match="unknown opponent Trait"):
-        ArchetypeBelief(1.0, traits=(OpponentTrait("opp_typo", True),))
+        ArchetypeBelief(1.0, traits=(OpponentTrait("typo", True),))
 
 
 def test_opponent_traits_compile_through_the_full_posterior_with_provenance():
     belief = ArchetypeBelief(
-        0.4, traits=TRAIT_CATALOG.compile({"opp_item_locks": True}), archetype="lock-deck")
-    context = EvaluationModel.build().with_opponent(OpponentBeliefs(
+        0.4, mechanics=(OpponentMechanic("item_lock", 1.0),), archetype="lock-deck")
+    context = EvaluationModel.build().with_opponent(_snapshot(
         candidates=(belief,), unknown_mass=0.6))
 
     valuation = evaluate(ObservationStateBuilder().root(printout(
         me=player(hand=[ULTRA_BALL]), them=player(own=False))), context)
     activation = next(item for item in valuation.activations
-                      if item.feature == "trait.opp_item_locks")
+                      if item.feature == "mechanic.item_lock")
 
     assert activation.value == 0.4
-    assert activation.provenance == ("belief:lock-deck:opp_item_locks",)
+    assert activation.provenance == ("cards:lock-deck:item_lock",)
 
 
 def test_card_functions_compile_to_situational_feature_activations():

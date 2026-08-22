@@ -24,7 +24,7 @@ def _strategy(name: str = "mega_starmie"):
 def _agent_with_boom(monkeypatch, decide):
     class BoomRuntime:
         deck = tuple(range(1, 61))
-        last_read = None
+        opponent_snapshot = None
         last_decision_limit = None
         last_deadline_hit = False
 
@@ -173,8 +173,7 @@ def _mega_starmie_runtime():
     deck = [int(value) for value in
             (REPO / "src" / "agents" / "mega_starmie" / "deck.csv").read_text().splitlines()
             if value.strip()]
-    return runtime_module.build_runtime(
-        strategy, deck, stats=None, scout=None, briefs=[])
+    return runtime_module.build_runtime(strategy, deck, stats=None)
 
 
 def test_pregame_draw_count_survives_a_dense_non_number_option():

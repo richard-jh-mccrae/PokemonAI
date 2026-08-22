@@ -121,10 +121,22 @@ def test_observation_state_is_the_only_live_legal_view_surface():
     assert offenders == [], f"retired observation surfaces or raw enrichments remain — {offenders}"
 
 
+def test_retired_opponent_surfaces_are_absent_from_live_source():
+    retired = re.compile(
+        r"\b(?:common\.scouting\.(?:read|scout|traits)|Read|OpponentBeliefs|OpponentLayer)\b"
+    )
+    offenders = []
+    for path in (REPO / "src").rglob("*.py"):
+        relative = path.relative_to(REPO).as_posix()
+        if retired.search(path.read_text(encoding="utf-8")):
+            offenders.append(relative)
+    assert offenders == [], f"retired opponent surfaces remain — {offenders}"
+
+
 def test_policy_consumers_cannot_walk_raw_observations():
     targets = (
         "src/common/runtime.py", "src/common/deck_tracker.py", "src/common/telemetry.py",
-        "src/common/scouting/scout.py", "src/common/ledger/decider.py",
+        "src/common/opponent/model.py", "src/common/ledger/decider.py",
         "src/common/ledger/evaluate.py", "src/common/ledger/worth.py",
     )
     fallback_functions = {"_crash_report", "_fallback_decision", "_last_resort_selection",
