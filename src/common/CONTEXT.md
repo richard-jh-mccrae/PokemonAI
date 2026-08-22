@@ -39,9 +39,9 @@ It never represents hidden game truth or provider-control state.
 _Avoid_: BoardState, GameState, DecisionState
 
 **Evaluation Model**:
-The versioned card knowledge, opponent profiles, roles, and Valuation Configuration used to value
-an Observation State. It interprets evidence but never contains per-decision knowledge, search
-effort, or policy.
+The versioned card knowledge, opponent profiles, roles, Valuation Configuration, and static Prize
+Plan used to interpret an Observation State. It never contains per-decision knowledge, search
+effort, or a selector; the evaluator emits derived Prize Map policy evidence for Decision Policy.
 _Avoid_: Observation State, LedgerContext, evaluator state
 
 **Value Evaluator**:
@@ -199,7 +199,8 @@ transition semantics, and their effective configurations.
 _Avoid_: Weights-only hash, deck name
 
 **Indifference Set**:
-Actions equal within Compute Configuration tolerance; a neutral seeded lottery selects among them.
+Actions equal within Policy Configuration tolerance. A Prize Plan may order an exactly equal
+subset; near-equal actions and any remaining exact ties use the neutral seeded lottery.
 _Avoid_: Lowest selection, hidden hierarchy
 
 **Archetype Belief**:
