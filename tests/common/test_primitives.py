@@ -8,32 +8,18 @@ from common.option_equivalence import (
     class_representatives, fan_out, fingerprint_source_card_id, option_in_play_source_id,
     option_source_card, semantic_option_fingerprint,
 )
-from common.strategy import PrizePlan, Roles, Strategy
+from common.strategy import Roles
 from common.telemetry import to_record
 from common.observation import ObservationStateBuilder
 from observation_helpers import engine_opt
 
 
-def test_declarative_roles_derive_a_complete_evolution_line():
-    roles = Roles({12: ["primary_attacker"]},
-                  evolves={10: 11, 11: 12}, ready={12: 2})
-    strategy = Strategy(name="test", roles=roles, prize_plan=PrizePlan([[12, 12]]))
-    assert 10 not in roles
-    assert strategy.lines[0].path == (10, 11, 12)
-    assert strategy.lines[0].ready.energy == 2
-    assert strategy.prize_plan.prizes_to_win == 6
+def test_roles_resolve_reads_store_defaults_and_deck_overrides():
+    roles = Roles({121: ["primary_attacker"]}).resolve((119, 120, 121))
 
-
-def test_roles_resolve_reads_the_store_records_across_an_evolution_line():
-    # Dreepy 119 -> Drakloak 120 -> Dragapult ex 121: ancestry from `evolves_from`, roles
-    # from authored `default_roles`, and a deck declaration REPLACING the payoff's default.
-    roles = Roles({121: ["primary_attacker"]}, ready={121: 2}).resolve((119, 120, 121))
-
-    assert roles.evolves == {119: 120, 120: 121}
     assert roles[119] == ["primary_attacker"]
     assert roles[120] == ["primary_attacker", "draw_engine"]
-    assert roles[121] == ["primary_attacker"]        # declared, so the authored sniper is gone
-    assert roles.lines[0].path == (119, 120, 121)
+    assert roles[121] == ["primary_attacker"]
 
 
 def test_option_equivalence_helpers_preserve_the_best_member():

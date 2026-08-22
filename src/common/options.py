@@ -82,12 +82,6 @@ class LegalAction:
             raise ValueError("multi-pick actions have no scalar representative")
         return self.selection[0]
 
-    @property
-    def menu_indices(self) -> tuple[int, ...]:
-        """Compatibility name: the exact engine selection, not an equivalence class."""
-        return self.selection
-
-
 def enumerate_legal_actions(observation: Mapping) -> tuple[LegalAction, ...]:
     """Group semantically interchangeable physical copies; cover every offered index exactly once."""
     select = observation.get("select") or {}
@@ -130,10 +124,6 @@ def enumerate_legal_actions(observation: Mapping) -> tuple[LegalAction, ...]:
     return tuple(sorted(actions, key=lambda action: (action.identity, action.selection)))
 
 
-def end_action(actions: tuple[LegalAction, ...]) -> LegalAction | None:
-    return next((action for action in actions if action.identity.kind == "end"), None)
-
-
 def recycled_card_ids(observation: Mapping, action: LegalAction, registry, root_seat: int, *,
                       carried=(), actor_seat=None):
     carried = tuple(carried)
@@ -162,4 +152,4 @@ def recycled_card_ids(observation: Mapping, action: LegalAction, registry, root_
     return tuple(dict.fromkeys((*carried, *stack, card_id)))
 
 
-__all__ = ("LegalAction", "end_action", "enumerate_legal_actions", "recycled_card_ids")
+__all__ = ("LegalAction", "enumerate_legal_actions", "recycled_card_ids")

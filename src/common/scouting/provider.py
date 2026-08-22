@@ -15,7 +15,6 @@ from .card_text import (  # noqa: F401
     _parse_retreat_free_grant,
     _parse_tool_retreat_free_at_hp,
     _parse_tool_retreat_reduction,
-    name_in_family,
     normalize_card_name,
     parse_attack_bench_requirement,
     parse_tool_damage_reduction,
@@ -38,7 +37,7 @@ from .card_text import (  # noqa: F401
 from .forward_index import _ForwardIndex, _build_forward_index, _name_index  # noqa: F401
 
 # CardType enum codes (cg.api.CardType) mirrored as literals so the records stay lib-free.
-_ITEM, _TOOL, _SUPPORTER, _STADIUM, _BASIC_ENERGY, _SPECIAL_ENERGY = 1, 2, 3, 4, 5, 6
+_ITEM, _TOOL, _SUPPORTER, _BASIC_ENERGY, _SPECIAL_ENERGY = 1, 2, 3, 5, 6
 
 
 def stage_from_card(c) -> str | None:
@@ -66,8 +65,8 @@ class CardStat:
     retreatReduction: int = 0          # SIGNED: NEGATIVE when a Tool makes retreating DEARER
     attackCostReduction: int = 0       # NO LIVE CONSUMER YET, deliberately: affordability is
                                        # ATTACK-keyed, and a wrong credit manufactures a phantom KO
-    holderNameFamily: str | None = None  # None = unconditional. Ask `applies_to_holder`, not this
-    holderNoRuleBox: bool = False      # Brave Bangle only. Ask `applies_to_holder`, not this
+    holderNameFamily: str | None = None
+    holderNoRuleBox: bool = False
     retreatFreeAtHp: int = 0           # the CONDITIONAL leg beside `retreatReduction` (ADR-0100 §8)
     retreatFreeGrant: str | None = None  # a BOARD-LEVEL Ability, as the predicate it scopes to
     recoil: int = 0                    # self-damage of the card's HIGHEST-damage attack
@@ -132,18 +131,8 @@ class CardStat:
         return self.cardType == _SUPPORTER
 
     @property
-    def is_stadium(self) -> bool:
-        """A Stadium card — so the FETCH closure asks through ``CardStat`` like every other class."""
-        return self.cardType == _STADIUM
-
-    @property
     def is_basic_energy(self) -> bool:
         return self.cardType == _BASIC_ENERGY
-
-    @property
-    def is_special_energy(self) -> bool:
-        """PROVISION is card text, not one unit of its own colour: read the amount off `provides:N`."""
-        return self.cardType == _SPECIAL_ENERGY
 
     @property
     def is_energy(self) -> bool:
@@ -152,15 +141,6 @@ class CardStat:
     @property
     def is_typed_basic_energy(self) -> bool:
         return self.cardType == _BASIC_ENERGY and self.energyType is not None
-
-    def applies_to_holder(self, holder: "CardStat | None") -> bool:
-        """Do THIS Tool's static modifiers reach ``holder``? The ONE place both holder gates are
-        evaluated, ANDed — a gate added at three of the four consumers is one the fourth ignores."""
-        # `getattr` with a True default rather than `holder.is_ex_body`: a holder we cannot
-        # interrogate must fail BOTH gates the same way, and for a benefit that way is refuse.
-        if self.holderNoRuleBox and (holder is None or getattr(holder, "is_ex_body", True)):
-            return False
-        return name_in_family(getattr(holder, "name", None), self.holderNameFamily)
 
     def can_pay_cheapest(self, energy: int) -> bool:
         """fail-CLOSED (``(minAttackCost or 99) <= energy``): an unknown cost reads unaffordable."""

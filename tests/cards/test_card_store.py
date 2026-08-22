@@ -4,6 +4,9 @@ Kept apart from the per-kind fact tests because these are what the store PROMISE
 can only check the cards that happen to be present, and would pass an empty store."""
 from __future__ import annotations
 
+import importlib
+import pkgutil
+
 import pytest
 from cards_helpers import (
     DECKS, ENERGY_KINDS, REPO, TRAINER_KINDS, all_covered_card_ids, deck_card_ids,
@@ -13,6 +16,17 @@ from cgpy.schema import CardType
 from common.cards import (
     card_store, energy_card_store, pokemon_card_store, pokemon_default_roles, trainer_card_store)
 from common.cards.pokemon_roles import undeclared_pokemon_roles
+
+
+def test_generated_pokemon_modules_are_discovered_by_the_live_store():
+    from common.cards import pokemon_cards
+
+    generated = {
+        importlib.import_module(f"{pokemon_cards.__name__}.{module.name}").CARD.card_id
+        for module in pkgutil.iter_modules(pokemon_cards.__path__)
+    }
+    assert generated
+    assert set(pokemon_card_store()) == generated
 
 
 @pytest.mark.parametrize("deck", DECKS)

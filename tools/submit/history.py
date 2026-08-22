@@ -45,6 +45,7 @@ def summary(manifest: dict) -> dict:
         "system": manifest["system"],
         "deck_size": manifest["deck"]["size"],
         "roles": len(manifest["strategy"]["roles"]),
-        "lines": len(manifest["strategy"]["lines"]),
+        "prize_selectors": sum(len(values) for values in
+                               manifest["strategy"]["prize_plan"].values()),
         "scouting": caps["scouting"],
     }

@@ -21,8 +21,8 @@ DEFAULT_KAGGLE_UPLOAD_TIMEOUT_SECONDS = 120
 def compose_message(row: dict) -> str:
     """The `-m` message: the join key (submission id) + a readable state digest."""
     s = row["summary"]
-    msg = (f"#{row['submission_id']} {row['agent']} @{row['git_hash']} · Bellman · "
-           f"roles:{s['roles']} · lines:{s['lines']} · "
+    msg = (f"#{row['submission_id']} {row['agent']} @{row['git_hash']} · Ledger · "
+           f"roles:{s['roles']} · prize selectors:{s['prize_selectors']} · "
            f"scouting:{'on' if s['scouting'] else 'off'}")
     return msg + (f" · {row['label']}" if row.get("label") else "")
 

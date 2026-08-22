@@ -131,6 +131,7 @@ class AgentRuntime:
                 compute=compute_configuration or ComputeConfiguration(),
                 roles={card_id: tuple(self.roles.get(card_id, ()) or ())
                        for card_id in self.deck},
+                prize_plan=strategy.prize_plan,
                 overlay=DeckOverlay(strategy.ledger_overlay)),
             provider_factory=preview_provider_factory(self.provider_factory),
             provider_kwargs={"registry": _ProviderFactSources(),

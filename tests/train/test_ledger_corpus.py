@@ -196,10 +196,11 @@ def test_sweep_partitions_reviewed_before_replaying(monkeypatch):
     monkeypatch.setattr(module, "load_corrections", lambda store: [kept, dropped])
     monkeypatch.setattr(module, "_replay_one",
                         lambda deck, c, overrides=None: row(deck, c.id, agrees=True))
-    reviewed = {"ep-2": {"disposition": "covered", "round": "2026-07-01"}}
+    reviewed = {"ep-2": {"disposition": "off-policy", "round": "2026-08-06"}}
     result = module.sweep(store="unused", decks=("a_deck",), reviewed=reviewed)
     assert [r["id"] for r in result["rows"]] == ["ep-1"]
     assert [r["id"] for r in result["retired"]] == ["ep-2"]
+    assert result["retired"][0]["disposition"] == "off-policy"
 
 
 def test_damage_targets_are_priced_with_engine_facts():

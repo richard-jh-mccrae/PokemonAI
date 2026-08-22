@@ -1,6 +1,6 @@
 """Mega Lucario deck declarations for the shared runtime."""
 
-from common.strategy import Roles, Strategy
+from common.strategy import PrizePlan, Roles, Strategy
 
 
 RIOLU, MEGA_LUCARIO_EX = 677, 678
@@ -21,7 +21,7 @@ ROLES = Roles({
 STRATEGY = Strategy(
     name="mega_lucario",
     roles=ROLES,
-    partners={SOLROCK: (LUNATONE,), LUNATONE: (SOLROCK,)},
+    prize_plan=PrizePlan(),
     starter_priority=(SOLROCK, RIOLU, MAKUHITA, LUNATONE, MEOWTH_EX),
     params={"preferred_start": "first"},
 )

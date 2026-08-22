@@ -20,6 +20,7 @@ from common.strategy.context import _MAIN
 
 from .chance import refresh_outcomes
 from .evaluate import FeatureActivation, FeatureContribution, Valuation, evaluate
+from .prizes import PrizeMap
 from .worth import EvaluationModel
 
 @dataclass(frozen=True)
@@ -45,6 +46,7 @@ class OptionPrice:
     ends_turn: bool
     gaps: tuple[str, ...]
     footprint: ContinuationFootprint = ContinuationFootprint(0.0, 0.0, False)
+    prize_map: PrizeMap | None = None
 
 
 @dataclass(frozen=True)
@@ -67,7 +69,8 @@ def price_actions(state, board: ObservationState, baseline: float, provider,
         if action.identity.kind == "end":
             # The one free action: ending the turn is the zero every other option must beat.
             prices.append(OptionPrice(
-                action, 0.0, True, (), ContinuationFootprint(0.0, 0.0, False)))
+                action, 0.0, True, (), ContinuationFootprint(0.0, 0.0, False),
+                baseline_valuation.prize_map))
             continue
         walk = _Walk(provider, ctx, board.decklist)
         node = provider.transition(state, action)
@@ -105,7 +108,8 @@ def price_actions(state, board: ObservationState, baseline: float, provider,
             # unrankable. Score neutral, SAY SO — a visible gap, never a silent absorb.
             walk.gaps.append(f"non-finite price for {action.identity}; scored zero")
             swing = 0.0
-        prices.append(OptionPrice(action, swing, ends_turn, tuple(walk.gaps), footprint))
+        prices.append(OptionPrice(action, swing, ends_turn, tuple(walk.gaps), footprint,
+                                  successor.prize_map))
     return tuple(prices)
 
 
@@ -336,8 +340,10 @@ def _expected_valuation(weighted, ctx) -> Valuation:
     values = {}
     provenance = {}
     gaps = []
+    prize_maps = set()
     for probability, valuation in weighted:
         gaps.extend(valuation.gaps)
+        prize_maps.add(valuation.prize_map)
         for item in valuation.activations:
             values[item.feature] = values.get(item.feature, 0.0) + probability * item.value
             provenance.setdefault(item.feature, set()).update(item.provenance)
@@ -348,8 +354,9 @@ def _expected_valuation(weighted, ctx) -> Valuation:
         item.feature, item.value, ctx.configuration[item.feature],
         item.value * ctx.configuration[item.feature], item.provenance)
         for item in activations)
+    prize_map = next(iter(prize_maps)) if len(prize_maps) == 1 else None
     return Valuation(sum(item.value for item in contributions), (), tuple(gaps),
-                     activations, contributions)
+                     activations, contributions, prize_map)
 
 
 __all__ = ("ContinuationFootprint", "OptionPrice", "price_actions")

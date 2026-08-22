@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 from common.cards.card_facts import FIRE, WATER
-from common.cards.functions.damage_context import SideFacts, bench_gate_context, damage_context
+from deprecated.bellman.damage_context import SideFacts, bench_gate_context, damage_context
 
 
 def test_each_side_lands_under_its_directional_key():
@@ -47,3 +47,4 @@ def test_the_discard_histogram_is_copied_not_aliased():
 
 def test_bench_gate_context_is_only_the_partner_condition_slice():
     assert bench_gate_context(["Lunatone"]) == {"atk_bench_names": ("Lunatone",)}
+

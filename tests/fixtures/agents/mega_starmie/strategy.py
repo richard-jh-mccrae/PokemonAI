@@ -26,9 +26,6 @@ STRATEGY = Strategy(
     # The deck's ordered opening bodies (ADR-0079) — mirrors the shipped agent so this fixture keeps
     # exercising the declaration-keyed `open-the-declared-starter` at the Set-Up Active pick.
     starter_priority=[CINDERACE, STARYU],
-    prize_plan=PrizePlan(routes=(
-        (CINDERACE, MEGA_STARMIE_EX, MEGA_STARMIE_EX),
-        (MEGA_STARMIE_EX, CINDERACE, MEGA_STARMIE_EX),
-    )),
+    prize_plan=PrizePlan(protect=(MEGA_STARMIE_EX,), offer=(CINDERACE,)),
     params={"preferred_start": "second"},
 )

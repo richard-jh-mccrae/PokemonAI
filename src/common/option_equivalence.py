@@ -56,11 +56,6 @@ def without_engine_serial(obj):
 _without_serial = without_engine_serial
 
 
-def card_state_fingerprint(card) -> str:
-    """Stable semantic card/body key, recursively ignoring physical serial identity."""
-    return json.dumps(without_engine_serial(card), sort_keys=True, separators=(",", ":"))
-
-
 def _card_at(frame, seat, area, index):
     """None — face-down zone, unknown area, bad index, absent seat — must yield NO CLASS, not a
     guess."""
@@ -244,12 +239,6 @@ def class_representatives(equiv: dict, count: int) -> list:
     """One index per class plus every unclassed option, ascending. The representative is the LOWEST
     index in its class so the choice is a pure function of the menu (Issue #178 reproducibility)."""
     return [i for i in range(count) if min(class_of(equiv, i)) == i]
-
-
-def canonical_keys(options, frame: dict | None) -> list:
-    """Per-option ORDERING key — the fingerprint, or ``""`` when the option has none (ADR-0103). A
-    positional tie-break is not permutation-invariant; this key is. Index-aligned list in, list out."""
-    return [option_fingerprint(o, frame) or "" for o in (options or [])]
 
 
 def fan_out(values, equiv: dict) -> list:

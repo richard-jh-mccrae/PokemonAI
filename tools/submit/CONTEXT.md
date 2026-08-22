@@ -3,8 +3,8 @@
 `package.py` stages a deck declaration, shared `common/`, and native `cg/`, then creates a zip.
 `cgpy/` is offline-only diagnostics/testing/simulation and is categorically forbidden from Kaggle
 artifacts. The artifact test scans every ZIP path and every file's bytes for that forbidden name.
-The embedded HTML/CSV brief records provenance, deck contents, the Ledger configuration, Roles,
-evolution Lines, starter order, partners, prize plan, and capabilities.
+The embedded HTML/CSV brief records provenance, deck contents, Ledger configuration, Roles,
+starter order, sparse Prize Plan selectors, and capabilities.
 
 `build.py` records the artifact in the local build ledger. `submit.py` checks and uploads that exact
 artifact. The exact-bundle mirror is bounded to 600 seconds and the Kaggle upload to 120 seconds:

@@ -11,7 +11,7 @@ from ledger_helpers import (DARK_E, DARKNESS, DRAGAPULT, DRAKLOAK, DREEPY, FIRE,
 import pytest
 
 from common.algebra import Deterministic, Refresh, Terminal, Unknown
-from common.ledger import EvaluationModel, LedgerDecider
+from common.ledger import EvaluationModel, LedgerDecider, PrizeMap
 from common.ledger.decider import LedgerUnavailable
 from deprecated.bellman.state import DecisionState
 
@@ -302,14 +302,24 @@ def test_a_refresh_for_a_card_not_in_hand_logs_the_gap_and_decides_anyway():
     assert any("not visible in hand" in gap for gap in decision.diagnostics["gaps"])
 
 
-def _price(kind, index, swing, *, ends=False, refresh=False):
+def _price(kind, index, swing, *, ends=False, refresh=False, prize_map=None):
     from types import SimpleNamespace
 
     from common.ledger.preview import OptionPrice
 
     return OptionPrice(
         SimpleNamespace(selection=[index], identity=SimpleNamespace(kind=kind)),
-        swing, ends, ())
+        swing, ends, (), prize_map=prize_map)
+
+
+def test_prize_plan_does_not_preempt_the_neutral_lottery_for_near_equal_prices():
+    decider = make_decider(provider=None)
+    preferred = PrizeMap(3, (1,), 1, 0, (1,))
+    ordinary = PrizeMap(3, (2,), 1, 0, (0,))
+    prices = (_price("play", 0, 1.0, prize_map=preferred),
+              _price("play", 1, 1.0 - 5e-10, prize_map=ordinary))
+
+    assert decider._ranked(prices)[0].action.selection == [1]
 
 
 def test_continuing_options_rank_only_by_configured_price():

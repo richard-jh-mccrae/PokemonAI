@@ -20,7 +20,10 @@ def test_manifest_describes_declarations_and_ledger_only():
     assert manifest["system"] == "ledger"
     assert manifest["strategy"]["roles"]["1030"] == ["primary_attacker"]
     assert manifest["strategy"]["roles"]["1031"] == ["primary_attacker"]
-    assert manifest["strategy"]["prize_plan"]["prizes_to_win"] == 6
+    assert manifest["strategy"]["prize_plan"] == {
+        "protect": [1031], "offer": [666],
+    }
+    assert not ({"lines", "partners", "worth_overrides"} & manifest["strategy"].keys())
     assert summary(manifest)["system"] == "ledger"
     configuration = manifest["valuation_configuration"]
     assert configuration["identity"]
@@ -30,6 +33,14 @@ def test_manifest_describes_declarations_and_ledger_only():
         "demand.dead": 0.15, "energy.concentration": 0.02,
         "kind.special_energy": 0.05}
     assert manifest["compute_configuration"]["identity"]
+
+
+@pytest.mark.parametrize("agent_name", SHIPPABLE_AGENTS)
+def test_every_shipped_deck_declares_a_prize_plan(agent_name):
+    manifest = build_manifest(REPO / "src" / "agents" / agent_name,
+                              git_hash="abc123", cards={})
+    plan = manifest["strategy"]["prize_plan"]
+    assert set(plan) == {"protect", "offer"}
 
 
 def test_brief_projects_the_same_weights_to_html_and_csv():
@@ -67,7 +78,7 @@ def test_package_contains_the_ledger_and_no_bellman_search(tmp_path):
         for retired in ("common/planner.py", "common/solver.py", "common/demand.py",
                         "common/potential.py", "common/value.py", "common/value_equations.py",
                         "common/pilot_profile.py", "common/terminal.py", "common/engine.py",
-                        "common/state.py"):
+                        "common/state.py", "common/cards/functions/damage_context.py"):
             assert retired not in names, retired
         assert any(name.startswith("cg/") for name in names)
         assert "brief.html" in names and "brief.csv" in names

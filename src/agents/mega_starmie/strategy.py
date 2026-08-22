@@ -19,9 +19,6 @@ STRATEGY = Strategy(
     ledger_overlay={"demand.dead": 0.15, "kind.special_energy": 0.05,
                     "energy.concentration": 0.02},
     starter_priority=(CINDERACE, STARYU),
-    prize_plan=PrizePlan(routes=(
-        (CINDERACE, MEGA_STARMIE_EX, MEGA_STARMIE_EX),
-        (MEGA_STARMIE_EX, CINDERACE, MEGA_STARMIE_EX),
-    )),
+    prize_plan=PrizePlan(protect=(MEGA_STARMIE_EX,), offer=(CINDERACE,)),
     params={"preferred_start": "second"},
 )

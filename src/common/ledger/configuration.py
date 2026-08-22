@@ -130,6 +130,7 @@ class ComputeConfiguration:
 class BehaviorIdentity:
     valuation: str
     compute: str
+    prize_plan: str
 
 
 __all__ = ("BehaviorIdentity", "ComputeConfiguration", "DeckOverlay",
