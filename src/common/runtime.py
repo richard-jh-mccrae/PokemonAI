@@ -16,7 +16,7 @@ from common.cards.card_facts import EnergyCard
 from common.cards.functions.damage import bench_reach
 from common.deck_tracker import OwnCardModel
 from common.ledger import (ComputeConfiguration, DeckOverlay, EvaluationModel,
-                           LedgerDecider, ValuationConfiguration,
+                           LedgerDecider, OpponentProfile, ValuationConfiguration,
                            preview_provider_factory)
 from common.opponent import (OpponentEvidence, OpponentKnowledgeBase, OpponentModel,
                              OpponentSnapshot)
@@ -95,7 +95,8 @@ class AgentRuntime:
 
     def __init__(self, strategy, deck, *, stats=_ENGINE, knowledge_base=None,
                  opponent_model_factory=OpponentModel, provider_factory=None, limits=None,
-                 valuation_configuration=None, compute_configuration=None):
+                 valuation_configuration=None, compute_configuration=None,
+                 decision_parity_oracle=None):
         self.strategy = strategy
         self.deck = tuple(int(card_id) for card_id in deck)
         if stats is _ENGINE:
@@ -124,18 +125,27 @@ class AgentRuntime:
         # observation. On the runtime so replay and test callers see the deployed board state.
         self._attack_locks: dict = {}
         self.knowledge = LegalKnowledge()
+        profiles = getattr(self.opponent_knowledge, "profiles", {})
+        inclusion = getattr(self.opponent_knowledge, "card_inclusion", {})
         self.ledger = LedgerDecider(
             self.deck, strategy.name,
             EvaluationModel.build(
                 configuration=valuation_configuration or ValuationConfiguration.general(),
-                compute=compute_configuration or ComputeConfiguration(),
                 roles={card_id: tuple(self.roles.get(card_id, ()) or ())
                        for card_id in self.deck},
                 prize_plan=strategy.prize_plan,
-                overlay=DeckOverlay(strategy.ledger_overlay)),
+                overlay=DeckOverlay(strategy.ledger_overlay),
+                opponent_profiles={
+                    name: OpponentProfile(
+                        profile.roles, profile.traits, profile.mechanics,
+                        inclusion[name])
+                    for name, profile in profiles.items()
+                }),
             provider_factory=preview_provider_factory(self.provider_factory),
             provider_kwargs={"registry": _ProviderFactSources(),
-                             "stats": self.stats})
+                             "stats": self.stats},
+            compute=compute_configuration or ComputeConfiguration(),
+            parity_oracle=decision_parity_oracle)
 
     def _option_card_id(self, state: ObservationState, option) -> int | None:
         option_type = option.type
@@ -366,18 +376,7 @@ def build_runtime(strategy, deck, **kwargs) -> AgentRuntime:
 
 
 def _belief_from_snapshot(snapshot: OpponentSnapshot) -> OpponentBelief:
-    scale = 1_000_000
-    candidates = tuple((candidate.archetype, round(candidate.probability * scale))
-                       for candidate in snapshot.candidates)
-    card_ids = {card_id for candidate in snapshot.candidates
-                for card_id in candidate.resources}
-    expected = tuple((card_id, round(sum(
-        candidate.probability * candidate.resources.get(card_id, 0.0)
-        for candidate in snapshot.candidates) * scale))
-                     for card_id in sorted(card_ids))
-    return OpponentBelief(
-        evidence=(("snapshot", snapshot.identity), ("archetypes", candidates)),
-        probabilities=expected)
+    return OpponentBelief.from_snapshot(snapshot)
 
 
 def _read_deck() -> list[int]:

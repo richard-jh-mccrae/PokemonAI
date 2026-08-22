@@ -12,8 +12,9 @@ from __future__ import annotations
 import hashlib
 import random
 from collections import defaultdict
+from dataclasses import replace
 
-from common.observation import ObservationState, ObservationStateBuilder
+from common.observation import ObservationState, ObservationStateBuilder, OpponentBelief
 from common.cards import card_store
 from common.cards.card_facts import SUPPORTER
 from common.ledger.evaluate import FeatureActivation, FeatureContribution, Valuation
@@ -71,6 +72,7 @@ def refresh_value(observation, board: ObservationState, card_id: int,
 
 def _refresh_samples(observation, board: ObservationState, card_id: int,
                      draws, opponent_shuffles: bool, evaluate_fn, compute):
+    compute = getattr(compute, "search", compute)
     gaps: list[str] = []
     seat = board.seat
     mine = _player(observation, seat)
@@ -103,7 +105,17 @@ def _refresh_samples(observation, board: ObservationState, card_id: int,
 
 
 def _seed(board: ObservationState, card_id: int, seed: int) -> int:
-    digest = hashlib.blake2b(f"{seed}:{board.key}:{int(card_id)}".encode("ascii"),
+    evidence = dict(board.knowledge.opponent.evidence)
+    key = board.key
+    if board.knowledge.opponent.decision_evidence is not None:
+        coarse = OpponentBelief(
+            evidence=(("snapshot", evidence["snapshot"]),
+                      ("archetypes", evidence["archetypes"])),
+            probabilities=board.knowledge.opponent.probabilities,
+        )
+        legacy = replace(board, knowledge=replace(board.knowledge, opponent=coarse))
+        key = legacy.key
+    digest = hashlib.blake2b(f"{seed}:{key}:{int(card_id)}".encode("ascii"),
                              digest_size=8).digest()
     return int.from_bytes(digest, "big")
 

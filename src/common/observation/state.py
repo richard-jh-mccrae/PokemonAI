@@ -146,9 +146,12 @@ class ObservationState:
         feed(hasher.update, self.seat)
         # Deck knowledge is position identity: the same pieces under another decklist must differ.
         feed(hasher.update, self.deck_counts)
-        feed(hasher.update, (_knowledge_key(self.knowledge),
-                             _semantic_locks(self), self.knowledge.opponent.evidence,
-                             self.knowledge.opponent.probabilities))
+        opponent = self.knowledge.opponent
+        knowledge_identity = (_knowledge_key(self.knowledge), _semantic_locks(self),
+                              opponent.evidence, opponent.probabilities)
+        if opponent.decision_evidence is not None:
+            knowledge_identity += (opponent.decision_evidence.identity,)
+        feed(hasher.update, knowledge_identity)
         feed(hasher.update, (_side_identity(self.me), _side_identity(self.them),
                              self.turn.scalars(), tuple(sorted(card.card_id for card in self.stadium)),
                              _looking_identity(self.looking)))

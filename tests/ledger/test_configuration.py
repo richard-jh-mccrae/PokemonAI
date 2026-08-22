@@ -5,6 +5,7 @@ from common.ledger import (
     DeckOverlay,
     EvaluationModel,
     ValuationConfiguration,
+    opponent_profiles_from_snapshot,
 )
 from dataclasses import replace
 import pytest
@@ -16,7 +17,7 @@ from common.opponent import (
     ArchetypeBelief, OpponentEvidence, OpponentMechanic, OpponentSnapshot, OpponentTrait,
 )
 from common.strategy import PrizePlan
-from common.observation import ObservationStateBuilder
+from common.observation import LegalKnowledge, ObservationStateBuilder, OpponentBelief
 from ledger_helpers import ULTRA_BALL, body, player, printout
 from common.ledger import evaluate
 
@@ -56,15 +57,21 @@ def test_ambiguous_and_target_directive_roles_are_retired_from_construction():
     EvaluationModel.build()
 
 
-def test_behavior_identity_pairs_valuation_with_a_separate_compute_profile():
-    context = EvaluationModel.build(compute=ComputeConfiguration())
-    faster = EvaluationModel.build(compute=replace(context.compute, chain_node_cap=64))
+def test_evaluation_model_excludes_deployment_compute_configuration():
+    context = EvaluationModel.build()
 
-    assert context.behavior_identity == BehaviorIdentity(
-        context.configuration.identity, context.compute.identity, PrizePlan().identity)
-    assert faster.configuration.identity == context.configuration.identity
-    assert faster.compute.identity != context.compute.identity
-    assert faster.behavior_identity != context.behavior_identity
+    assert not hasattr(context, "compute")
+    assert context.identity
+
+
+def test_behavior_identity_covers_every_decision_component():
+    identity = BehaviorIdentity(
+        "evaluator", "model", "search", "policy-model", "decision-policy",
+        "provider", "compute", "prize-plan")
+
+    assert tuple(identity.__dataclass_fields__) == (
+        "evaluator", "evaluation_model", "search", "policy_model",
+        "decision_policy", "provider", "compute", "prize_plan")
 
 
 def test_behavior_identity_includes_the_effective_prize_plan():
@@ -72,8 +79,7 @@ def test_behavior_identity_includes_the_effective_prize_plan():
     offered = EvaluationModel.build(prize_plan=PrizePlan(offer=(666,)))
 
     assert offered.configuration.identity == general.configuration.identity
-    assert offered.compute.identity == general.compute.identity
-    assert offered.behavior_identity != general.behavior_identity
+    assert offered.identity != general.identity
 
 
 def test_catalog_contains_the_complete_generic_surface_without_tags_or_card_pins():
@@ -116,15 +122,17 @@ def test_opponent_roles_use_observed_facts_plus_continuous_posterior_expectation
     beliefs = _snapshot(
         observed_roles={card_id: ("support_pokemon",)},
         candidates=(
-            ArchetypeBelief(0.25, roles={card_id: ("primary_attacker",)}),
-            ArchetypeBelief(0.50, roles={card_id: ("healer",)}),
+            ArchetypeBelief(0.25, roles={card_id: ("primary_attacker",)},
+                            archetype="attacker"),
+            ArchetypeBelief(0.50, roles={card_id: ("healer",)}, archetype="healer"),
         ),
         unknown_mass=0.25,
     )
-    context = EvaluationModel.build().with_opponent(beliefs)
-
+    context = EvaluationModel.build(
+        opponent_profiles=opponent_profiles_from_snapshot(beliefs))
+    knowledge = LegalKnowledge(opponent=OpponentBelief.from_snapshot(beliefs))
     valuation = evaluate(ObservationStateBuilder().root(printout(
-        them=player(own=False, active=body(card_id, 1)))), context)
+        them=player(own=False, active=body(card_id, 1))), knowledge=knowledge), context)
     activation = {item.feature: item.value for item in valuation.activations}
 
     assert activation["role.support_pokemon"] == -1.0
@@ -220,11 +228,13 @@ def test_every_opponent_trait_compiles_against_the_closed_typed_schema():
 def test_opponent_traits_compile_through_the_full_posterior_with_provenance():
     belief = ArchetypeBelief(
         0.4, mechanics=(OpponentMechanic("item_lock", 1.0),), archetype="lock-deck")
-    context = EvaluationModel.build().with_opponent(_snapshot(
-        candidates=(belief,), unknown_mass=0.6))
+    snapshot = _snapshot(candidates=(belief,), unknown_mass=0.6)
+    context = EvaluationModel.build(
+        opponent_profiles=opponent_profiles_from_snapshot(snapshot))
+    knowledge = LegalKnowledge(opponent=OpponentBelief.from_snapshot(snapshot))
 
     valuation = evaluate(ObservationStateBuilder().root(printout(
-        me=player(hand=[ULTRA_BALL]), them=player(own=False))), context)
+        me=player(hand=[ULTRA_BALL]), them=player(own=False)), knowledge=knowledge), context)
     activation = next(item for item in valuation.activations
                       if item.feature == "mechanic.item_lock")
 

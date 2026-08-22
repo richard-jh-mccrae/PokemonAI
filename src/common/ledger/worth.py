@@ -6,9 +6,12 @@ on the current body or a forward evolution already visible in hand."""
 from __future__ import annotations
 
 from collections import Counter
-from dataclasses import dataclass, field, replace
+import hashlib
+import json
+from dataclasses import dataclass, field
 from functools import lru_cache
 from enum import Enum
+from types import MappingProxyType
 from typing import Mapping
 
 from common.cards import FUNCTION_CATALOG, card_store, play_clauses, pokemon_default_roles
@@ -16,11 +19,11 @@ from common.cards.card_facts import COLORLESS, SUPPORTER, EnergyCard, PokemonCar
 from common.cards.functions.energy import provision_units
 from common.cards.functions.fetch import DEADNESS, fetch_target_matches
 from common.cards.pokemon_roles import undeclared_pokemon_roles
-from common.opponent import OpponentSnapshot
+from common.observation.knowledge import PROBABILITY_SCALE
+from common.opponent import ArchetypeBelief, OpponentMechanic, OpponentTrait
 from common.strategy import PrizePlan
 
-from .configuration import (BehaviorIdentity, ComputeConfiguration, DeckOverlay,
-                            ValuationConfiguration)
+from .configuration import DeckOverlay, ValuationConfiguration
 
 
 @dataclass(frozen=True)
@@ -28,19 +31,19 @@ class EvaluationModel:
     """Everything deck-scoped the evaluator needs: configuration, Roles, and card facts."""
 
     configuration: ValuationConfiguration
-    compute: ComputeConfiguration
     roles: Mapping[int, tuple[str, ...]]
     store: Mapping[int, object] = field(repr=False)
     prize_plan: PrizePlan = PrizePlan()
-    #: Posterior beliefs used for the opponent side; None means unknown archetype.
-    opponent: OpponentSnapshot | None = None
+    opponent_profiles: Mapping[str, "OpponentProfile"] = field(
+        default_factory=dict, repr=False)
 
     @classmethod
     def build(cls, *, roles: Mapping[int, tuple[str, ...]] | None = None,
               configuration: ValuationConfiguration | None = None,
               overlay: DeckOverlay | None = None,
-              compute: ComputeConfiguration | None = None,
-              prize_plan: PrizePlan | None = None) -> "EvaluationModel":
+              prize_plan: PrizePlan | None = None,
+              opponent_profiles: Mapping[str, "OpponentProfile"] | None = None,
+              ) -> "EvaluationModel":
         configured = (configuration or ValuationConfiguration.general()).resolve(
             overlay or DeckOverlay())
         merged = dict(pokemon_default_roles())
@@ -59,16 +62,22 @@ class EvaluationModel:
             for attack in getattr(facts, "attacks", ()) or ():
                 clauses.extend(attack.clauses)
             FUNCTION_CATALOG.compile(clauses)
-        return cls(configuration=configured, compute=compute or ComputeConfiguration(), roles=merged,
-                   store=store, prize_plan=prize_plan or PrizePlan())
+        profiles = MappingProxyType(dict(sorted((opponent_profiles or {}).items())))
+        return cls(configuration=configured, roles=merged, store=store,
+                   prize_plan=prize_plan or PrizePlan(), opponent_profiles=profiles)
 
     @property
-    def behavior_identity(self) -> BehaviorIdentity:
-        return BehaviorIdentity(
-            self.configuration.identity, self.compute.identity, self.prize_plan.identity)
-
-    def with_opponent(self, layer: OpponentSnapshot | None) -> "EvaluationModel":
-        return self if layer is self.opponent else replace(self, opponent=layer)
+    def identity(self) -> str:
+        payload = {
+            "configuration": self.configuration.identity,
+            "prize_plan": self.prize_plan.identity,
+            "roles": tuple(sorted(self.roles.items())),
+            "opponent_profiles": {
+                name: profile.canonical_data()
+                for name, profile in self.opponent_profiles.items()},
+        }
+        blob = json.dumps(payload, sort_keys=True).encode("utf-8")
+        return hashlib.blake2b(blob, digest_size=8).hexdigest()
 
     def facts(self, card_id: int):
         return self.store.get(int(card_id))
@@ -191,15 +200,73 @@ def legal_line_reach(body, reach, ctx: EvaluationModel, hand=(), turn=None) -> M
     return legal
 
 
-def opponent_line_reach(ctx: EvaluationModel) -> Mapping[int, float]:
-    if ctx.opponent is None:
+@dataclass(frozen=True)
+class OpponentEvaluation:
+    observed_roles: Mapping[int, tuple[str, ...]]
+    candidates: tuple[ArchetypeBelief, ...]
+    unknown_mass: float
+    failures: tuple[str, ...] = ()
+
+
+@dataclass(frozen=True)
+class OpponentProfile:
+    roles: Mapping[int, tuple[str, ...]]
+    traits: tuple[OpponentTrait, ...]
+    mechanics: tuple[OpponentMechanic, ...]
+    resources: Mapping[int, float]
+
+    def canonical_data(self):
+        return {
+            "roles": tuple(sorted(self.roles.items())),
+            "traits": tuple((item.name, item.value) for item in self.traits),
+            "mechanics": tuple((item.name, item.probability) for item in self.mechanics),
+            "resources": tuple(sorted(self.resources.items())),
+        }
+
+
+def opponent_profiles_from_snapshot(snapshot) -> Mapping[str, OpponentProfile]:
+    return MappingProxyType({
+        candidate.archetype: OpponentProfile(
+            candidate.roles, candidate.traits, candidate.mechanics,
+            candidate.resources)
+        for candidate in snapshot.candidates
+    })
+
+
+def opponent_evaluation(board, ctx: EvaluationModel) -> OpponentEvaluation | None:
+    evidence = board.knowledge.opponent.decision_evidence
+    if evidence is None:
+        return None
+    def probability(value):
+        return (value / PROBABILITY_SCALE if isinstance(value, int) else float(value))
+
+    missing = tuple(candidate.archetype for candidate in evidence.candidates
+                    if candidate.archetype not in ctx.opponent_profiles)
+    candidates = tuple(ArchetypeBelief(
+        probability(candidate.probability),
+        roles=profile.roles,
+        traits=profile.traits,
+        mechanics=profile.mechanics,
+        archetype=candidate.archetype,
+        resources=profile.resources,
+    ) for candidate in evidence.candidates
+      for profile in (ctx.opponent_profiles.get(
+          candidate.archetype, OpponentProfile({}, (), (), {})),))
+    observed = {card_id: tuple(roles) for card_id, roles in evidence.observed_roles}
+    unknown = probability(evidence.unknown_mass)
+    failures = tuple(f"missing opponent profile: {archetype}" for archetype in missing)
+    return OpponentEvaluation(observed, candidates, unknown, failures)
+
+
+def opponent_line_reach(ctx: EvaluationModel, opponent=None) -> Mapping[int, float]:
+    if opponent is None:
         return {}
     ids = {evo_id for line in _forward_lines().values() for evo_id in line}
     return {evo_id: sum(candidate.probability * candidate.resources.get(evo_id, 0.0)
-                        for candidate in ctx.opponent.candidates)
+                        for candidate in opponent.candidates)
             for evo_id in ids
             if any(candidate.resources.get(evo_id, 0.0)
-                   for candidate in ctx.opponent.candidates)}
+                   for candidate in opponent.candidates)}
 
 
 def _held_fetch_reaches(hand, turn, target, ctx: EvaluationModel) -> bool:

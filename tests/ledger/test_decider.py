@@ -11,8 +11,12 @@ from ledger_helpers import (DARK_E, DARKNESS, DRAGAPULT, DRAKLOAK, DREEPY, FIRE,
 import pytest
 
 from common.algebra import Deterministic, Refresh, Terminal, Unknown
+from common.decision import (CandidateDisposition, CandidateRoster, DecisionDelta,
+                             EvaluationStatus, ValuedCandidate)
 from common.ledger import EvaluationModel, LedgerDecider, PrizeMap
 from common.ledger.decider import LedgerUnavailable
+from common.ledger.decision import LEDGER_VALUE_SCALE
+from common.ledger.search import GreedyDecisionPolicy
 from deprecated.bellman.state import DecisionState
 
 
@@ -21,8 +25,25 @@ def make_decider(provider, deck=(DRAGAPULT, FIRE_E, DARK_E) * 20, sink=None):
                          provider_factory=lambda _state, **_kw: provider, gap_sink=sink)
 
 
+def choose_prices(decider, prices, *, forced=False):
+    candidates = tuple(ValuedCandidate(
+        price.action,
+        DecisionDelta(price.swing, LEDGER_VALUE_SCALE),
+        (CandidateDisposition.FORCED if forced else
+         CandidateDisposition.ENDS_TURN if price.ends_turn
+         else CandidateDisposition.CONTINUES_TURN),
+        EvaluationStatus.COMPLETE,
+        policy_tie_break=(() if price.prize_map is None
+                          else price.prize_map.plan_rank_key()),
+        policy_evidence=price.prize_map,
+    ) for price in prices)
+    chosen = GreedyDecisionPolicy().choose(
+        CandidateRoster(candidates, forced), decider.compute.policy).action
+    return next(price for price in prices if price.action is chosen)
+
+
 def state_of(observation, deck):
-    identity = f"ledger:{EvaluationModel.build().behavior_identity}"
+    identity = f"ledger:{EvaluationModel.build().identity}"
     return DecisionState.from_observation(observation, deck=tuple(deck), deck_name="test",
                                           value_registry_identity=identity)
 
@@ -218,15 +239,15 @@ def test_equal_swings_use_a_reproducible_neutral_lottery():
         selection=[1], identity=ActionIdentity("attach", ("candidate-b",))), 0.1, False, ())
     decider = make_decider(provider=None)
 
-    chosen = decider._choose((first, second), forced=False)
+    chosen = choose_prices(decider, (first, second))
     relabeled = (
         OptionPrice(SimpleNamespace(selection=[0], identity=ActionIdentity("play", (999,))),
                     0.1, False, ()),
         OptionPrice(SimpleNamespace(selection=[1], identity=ActionIdentity("attack", (1,))),
                     0.1, False, ()),
     )
-    assert decider._choose((first, second), forced=False) is chosen
-    assert decider._choose(relabeled, forced=False).action.selection == chosen.action.selection
+    assert choose_prices(decider, (first, second)) is chosen
+    assert choose_prices(decider, relabeled).action.selection == chosen.action.selection
 
 
 def test_a_menu_with_no_ender_takes_the_least_bad_option():
@@ -308,7 +329,8 @@ def _price(kind, index, swing, *, ends=False, refresh=False, prize_map=None):
     from common.ledger.preview import OptionPrice
 
     return OptionPrice(
-        SimpleNamespace(selection=[index], identity=SimpleNamespace(kind=kind)),
+        SimpleNamespace(selection=[index],
+                        identity=SimpleNamespace(kind=kind, parts=(index,))),
         swing, ends, (), prize_map=prize_map)
 
 
@@ -319,20 +341,20 @@ def test_prize_plan_does_not_preempt_the_neutral_lottery_for_near_equal_prices()
     prices = (_price("play", 0, 1.0, prize_map=preferred),
               _price("play", 1, 1.0 - 5e-10, prize_map=ordinary))
 
-    assert decider._ranked(prices)[0].action.selection == [1]
+    assert choose_prices(decider, prices).action.selection == [1]
 
 
 def test_continuing_options_rank_only_by_configured_price():
     decider = make_decider(provider=None)
     prices = (_price("attach", 0, 0.05), _price("play", 1, 0.40, refresh=True),
               _price("end", 2, 0.0, ends=True))
-    assert decider._choose(prices, forced=False).action.identity.kind == "play"
+    assert choose_prices(decider, prices).action.identity.kind == "play"
 
 
 def test_a_positive_hand_shuffle_alone_still_gets_played():
     decider = make_decider(provider=None)
     prices = (_price("play", 0, 0.40, refresh=True), _price("end", 1, 0.0, ends=True))
-    assert decider._choose(prices, forced=False).action.identity.kind == "play"
+    assert choose_prices(decider, prices).action.identity.kind == "play"
 
 
 def test_price_actions_has_no_mechanic_specific_ordering_flags():
@@ -409,12 +431,9 @@ def test_no_card_or_mechanic_specific_ordering_branch_remains():
     shuffle = _price("play", 2, 0.40, refresh=True)
     end = _price("end", 3, 0.0, ends=True)
 
-    assert decider._choose((attach, fetch, shuffle, end),
-                           forced=False).action.selection == [2]
-    assert decider._choose((fetch, shuffle, end),
-                           forced=False).action.selection == [2]   # shuffle before fetch
-    assert decider._choose((fetch, end),
-                           forced=False).action.selection == [1]   # no shuffle: fetch normal
+    assert choose_prices(decider, (attach, fetch, shuffle, end)).action.selection == [2]
+    assert choose_prices(decider, (fetch, shuffle, end)).action.selection == [2]
+    assert choose_prices(decider, (fetch, end)).action.selection == [1]
 
 
 def test_decider_has_no_restock_classifier():
