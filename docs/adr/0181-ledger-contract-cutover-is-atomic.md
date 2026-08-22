@@ -1,4 +1,4 @@
-# ADR-TEMP-583 — The Ledger contract cutover is atomic
+# ADR-0181 — The Ledger contract cutover is atomic
 
 The normal live path switches atomically to Decision Coordinator and the Ledger adapters; the old
 decider survives only as an offline Decision Parity oracle, never a production selector or shadow

@@ -1,4 +1,4 @@
-# ADR-TEMP-583 — Decision results preserve explicit outcomes
+# ADR-0178 — Decision results preserve explicit outcomes
 
 Search materializes every legal root candidate before work and retains immutable legal-view outcomes,
 Action Paths, typed status, Value Components, scale, perspective, and Transition Trace alongside the

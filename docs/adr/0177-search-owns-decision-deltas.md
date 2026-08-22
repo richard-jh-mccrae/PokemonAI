@@ -1,4 +1,4 @@
-# ADR-TEMP-583 — Search owns decision deltas; value evaluators own state value
+# ADR-0177 — Search owns decision deltas; value evaluators own state value
 
 Search Algorithm owns traversal and Q(s,a), Value Evaluator remains a pure V(s) function, Policy
 Model supplies P(a|s), and Decision Policy alone selects the deployed action. Neutral contracts live
