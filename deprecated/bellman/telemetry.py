@@ -1,29 +1,9 @@
-"""Stable JSON telemetry for Bellman root decisions."""
+"""Diagnostic-only serializer for quarantined Bellman teacher records."""
 from __future__ import annotations
 
 import dataclasses
 import hashlib
 import json
-import math
-import sys
-from contextlib import contextmanager
-from contextvars import ContextVar
-
-
-TAG = "@T"
-_CAPTURE: ContextVar[list[dict] | None] = ContextVar("telemetry_capture", default=None)
-
-
-def lethal_proof_seconds(record: dict | None) -> float | None:
-    if not isinstance(record, dict):
-        return None
-    proof = ((record.get("diagnostics") or {}).get("terminal_proof") or {})
-    value = proof.get("elapsed_ms")
-    if proof.get("attempted") is not True or isinstance(value, bool) \
-            or not isinstance(value, (int, float)):
-        return None
-    seconds = float(value) / 1000.0
-    return seconds if math.isfinite(seconds) and seconds >= 0.0 else None
 
 
 def _wire(value):
@@ -79,13 +59,8 @@ def _compact_diagnostics(diagnostics: dict) -> dict:
     return compact
 
 
-def to_record(decision, *, opponent=None, seat=None, compact=False,
-              state=None,
-              decision_seconds: float | None = None,
-              decision_limit_seconds: float | None = None,
-              deadline_hit: bool | None = None) -> dict:
-    """Serialize the complete Bellman explanation for one committed choice."""
-
+def to_record(decision, *, opponent=None, seat=None, compact=False, state=None,
+              decision_seconds=None, decision_limit_seconds=None, deadline_hit=None) -> dict:
     diagnostics = _wire(dict(decision.diagnostics))
     if compact:
         diagnostics = _compact_diagnostics(diagnostics)
@@ -114,27 +89,4 @@ def to_record(decision, *, opponent=None, seat=None, compact=False,
     return record
 
 
-def emit(decision, *, opponent=None, seat=None, state=None, out=None, decision_seconds=None,
-         decision_limit_seconds=None, deadline_hit=None) -> None:
-    record = to_record(decision, opponent=opponent, seat=seat, state=state, compact=True,
-                       decision_seconds=decision_seconds,
-                       decision_limit_seconds=decision_limit_seconds,
-                       deadline_hit=deadline_hit)
-    captured = _CAPTURE.get()
-    if captured is not None:
-        captured.append(record)
-    print(f"{TAG} " + json.dumps(record, separators=(",", ":")),
-          file=out or sys.stderr, flush=True)
-
-
-@contextmanager
-def capture_records():
-    records = []
-    token = _CAPTURE.set(records)
-    try:
-        yield records
-    finally:
-        _CAPTURE.reset(token)
-
-
-__all__ = ["TAG", "capture_records", "emit", "to_record"]
+__all__ = ("to_record",)

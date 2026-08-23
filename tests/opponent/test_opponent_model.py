@@ -12,7 +12,7 @@ from common.scouting.artifact import Artifact
 from common.scouting.briefs import Brief
 from common.scouting.provider import CardStat, DictCardStatProvider
 from common.api import RootDecision
-from common.telemetry import to_record
+from deprecated.bellman.telemetry import to_record
 from common.observation import ObservationStateBuilder
 from ledger_helpers import player, printout
 from scouting_helpers import MEGA_LUCARIO, RIOLU, SOLROCK, make_obs, tiny_artifact

@@ -153,7 +153,7 @@ def test_live_runtime_has_no_retired_bellman_or_latch_state():
 
 def test_policy_consumers_cannot_walk_raw_observations():
     targets = (
-        "src/common/runtime.py", "src/common/deck_tracker.py", "src/common/telemetry.py",
+        "src/common/runtime.py", "src/common/deck_tracker.py", "src/common/telemetry/core.py",
         "src/common/opponent/model.py", "src/common/ledger/decider.py",
         "src/common/ledger/evaluate.py", "src/common/ledger/worth.py",
     )

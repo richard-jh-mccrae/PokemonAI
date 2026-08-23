@@ -97,6 +97,28 @@ def test_save_telemetry_writes_seat_specific_inspector_logs(tmp_path):
     }
 
 
+def test_save_telemetry_writes_the_authoritative_episode_stream(tmp_path):
+    from common.telemetry import RecordAssembler, build_outcome_record
+
+    outcome = build_outcome_record(
+        episode_key="42",
+        decision_records=[],
+        winner=None,
+        terminal_reason="draw",
+        public_prizes={0: 1, 1: 1},
+        rewards={0: 0.0, 1: 0.0},
+        duration_seconds=2.0,
+        external_episode_id="42",
+    )
+
+    _save_telemetry(tmp_path, 42, [outcome])
+
+    assembler = RecordAssembler()
+    records = [record for line in (tmp_path / "episode-42-telemetry.jsonl").read_text().splitlines()
+               if (record := assembler.ingest(line)) is not None]
+    assert records == [outcome]
+
+
 @pytest.mark.req("REQ-SIM-0009")
 def test_generate_corpus_exposes_overlay_to_games_and_restores_env(tmp_path, monkeypatch):
     seen = []
@@ -122,6 +144,7 @@ def test_generate_corpus_exposes_overlay_to_games_and_restores_env(tmp_path, mon
     replays = [json.loads(path.read_text(encoding="utf-8"))
                for path in Path(run_dir).glob("*.json") if "-logs" not in path.name]
     assert all(replay["info"]["MatchWallSeconds"] >= 0.0 for replay in replays)
+    assert len(list(Path(run_dir).glob("episode-*-telemetry.jsonl"))) == 2
 
 
 def test_generate_corpus_forwards_cabt_timeouts(tmp_path, monkeypatch):

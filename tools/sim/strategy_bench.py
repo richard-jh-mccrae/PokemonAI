@@ -111,40 +111,65 @@ def summarize_matches(matches) -> dict:
     }
 
 
+def paired_telemetry_overhead(emitting, baseline) -> dict:
+    emitting = tuple(float(value) for value in emitting)
+    baseline = tuple(float(value) for value in baseline)
+    if not emitting or len(emitting) != len(baseline) or any(value <= 0 for value in baseline):
+        raise ValueError("paired telemetry benchmark requires equal positive match samples")
+    overhead = (sum(emitting) - sum(baseline)) / sum(baseline)
+    return {"overhead": overhead}
+
+
 def decision_metrics(records, *, match_index, contestants) -> list[dict]:
     from common.telemetry import lethal_proof_seconds
 
     rows = []
     for record in records:
+        if record.get("record_type") == "outcome":
+            continue
+        ledger = record.get("schema") == "ledger.telemetry"
         production = ((record.get("diagnostics") or {}).get("production") or {})
         incumbent = production.get("final_incumbent") or {}
         snapshot = (record.get("diagnostics") or {}).get("strategy_snapshot") or {}
         fallback = (record.get("diagnostics") or {}).get("fallback") or {}
-        seat = int(record.get("engine_seat", record.get("seat", 0)))
+        decision = record.get("decision") or {}
+        timing = record.get("timing") or {}
+        seat = int(record.get("engine_seat", decision.get("seat", record.get("seat", 0))))
+        chosen_id = decision.get("chosen_action_id")
+        chosen_action = next((action for action in record.get("actions") or ()
+                              if action.get("id") == chosen_id), None)
+        chosen_candidate = next((candidate for candidate in record.get("candidates") or ()
+                                 if candidate.get("action_id") == chosen_id), None)
+        delta = None if chosen_candidate is None else chosen_candidate.get("delta")
+        decision_seconds = (timing.get("decision_seconds") if ledger
+                            else record.get("decision_seconds"))
         rows.append({
             "match": match_index,
-            "decision": int(record.get("decision_index", len(rows))),
-            "turn": snapshot.get("turn"),
+            "decision": int(record.get("decision_index", decision.get("index", len(rows)))),
+            "turn": decision.get("turn") if ledger else snapshot.get("turn"),
             "seat": seat,
             "agent": contestants[seat],
-            "action": record.get("action"),
-            "value": record.get("value"),
-            "complete": record.get("complete"),
+            "action": (chosen_action or {}).get("identity") if ledger else record.get("action"),
+            "value": (delta or {}).get("total") if ledger else record.get("value"),
+            "complete": record.get("completeness") == "complete" if ledger
+                        else record.get("complete"),
             "round_trip_seconds": record.get("round_trip_seconds"),
-            "decision_seconds": record.get("decision_seconds"),
-            "decision_limit_seconds": record.get("decision_limit_seconds"),
-            "deadline_hit": record.get("deadline_hit"),
+            "decision_seconds": decision_seconds,
+            "decision_limit_seconds": (timing.get("decision_limit_seconds") if ledger
+                                       else record.get("decision_limit_seconds")),
+            "deadline_hit": (timing.get("deadline_hit") if ledger
+                             else record.get("deadline_hit")),
             "lethal_proof_seconds": lethal_proof_seconds(record),
-            "total_search_seconds": incumbent.get("search_seconds", record.get("decision_seconds")),
+            "total_search_seconds": incumbent.get("search_seconds", decision_seconds),
             "first_found_seconds": incumbent.get("first_found_seconds"),
             "first_recoverable_seconds": incumbent.get("first_recoverable_seconds"),
             "first_full_seconds": incumbent.get("first_full_seconds"),
             "stabilized_seconds": incumbent.get("stabilized_seconds"),
             "remaining_search_seconds": (
-                max(0.0, float(incumbent.get("search_seconds", record.get("decision_seconds")))
+                max(0.0, float(incumbent.get("search_seconds", decision_seconds))
                     - float(incumbent["stabilized_seconds"]))
                 if incumbent.get("stabilized_seconds") is not None
-                and incumbent.get("search_seconds", record.get("decision_seconds")) is not None
+                and incumbent.get("search_seconds", decision_seconds) is not None
                 else None),
             "strategy_wave": incumbent.get("strategy_wave"),
             "strategy_focus_position": incumbent.get("strategy_focus_position"),
@@ -294,18 +319,21 @@ def _run_match_job(task: dict) -> dict:
         decision_seconds=config["decision_timeout"]) for directory in dirs)
     recorder = MatchRecorder()
     captured = []
+    telemetry = []
     started = monotonic()
     try:
         result = play_match(
             servers[0], servers[1], read_deck(dirs[0]), read_deck(dirs[1]),
             recorder=recorder, decision_timeout=config["decision_timeout"],
-            match_timeout=config["match_timeout"], metrics=captured)
+            match_timeout=config["match_timeout"], metrics=captured,
+            telemetry=telemetry, episode_key=str(task["episode_id"]),
+            external_episode_id=str(task["episode_id"]))
     finally:
         for server in servers:
             server.close()
     elapsed = monotonic() - started
     replay = recorder.replay(episode_id=task["episode_id"], team_names=list(names))
-    replay_path = save_match_artifacts(run_dir, task["episode_id"], replay, captured)
+    replay_path = save_match_artifacts(run_dir, task["episode_id"], replay, telemetry)
     return {
         "match": {
             "match": index, "contestants": names, "winner_seat": result.winner,

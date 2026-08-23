@@ -69,6 +69,7 @@ def test_positive_develop_beats_a_bigger_turn_ender():
                ("root", attack.identity): Terminal(struck, "attack resolved")})
     decision = make_decider(provider).decide(root_obs)
     assert decision.action.kind == "attach"
+    assert decision.decision_result.chosen is decision.decision_result.roster.candidates[0].action
 
 
 def test_with_nothing_worth_doing_the_best_ender_wins():

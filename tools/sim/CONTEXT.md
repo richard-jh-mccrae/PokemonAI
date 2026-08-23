@@ -12,5 +12,5 @@ These tools exercise packaged agents through the competition environment and nat
 - `audit_attacks.py`, `generate_attack_overrides.py`: measured attack facts.
 - `record.py`, `result.py`, `paired_ab.py`: replay and experiment records.
 
-Agents loaded here all enter `common.runtime.BellmanRuntime`. Replays retain per-frame observations so
-the Bellman correction corpus can re-evaluate decisions offline.
+Agents loaded here all enter `common.runtime.AgentRuntime`. Replays retain per-frame observations so
+offline evaluators can reconstruct decisions from each player's legal view.

@@ -28,6 +28,10 @@ _Avoid_: State key, decision id
 Identity of one choice point: its Position Key plus the exact legal question and actions offered.
 _Avoid_: Position Key, replay id
 
+**Episode Key**:
+Stream-scoped identity shared by every record from one Episode when no external Episode id exists.
+_Avoid_: Match id, Position Key, Decision Key
+
 **Legal Knowledge**:
 Facts the player may carry from earlier observations but the current engine printout does not contain.
 It includes exact facts and honest beliefs, never hidden truth or provider-control metadata.
@@ -231,6 +235,14 @@ _Avoid_: Silent zero, typo fallback
 **Observation Record**:
 The versioned, hidden-safe serialized form of an Observation State used for replay and learning.
 _Avoid_: Raw observation, diagnostic dump
+
+**Decision Record**:
+The versioned, hidden-safe serialization of one typed runtime decision and its complete legal evidence.
+_Avoid_: Bellman record, diagnostics dump, chosen action
+
+**Outcome Record**:
+One Episode's terminal public facts and labels, linked to every Decision Record in that Episode.
+_Avoid_: Terminal decision, reward row
 
 **Opponent Belief**:
 Scouting's immutable evidence-level estimate of the opponent: candidate-conditioned probabilities,

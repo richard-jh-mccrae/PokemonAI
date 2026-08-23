@@ -25,7 +25,7 @@ def _load_agent(bundle: Path):
 
 def main() -> None:
     capture = os.environ.get("AGENT_CAPTURE_TELEMETRY") == "1"
-    os.environ["AGENT_NO_TELEMETRY"] = "0" if capture else "1"
+    emit_enabled = os.environ.get("AGENT_NO_TELEMETRY") != "1"
     for root in sys.argv[1:]:                              # extra sys.path roots (e.g. src for source agent)
         sys.path.insert(0, root)
     bundle = Path.cwd()
@@ -45,13 +45,38 @@ def main() -> None:
             continue
         if capture:
             from common.telemetry import capture_records
-            context = capture_records()
+            context = capture_records(suppress_output=True)
         else:
             context = nullcontext([])
-        with context as records:
-            choice = agent(json.loads(line))
-        payload = ({"choice": [int(i) for i in choice], "telemetry": records}
-                   if capture else [int(i) for i in choice])
+        request = json.loads(line)
+        if request == {"telemetry_control": "flush"}:
+            if emit_enabled:
+                from common.telemetry import flush
+                flush()
+            proto.write('{"flushed":true}\n')
+            proto.flush()
+            break
+        if isinstance(request, dict) and "observation" in request \
+                and "telemetry_episode_key" in request:
+            observation = request["observation"]
+            from common.telemetry import episode_context
+            episode = episode_context(request["telemetry_episode_key"])
+        else:
+            observation = request
+            episode = nullcontext()
+        with episode, context as records:
+            if emit_enabled:
+                from common.telemetry import take_caller_seconds
+                take_caller_seconds()
+            choice = agent(observation)
+        if capture:
+            payload = {"choice": [int(i) for i in choice], "telemetry": records,
+                       "telemetry_seconds": records.emit_seconds}
+        elif emit_enabled:
+            payload = {"choice": [int(i) for i in choice], "telemetry": [],
+                       "telemetry_seconds": take_caller_seconds()}
+        else:
+            payload = [int(i) for i in choice]
         proto.write(json.dumps(payload) + "\n")
         proto.flush()
 

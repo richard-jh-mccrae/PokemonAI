@@ -1,5 +1,6 @@
 """Battle (tools/sim): a local head-to-head between two Builds. Pure-core + engine driver."""
 from pathlib import Path
+from time import monotonic
 from types import SimpleNamespace
 
 import pytest
@@ -163,14 +164,21 @@ def test_report_surfaces_crashes_when_present():
 @pytest.mark.req("REQ-SIM-0007")
 def test_play_match_runs_a_full_game_and_names_a_winner():
     deck = read_deck(MEGA)
-    a, b = AgentServer(MEGA, SRC), AgentServer(MEGA, SRC)
+    a = AgentServer(MEGA, SRC, capture_telemetry=True)
+    b = AgentServer(MEGA, SRC, capture_telemetry=True)
+    telemetry = []
     try:
-        result = play_match(a, b, deck, deck)
+        result = play_match(a, b, deck, deck, telemetry=telemetry,
+                            episode_key="native-full-game")
     finally:
         a.close()
         b.close()
     assert result.winner in (0, 1, None)        # engine resolved the game to a verdict
     assert result.crashed == ()                 # clean mirror crashes neither seat
+    decisions = [record for record in telemetry if record["record_type"] == "decision"]
+    outcomes = [record for record in telemetry if record["record_type"] == "outcome"]
+    assert len(outcomes) == 1
+    assert outcomes[0]["decision_ids"] == [record["record_id"] for record in decisions]
 
 
 @pytest.mark.req("REQ-SIM-0007")
@@ -230,7 +238,61 @@ def test_play_match_times_every_decision_even_with_the_contestants_telemetry_off
     metrics = []
     play_match(SilentServer(), SilentServer(), [], [], metrics=metrics)
 
-    assert metrics == [{"engine_seat": 0, "decision_index": 0, "round_trip_seconds": 0.75}]
+    assert metrics == [{"engine_seat": 0, "decision_index": 0,
+                        "round_trip_seconds": 0.75, "telemetry_seconds": 0.0}]
+
+
+@pytest.mark.req("REQ-SIM-0007")
+def test_play_match_owner_appends_one_outcome_with_the_exact_decision_set(monkeypatch):
+    live = {"current": {"result": -1, "yourIndex": 0, "players": [
+        {"prize": [None, None]}, {"prize": [None]},
+    ]}, "select": {"context": 0}}
+    over = {"current": {"result": 1, "yourIndex": 0, "players": [
+        {"prize": [None, None]}, {"prize": []},
+    ]}, "select": None}
+    monkeypatch.setattr("cg.game.battle_start", lambda _a, _b: (
+        live, SimpleNamespace(errorPlayer=-1)))
+    monkeypatch.setattr("cg.game.battle_select", lambda _choice: over)
+    monkeypatch.setattr("cg.game.battle_finish", lambda: None)
+
+    class CapturingServer:
+        last_timeout = False
+        last_seconds = 0.01
+
+        def begin_episode(self, episode_key):
+            self.episode_key = episode_key
+
+        def act(self, _obs, timeout=None):
+            self.last_telemetry = [{
+                "record_type": "decision",
+                "record_id": "seat-0-decision-0",
+                "episode": {"key": self.episode_key},
+            }]
+            return [0]
+
+    records = []
+    play_match(CapturingServer(), CapturingServer(), [], [], telemetry=records)
+
+    assert [record["record_type"] for record in records] == ["decision", "outcome"]
+    outcome = records[-1]
+    assert outcome["decision_ids"] == ["seat-0-decision-0"]
+    assert outcome["result"]["winner"] == 1
+    assert outcome["result"]["public_prizes"] == {"0": 2, "1": 0}
+
+
+def test_illegal_deck_still_gets_exactly_one_owner_outcome(monkeypatch):
+    obs = {"current": {"players": [{"prize": []}, {"prize": []}]}, "select": None}
+    monkeypatch.setattr("cg.game.battle_start", lambda _a, _b: (
+        obs, SimpleNamespace(errorPlayer=0)))
+    monkeypatch.setattr("cg.game.battle_finish", lambda: None)
+
+    records = []
+    result = play_match(SimpleNamespace(), SimpleNamespace(), [], [], telemetry=records)
+
+    assert result.winner == 1
+    assert len(records) == 1
+    assert records[0]["record_type"] == "outcome"
+    assert records[0]["result"]["terminal_reason"] == "illegal_deck"
 
 
 @pytest.mark.req("REQ-SIM-0007")

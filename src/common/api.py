@@ -2,7 +2,10 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Mapping
+from typing import TYPE_CHECKING, Mapping
+
+if TYPE_CHECKING:
+    from common.decision.contracts import DecisionResult
 
 
 @dataclass(frozen=True, order=True)
@@ -22,6 +25,7 @@ class RootDecision:
     value: float
     complete: bool
     diagnostics: Mapping
+    decision_result: DecisionResult | None = None
 
 
 __all__ = (
