@@ -189,7 +189,7 @@ _OP_POSES = {
     "xHealMegaBounceEnergy": {(int(SelectType.CARD), int(SelectContext.HEAL))},
     # Turbo Flare's rider asks for the Basic Energies before it asks where each one goes.  A live
     # CABT observation carries a native (not cgpy) search token, so this first rider ask must be
-    # reconstructible from the public attack log just like a trainer's first ask.
+    # reconstructible from the attack definition before the public attack log is emitted.
     "xDeckEnergyAttachDistribute": {(int(SelectType.CARD), int(SelectContext.ATTACH_TO))},
     "xDeckEvolveInPlayAndShuffle": {
         (int(SelectType.CARD), int(SelectContext.EVOLVES_TO)),
@@ -212,6 +212,7 @@ def _reconstruct_effect_frame(gs: GameState, select: dict, seat: int, logs: list
             f"state_from_obs: cannot seed a non-MAIN select with no effect card "
             f"(context {select['context']})")
     in_play = any(p.top == eff for s in (0, 1) for p in gs.in_play(s))
+    key = (int(select["type"]), int(select["context"]))
     kind = "play"
     if in_play:
         attacks = [entry for entry in reversed(logs or [])
@@ -219,18 +220,27 @@ def _reconstruct_effect_frame(gs: GameState, select: dict, seat: int, logs: list
                    and int(entry.get("playerIndex", -1)) == seat
                    and int(entry.get("serial", -1)) == eff
                    and entry.get("attackId") is not None]
-        if len(attacks) != 1:
+        programs = []
+        if len(attacks) == 1:
+            attack_id = int(attacks[0]["attackId"])
+            programs = [(attack_id, (def_for(f"attack:{attack_id}") or {}).get("rider"))]
+        elif not attacks:
+            for attack_id in gs.db.card(gs.card_id(eff)).attacks:
+                rider = (def_for(f"attack:{attack_id}") or {}).get("rider")
+                pcs = [i for i, op in enumerate(rider or ())
+                       if key in _OP_POSES.get(op["op"], ())]
+                if len(pcs) == 1:
+                    programs.append((attack_id, rider))
+        if len(programs) != 1:
             raise ValueError(
                 "state_from_obs: cannot identify the attack that posed the mid-effect select")
-        attack_id = int(attacks[0]["attackId"])
-        program = (def_for(f"attack:{attack_id}") or {}).get("rider")
+        _, program = programs[0]
         kind = "attack"
     else:
         program = (def_for(gs.card_id(eff)) or {}).get("play")
     if not program:
         raise ValueError(f"state_from_obs: effect source {gs.card_id(eff)} has no {kind} program "
                          "to reconstruct")
-    key = (int(select["type"]), int(select["context"]))
     pcs = [i for i, op in enumerate(program) if key in _OP_POSES.get(op["op"], ())]
     if len(pcs) != 1:
         raise ValueError(

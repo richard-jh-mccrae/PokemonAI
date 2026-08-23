@@ -180,10 +180,9 @@ class GreedyDecisionPolicy:
                            and candidate.status.value in configuration.accepted_statuses)
         reason = DecisionReason.FORCED if roster.forced else DecisionReason.BEST_DELTA
         if not candidates:
-            candidates = roster.candidates
-            raise ValueError("normal policy received no comparable candidates")
-        if not candidates:
-            raise ValueError("cannot choose from an empty candidate roster")
+            detail = tuple((str(candidate.action.identity), candidate.status.value, candidate.gaps)
+                           for candidate in roster.candidates)
+            raise ValueError(f"normal policy received no comparable candidates: {detail}")
         if not roster.forced:
             continuing = tuple(
                 candidate for candidate in candidates

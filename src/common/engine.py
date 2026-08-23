@@ -126,6 +126,7 @@ class CgpyTransitionProvider:
         self._attack_committed: dict[str, bool] = {}
         self._provider_metadata: dict[int, dict] = {}
         self._local_nested = False
+        self._local_nested_error = ""
         self._root_turn = int((_payload(root).get("current") or {}).get("turn", 0))
         self._error = ""
         try:
@@ -157,6 +158,7 @@ class CgpyTransitionProvider:
             context = int(((_payload(root).get("select") or {}).get("context", -1)))
             if context != _MAIN:
                 self._local_nested = True
+                self._local_nested_error = f"{type(exc).__name__}: {exc}"
                 self._error = ""
             else:
                 self._error = f"{type(exc).__name__}: {exc}"
@@ -513,7 +515,7 @@ class CgpyTransitionProvider:
                     prizes.pop(index)
             else:
                 return Unknown("historical nested frame unavailable",
-                               f"select context {context}")
+                               f"select context {context}; {self._local_nested_error}")
             current["turnActionCount"] = int(current.get("turnActionCount", 0)) + 1
             obs["select"] = None
             successor = self._bind(state, obs)
