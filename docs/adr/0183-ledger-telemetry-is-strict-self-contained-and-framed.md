@@ -1,4 +1,4 @@
-# ADR-TEMP-585 — Ledger telemetry is strict, self-contained, and framed
+# ADR-0183 — Ledger telemetry is strict, self-contained, and framed
 
 Each Ledger Decision Record carries the legal observation, complete typed Decision Result, effective
 configuration, and provenance needed to replay it without another stream record. A strict versioned
