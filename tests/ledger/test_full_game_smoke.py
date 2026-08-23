@@ -1,11 +1,8 @@
-"""One whole cgpy game through the LIVE runtime: the Ledger answers, ObservationState agrees.
+"""One whole cgpy game through the live runtime: the Ledger answers, ObservationState agrees.
 
-The deployment shell (common.runtime) catches every exception into a last-resort answer,
-so a completely dead Ledger still finishes matches and every other full-game harness stays
-green. This smoke is the liveness assertion the rest of the tree cannot supply:
+This smoke is the liveness assertion the rest of the tree cannot supply:
 
-- every post-pregame decision must come back `backend == "ledger"` (or the trivial
-  forced-selection shortcut) — one crash fallback anywhere fails the game;
+- every post-pregame decision enters the coordinator exactly once and returns as Ledger;
 - both seats' ObservationState advance chains are cross-checked against the ENGINE'S OWN state —
   god truth, not a rendered reprint — every step: zone counts, hand and discard contents,
   actives, bench, statuses, stadium;
@@ -79,12 +76,23 @@ def _assert_board_matches_engine(board, gs, seat, step):
     assert board.turn.number == gs.turn, f"step {step} turn"
 
 
-def test_a_full_cgpy_mirror_game_runs_on_the_ledger_start_to_finish():
+def test_a_full_cgpy_mirror_game_runs_on_the_ledger_start_to_finish(monkeypatch):
+    monkeypatch.setenv("AGENT_BRAIN_STRICT", "1")
     deck = _deck()
     # Seed chosen by scan: 16 turns, every prize taken — knockouts, promotions, prize flips.
     engine, err_player, err_type = Engine.start(deck, deck, rng=SeededRng(424242))
     assert engine is not None, f"deck rejected: seat {err_player} errorType {err_type}"
     runtimes = {seat: _runtime(deck) for seat in (0, 1)}
+    coordinator_entries: Counter = Counter()
+    for seat, runtime in runtimes.items():
+        real = runtime.ledger.coordinator
+
+        class RecordingCoordinator:
+            def decide(self, *args, _seat=seat, _real=real, **kwargs):
+                coordinator_entries[_seat] += 1
+                return _real.decide(*args, **kwargs)
+
+        runtime.ledger.coordinator = RecordingCoordinator()
     own_cards = {seat: OwnCardModel(runtimes[seat].deck)
                  for seat in (0, 1)}
     chains = {seat: build_observation(observation(engine.gs, seat), decklist=deck)
@@ -98,15 +106,16 @@ def test_a_full_cgpy_mirror_game_runs_on_the_ledger_start_to_finish():
         obs["own_prizes"] = own_cards[seat].prize_export()
         obs["known_top"] = own_cards[seat].known_top_export()
         turn = int((obs.get("current") or {}).get("turn", 0))
+        entries_before = coordinator_entries[seat]
         decision = runtimes[seat].decide(obs)
         backend = decision.diagnostics.get("backend")
         backends[backend] += 1
         if turn <= 0:
             assert backend == "declarative-pregame", (steps, backend)
+            assert coordinator_entries[seat] == entries_before
         else:
-            # The whole point: the LEDGER answered, not the exception fallback.
-            assert backend in ("ledger", "forced-selection"), \
-                (steps, backend, decision.diagnostics)
+            assert backend == "ledger", (steps, backend, decision.diagnostics)
+            assert coordinator_entries[seat] == entries_before + 1
         engine.step(list(decision.chosen))
         steps += 1
         for view in (0, 1):
@@ -116,7 +125,7 @@ def test_a_full_cgpy_mirror_game_runs_on_the_ledger_start_to_finish():
 
     assert engine.gs.result != -1, f"no result after {MAX_STEPS} steps; backends {backends}"
     assert backends["ledger"] >= 20, backends
-    assert backends.get("last-resort-fallback", 0) == 0, backends
+    assert set(backends) <= {"declarative-pregame", "ledger"}, backends
 
     # The terminal frame digests, and the evaluator reads the outcome straight off the board.
     ctx = EvaluationModel.build()

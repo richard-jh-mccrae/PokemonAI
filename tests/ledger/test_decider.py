@@ -274,7 +274,7 @@ def test_an_empty_menu_raises_ledger_unavailable():
         make_decider(provider).decide(printout(me=player(active=body(DRAGAPULT, 1))))
 
 
-def test_an_unavailable_provider_raises_ledger_unavailable():
+def test_an_unavailable_provider_returns_a_typed_fail_safe_decision():
     class DeadProvider:
         available = False
         _error = "engine session refused"
@@ -284,8 +284,11 @@ def test_an_unavailable_provider_raises_ledger_unavailable():
 
     decider = LedgerDecider(DECK, "test", EvaluationModel.build(),
                             provider_factory=lambda _s, **_kw: DeadProvider())
-    with pytest.raises(LedgerUnavailable):
-        decider.decide(printout(me=player(active=body(DRAGAPULT, 1))))
+    decision = decider.decide(printout(me=player(active=body(DRAGAPULT, 1))))
+
+    assert decision.diagnostics["policy_reason"] == "fail_safe_provider_failure"
+    assert decision.diagnostics["failure"]["stage"] == "provider"
+    assert decision.complete is False
 
 
 def test_harlequin_legs_average_exactly_on_a_uniform_pool():

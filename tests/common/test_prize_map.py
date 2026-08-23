@@ -30,7 +30,7 @@ def _state(observation):
 def test_runtime_prefers_forcing_the_opponent_to_overrun_its_last_three_prizes(monkeypatch):
     monkeypatch.setenv("AGENT_BRAIN_STRICT", "1")
     select = {"context": 0, "minCount": 1, "maxCount": 1,
-              "option": [{"type": 1}, {"type": 1}]}
+              "option": [{"type": 1, "number": 1}, {"type": 1, "number": 2}]}
     root = printout(
         me=player(active=body(MEGA_STARMIE, 1), bench=(body(CINDERACE, 2),)),
         them=player(own=False, prizes=3), select=select)
@@ -76,7 +76,7 @@ def test_runtime_prefers_forcing_the_opponent_to_overrun_its_last_three_prizes(m
 def test_prize_plan_breaks_only_an_equal_structural_tie(monkeypatch):
     monkeypatch.setenv("AGENT_BRAIN_STRICT", "1")
     select = {"context": 0, "minCount": 1, "maxCount": 1,
-              "option": [{"type": 1}, {"type": 1}]}
+              "option": [{"type": 1, "number": 1}, {"type": 1, "number": 2}]}
     offered = _state(printout(
         me=player(active=body(CINDERACE, 2),
                   bench=(body(STARYU, 3), body(MEGA_STARMIE, 1))),
@@ -110,7 +110,7 @@ def test_prize_plan_breaks_only_an_equal_structural_tie(monkeypatch):
 def test_prize_plan_cannot_override_superior_ledger_value(monkeypatch):
     monkeypatch.setenv("AGENT_BRAIN_STRICT", "1")
     select = {"context": 0, "minCount": 1, "maxCount": 1,
-              "option": [{"type": 1}, {"type": 1}]}
+              "option": [{"type": 1, "number": 1}, {"type": 1, "number": 2}]}
     offered = _state(printout(
         me=player(active=body(CINDERACE, 2),
                   bench=(body(STARYU, 3), body(MEGA_STARMIE, 1))),

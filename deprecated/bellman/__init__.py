@@ -6,6 +6,8 @@ teacher-side consumer rewrites `from common import X` to `from deprecated.bellma
 
 from .belief import BellmanDeckProfile, opponent_belief
 from .budget_prototype import DecisionClock, FairBudgetPrototype
+from .contracts import (END_VALUE, BellmanPlanner, BellmanUnavailable, PlanRequest, PlanStep,
+                        RootDecision)
 from .demand import (
     ActionFocus,
     CoverageEdge,
@@ -44,5 +46,6 @@ __all__ = (
     "StrategyBeam", "TerminalLimits", "TerminalProof", "TerminalProver",
     "TransitionProvider", "TurnBudgets", "UtilityScale", "ValueOracle", "ValueRegistry", "WorthSeeds",
     "access_probability", "bellman_provider_factory", "build_teacher_runtime",
-    "opponent_belief",
+    "opponent_belief", "END_VALUE", "BellmanPlanner", "BellmanUnavailable", "PlanRequest",
+    "PlanStep", "RootDecision",
 )

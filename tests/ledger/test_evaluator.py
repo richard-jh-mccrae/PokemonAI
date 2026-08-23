@@ -215,6 +215,14 @@ def test_unknown_card_scores_the_floor_and_logs_a_gap():
     assert any(str(UNKNOWN) in gap for gap in valuation.gaps)
 
 
+def test_non_pokemon_rendered_as_a_body_is_explicit_coverage_unknown():
+    valuation = evaluate(board(me=player(active=body(ULTRA_BALL, 1))), ctx())
+
+    assert any("non-Pokemon body" in gap for gap in valuation.gaps)
+    assert any(item.feature == "coverage.unknown_card" and item.value > 0
+               for item in valuation.activations)
+
+
 def test_opponent_hand_is_priced_by_count_alone():
     context = ctx()
     small = board(them=player(own=False, hand_count=2))

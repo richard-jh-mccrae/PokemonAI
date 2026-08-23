@@ -9,20 +9,28 @@ in `RootDecision.diagnostics`; a `gap_sink` callable receives one record per dec
 a gap — the honest worklist, counted per decision affected."""
 from __future__ import annotations
 
+import os
+import sys
+
 from common.api import RootDecision
-from common.decision import DecisionCoordinator
+from common.decision import DecisionCoordinator, FailSafeRequest, fail_safe_request
 from common.observation import (KnownOwnPrizes, ObservationStateBuilder, OpponentBelief,
                                 reduce_knowledge)
 from common.strategy.context import _MAIN
 
 from .decision import LedgerValueEvaluator
 from .configuration import BehaviorIdentity
-from .search import GreedyDecisionPolicy, LedgerOnePlySearch, UniformPolicyModel
+from .search import (FailSafeDecisionPolicy, GreedyDecisionPolicy, LedgerOnePlySearch,
+                     TransitionProviderSource, UniformPolicyModel, unavailable_ledger_result)
 from .seam import LedgerNativeProvider, PreviewState
 from .worth import EvaluationModel
 
 class LedgerUnavailable(RuntimeError):
     """The transition seam could not open for this observation."""
+
+
+class DecisionPostprocessingError(RuntimeError):
+    coordinator_entered = True
 
 
 class LedgerDecider:
@@ -40,6 +48,7 @@ class LedgerDecider:
         self.provider_kwargs = dict(provider_kwargs or {})
         self.gap_sink = gap_sink
         self.parity_oracle = parity_oracle
+        self.coordinator = self._build_coordinator()
 
     @property
     def behavior_identity(self) -> BehaviorIdentity:
@@ -53,6 +62,7 @@ class LedgerDecider:
             LedgerOnePlySearch.identity,
             UniformPolicyModel.identity,
             GreedyDecisionPolicy.identity,
+            FailSafeDecisionPolicy.identity,
             provider_name,
             self.compute.identity,
             self.ctx.prize_plan.identity,
@@ -76,38 +86,95 @@ class LedgerDecider:
                              prize_counts=(board.knowledge.own_prizes.cards
                                            if isinstance(board.knowledge.own_prizes,
                                                          KnownOwnPrizes) else ()))
-        provider = self.provider_factory(state, **self.provider_kwargs)
-        if not getattr(provider, "available", True):
-            _close_quietly(provider)               # a half-opened engine session must not leak
-            raise LedgerUnavailable(str(getattr(provider, "_error", "provider unavailable")))
+        provider = TransitionProviderSource(self.provider_factory, state, self.provider_kwargs)
+        coordinator_entered = False
         try:
-            search_configuration, policy_configuration = self._configurations(self.compute)
-            coordinator = DecisionCoordinator(
-                evaluator=LedgerValueEvaluator(),
-                evaluation_model=ctx,
-                search=LedgerOnePlySearch(),
-                search_configuration=search_configuration,
-                policy_model=UniformPolicyModel(),
-                decision_policy=GreedyDecisionPolicy(),
-                policy_configuration=policy_configuration,
-                behavior_identity=self.behavior_identity,
-            )
-            result = coordinator.decide(state, provider=provider)
-            if self.parity_oracle is not None:
-                self.parity_oracle(
-                    state=state, board=board, provider=provider, evaluation_model=ctx,
-                    result=result, search_configuration=search_configuration,
-                    policy_configuration=policy_configuration)
-        finally:
-            # A close() failing on an already-broken session must not mask the pricing outcome.
-            _close_quietly(provider)
+            try:
+                coordinator_entered = True
+                result = self.coordinator.decide(
+                    state, provider=provider,
+                    strict=os.environ.get("AGENT_BRAIN_STRICT") == "1")
+                search_configuration, policy_configuration = self._configurations(self.compute)
+                if self.parity_oracle is not None and provider.instance is not None:
+                    self.parity_oracle(
+                        state=state, board=board, provider=provider.instance,
+                        evaluation_model=ctx, result=result,
+                        search_configuration=search_configuration,
+                        policy_configuration=policy_configuration)
+            finally:
+                provider.close()
+            return self._root_decision(
+                result, board, opponent, policy_configuration,
+                decision_parity=self.parity_oracle is not None and provider.instance is not None,
+                cleanup_failure=provider.close_failure)
+        except Exception as exc:
+            if isinstance(exc, LedgerUnavailable):
+                raise
+            if coordinator_entered:
+                raise DecisionPostprocessingError(str(exc)) from exc
+            raise
+
+    def fail_safe(self, observation, failure, *, opponent=None, knowledge=None, state=None):
+        if state is None:
+            try:
+                board = ObservationStateBuilder(self.deck).root(
+                    observation, knowledge=knowledge)
+            except Exception:
+                board = None
+        else:
+            board = state
+        request = fail_safe_request(observation) if board is None else None
+        root = (request if request is not None else
+                PreviewState(observation, board, "root", deck=self.deck,
+                             deck_counts=board.deck_counts or (),
+                             prize_counts=(board.knowledge.own_prizes.cards
+                                           if isinstance(board.knowledge.own_prizes,
+                                                         KnownOwnPrizes) else ())))
+        result = self.coordinator.decide(root, failure=failure)
+        _search, policy_configuration = self._configurations(self.compute)
+        return self._root_decision(
+            result, board, opponent, policy_configuration, decision_parity=False,
+            fail_safe_request=request)
+
+    def _build_coordinator(self):
+        search_configuration, policy_configuration = self._configurations(self.compute)
+        return DecisionCoordinator(
+            evaluator=LedgerValueEvaluator(),
+            evaluation_model=self.ctx,
+            search=LedgerOnePlySearch(),
+            search_configuration=search_configuration,
+            policy_model=UniformPolicyModel(),
+            decision_policy=GreedyDecisionPolicy(),
+            policy_configuration=policy_configuration,
+            behavior_identity=self.behavior_identity,
+            fail_safe_policy=FailSafeDecisionPolicy(),
+            failure_handler=unavailable_ledger_result,
+        )
+
+    def _root_decision(self, result, board, opponent, policy_configuration, *,
+                       decision_parity, cleanup_failure=None,
+                       fail_safe_request: FailSafeRequest | None = None):
         if not result.roster.candidates:
             raise LedgerUnavailable("no legal actions to price")
+        failure = result.search.failure
+        if failure is not None:
+            print(
+                f"LEDGER-CRASH stage={failure.stage.value} "
+                f"{failure.error_type}: {failure.message}\n{failure.traceback_tail}",
+                file=sys.stderr, flush=True,
+            )
+        if cleanup_failure is not None:
+            print(
+                f"LEDGER-CRASH stage=provider cleanup {cleanup_failure.error_type}: "
+                f"{cleanup_failure.message}\n{cleanup_failure.traceback_tail}",
+                file=sys.stderr, flush=True,
+            )
 
         candidates = result.roster.candidates
         chosen = next(candidate for candidate in candidates
                       if candidate.action is result.chosen)
-        context_value = None if board.select is None else board.select.context
+        context_value = (fail_safe_request.context if fail_safe_request is not None else
+                         None if board.select is None else board.select.context)
         context = _MAIN if context_value is None else int(context_value)
         chosen_value = None if chosen.delta is None else chosen.delta.total
         indifference_ordinals = tuple(
@@ -117,8 +184,14 @@ class LedgerDecider:
         gaps = (tuple(gap for candidate in candidates for gap in candidate.gaps)
                 + result.baseline.gaps)
         if gaps and self.gap_sink is not None:
-            self.gap_sink({"context": context, "position_key": board.position_key,
-                           "decision_key": board.decision_key, "gaps": sorted(set(gaps)),
+            self.gap_sink({"context": context,
+                           "position_key": (fail_safe_request.state_key
+                                            if fail_safe_request is not None
+                                            else board.position_key),
+                           "decision_key": (fail_safe_request.decision_key
+                                            if fail_safe_request is not None
+                                            else board.decision_key),
+                           "gaps": sorted(set(gaps)),
                            "chosen": list(chosen.action.selection)})
         ranked = GreedyDecisionPolicy._ranked(candidates, policy_configuration)
         return RootDecision(
@@ -131,28 +204,43 @@ class LedgerDecider:
                 "compute": self.compute.identity,
                 "prize_plan": self.ctx.prize_plan.identity,
                 "behavior": self.behavior_identity,
-                "policy_reason": result.policy_reason,
-                "decision_parity": self.parity_oracle is not None,
+                "policy_reason": getattr(result.policy_reason, "value", result.policy_reason),
+                "decision_parity": decision_parity,
                 "search": {
                     "nodes_visited": result.trace.nodes_visited,
                     "stop_reason": result.trace.stop_reason,
                     "frontier": result.trace.frontier,
                 },
-                "position_key": board.position_key,
-                "decision_key": board.decision_key,
+                "position_key": (fail_safe_request.state_key
+                                 if fail_safe_request is not None else board.position_key),
+                "decision_key": (fail_safe_request.decision_key
+                                 if fail_safe_request is not None else board.decision_key),
                 "prize_map": (chosen.policy_evidence.as_dict()
                               if chosen.policy_evidence is not None else None),
                 **({"opponent_unknown_mass": opponent.unknown_mass}
                    if opponent is not None else {}),
                 "baseline": result.baseline.total, "gaps": sorted(set(gaps)),
+                **({"failure": {
+                    "stage": result.search.failure.stage.value,
+                    "error_type": result.search.failure.error_type,
+                    "message": result.search.failure.message,
+                    "traceback_tail": result.search.failure.traceback_tail,
+                }} if result.search.failure is not None else {}),
+                **({"cleanup_failure": {
+                    "stage": cleanup_failure.stage.value,
+                    "error_type": cleanup_failure.error_type,
+                    "message": cleanup_failure.message,
+                    "traceback_tail": cleanup_failure.traceback_tail,
+                }} if cleanup_failure is not None else {}),
                 "indifference_ordinals": indifference_ordinals,
                 "prices": tuple({"action": str(candidate.action.identity),
                                  "selection": list(candidate.action.selection),
                                  "swing": (None if candidate.delta is None
                                            else candidate.delta.total),
-                                 "ends_turn": not candidate.continuation.continues_turn,
+                                 "ends_turn": (False if candidate.continuation is None else
+                                               not candidate.continuation.continues_turn),
                                  "status": candidate.status.value,
-                                 "continuation": {
+                                 "continuation": (None if candidate.continuation is None else {
                                      "state_delta": candidate.continuation.state_delta,
                                      "action_opportunity": candidate.continuation.action_opportunity,
                                      "continues_turn": candidate.continuation.continues_turn,
@@ -174,7 +262,7 @@ class LedgerDecider:
                                          "value": item.value,
                                      } for item in (() if candidate.delta is None
                                                    else candidate.delta.components)),
-                                 }}
+                                 })}
                                 for candidate in ranked),
             })
 
@@ -182,14 +270,4 @@ class LedgerDecider:
     def _configurations(compute):
         return compute.search, compute.policy
 
-def _close_quietly(provider) -> None:
-    close = getattr(provider, "close", None)
-    if close is None:
-        return
-    try:
-        close()
-    except Exception:
-        pass
-
-
-__all__ = ("LedgerDecider", "LedgerUnavailable")
+__all__ = ("DecisionPostprocessingError", "LedgerDecider", "LedgerUnavailable")

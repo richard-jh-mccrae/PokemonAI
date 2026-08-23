@@ -107,6 +107,7 @@ class BehaviorIdentity:
     search: str
     policy_model: str
     decision_policy: str
+    fail_safe_policy: str
     provider: str
     compute: str
     prize_plan: str

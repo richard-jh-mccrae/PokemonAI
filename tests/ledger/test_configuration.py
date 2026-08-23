@@ -67,11 +67,11 @@ def test_evaluation_model_excludes_deployment_compute_configuration():
 def test_behavior_identity_covers_every_decision_component():
     identity = BehaviorIdentity(
         "evaluator", "model", "search", "policy-model", "decision-policy",
-        "provider", "compute", "prize-plan")
+        "fail-safe-policy", "provider", "compute", "prize-plan")
 
     assert tuple(identity.__dataclass_fields__) == (
         "evaluator", "evaluation_model", "search", "policy_model",
-        "decision_policy", "provider", "compute", "prize_plan")
+        "decision_policy", "fail_safe_policy", "provider", "compute", "prize_plan")
 
 
 def test_behavior_identity_includes_the_effective_prize_plan():

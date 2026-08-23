@@ -110,7 +110,7 @@ def test_coordinator_keeps_search_evaluation_and_policy_contracts_separate():
     assert result.baseline is baseline
     assert result.roster.candidates == candidates
     assert result.trace.chosen_action is attach
-    assert result.policy_reason == "fake-decision-policy"
+    assert result.policy_reason.value == "policy"
     request, passed_evaluator, passed_model, provider, search_config = search.calls[0]
     assert request.state == "state"
     assert request.evaluation_model == "evaluation-model"

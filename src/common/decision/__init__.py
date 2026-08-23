@@ -3,11 +3,15 @@ from .contracts import (
     CandidateRoster,
     ContinuationResult,
     DecisionDelta,
+    DecisionFailure,
+    DecisionFailureStage,
     DecisionChoice,
     DecisionPolicy,
     DecisionResult,
+    DecisionReason,
     EvaluationRequest,
     EvaluationStatus,
+    FailSafeRequest,
     PolicyModel,
     SearchAlgorithm,
     SearchResult,
@@ -24,14 +28,17 @@ from .contracts import (
 from .coordinator import DecisionCoordinator
 from .configuration import (BudgetController, ComputeConfiguration, PolicyConfiguration,
                             SearchConfiguration)
+from .fail_safe import fail_safe_request, safe_legal_selection
 
 __all__ = (
     "BudgetController", "CandidateDisposition", "CandidateRoster", "ComputeConfiguration",
     "ContinuationResult",
-    "DecisionChoice", "DecisionCoordinator", "DecisionDelta",
+    "DecisionChoice", "DecisionCoordinator", "DecisionDelta", "DecisionFailure",
+    "DecisionFailureStage", "DecisionReason",
     "DecisionPolicy", "DecisionResult", "EvaluationRequest", "EvaluationStatus",
-    "PolicyConfiguration", "PolicyModel", "SearchAlgorithm", "SearchConfiguration",
+    "FailSafeRequest", "PolicyConfiguration", "PolicyModel", "SearchAlgorithm",
+    "SearchConfiguration",
     "SearchResult", "SearchTrace", "SearchValue", "StateValuation",
     "SuccessorResult", "ValuationCache", "ValueComponent", "ValueEvaluator", "ValueScale",
-    "ValuedCandidate",
+    "ValuedCandidate", "fail_safe_request", "safe_legal_selection",
 )

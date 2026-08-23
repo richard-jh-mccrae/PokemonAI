@@ -1,4 +1,4 @@
-"""Planning failure and deadline fallback always submit a productive legal choice."""
+"""Forced and degraded decisions stay legal inside the coordinator contract."""
 from __future__ import annotations
 
 import importlib.util
@@ -22,11 +22,20 @@ def _strategy(name: str = "mega_starmie"):
 
 
 def _agent_with_boom(monkeypatch, decide):
+    def broken_provider(state, **_kwargs):
+        decide(state._provider_payload)
+        raise AssertionError("failure fixture did not raise")
+
+    runtime = _mega_starmie_runtime(provider_factory=broken_provider)
+    monkeypatch.setattr(runtime_module, "build_runtime", lambda *a, **k: runtime)
+    monkeypatch.setattr(runtime_module, "_read_deck", lambda: list(runtime.deck))
+    return runtime_module.make_agent(strategy=None)
+
+
+def _agent_with_decision(monkeypatch, decide):
     class BoomRuntime:
         deck = tuple(range(1, 61))
         opponent_snapshot = None
-        last_decision_limit = None
-        last_deadline_hit = False
 
         def decide(self, observation):
             return decide(observation)
@@ -161,19 +170,176 @@ def test_a_planning_crash_spends_the_full_draw_or_damage_count(monkeypatch):
 def test_a_telemetry_failure_never_discards_a_computed_decision(monkeypatch, capsys):
     decision = runtime_module.RootDecision(
         (2,), None, 1.0, True, {"unserializable": object()})
-    agent = _agent_with_boom(monkeypatch, lambda _observation: decision)
+    agent = _agent_with_decision(monkeypatch, lambda _observation: decision)
     observation = _menu([engine_opt(type=3, area=2, index=0)])
 
     assert agent(observation) == [2]
     assert "telemetry" in capsys.readouterr().err.lower()
 
 
-def _mega_starmie_runtime():
+def test_deck_submission_is_the_only_protocol_bypass(monkeypatch):
+    calls = []
+
+    class RecordingRuntime:
+        deck = tuple(range(1, 61))
+        opponent_snapshot = None
+
+        def decide(self, observation):
+            calls.append(observation)
+            return runtime_module.RootDecision(
+                (), runtime_module.ActionIdentity("decline"), 0.0, True,
+                {"backend": "ledger"})
+
+    monkeypatch.setattr(runtime_module, "build_runtime", lambda *a, **k: RecordingRuntime())
+    monkeypatch.setattr(runtime_module, "_read_deck", lambda: list(range(1, 61)))
+    agent = runtime_module.make_agent(strategy=None)
+
+    assert runtime_module.PROTOCOL_BYPASS_ALLOWLIST == frozenset({"deck_submission"})
+    assert agent({"select": None, "current": None}) == list(range(1, 61))
+    assert calls == []
+
+    with pytest.raises(ValueError, match="not an approved protocol bypass"):
+        agent({"select": None, "current": {"result": 0}})
+    assert calls == []
+
+    game_menu = _menu([], min_count=0, max_count=0)
+    assert agent(game_menu) == []
+    assert calls == [game_menu]
+
+
+def _mega_starmie_runtime(**kwargs):
     strategy = _strategy()
     deck = [int(value) for value in
             (REPO / "src" / "agents" / "mega_starmie" / "deck.csv").read_text().splitlines()
             if value.strip()]
-    return runtime_module.build_runtime(strategy, deck, stats=None)
+    return runtime_module.build_runtime(strategy, deck, stats=None, **kwargs)
+
+
+def test_post_pregame_forced_menu_is_a_complete_ledger_decision_without_preview():
+    def forbidden_provider(_state, **_kwargs):
+        raise AssertionError("forced decision must not construct a transition provider")
+
+    runtime = _mega_starmie_runtime(provider_factory=forbidden_provider)
+    observation = _menu([engine_opt(type=14)], context=0, turn=2)
+
+    decision = runtime.decide(observation)
+
+    assert decision.diagnostics["backend"] == "ledger"
+    assert decision.diagnostics["policy_reason"] == "forced"
+    assert decision.complete is True
+    assert decision.value == 0.0
+    assert decision.chosen == (0,)
+    assert decision.diagnostics["prices"] == ({
+        "action": str(decision.action),
+        "selection": [0],
+        "swing": 0.0,
+        "ends_turn": False,
+        "status": "complete",
+        "continuation": None,
+    },)
+
+
+def test_one_canonical_action_with_equivalent_selections_is_still_forced():
+    def forbidden_provider(_state, **_kwargs):
+        raise AssertionError("forced decision must not construct a transition provider")
+
+    runtime = _mega_starmie_runtime(provider_factory=forbidden_provider)
+    observation = _menu([engine_opt(type=14), engine_opt(type=14)], context=0, turn=2)
+
+    decision = runtime.decide(observation)
+
+    assert decision.diagnostics["policy_reason"] == "forced"
+    assert decision.complete is True
+    assert decision.value == 0.0
+    assert len(decision.diagnostics["prices"]) == 1
+
+
+def test_post_pregame_provider_failure_is_a_typed_ledger_fail_safe_decision():
+    def broken_provider(_state, **_kwargs):
+        raise RuntimeError("native session died")
+
+    runtime = _mega_starmie_runtime(provider_factory=broken_provider)
+    observation = _menu([
+        engine_opt(type=3, area=2, index=0),
+        engine_opt(type=14),
+    ], context=0, turn=2)
+
+    decision = runtime.decide(observation)
+
+    assert decision.diagnostics["backend"] == "ledger"
+    assert decision.diagnostics["policy_reason"] == "fail_safe_provider_failure"
+    assert decision.complete is False
+    assert decision.chosen == (1,)
+    assert decision.diagnostics["failure"]["stage"] == "provider"
+    assert decision.diagnostics["failure"]["error_type"] == "RuntimeError"
+    assert "native session died" in decision.diagnostics["failure"]["message"]
+    assert {price["status"] for price in decision.diagnostics["prices"]} == {"unavailable"}
+    assert {tuple(price["selection"]) for price in decision.diagnostics["prices"]} == {
+        (0,), (1,),
+    }
+
+
+def test_every_post_pregame_menu_enters_the_decision_coordinator_once():
+    def broken_provider(_state, **_kwargs):
+        raise RuntimeError("provider unavailable")
+
+    runtime = _mega_starmie_runtime(provider_factory=broken_provider)
+    entered = []
+    real = runtime.ledger.coordinator
+
+    class RecordingCoordinator:
+        def decide(self, *args, **kwargs):
+            entered.append(args[0])
+            return real.decide(*args, **kwargs)
+
+    runtime.ledger.coordinator = RecordingCoordinator()
+
+    runtime.decide(_menu([engine_opt(type=0, number=1)], context=38, turn=0))
+    assert entered == []
+
+    runtime.decide(_menu([engine_opt(type=14)], context=0, turn=2))
+    assert len(entered) == 1
+
+    runtime.decide(_menu([
+        engine_opt(type=3, area=2, index=0),
+        engine_opt(type=14),
+    ], context=0, turn=2))
+    assert len(entered) == 2
+
+    malformed = _menu([
+        engine_opt(type=3, area=2, index=0),
+        engine_opt(type=14),
+    ], context=0, turn=2)
+    malformed["current"]["players"] = malformed["current"]["players"][:1]
+    decision = runtime.decide(malformed)
+    assert len(entered) == 3
+    assert decision.chosen == (1,)
+    assert decision.diagnostics["policy_reason"] == "fail_safe_runtime_failure"
+
+
+def test_a_post_coordinator_mapping_bug_is_not_routed_through_a_second_entry():
+    runtime = _mega_starmie_runtime(
+        provider_factory=lambda _state, **_kwargs: (_ for _ in ()).throw(
+            RuntimeError("provider unavailable")))
+    entered = 0
+    real = runtime.ledger.coordinator
+
+    class RecordingCoordinator:
+        def decide(self, *args, **kwargs):
+            nonlocal entered
+            entered += 1
+            return real.decide(*args, **kwargs)
+
+    runtime.ledger.coordinator = RecordingCoordinator()
+    runtime.ledger._root_decision = lambda *_args, **_kwargs: (_ for _ in ()).throw(
+        RuntimeError("mapping bug"))
+
+    with pytest.raises(RuntimeError, match="mapping bug"):
+        runtime.decide(_menu([
+            engine_opt(type=3, area=2, index=0),
+            engine_opt(type=14),
+        ], context=0, turn=2))
+    assert entered == 1
 
 
 def test_pregame_draw_count_survives_a_dense_non_number_option():
@@ -200,7 +366,7 @@ def test_pregame_setup_active_survives_dense_card_options():
     assert decision.chosen == (1,)                   # starter priority, not a crash
 
 
-def test_one_effect_timeout_latches_the_fallback_until_main_returns():
+def test_each_effect_menu_is_decided_from_its_current_observation():
     deployed = _mega_starmie_runtime()
     calls = 0
 
@@ -209,7 +375,7 @@ def test_one_effect_timeout_latches_the_fallback_until_main_returns():
         calls += 1
         return runtime_module.RootDecision(
             (0,), runtime_module.ActionIdentity("card"), 1.0, False,
-            {"production": {"deadline_hit": True}})
+            {})
 
     deployed._decide_core = timed_out
     observation = _menu(
@@ -222,12 +388,12 @@ def test_one_effect_timeout_latches_the_fallback_until_main_returns():
     ]
 
     assert deployed.decide(observation).chosen == (0,)
-    assert deployed.decide(observation).chosen == (1,)
-    assert calls == 1
+    assert deployed.decide(observation).chosen == (0,)
+    assert calls == 2
 
     observation["select"] = {
         "context": 0, "minCount": 1, "maxCount": 1,
         "option": [engine_opt(type=14)],
     }
     deployed.decide(observation)
-    assert calls == 2
+    assert calls == 3

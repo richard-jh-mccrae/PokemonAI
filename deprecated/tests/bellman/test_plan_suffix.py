@@ -1,6 +1,7 @@
 from __future__ import annotations
 
-from common import PlanRequest, PlanStep, enumerate_legal_actions
+from common import enumerate_legal_actions
+from deprecated.bellman import PlanRequest, PlanStep
 from deprecated.bellman.pilot_profile import PilotProfile
 from deprecated.bellman.runtime import BellmanTeacherRuntime
 from deprecated.bellman.state import DecisionState

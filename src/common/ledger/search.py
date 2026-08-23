@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import hashlib
 import math
+from dataclasses import dataclass
 
 from common.decision import (
     CandidateDisposition,
@@ -10,17 +11,52 @@ from common.decision import (
     BudgetController,
     DecisionChoice,
     DecisionDelta,
+    DecisionFailure,
+    DecisionFailureStage,
+    DecisionReason,
     EvaluationStatus,
     EvaluationRequest,
+    FailSafeRequest,
     SearchResult,
     SearchValue,
+    StateValuation,
     ValuationCache,
     ValuedCandidate,
+    safe_legal_selection,
 )
+from common.observation.provider import provider_payload
 from common.strategy.context import _MAIN
 
 from .decision import ledger_valuation_from_state, value_components
 from .preview import price_actions
+
+
+class DecisionExecutionError(RuntimeError):
+    def __init__(self, failure: DecisionFailure):
+        super().__init__(failure.message)
+        self.failure = failure
+
+
+@dataclass
+class TransitionProviderSource:
+    factory: object
+    state: object
+    kwargs: dict
+    instance: object | None = None
+    close_failure: DecisionFailure | None = None
+
+    def open(self):
+        if self.instance is None:
+            self.instance = self.factory(self.state, **self.kwargs)
+        return self.instance
+
+    def close(self):
+        close = getattr(self.instance, "close", None)
+        if close is not None:
+            try:
+                close()
+            except Exception as exc:
+                self.close_failure = DecisionFailure.capture(DecisionFailureStage.PROVIDER, exc)
 
 
 class UniformPolicyModel:
@@ -49,11 +85,42 @@ class LedgerOnePlySearch:
         def ledger_value(state):
             return ledger_valuation_from_state(state_value(state))
 
-        baseline = state_value(board)
+        try:
+            baseline = state_value(board)
+        except Exception as exc:
+            raise DecisionExecutionError(DecisionFailure.capture(
+                DecisionFailureStage.EVALUATION, exc)) from exc
+        actions = tuple(root.legal_actions)
+        if board.select is not None and len(actions) == 1:
+            candidate = ValuedCandidate(
+                actions[0],
+                DecisionDelta(0.0, baseline.scale),
+                CandidateDisposition.FORCED,
+                EvaluationStatus.COMPLETE,
+                search_value=SearchValue(baseline.total, baseline.scale),
+                prior=1.0,
+                policy_evidence=baseline.evidence,
+            )
+            return SearchResult(
+                baseline,
+                CandidateRoster((candidate,), forced=True),
+                stop_reason="forced",
+            )
         budget = BudgetController(configuration)
-        prices = price_actions(
-            root, board, baseline.total, provider, request.evaluation_model,
-            configuration, budget, ledger_value, state_value)
+        try:
+            provider = provider.open() if isinstance(provider, TransitionProviderSource) else provider
+            if not getattr(provider, "available", True):
+                raise RuntimeError(str(getattr(provider, "_error", "provider unavailable")))
+        except Exception as exc:
+            raise DecisionExecutionError(DecisionFailure.capture(
+                DecisionFailureStage.PROVIDER, exc)) from exc
+        try:
+            prices = price_actions(
+                root, board, baseline.total, provider, request.evaluation_model,
+                configuration, budget, ledger_value, state_value)
+        except Exception as exc:
+            raise DecisionExecutionError(DecisionFailure.capture(
+                DecisionFailureStage.SEARCH, exc)) from exc
         context_value = None if board.select is None else board.select.context
         forced = (_MAIN if context_value is None else int(context_value)) != _MAIN
         prior_values = policy_model.priors(board, tuple(price.action for price in prices))
@@ -111,10 +178,10 @@ class GreedyDecisionPolicy:
         candidates = tuple(candidate for candidate in roster.candidates
                            if candidate.delta is not None
                            and candidate.status.value in configuration.accepted_statuses)
-        reason = "forced" if roster.forced else "best_delta"
+        reason = DecisionReason.FORCED if roster.forced else DecisionReason.BEST_DELTA
         if not candidates:
             candidates = roster.candidates
-            reason = f"unavailable_{configuration.unavailable_fallback}"
+            raise ValueError("normal policy received no comparable candidates")
         if not candidates:
             raise ValueError("cannot choose from an empty candidate roster")
         if not roster.forced:
@@ -125,13 +192,13 @@ class GreedyDecisionPolicy:
                 and candidate.delta.total > configuration.noise_tolerance)
             if continuing:
                 candidates = continuing
-                reason = "positive_continuation"
+                reason = DecisionReason.POSITIVE_CONTINUATION
             else:
                 enders = tuple(candidate for candidate in candidates
                                if candidate.disposition is CandidateDisposition.ENDS_TURN)
                 if enders:
                     candidates = enders
-                    reason = "best_turn_ender"
+                    reason = DecisionReason.BEST_TURN_ENDER
         return DecisionChoice(self._ranked(candidates, configuration)[0].action, reason)
 
     @staticmethod
@@ -161,4 +228,54 @@ class GreedyDecisionPolicy:
         return tuple(ranked)
 
 
-__all__ = ("GreedyDecisionPolicy", "LedgerOnePlySearch", "UniformPolicyModel")
+class FailSafeDecisionPolicy:
+    identity = "ledger-fail-safe-v1"
+
+    _REASONS = {
+        DecisionFailureStage.EVALUATION: DecisionReason.FAIL_SAFE_EVALUATION_FAILURE,
+        DecisionFailureStage.PROVIDER: DecisionReason.FAIL_SAFE_PROVIDER_FAILURE,
+        DecisionFailureStage.SEARCH: DecisionReason.FAIL_SAFE_SEARCH_FAILURE,
+        DecisionFailureStage.POLICY: DecisionReason.FAIL_SAFE_POLICY_FAILURE,
+        DecisionFailureStage.RUNTIME: DecisionReason.FAIL_SAFE_RUNTIME_FAILURE,
+    }
+
+    def choose(self, roster, configuration, state, failure):
+        del configuration
+        payload = state.observation if isinstance(state, FailSafeRequest) else provider_payload(state)
+        selection = tuple(safe_legal_selection(payload))
+        candidate = next((item for item in roster.candidates
+                          if selection in getattr(item.action, "equivalent_selections", ())), None)
+        if candidate is None:
+            candidate = min(roster.candidates, key=lambda item: item.action.selection)
+        return DecisionChoice(candidate.action, self._REASONS[failure.stage])
+
+
+def unavailable_ledger_result(request, failure):
+    from .decision import LEDGER_VALUE_SCALE, LedgerValueEvaluator
+
+    root = request.state
+    fail_safe = isinstance(root, FailSafeRequest)
+    board = None if fail_safe else getattr(root, "observation", root)
+    baseline = StateValuation(
+        root.state_key if fail_safe else board.position_key,
+        0.0, LEDGER_VALUE_SCALE, root.seat if fail_safe else board.seat,
+        LedgerValueEvaluator.identity, status=EvaluationStatus.UNAVAILABLE,
+        gaps=(f"{failure.stage.value}:{failure.error_type}",),
+    )
+    actions = tuple(root.legal_actions)
+    forced = len(actions) == 1
+    candidates = tuple(ValuedCandidate(
+        action, None,
+        CandidateDisposition.FORCED if forced else
+        CandidateDisposition.ENDS_TURN if action.identity.kind == "end" else
+        CandidateDisposition.CONTINUES_TURN,
+        EvaluationStatus.UNAVAILABLE,
+        gaps=baseline.gaps,
+    ) for action in actions)
+    return SearchResult(
+        baseline, CandidateRoster(candidates, forced), stop_reason=failure.stage.value,
+        failure=failure)
+
+
+__all__ = ("FailSafeDecisionPolicy", "GreedyDecisionPolicy", "LedgerOnePlySearch",
+           "TransitionProviderSource", "UniformPolicyModel", "unavailable_ledger_result")
