@@ -1,4 +1,4 @@
-# ADR-TEMP-584 — Post-pregame decisions have one coordinator entry
+# ADR-0182 — Post-pregame decisions have one coordinator entry
 
 Every post-pregame legal menu enters the Decision Coordinator exactly once: a forced Candidate
 Roster returns complete with zero Decision Delta and no preview, while failures remain in the same
