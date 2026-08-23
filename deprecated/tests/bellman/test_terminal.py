@@ -10,13 +10,13 @@ from common import (
     Chance,
     Choice,
     Deterministic,
-    PlanRequest,
     Refresh,
     RevealChoice,
     RevealOutcome,
     Terminal,
     Unknown,
 )
+from deprecated.bellman import PlanRequest
 from deprecated.bellman.state import DecisionState
 from deprecated.bellman import BellmanTurnPlanner, Potential, ValueRegistry
 from common.algebra import Edge, WeightedEdge

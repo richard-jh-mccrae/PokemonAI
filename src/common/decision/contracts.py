@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import math
+import traceback
 from dataclasses import dataclass
 from enum import Enum
 from typing import Protocol
@@ -18,6 +19,50 @@ class CandidateDisposition(str, Enum):
     CONTINUES_TURN = "continues_turn"
     ENDS_TURN = "ends_turn"
     FORCED = "forced"
+
+
+class DecisionFailureStage(str, Enum):
+    EVALUATION = "evaluation"
+    PROVIDER = "provider"
+    SEARCH = "search"
+    POLICY = "policy"
+    RUNTIME = "runtime"
+
+
+class DecisionReason(str, Enum):
+    POLICY = "policy"
+    FORCED = "forced"
+    BEST_DELTA = "best_delta"
+    POSITIVE_CONTINUATION = "positive_continuation"
+    BEST_TURN_ENDER = "best_turn_ender"
+    FAIL_SAFE_EVALUATION_FAILURE = "fail_safe_evaluation_failure"
+    FAIL_SAFE_PROVIDER_FAILURE = "fail_safe_provider_failure"
+    FAIL_SAFE_SEARCH_FAILURE = "fail_safe_search_failure"
+    FAIL_SAFE_POLICY_FAILURE = "fail_safe_policy_failure"
+    FAIL_SAFE_RUNTIME_FAILURE = "fail_safe_runtime_failure"
+    EMPTY_ROSTER = "empty_roster"
+
+
+@dataclass(frozen=True, slots=True)
+class DecisionFailure:
+    stage: DecisionFailureStage
+    error_type: str
+    message: str
+    traceback_tail: str = ""
+
+    @classmethod
+    def capture(cls, stage: DecisionFailureStage, exc: Exception) -> "DecisionFailure":
+        return cls(stage, type(exc).__name__, str(exc)[:500], traceback.format_exc()[-2000:])
+
+
+@dataclass(frozen=True, slots=True)
+class FailSafeRequest:
+    observation: dict
+    legal_actions: tuple
+    seat: int
+    state_key: str
+    decision_key: str
+    context: int | None
 
 
 @dataclass(frozen=True, slots=True)
@@ -190,6 +235,7 @@ class SearchResult:
     nodes_visited: int = 0
     stop_reason: str = "complete"
     frontier: tuple[object, ...] = ()
+    failure: DecisionFailure | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -208,14 +254,14 @@ class DecisionResult:
     roster: CandidateRoster
     search: SearchResult
     trace: SearchTrace | None = None
-    policy_reason: str = ""
+    policy_reason: DecisionReason = DecisionReason.POLICY
     behavior_identity: object | None = None
 
 
 @dataclass(frozen=True, slots=True)
 class DecisionChoice:
     action: object
-    reason: str
+    reason: DecisionReason
 
 
 class ValueEvaluator(Protocol):
@@ -244,7 +290,8 @@ class DecisionPolicy(Protocol):
 
 __all__ = (
     "CandidateDisposition", "CandidateRoster", "ContinuationResult", "DecisionChoice",
-    "DecisionDelta",
+    "DecisionDelta", "DecisionFailure", "DecisionFailureStage", "DecisionReason",
+    "FailSafeRequest",
     "DecisionPolicy",
     "DecisionResult", "EvaluationRequest", "EvaluationStatus", "PolicyModel",
     "SearchAlgorithm", "SearchResult", "SearchTrace", "SearchValue", "StateValuation",

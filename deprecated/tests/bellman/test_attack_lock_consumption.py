@@ -8,8 +8,6 @@ buys a knockout the agent cannot make, on the OPPONENT's side it fears a hit the
 """
 from __future__ import annotations
 
-from bellman_helpers import runtime
-
 from deprecated.bellman import BoardPotential, CardFacts, ValueRegistry
 from common.cards.card_facts import Attack, BASIC, Clause, PokemonCard
 
@@ -92,45 +90,3 @@ def test_an_expired_lock_restores_every_family():
                                str(DEFENDER): {str(OPPONENT_BIG): 7}})
 
     assert expired == free
-
-
-MEGA_LUCARIO_EX, MEGA_BRAVE = 678, 983
-
-
-def _selection_observation(*, context, logs):
-    """One mid-effect selection: a required choice inside an effect, not the main menu."""
-    body = {"id": MEGA_LUCARIO_EX, "serial": 44, "hp": 340, "maxHp": 340,
-            "energies": [], "energyCards": [], "tools": [], "preEvolution": []}
-    side = {"active": [body], "bench": [], "hand": [], "discard": [], "prize": [None] * 6,
-            "handCount": 0}
-    opponent = dict(side, hand=None, active=[], handCount=4)
-    return {
-        "current": {"yourIndex": 0, "turn": 9, "players": [side, opponent], "stadium": []},
-        "select": {"context": context, "minCount": 1, "maxCount": 1,
-                   "option": [{"type": 7, "index": 0}]},
-        "logs": logs,
-    }
-
-
-def test_a_fallback_answered_choice_still_records_the_lock_it_carried():
-    """`logs` is a DELTA. A selection answered by the Strategy fallback returns before the
-    search runs, so if the fold sat behind that early return the ATTACK rows in this delta would
-    be gone permanently — the observation never carries them again."""
-    agent = runtime("mega_lucario")
-    agent._fallback_pending = True
-
-    decision = agent.decide(_selection_observation(
-        context=7, logs=[{"type": 15, "serial": 44, "attackId": MEGA_BRAVE}]))
-
-    assert decision.diagnostics["backend"] == "strategy-fallback"
-    assert agent._attack_locks == {"44": {str(MEGA_BRAVE): 9 + 2}}
-
-
-def test_a_new_match_starts_the_ledger_empty():
-    agent = runtime("mega_lucario")
-    agent._attack_locks = {"44": {str(MEGA_BRAVE): 11}}
-
-    agent.decide({"current": {"yourIndex": 0, "turn": 0, "players": [{}, {}]},
-                  "select": {"context": 1, "minCount": 1, "maxCount": 1, "option": []}})
-
-    assert agent._attack_locks == {}

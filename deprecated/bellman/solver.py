@@ -12,7 +12,7 @@ from common.algebra import (
     ActionDiagnostic, Actor, Chance, Choice, Deterministic, BellmanLedger, Refresh, RevealChoice,
     RootDiagnostics, Terminal, Unknown,
 )
-from common.api import PlanStep, RootDecision
+from .contracts import PlanStep, RootDecision
 from .budget_prototype import FairBudgetPrototype
 from .commutativity import ActionFootprint, independent
 from common.cards import play_clauses

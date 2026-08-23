@@ -22,6 +22,8 @@ from common import (
 )
 from deprecated.bellman.state import DecisionState
 from common.engine import CgpyTransitionProvider
+from common.deck_tracker import OwnCardModel
+from common.observation import ObservationStateBuilder, reduce_knowledge
 from common.runtime import build_runtime
 from common.native_engine import _hidden_signature
 
@@ -200,6 +202,68 @@ def test_production_runtime_returns_a_legal_native_action_without_fallback():
 
         assert decision.chosen in legal_selections
         assert decision.diagnostics["backend"] == "ledger"
+    finally:
+        battle_finish()
+
+
+def test_production_runtime_completes_a_full_native_game_without_decision_failure(monkeypatch):
+    monkeypatch.setenv("AGENT_BRAIN_STRICT", "1")
+    deck = _deck()
+    observation, start = battle_start(list(deck), list(deck))
+    runtimes = {
+        seat: build_runtime(
+            _strategy(), deck,
+            provider_factory=partial(NativeCgTransitionProvider, world_count=1),
+        )
+        for seat in (0, 1)
+    }
+    own_cards = {seat: OwnCardModel(deck) for seat in (0, 1)}
+    coordinator_entries = {seat: 0 for seat in (0, 1)}
+    for seat, runtime in runtimes.items():
+        real = runtime.ledger.coordinator
+
+        class RecordingCoordinator:
+            def decide(self, *args, _seat=seat, _real=real, **kwargs):
+                coordinator_entries[_seat] += 1
+                return _real.decide(*args, **kwargs)
+
+        runtime.ledger.coordinator = RecordingCoordinator()
+
+    try:
+        assert start.errorPlayer == -1
+        for step in range(2000):
+            current = observation.get("current") or {}
+            result = current.get("result")
+            if result is not None and result != -1:
+                break
+            assert observation.get("select") is not None, (step, observation)
+            seat = int(current.get("yourIndex", 0))
+            board = ObservationStateBuilder(deck).root(observation)
+            own_cards[seat].observe(board)
+            runtime = runtimes[seat]
+            runtime.knowledge = reduce_knowledge(
+                runtime.knowledge,
+                own_prizes=tuple(sorted((own_cards[seat].prize_export() or {}).items())),
+                known_top=own_cards[seat].known_top_export() or (),
+            )
+            before = coordinator_entries[seat]
+            decision = runtime.decide(observation)
+            turn = int(current.get("turn", 0))
+            if turn <= 0:
+                assert decision.diagnostics["backend"] == "declarative-pregame"
+                assert coordinator_entries[seat] == before
+            else:
+                assert decision.diagnostics["backend"] == "ledger"
+                assert "failure" not in decision.diagnostics
+                assert coordinator_entries[seat] == before + 1
+            legal = {selection for action in enumerate_legal_actions(observation)
+                     for selection in action.equivalent_selections}
+            assert decision.chosen in legal, (step, decision, legal)
+            observation = battle_select(list(decision.chosen))
+        else:
+            raise AssertionError("native game did not finish within 2000 decisions")
+
+        assert (observation.get("current") or {}).get("result") in (0, 1, 2)
     finally:
         battle_finish()
 

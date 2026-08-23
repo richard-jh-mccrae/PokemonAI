@@ -1,9 +1,4 @@
-"""A brain crash must be catchable after the fact, never silently absorbed.
-
-The fallback shell still saves the match, but the crash itself has to surface: the full
-traceback on stderr under a greppable LEDGER-CRASH marker, and a bounded report inside the
-decision's diagnostics so telemetry, replays, and the corpus dashboard all carry it. Offline
-harnesses can refuse the parachute entirely with AGENT_BRAIN_STRICT=1."""
+"""A brain crash becomes a visible typed fail-safe Decision Result."""
 from __future__ import annotations
 
 import importlib.util
@@ -48,12 +43,12 @@ def test_a_brain_crash_logs_the_traceback_and_reports_in_diagnostics(capsys):
     runtime.ledger.decide = dead
     decision = runtime.decide(_observation())
 
-    assert decision.diagnostics["backend"] == "last-resort-fallback"
-    fallback = decision.diagnostics["fallback"]
-    assert fallback["cause"] == "exception:ValueError"
-    assert fallback["error"]["type"] == "ValueError"
-    assert "boom: the exact bug text" in fallback["error"]["message"]
-    assert "boom: the exact bug text" in fallback["error"]["traceback_tail"]
+    assert decision.diagnostics["backend"] == "ledger"
+    assert decision.diagnostics["policy_reason"] == "fail_safe_runtime_failure"
+    assert decision.diagnostics["failure"]["stage"] == "runtime"
+    assert decision.diagnostics["failure"]["error_type"] == "ValueError"
+    assert "boom: the exact bug text" in decision.diagnostics["failure"]["message"]
+    assert "boom: the exact bug text" in decision.diagnostics["failure"]["traceback_tail"]
 
     stderr = capsys.readouterr().err
     assert "LEDGER-CRASH" in stderr

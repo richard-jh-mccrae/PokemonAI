@@ -3,8 +3,8 @@
 Every shipped deck uses one system: `common.runtime.AgentRuntime`. Live decisions come from the
 Ledger (`common/ledger/`, a 1-ply worth-differencing decider over
 `common/observation/` ObservationState, ADR-0145); the shell around it does declarative pregame,
-forced selections, typed knowledge reduction,
-and a last-resort crash fallback. The pre-Ledger Bellman planner is quarantined under
+typed knowledge reduction, and one coordinated post-pregame decision path. Forced and degraded
+choices remain typed Decision Results. The pre-Ledger Bellman planner is quarantined under
 `deprecated/bellman/` (ADR-0149) and extends this shell as the offline teacher.
 
 ## Language
@@ -325,7 +325,9 @@ _Avoid_: raw observation, replay truth, Opponent Snapshot
 
 The runtime performs declarative setup choices, resolves Roles and evolution from the unified
 card records (deck declarations REPLACE authored defaults), builds the deck's Evaluation Model
-and complete effective configuration, and sends every normal-turn decision to `common.ledger`.
+and complete effective configuration, and sends every post-pregame decision through the Decision
+Coordinator. A forced Candidate Roster skips transition preview; unavailable work is resolved by
+the typed Fail-safe Policy.
 
 Deck-local policy is data in `src/agents/<deck>/strategy.py`:
 

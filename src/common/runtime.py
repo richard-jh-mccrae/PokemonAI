@@ -9,6 +9,7 @@ from time import perf_counter
 
 from common import telemetry
 from common.api import ActionIdentity, RootDecision
+from common.decision import DecisionFailure, DecisionFailureStage
 from common.observation import (HiddenHand, LegalKnowledge, ObservationState,
                                 ObservationStateBuilder, OpponentBelief, reduce_knowledge)
 from common.cards import card_clauses, card_store
@@ -26,25 +27,18 @@ from common.scouting.provider import EngineCardStatProvider
 from common.strategy.context import (
     _CARD,
     _DRAW_COUNT,
-    _DAMAGE,
-    _DAMAGE_COUNTER,
-    _DAMAGE_COUNTER_ANY,
-    _DAMAGE_COUNTER_COUNT,
-    _END,
     _HAND,
     _IS_FIRST,
     _MULLIGAN,
     _NO,
     _SETUP_ACTIVE,
     _SETUP_BENCH,
-    _TO_BENCH,
-    _TO_FIELD,
-    _TO_HAND,
     _YES,
 )
 
 
 _ENGINE = object()
+PROTOCOL_BYPASS_ALLOWLIST = frozenset({"deck_submission"})
 
 
 class _StoreFacts:
@@ -90,11 +84,10 @@ class _ProviderFactSources:
 
 
 class AgentRuntime:
-    """Deployment shell: declarative pregame, forced selections, and the Ledger (ADR-0145/0149);
-    the Bellman teacher extends this shell from ``deprecated/bellman/runtime.py``."""
+    """Deployment shell: declarative pregame followed by coordinated Ledger decisions."""
 
     def __init__(self, strategy, deck, *, stats=_ENGINE, knowledge_base=None,
-                 opponent_model_factory=OpponentModel, provider_factory=None, limits=None,
+                 opponent_model_factory=OpponentModel, provider_factory=None,
                  valuation_configuration=None, compute_configuration=None,
                  decision_parity_oracle=None):
         self.strategy = strategy
@@ -113,17 +106,9 @@ class AgentRuntime:
         self.opponent_model_factory = opponent_model_factory
         self.opponent_model = None
         self.opponent_snapshot: OpponentSnapshot | None = None
+        self.last_state: ObservationState | None = None
         self._in_pregame = False
         self.provider_factory = provider_factory
-        self.limits = limits
-        self.last_decision_limit = None
-        self.last_deadline_hit = False
-        self._fallback_scope = None
-        self._fallback_effect = None
-        self._fallback_pending = False
-        # Match-scoped: `logs` is a DELTA, so a lock spent two selections ago is no longer in the
-        # observation. On the runtime so replay and test callers see the deployed board state.
-        self._attack_locks: dict = {}
         self.knowledge = LegalKnowledge()
         profiles = getattr(self.opponent_knowledge, "profiles", {})
         inclusion = getattr(self.opponent_knowledge, "card_inclusion", {})
@@ -229,48 +214,28 @@ class AgentRuntime:
         return self.opponent_snapshot
 
     def _reset_for_pregame(self) -> None:
-        """Match-boundary state clearing; the teacher extends this with its plan caches."""
+        """Clear match-scoped runtime state."""
         self.opponent_model = self._new_opponent_model()
         self.opponent_snapshot = None
-        self._attack_locks = {}
         self.knowledge = LegalKnowledge()
 
-    def _invalidate_plans(self) -> None:
-        """The Ledger holds no cross-decision plan state; the Bellman teacher overrides."""
-
-    def _forced_selection(self, state: ObservationState):
-        select = state.select
-        options = () if select is None else select.options
-        minimum = 0 if select is None or select.min_count is None else int(select.min_count)
-        maximum = len(options) if select is None or select.max_count is None else int(select.max_count)
-        if len(options) > 1 or minimum != maximum or minimum != len(options):
-            return None
-        self._invalidate_plans()
-        return RootDecision(
-            tuple(range(len(options))), ActionIdentity(
-                "forced_selection", (-1 if select is None or select.context is None
-                                     else int(select.context),)),
-            0.0, True, {"backend": "forced-selection",
-                        "context": None if select is None else select.context,
-                        "option_count": len(options)})
-
     def decide(self, observation: dict) -> RootDecision:
-        self.last_deadline_hit = False
-        self.last_decision_limit = None
+        self.last_state = None
         try:
             return self._decide(observation)
         except Exception as exc:
-            # Hiding a brain crash breeds unfixable bugs: AGENT_BRAIN_STRICT=1 re-raises for
-            # offline harnesses; deployment logs the full traceback (LEDGER-CRASH, greppable)
-            # and carries a bounded report in diagnostics, THEN saves the match.
             if os.environ.get("AGENT_BRAIN_STRICT") == "1":
                 raise
-            report = self._crash_report(observation, exc)
-            return self._fallback_decision(observation, f"exception:{type(exc).__name__}",
-                                           error=report)
+            if getattr(exc, "coordinator_entered", False):
+                raise
+            failure = DecisionFailure.capture(DecisionFailureStage.RUNTIME, exc)
+            return self.ledger.fail_safe(
+                observation, failure, opponent=self.opponent_snapshot,
+                knowledge=self.knowledge, state=getattr(self, "last_state", None))
 
     def _decide(self, observation: dict) -> RootDecision:
         state = ObservationStateBuilder(self.deck).root(observation, knowledge=self.knowledge)
+        self.last_state = state
         self.knowledge = state.knowledge
         if state.turn.number <= 0:
             if not self._in_pregame:
@@ -278,23 +243,6 @@ class AgentRuntime:
             self._in_pregame = True
             return self._pregame(state)
         self._in_pregame = False
-        scope = (state.turn.number, state.seat)
-        select = state.select
-        context = -1 if select is None or select.context is None else int(select.context)
-        effect = None if select is None else select.effect
-        effect_key = ((effect.owner, effect.card_id, effect.serial) if effect is not None else None)
-        new_effect = (self._fallback_effect is not None and effect_key is not None
-                      and effect_key != self._fallback_effect)
-        if (context == 0 or new_effect
-                or (self._fallback_scope is not None and self._fallback_scope != scope)):
-            self._fallback_scope = None
-            self._fallback_effect = None
-            self._fallback_pending = False
-        elif self._fallback_scope == scope or self._fallback_pending:
-            self._fallback_scope = scope
-            self._fallback_effect = effect_key or self._fallback_effect
-            self._fallback_pending = False
-            return self._fallback_decision(observation, "effect_latch")
         # One decision allocates heavily but builds trees, so cyclic garbage is rare and the
         # collector's constant generational scans reclaim almost nothing until the search ends.
         # Pause it for the decision; collection resumes with the first allocation afterwards.
@@ -302,23 +250,12 @@ class AgentRuntime:
         if collector_was_enabled:
             gc.disable()
         try:
-            decision = self._decide_core(state, observation)
-            production = (decision.diagnostics.get("production") or {})
-            if bool(production.get("deadline_hit")):
-                if context == 0:
-                    self._fallback_pending = production.get("execution_tier") == "recoverable"
-                else:
-                    self._fallback_scope = scope
-                    self._fallback_effect = effect_key
-            return decision
+            return self._decide_core(state, observation)
         finally:
             if collector_was_enabled:
                 gc.enable()
 
     def _decide_core(self, state: ObservationState, observation: dict) -> RootDecision:
-        forced = self._forced_selection(state)
-        if forced is not None:
-            return forced
         snapshot = self._observe_matchup(state)
         self.knowledge = reduce_knowledge(
             self.knowledge, opponent=_belief_from_snapshot(snapshot))
@@ -327,47 +264,6 @@ class AgentRuntime:
         return self.ledger.decide(
             observation, opponent=snapshot,
             knowledge=self.knowledge, state=state)
-
-    @staticmethod
-    def _crash_report(observation: dict, exc: Exception) -> dict:
-        select = observation.get("select") or {}
-        current = observation.get("current") or {}
-        trace = traceback.format_exc()
-        print(f"LEDGER-CRASH turn={current.get('turn')} seat={current.get('yourIndex')} "
-              f"context={select.get('context')} options={len(select.get('option') or ())}: "
-              f"{type(exc).__name__}: {exc}\n{trace}", file=sys.stderr, flush=True)
-        return {"type": type(exc).__name__, "message": str(exc)[:500],
-                "traceback_tail": trace[-2000:]}
-
-    #: Names the crash path in diagnostics and the dashboard; the teacher overrides both.
-    fallback_backend = "last-resort-fallback"
-    fallback_action = "last_resort_fallback"
-
-    def _fallback_selection(self, observation: dict) -> list[int]:
-        return _last_resort_selection(observation)
-
-    def _fallback_decision(self, observation: dict, cause: str,
-                           error: dict | None = None) -> RootDecision:
-        chosen = tuple(self._fallback_selection(observation))
-        select = observation.get("select") or {}
-        current = observation.get("current") or {}
-        context = _int_field(select, "context", -1)
-        if context != 0:
-            self._fallback_scope = (
-                _int_field(current, "turn", 0), _int_field(current, "yourIndex", 0))
-            effect = select.get("effect") or {}
-            self._fallback_effect = (tuple(effect.get(key) for key in (
-                "playerIndex", "id", "serial")) if effect else self._fallback_effect)
-        self._invalidate_plans()
-        diagnostics = {
-            "backend": self.fallback_backend,
-            "fallback": {"cause": cause, "latched": self._fallback_scope is not None,
-                         "context": context, "chosen": chosen,
-                         **({"error": error} if error else {})},
-        }
-        return RootDecision(
-            chosen, ActionIdentity(self.fallback_action, (context,)), 0.0, False, diagnostics)
-
 
 def build_runtime(strategy, deck, **kwargs) -> AgentRuntime:
     """Construct the one shared runtime; injectable seams keep tests engine-independent."""
@@ -385,69 +281,6 @@ def _read_deck() -> list[int]:
         return [int(value) for value in handle.read().splitlines()[:60] if value.strip()]
 
 
-def _int_field(mapping, key, default: int) -> int:
-    """`int(mapping.get(key, default))` that survives present-but-None: the deployed dialect
-    pads absent fields with None, and `or` would eat a legal 0."""
-    value = (mapping or {}).get(key, default)
-    return default if value is None else int(value)
-
-
-def _last_resort_selection(observation: dict) -> list[int]:
-    """Deterministic legal choice when planning cannot return. TOTAL by contract: this is the
-    last shell before a forfeit, so any malformed shape degrades to the first offered index
-    rather than raising a second time."""
-    select = observation.get("select") or {}
-    options = tuple(select.get("option") or ())
-    try:
-        return _last_resort_ranked(select, options, observation)
-    except Exception:
-        return [0] if options else []
-
-
-def _last_resort_ranked(select, options, observation: dict) -> list[int]:
-    context = _int_field(select, "context", -1)
-    end_index = next((index for index, option in enumerate(options)
-                      if isinstance(option, dict) and option.get("type") is not None
-                      and int(option["type"]) == _END),
-                     None)
-    if context == 0 and end_index is not None:
-        return [end_index]
-    minimum = min(max(0, int(select.get("minCount") or 0)), len(options))
-    maximum = min(max(minimum, int(select.get("maxCount") or 0)), len(options))
-    if not options:
-        return []
-    if context == _TO_HAND:
-        return list(range(maximum))
-    if context in {_TO_BENCH, _TO_FIELD}:
-        return list(range(max(minimum, min(1, maximum))))
-    if context in {_DAMAGE, _DAMAGE_COUNTER, _DAMAGE_COUNTER_ANY}:
-        players = ((observation.get("current") or {}).get("players") or ())
-        counters = max(1, int(select.get("remainDamageCounter") or 1))
-
-        def target(index):
-            option = options[index]
-            seat = int(option.get("playerIndex", 1))
-            area = int(option.get("area", -1))
-            player = players[seat] if 0 <= seat < len(players) and players[seat] else {}
-            bodies = ((player.get("active") or ()) if area == 4 else
-                      (player.get("bench") or ()) if area == 5 else ())
-            position = option.get("index")
-            body = (bodies[position] if isinstance(position, int)
-                    and 0 <= position < len(bodies) else {})
-            hp = int((body or {}).get("hp", 10 ** 9))
-            # An already-KO'd body (hp <= 0) must sort last: it is going to be discarded once
-            # the attack finishes resolving, so any further counter placed on it is pure waste.
-            if hp <= 0:
-                return (2, 0, index)
-            return (0 if hp <= counters * 10 else 1, hp, index)
-
-        return [min(range(len(options)), key=target)]
-    if context in {_DRAW_COUNT, _DAMAGE_COUNTER_COUNT}:
-        return [max(range(len(options)), key=lambda index: (
-            int(options[index].get("number", -1)), -index))]
-    return list(range(minimum))
-
-
 def make_agent(strategy):
     """Create the Kaggle ``agent(observation)`` hook."""
 
@@ -456,32 +289,31 @@ def make_agent(strategy):
     telemetry_on = os.environ.get("AGENT_NO_TELEMETRY") != "1"
 
     def agent(observation: dict) -> list[int]:
-        if observation.get("select") is None:
+        protocol_operation = ("deck_submission"
+                              if observation.get("select") is None
+                              and "current" in observation
+                              and observation["current"] is None else None)
+        if observation.get("select") is None and protocol_operation is None:
+            raise ValueError("non-decision observation is not an approved protocol bypass")
+        if protocol_operation is not None:
+            if protocol_operation not in PROTOCOL_BYPASS_ALLOWLIST:
+                raise ValueError(f"unapproved protocol bypass {protocol_operation}")
             return list(runtime.deck)
         started = perf_counter()
-        try:
-            provisional = ObservationStateBuilder(runtime.deck).root(
-                observation, knowledge=getattr(runtime, "knowledge", LegalKnowledge()))
-            own_cards.observe(provisional)
-            runtime.knowledge = reduce_knowledge(
-                getattr(runtime, "knowledge", LegalKnowledge()),
-                own_prizes=tuple(sorted((own_cards.prize_export() or {}).items())),
-                known_top=own_cards.known_top_export() or ())
-            decision = runtime.decide(observation)
-        except Exception:                            # an uncaught raise forfeits the match
-            traceback.print_exc(file=sys.stderr)
-            chosen = _last_resort_selection(observation)
-            print(f"last-resort submission after planning failure: {chosen}",
-                  file=sys.stderr, flush=True)
-            return chosen
+        provisional = ObservationStateBuilder(runtime.deck).root(
+            observation, knowledge=getattr(runtime, "knowledge", LegalKnowledge()))
+        own_cards.observe(provisional)
+        runtime.knowledge = reduce_knowledge(
+            getattr(runtime, "knowledge", LegalKnowledge()),
+            own_prizes=tuple(sorted((own_cards.prize_export() or {}).items())),
+            known_top=own_cards.known_top_export() or ())
+        decision = runtime.decide(observation)
         if telemetry_on:
             try:
                 telemetry.emit(decision, opponent=runtime.opponent_snapshot,
                                seat=provisional.seat,
                                state=getattr(runtime, "last_state", provisional),
-                               decision_seconds=perf_counter() - started,
-                               decision_limit_seconds=runtime.last_decision_limit,
-                               deadline_hit=runtime.last_deadline_hit)
+                               decision_seconds=perf_counter() - started)
             except Exception:                        # telemetry must never lose the match
                 print("telemetry emit failed; decision preserved", file=sys.stderr, flush=True)
                 traceback.print_exc(file=sys.stderr)

@@ -289,6 +289,12 @@ def _side(trace: _Trace, label: str, side: Side, sign: float, ctx: EvaluationMod
 def _body(trace: _Trace, part: str, body: Body, sign: float, ctx: EvaluationModel, *,
           own: bool, active: bool, doomed: bool, reach, opponent) -> None:
     body_facts = ctx.facts(body.card.card_id)
+    if body_facts is not None and not isinstance(body_facts, PokemonCard):
+        trace.add(part, "coverage.unknown_card", sign)
+        trace.add(part, "zone.in_play", sign)
+        trace.add(part, "body.hp_per_100", sign * body.max_hp / 100.0)
+        trace.gaps.append(f"{part}: non-Pokemon body {body.card.card_id}")
+        return
     _card(trace, part, body.card.card_id, body_facts, sign, ctx, own=own,
           placement="in_play", opponent=opponent)
     trace.add(part, "zone.in_play", sign)
@@ -379,7 +385,10 @@ def _card(trace: _Trace, part: str, card_id: int, facts, amount: float,
     else:
         kind = getattr(facts, "kind", "item")
     trace.add(part, f"kind.{kind}", amount)
-    trace.add(part, f"interaction.kind.{kind}.{placement}", situated)
+    interaction = f"interaction.kind.{kind}.{placement}"
+    if interaction not in FEATURE_CATALOG:
+        raise KeyError(f"unregistered Valuation Feature {interaction!r} for card {card_id}")
+    trace.add(part, interaction, situated)
 def _hand_feature(card_id, facts, demand: Demand, copies_before: int,
                   ctx: EvaluationModel, deck_counts) -> tuple[str, int | None]:
     scale, capacity = _liveness(card_id, facts, demand, ctx, deck_counts)

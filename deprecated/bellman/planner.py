@@ -4,7 +4,7 @@ from __future__ import annotations
 from dataclasses import dataclass, replace
 from time import monotonic
 
-from common.api import BellmanUnavailable, PlanRequest, RootDecision
+from .contracts import BellmanUnavailable, PlanRequest, RootDecision
 from .providers import BellmanNativeProvider
 from .solver import ProductionLimits, ProductionSolver
 from .pilot_profile import DEFAULT_PILOT_PROFILE, PilotProfile

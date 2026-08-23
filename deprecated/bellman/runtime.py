@@ -6,9 +6,11 @@ import json
 import os
 from pathlib import Path
 
-from common.api import PlanRequest, RootDecision
+from common.api import ActionIdentity
+from common.decision.fail_safe import _int_field, safe_legal_selection
 from .card_worth import role_value
-from common.runtime import AgentRuntime, _int_field, _last_resort_selection
+from .contracts import PlanRequest, RootDecision
+from common.runtime import AgentRuntime
 from common.scouting.artifact import load_artifact
 from common.scouting.pokemon_roles import general_pokemon_roles
 from common.strategy import Roles
@@ -129,10 +131,12 @@ class BellmanTeacherRuntime(AgentRuntime):
     fallback_action = "bellman_fallback"
 
     def __init__(self, strategy, deck, **kwargs):
+        teacher_limits = kwargs.pop("limits", None)
         teacher_functions = kwargs.pop("functions", None)
         legacy_scout = kwargs.pop("scout", "default")
         legacy_briefs = kwargs.pop("briefs", "default")
         super().__init__(strategy, deck, **kwargs)
+        self.limits = teacher_limits
         self.scout = (LegacyScout(load_artifact(strict=True))
                       if legacy_scout == "default" else legacy_scout)
         self.briefs = (load_legacy_briefs()
@@ -186,6 +190,23 @@ class BellmanTeacherRuntime(AgentRuntime):
         self._plan_suffix = ()
         self._proof_suffix = ()
         self._proof_id = ""
+
+    def _forced_selection(self, state):
+        select = state.select
+        options = () if select is None else select.options
+        minimum = 0 if select is None or select.min_count is None else int(select.min_count)
+        maximum = len(options) if select is None or select.max_count is None else int(select.max_count)
+        if len(options) > 1 or minimum != maximum or minimum != len(options):
+            return None
+        self._invalidate_plans()
+        return RootDecision(
+            tuple(range(len(options))),
+            ActionIdentity("forced_selection", (
+                -1 if select is None or select.context is None else int(select.context),)),
+            0.0, True,
+            {"backend": "forced-selection", "context": None if select is None else select.context,
+             "option_count": len(options)},
+        )
 
     def _observe_matchup(self, state):
         self.last_read = self.scout.observe(state) if self.scout is not None else LegacyRead()
@@ -366,7 +387,7 @@ class BellmanTeacherRuntime(AgentRuntime):
                             decision.complete, diagnostics, decision.plan_suffix)
 
     def _fallback_selection(self, observation: dict) -> list[int]:
-        return _last_resort_selection(observation)
+        return safe_legal_selection(observation)
 
 
 def build_teacher_runtime(strategy, deck, **kwargs) -> BellmanTeacherRuntime:

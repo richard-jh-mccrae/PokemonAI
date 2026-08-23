@@ -133,6 +133,24 @@ def test_retired_opponent_surfaces_are_absent_from_live_source():
     assert offenders == [], f"retired opponent surfaces remain — {offenders}"
 
 
+def test_live_decision_contract_has_no_bellman_plan_state():
+    from common.api import RootDecision
+
+    decision = RootDecision((), None, 0.0, True, {})
+
+    assert not hasattr(decision, "plan_suffix")
+
+
+def test_live_runtime_has_no_retired_bellman_or_latch_state():
+    text = (REPO / "src/common/runtime.py").read_text(encoding="utf-8")
+    retired = (
+        "last_decision_limit", "last_deadline_hit", "_fallback_scope", "_fallback_effect",
+        "_fallback_pending", "_invalidate_plans",
+    )
+
+    assert all(name not in text for name in retired)
+
+
 def test_policy_consumers_cannot_walk_raw_observations():
     targets = (
         "src/common/runtime.py", "src/common/deck_tracker.py", "src/common/telemetry.py",

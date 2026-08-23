@@ -21,7 +21,7 @@ from common.ledger import (ComputeConfiguration, EvaluationModel, LedgerDecider,
 from common.ledger.chance import refresh_value
 from common.ledger.decider import LedgerUnavailable
 from common.options import enumerate_legal_actions
-from common.runtime import _last_resort_selection
+from common.decision import safe_legal_selection
 from deprecated.bellman.state import DecisionState
 
 
@@ -104,9 +104,11 @@ def test_a_raising_provider_close_does_not_mask_the_decision():
     decision = LedgerDecider((DRAGAPULT,) * 60, "test", EvaluationModel.build(),
                              provider_factory=lambda _s, **_kw: provider).decide(root_obs)
     assert decision.diagnostics["backend"] == "ledger"
+    assert decision.diagnostics["cleanup_failure"]["stage"] == "provider"
+    assert decision.diagnostics["cleanup_failure"]["error_type"] == "RuntimeError"
 
 
-def test_an_unavailable_provider_is_closed_before_the_refusal():
+def test_an_unavailable_provider_is_closed_before_the_fail_safe_result():
     closed = []
 
     class HalfOpenProvider:
@@ -118,20 +120,21 @@ def test_an_unavailable_provider_is_closed_before_the_refusal():
 
     decider = LedgerDecider((DRAGAPULT,) * 60, "test", EvaluationModel.build(),
                             provider_factory=lambda _s, **_kw: HalfOpenProvider())
-    with pytest.raises(LedgerUnavailable):
-        decider.decide(printout(me=player(active=body(DRAGAPULT, 1))))
+    decision = decider.decide(printout(me=player(active=body(DRAGAPULT, 1))))
+
+    assert decision.diagnostics["failure"]["stage"] == "provider"
     assert closed == [True]
 
 
-def test_the_last_resort_shell_is_total():
-    """The final shell before a forfeit used to crash on the exact shape that had just
-    crashed the layer above it (a present-but-None context)."""
+def test_the_fail_safe_selector_is_total():
     garbage = {"select": {"context": None, "minCount": None, "maxCount": None,
                           "option": ["junk", {"type": 14}]}, "current": None}
-    assert _last_resort_selection(garbage) == []       # minCount None reads 0: decline legally
+    assert safe_legal_selection(garbage) == []         # minCount None reads 0: decline legally
     garbage["select"]["minCount"] = 2
-    assert _last_resort_selection(garbage) == [0, 1]   # a demanded count is still met
-    assert _last_resort_selection({"select": None}) == []
+    assert safe_legal_selection(garbage) == [0, 1]     # a demanded count is still met
+    garbage["select"]["minCount"] = "broken"
+    assert safe_legal_selection(garbage) == [0]
+    assert safe_legal_selection({"select": None}) == []
 
 
 def test_a_corrupt_bench_max_cannot_stall_the_evaluator():

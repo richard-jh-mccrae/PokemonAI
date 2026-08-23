@@ -13,7 +13,8 @@ from cgpy.search import export_token
 from cgpy.state import PokemonInPlay
 
 from common.engine import _own_prize_export
-from common import Deterministic, PlanRequest, Terminal
+from common import Deterministic, Terminal
+from deprecated.bellman import PlanRequest
 from deprecated.bellman.state import DecisionState
 from deprecated.bellman import (
     BoardPotential,

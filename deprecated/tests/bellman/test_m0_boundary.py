@@ -3,7 +3,7 @@ from __future__ import annotations
 import ast
 from pathlib import Path
 
-from common import END_VALUE
+from deprecated.bellman import END_VALUE
 from deprecated.bellman import BellmanTurnPlanner
 from deprecated.bellman.providers import BellmanNativeProvider
 
