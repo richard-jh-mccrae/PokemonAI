@@ -49,6 +49,19 @@ def main() -> None:
         else:
             context = nullcontext([])
         request = json.loads(line)
+        if isinstance(request, dict) and request.get("telemetry_control") == "receipt":
+            if emit_enabled:
+                from common.telemetry import flush
+                try:
+                    flush()
+                except Exception:
+                    pass
+            session = agent.runtime.telemetry_session
+            receipt = (session.close_episode()
+                       if session.episode_key == str(request.get("episode_key")) else None)
+            proto.write(json.dumps({"receipt": receipt}) + "\n")
+            proto.flush()
+            continue
         if request == {"telemetry_control": "flush"}:
             if emit_enabled:
                 from common.telemetry import flush

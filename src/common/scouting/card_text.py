@@ -4,7 +4,7 @@ Match ONLY the clean UNCONDITIONAL phrasing, so a conditional variant parses to 
 under-crediting never over-credits. INVERTS for a COST (Gravity Gemstone: ``{C}`` MORE to retreat),
 which therefore matches more readily. A holder gate is CARRIED when the pool lets us decide it about
 a body in play (Issue #306/#345); a condition about a coin, a hidden zone or a board sweep is
-refused. Split out of ``provider.py``, which re-exports every name.
+refused.
 """
 from __future__ import annotations
 
@@ -14,16 +14,8 @@ import re
 # \u escapes, not literals: this file must read identically under any editor's default encoding.
 _NAME_FAMILY = r"(?:[A-Z][\w.-]+ ){0,3}[A-Z][\w.-]*['" + "\u2019" + r"]s"
 
-#: Apostrophes folded to ASCII — the pool mixes forms WITHIN one family, so normalise both sides.
-_APOSTROPHES = str.maketrans({"\u2019": "'", "\u02bc": "'", "\u2018": "'"})
-
 _HOLDER_FAMILY_RE = re.compile(
     r"\b[Tt]he (" + _NAME_FAMILY + r") Pok.mon this card is attached to")
-
-
-def normalize_card_name(name: str) -> str:
-    """A card name folded to one apostrophe form and one run of spaces — the name-family test's key."""
-    return " ".join((name or "").translate(_APOSTROPHES).split())
 
 
 def _parse_tool_holder_family(card) -> str | None:
@@ -116,10 +108,6 @@ _BENCH_SNIPE_RE = re.compile(
     r"This attack also does (\d+) damage to 1 of your opponent.s Benched Pok.mon\.?$")
 _DAMAGE_PER_COUNTER = 10
 # Bypasses a damage-PREVENTION Ability that combat math otherwise treats as an absolute wall.
-_IGNORES_ACTIVE_EFFECTS_RE = re.compile(
-    r"isn.t affected by[^.]*effects on your opponent.s Active Pok.mon")
-
-
 def _sentences(text: str) -> list[str]:
     """Trimmed sentences, newlines folded — so a rider parser can require WHOLE-sentence phrasing."""
     return [s.strip() for s in re.split(r"(?<=\.)\s+", (text or "").replace("\n", " ")) if s.strip()]
@@ -141,11 +129,6 @@ def parse_attack_bench_snipe(text: str) -> int:
         if m:
             return int(m.group(1))
     return 0
-
-
-def parse_attack_ignores_active_effects(text: str) -> bool:
-    """It lands full damage THROUGH a damage-prevention Ability; anything else → False."""
-    return bool(_IGNORES_ACTIVE_EFFECTS_RE.search((text or "").replace("\n", " ")))
 
 
 _PREVENT_EX_RE = re.compile(

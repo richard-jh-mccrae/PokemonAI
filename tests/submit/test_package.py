@@ -70,6 +70,7 @@ def test_package_contains_the_ledger_and_no_bellman_search(tmp_path):
         assert "common/ledger/decider.py" in names
         assert "common/ledger/configuration.py" in names
         assert "common/ledger/features.py" in names
+        assert "common/ledger/activation.py" in names
         assert "common/cards/function_catalog.py" in names
         assert "common/opponent/model.py" in names
         assert "common/scouting/read.py" not in names
@@ -85,8 +86,13 @@ def test_package_contains_the_ledger_and_no_bellman_search(tmp_path):
         for retired in ("common/planner.py", "common/solver.py", "common/demand.py",
                         "common/potential.py", "common/value.py", "common/value_equations.py",
                         "common/pilot_profile.py", "common/terminal.py", "common/engine.py",
+                        "common/information.py",
                         "common/state.py", "common/cards/functions/damage_context.py"):
             assert retired not in names, retired
+        assert not any(
+            marker in bundle.read(name)
+            for name in names if name.endswith(".py")
+            for marker in (b"from deprecated", b"import deprecated"))
         assert any(name.startswith("cg/") for name in names)
         assert "brief.html" in names and "brief.csv" in names
         assert "runtime_config.json" not in names

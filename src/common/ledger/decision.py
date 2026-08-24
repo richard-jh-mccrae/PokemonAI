@@ -1,5 +1,9 @@
 from __future__ import annotations
 
+import ast
+import hashlib
+from pathlib import Path
+
 from common.decision import (
     EvaluationStatus,
     StateValuation,
@@ -7,14 +11,38 @@ from common.decision import (
     ValueScale,
 )
 
+from .features import FEATURE_CATALOG
 from .evaluate import (FeatureActivation, FeatureContribution, Valuation, evaluate)
 
 
 LEDGER_VALUE_SCALE = ValueScale("ledger-worth", 1)
+EVALUATOR_ID_DIGEST_BYTES = 16
+
+
+def evaluator_semantics_identity(paths=None) -> str:
+    paths = tuple(paths or (
+        Path(__file__).with_name("activation.py"),
+        Path(__file__).with_name("evaluate.py"),
+        Path(__file__).with_name("features.py"),
+        Path(__file__).with_name("prizes.py"),
+        Path(__file__).with_name("worth.py"),
+    ))
+    digest = hashlib.blake2b(digest_size=EVALUATOR_ID_DIGEST_BYTES)
+    for path in paths:
+        tree = ast.parse(Path(path).read_text(encoding="utf-8"))
+        for node in ast.walk(tree):
+            body = getattr(node, "body", None)
+            if isinstance(body, list) and body and isinstance(body[0], ast.Expr) \
+                    and isinstance(body[0].value, ast.Constant) \
+                    and isinstance(body[0].value.value, str):
+                node.body = body[1:]
+        digest.update(Path(path).name.encode("utf-8"))
+        digest.update(ast.dump(tree, include_attributes=False).encode("utf-8"))
+    return digest.hexdigest()
 
 
 class LedgerValueEvaluator:
-    identity = "ledger-linear-v1"
+    identity = f"ledger-linear-v2:{FEATURE_CATALOG.identity}:{evaluator_semantics_identity()}"
 
     def evaluate(self, request) -> StateValuation:
         board = getattr(request.state, "observation", request.state)

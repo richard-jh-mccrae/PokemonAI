@@ -26,6 +26,7 @@ class DecisionFailureStage(str, Enum):
     PROVIDER = "provider"
     SEARCH = "search"
     POLICY = "policy"
+    PRESENTATION = "presentation"
     RUNTIME = "runtime"
 
 
@@ -39,6 +40,7 @@ class DecisionReason(str, Enum):
     FAIL_SAFE_PROVIDER_FAILURE = "fail_safe_provider_failure"
     FAIL_SAFE_SEARCH_FAILURE = "fail_safe_search_failure"
     FAIL_SAFE_POLICY_FAILURE = "fail_safe_policy_failure"
+    FAIL_SAFE_PRESENTATION_FAILURE = "fail_safe_presentation_failure"
     FAIL_SAFE_RUNTIME_FAILURE = "fail_safe_runtime_failure"
     EMPTY_ROSTER = "empty_roster"
 
@@ -197,13 +199,40 @@ class ValuedCandidate:
 class CandidateRoster:
     candidates: tuple[ValuedCandidate, ...]
     forced: bool = False
+    legal_action_identities: tuple[object, ...] = ()
+    legal_actions_proven: bool = False
 
     def __post_init__(self):
-        identities = tuple(getattr(candidate.action, "identity", candidate.action)
+        identities = tuple(_roster_action_id(candidate.action)
                            for candidate in self.candidates)
         if any(identity in identities[:index]
                for index, identity in enumerate(identities)):
             raise ValueError("duplicate candidate action")
+        legal = tuple(self.legal_action_identities)
+        if any(identity in legal[:index] for index, identity in enumerate(legal)):
+            raise ValueError("duplicate legal action")
+        if self.legal_actions_proven and identities != legal:
+            raise ValueError("candidate roster does not match ordered legal actions")
+        object.__setattr__(self, "legal_action_identities", legal)
+
+    @classmethod
+    def from_legal_actions(cls, legal_actions, candidates, *, forced=False):
+        legal = tuple(_roster_action_id(action) for action in legal_actions)
+        candidates = tuple(candidates)
+        actual = tuple(_roster_action_id(candidate.action) for candidate in candidates)
+        if len(actual) < len(legal):
+            raise ValueError("candidate roster has a missing legal action")
+        if len(actual) > len(legal):
+            raise ValueError("candidate roster has an extra candidate action")
+        if actual != legal:
+            raise ValueError("candidate roster order differs from legal actions")
+        return cls(candidates, forced, legal, True)
+
+
+def _roster_action_id(action):
+    selection = getattr(action, "selection", None)
+    identity = getattr(action, "identity", action)
+    return ((identity, tuple(selection)) if selection is not None else identity)
 
 
 @dataclass(frozen=True, slots=True)
@@ -256,6 +285,29 @@ class DecisionResult:
     trace: SearchTrace | None = None
     policy_reason: DecisionReason = DecisionReason.POLICY
     behavior_identity: object | None = None
+
+    def __post_init__(self):
+        if self.search.roster != self.roster:
+            raise ValueError("decision and search candidate rosters differ")
+        if self.chosen is None:
+            if self.roster.candidates:
+                raise ValueError("non-empty candidate roster requires a chosen action")
+            return
+        chosen_identity = getattr(self.chosen, "identity", self.chosen)
+        matches = tuple(candidate for candidate in self.roster.candidates
+                        if getattr(candidate.action, "identity", candidate.action)
+                        == chosen_identity)
+        if len(matches) != 1:
+            raise ValueError("chosen action is not in candidate roster")
+
+    @property
+    def chosen_candidate(self) -> ValuedCandidate | None:
+        if self.chosen is None:
+            return None
+        chosen_identity = getattr(self.chosen, "identity", self.chosen)
+        return next(candidate for candidate in self.roster.candidates
+                    if getattr(candidate.action, "identity", candidate.action)
+                    == chosen_identity)
 
 
 @dataclass(frozen=True, slots=True)

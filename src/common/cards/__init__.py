@@ -13,8 +13,8 @@ from typing import Mapping
 
 from common.cards.card_facts import (
     Ability, Attack, Clause, EnergyCard, PokemonCard, TrainerCard)
-from common.cards.function_catalog import (FUNCTION_CATALOG, FUNCTION_FEATURES, FunctionCatalog,
-                                           FunctionSpec, card_clauses)
+from common.cards.function_catalog import (FUNCTION_CATALOG, FunctionCatalog, FunctionSpec,
+                                           card_clauses)
 from common.cards.pokemon_roles import default_pokemon_roles
 
 
@@ -86,7 +86,6 @@ def pokemon_default_roles() -> Mapping[int, tuple[str, ...]]:
 
 
 __all__ = ("Ability", "Attack", "Clause", "EnergyCard", "FUNCTION_CATALOG",
-           "FUNCTION_FEATURES",
            "FunctionCatalog", "FunctionSpec", "PokemonCard",
            "TrainerCard", "attack_index", "card_store", "energy_card_store",
            "card_clauses", "play_clauses", "pokemon_card_store", "pokemon_default_roles",

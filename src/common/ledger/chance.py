@@ -20,11 +20,8 @@ from common.cards.card_facts import SUPPORTER
 from common.ledger.evaluate import FeatureActivation, FeatureContribution, Valuation
 
 
-def refresh_valuation(observation, board: ObservationState, card_id: int,
-                      draws, opponent_shuffles: bool, evaluate_fn, compute):
-    samples, gaps = _refresh_samples(
-        observation, board, card_id, draws, opponent_shuffles, evaluate_fn, compute)
-    return _average(samples, gaps)
+PLAYER_COUNT = 2
+SEED_DIGEST_BYTES = 8
 
 
 def _average(samples, gaps):
@@ -60,15 +57,6 @@ def refresh_outcomes(observation, board: ObservationState, card_id: int,
     outcomes = tuple((probability, successor, synthetic)
                      for _valuation, successor, synthetic in samples)
     return valuation, gaps, outcomes
-
-def refresh_value(observation, board: ObservationState, card_id: int,
-                  draws, opponent_shuffles: bool, evaluate_fn, compute):
-    """Expected VALUE of the board after playing shuffle-draw supporter `card_id` (absolute,
-    not a swing — the preview differences it against its own baseline), plus the gaps met."""
-    valuation, gaps = refresh_valuation(
-        observation, board, card_id, draws, opponent_shuffles, evaluate_fn, compute)
-    return valuation.total, gaps
-
 
 def _refresh_samples(observation, board: ObservationState, card_id: int,
                      draws, opponent_shuffles: bool, evaluate_fn, compute):
@@ -116,7 +104,7 @@ def _seed(board: ObservationState, card_id: int, seed: int) -> int:
         legacy = replace(board, knowledge=replace(board.knowledge, opponent=coarse))
         key = legacy.key
     digest = hashlib.blake2b(f"{seed}:{key}:{int(card_id)}".encode("ascii"),
-                             digest_size=8).digest()
+                             digest_size=SEED_DIGEST_BYTES).digest()
     return int.from_bytes(digest, "big")
 
 
@@ -138,7 +126,7 @@ def _synthesize(observation, seat: int, hand_ids, deck_count: int, played_id: in
     root = dict(observation)
     current = dict(root.get("current") or {})
     players = list(current.get("players") or ())
-    while len(players) < max(2, seat + 1):         # both seats must exist to be rewritten
+    while len(players) < max(PLAYER_COUNT, seat + 1):
         players.append({})
     mine = dict(players[seat] or {})
     mine["hand"] = [{"id": int(card_id), "serial": None, "playerIndex": seat}
@@ -170,4 +158,4 @@ def _synthesize(observation, seat: int, hand_ids, deck_count: int, played_id: in
     return root
 
 
-__all__ = ("refresh_outcomes", "refresh_value", "refresh_valuation")
+__all__ = ("refresh_outcomes",)

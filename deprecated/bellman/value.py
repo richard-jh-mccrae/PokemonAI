@@ -20,7 +20,7 @@ from common.cards import card_store, play_clauses
 from common.cards.card_facts import BASIC_ENERGY, COLORLESS, EnergyCard, PokemonCard
 from common.cards.functions.damage import bench_reach
 from common.cards.functions.fetch import DEADNESS, fetch_target_matches
-from common.option_equivalence import fingerprint_source_card_id
+from .option_sources import fingerprint_source_card_id
 from .state import DecisionState
 
 

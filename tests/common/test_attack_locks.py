@@ -6,7 +6,8 @@ import json
 import pytest
 
 from common.cards.functions.attack_lock import (
-    LOCK_TURN_STRIDE, fold_attack_locks, locked_attack_ids)
+    LOCK_TURN_STRIDE, fold_attack_locks)
+from deprecated.bellman.attack_locks import locked_attack_ids
 
 
 #: Real store attacks: only Mega Brave (983) prints the "can't use this next turn" clause;

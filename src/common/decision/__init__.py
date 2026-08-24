@@ -25,7 +25,7 @@ from .contracts import (
     ValueScale,
     ValuedCandidate,
 )
-from .coordinator import DecisionCoordinator
+from .coordinator import DecisionCoordinator, neutral_lottery_choice
 from .configuration import (BudgetController, ComputeConfiguration, PolicyConfiguration,
                             SearchConfiguration)
 from .fail_safe import fail_safe_request, safe_legal_selection
@@ -40,5 +40,5 @@ __all__ = (
     "SearchConfiguration",
     "SearchResult", "SearchTrace", "SearchValue", "StateValuation",
     "SuccessorResult", "ValuationCache", "ValueComponent", "ValueEvaluator", "ValueScale",
-    "ValuedCandidate", "fail_safe_request", "safe_legal_selection",
+    "ValuedCandidate", "fail_safe_request", "neutral_lottery_choice", "safe_legal_selection",
 )

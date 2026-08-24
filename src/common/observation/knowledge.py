@@ -59,7 +59,9 @@ class OpponentCandidatePosterior:
 class OpponentDecisionEvidence:
     snapshot_identity: str
     candidates: tuple[OpponentCandidatePosterior, ...]
-    observed_roles: tuple[tuple[int, tuple[str, ...]], ...]
+    revealed_card_ids: tuple[int, ...]
+    in_play_card_ids: tuple[int, ...]
+    public_resources: tuple[int, ...]
     unknown_mass: str
     failures: tuple[tuple[str, str], ...] = ()
     public_events: tuple[tuple[object, tuple, bool], ...] = ()
@@ -69,7 +71,9 @@ class OpponentDecisionEvidence:
         return (
             self.snapshot_identity,
             tuple((item.archetype, item.probability) for item in self.candidates),
-            self.observed_roles,
+            self.revealed_card_ids,
+            self.in_play_card_ids,
+            self.public_resources,
             self.unknown_mass,
             self.failures,
             self.public_events,
@@ -91,9 +95,6 @@ class OpponentBelief:
             candidate.probability * candidate.resources.get(card_id, 0.0)
             for candidate in snapshot.candidates) * scale))
                          for card_id in sorted(card_ids))
-        observed_roles = tuple((int(card_id), tuple(roles))
-                               for card_id, roles in getattr(
-                                   snapshot, "observed_roles", {}).items())
         archetypes = tuple((candidate.archetype, round(candidate.probability * scale))
                            for candidate in snapshot.candidates)
         posterior = tuple(OpponentCandidatePosterior(
@@ -102,7 +103,11 @@ class OpponentBelief:
         decision_evidence = OpponentDecisionEvidence(
             snapshot.identity,
             posterior,
-            observed_roles,
+            tuple(int(card_id) for card_id in snapshot.evidence.revealed_card_ids),
+            tuple(int(card_id) for card_id in snapshot.evidence.in_play_card_ids),
+            tuple(int(getattr(snapshot.evidence.resources, name)) for name in (
+                "hand_count", "deck_count", "prize_count", "active_count",
+                "bench_count", "discard_count")),
             repr(snapshot.unknown_mass),
             tuple((item.subsystem.value, item.error)
                   for item in getattr(snapshot, "failures", ())),

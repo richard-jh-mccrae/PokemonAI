@@ -1,10 +1,13 @@
-from dataclasses import dataclass, replace
+from dataclasses import replace
+from io import StringIO
 import json
+from pathlib import Path
+import subprocess
 
 from ledger_helpers import player, printout
 import pytest
 
-from common.api import ActionIdentity
+from common.api import ActionIdentity, RootDecision
 from common.decision import (
     CandidateDisposition,
     CandidateRoster,
@@ -25,24 +28,33 @@ from common.decision import (
     ValuedCandidate,
 )
 from common.observation import ObservationStateBuilder, TransitionTrace, VisibleHand
+from common.options import LegalAction
 from common.ledger import BehaviorIdentity, EvaluationModel, PrizeMap
 from common.telemetry import (
     MAX_FRAME_BYTES,
     RecordAssembler,
     TelemetrySession,
     build_decision_record,
+    build_episode_receipt,
     build_outcome_record,
     frame_record,
     episode_context,
+    emit,
     migrate_record,
     validate_record,
+    runtime_provenance,
 )
 
 
-@dataclass(frozen=True)
-class Action:
-    identity: ActionIdentity
-    selection: tuple[int, ...]
+def Action(identity, selection):
+    return LegalAction(identity, selection, (selection,), ())
+
+
+def _provider_configuration(identity="fixture-provider"):
+    return {
+        "identity": identity, "backend": "fixture", "factory": "tests.FixtureProvider",
+        "version": 2, "kwargs": {}, "factory_kwargs": {},
+    }
 
 
 def test_decision_record_keeps_the_complete_typed_candidate_roster():
@@ -58,6 +70,7 @@ def test_decision_record_keeps_the_complete_typed_candidate_roster():
         evidence=PrizeMap(4, (101, 202), 4, 0),
     )
     action = Action(ActionIdentity("end_turn"), (0,))
+    state = replace(state, legal_actions=(action,))
     candidate = ValuedCandidate(
         action,
         DecisionDelta(-0.25, scale, (
@@ -66,7 +79,7 @@ def test_decision_record_keeps_the_complete_typed_candidate_roster():
         CandidateDisposition.ENDS_TURN,
         EvaluationStatus.COMPLETE,
     )
-    roster = CandidateRoster((candidate,))
+    roster = CandidateRoster.from_legal_actions(state.legal_actions, (candidate,))
     search = SearchResult(baseline, roster, nodes_visited=3, stop_reason="complete")
     result = DecisionResult(
         action,
@@ -88,13 +101,14 @@ def test_decision_record_keeps_the_complete_typed_candidate_roster():
         selection=(0,),
         evaluation_model=EvaluationModel.build(),
         compute_configuration=ComputeConfiguration(),
+        provider_configuration=_provider_configuration("provider"),
         provenance={"agent": "test", "artifact": "fixture", "code": "abc123",
                     "data": {"cards": "cards-v1"}},
         decision_seconds=0.125,
     )
 
     assert record["schema"] == "ledger.telemetry"
-    assert record["schema_version"] == 1
+    assert record["schema_version"] == 2
     assert record["record_type"] == "decision"
     assert record["episode"]["key"] == "episode-7"
     assert record["decision"]["index"] == 4
@@ -123,6 +137,7 @@ def test_decision_record_keeps_the_complete_typed_candidate_roster():
     model = record["configuration"]["evaluation_model"]
     assert model["valuation"]["values"]["prize.race"] == 1.0
     assert model["identity"]
+    assert model["card_store_identity"]
     assert record["configuration"]["compute"]["search"]["node_budget"] == 4096
     assert record["configuration"]["compute"]["identity"]
     assert record["provenance"]["code"] == "abc123"
@@ -136,6 +151,7 @@ def test_decision_record_keeps_every_successor_and_continuation_component():
     scale = ValueScale("ledger-worth", 1)
     baseline = StateValuation(state.position_key, 1.0, scale, state.seat, "eval")
     action = Action(ActionIdentity("attach", ("water",)), (2,))
+    state = replace(state, legal_actions=(action,))
     landing = StateValuation(
         state.position_key, 1.75, scale, state.seat, "eval",
         (ValueComponent("energy_progress", 1.0, 0.75, 0.75),),
@@ -166,7 +182,7 @@ def test_decision_record_keeps_every_successor_and_continuation_component():
         continuation=continuation,
         policy_evidence=PrizeMap(4, (101, 202), 4, 0),
     )
-    roster = CandidateRoster((candidate,))
+    roster = CandidateRoster.from_legal_actions(state.legal_actions, (candidate,))
     search = SearchResult(baseline, roster)
     result = DecisionResult(action, baseline, roster, search)
 
@@ -179,6 +195,7 @@ def test_decision_record_keeps_every_successor_and_continuation_component():
         selection=(2,),
         evaluation_model=EvaluationModel.build(),
         compute_configuration=ComputeConfiguration(),
+        provider_configuration=_provider_configuration(),
         provenance={"agent": "test", "artifact": "fixture", "code": "abc123", "data": {}},
         decision_seconds=0.01,
     )
@@ -205,13 +222,14 @@ def test_framing_is_bounded_deterministic_and_lossless_out_of_order():
     scale = ValueScale("ledger-worth", 1)
     baseline = StateValuation(state.position_key, 0.0, scale, state.seat, "eval")
     action = Action(ActionIdentity("end_turn"), (0,))
+    state = replace(state, legal_actions=(action,))
     candidate = ValuedCandidate(
         action,
         DecisionDelta(0.0, scale),
         CandidateDisposition.ENDS_TURN,
         EvaluationStatus.COMPLETE,
     )
-    roster = CandidateRoster((candidate,))
+    roster = CandidateRoster.from_legal_actions(state.legal_actions, (candidate,))
     result = DecisionResult(action, baseline, roster, SearchResult(baseline, roster))
     record = build_decision_record(
         result,
@@ -222,6 +240,7 @@ def test_framing_is_bounded_deterministic_and_lossless_out_of_order():
         selection=(0,),
         evaluation_model=EvaluationModel.build(),
         compute_configuration=ComputeConfiguration(),
+        provider_configuration=_provider_configuration(),
         provenance={"agent": "test", "artifact": "fixture", "code": "abc123", "data": {
             "padding": "".join(f"{index:08x}" for index in range(20_000))
         }},
@@ -241,13 +260,22 @@ def test_framing_is_bounded_deterministic_and_lossless_out_of_order():
 
 def test_outcome_record_links_the_exact_episode_decision_set():
     decisions = [
-        {"record_type": "decision", "record_id": "d0", "episode": {"key": "episode-9"}},
-        {"record_type": "decision", "record_id": "d1", "episode": {"key": "episode-9"}},
+        {"record_type": "decision", "record_id": "d0", "episode": {"key": "episode-9"},
+         "decision": {"seat": 0, "index": 0}},
+        {"record_type": "decision", "record_id": "d1", "episode": {"key": "episode-9"},
+         "decision": {"seat": 1, "index": 0}},
     ]
 
+    receipt = build_episode_receipt(
+        episode_key="episode-9", reservations=[{
+            "record_id": decision["record_id"], "seat": decision["decision"]["seat"],
+            "index": decision["decision"]["index"], "status": "delivered",
+            "error_type": None,
+        } for decision in decisions])
     record = build_outcome_record(
         episode_key="episode-9",
         decision_records=decisions,
+        telemetry_receipt=receipt,
         winner=1,
         terminal_reason="prizes_taken",
         public_prizes={0: 2, 1: 0},
@@ -258,11 +286,12 @@ def test_outcome_record_links_the_exact_episode_decision_set():
 
     assert record == {
         "schema": "ledger.telemetry",
-        "schema_version": 1,
+        "schema_version": 2,
         "record_type": "outcome",
         "record_id": record["record_id"],
         "episode": {"key": "episode-9", "external_id": "kaggle-44"},
         "decision_ids": ["d0", "d1"],
+        "telemetry_receipt_id": receipt["record_id"],
         "result": {
             "winner": 1,
             "draw": False,
@@ -291,10 +320,115 @@ def test_session_uses_owner_episode_key_and_tracks_parent_per_seat():
                       "parent_decision_id": "seat-zero-first"}
 
 
+def test_episode_receipt_accounts_for_every_reservation_before_outcome_certification():
+    session = TelemetrySession()
+    session.begin_episode("receipt-episode")
+    reservation = session.reserve_decision(
+        seat=0, position_key="position", decision_key="decision")
+    session.commit_decision(seat=0, record_id=reservation["record_id"])
+    session.deliver_decision(record_id=reservation["record_id"])
+
+    receipt = session.close_episode()
+
+    assert receipt["schema_version"] == 2
+    assert receipt["record_type"] == "telemetry_receipt"
+    assert receipt["certified"] is True
+    assert receipt["reservations"] == [{
+        "record_id": reservation["record_id"], "seat": 0, "index": 0,
+        "status": "delivered", "error_type": None,
+    }]
+
+
+def test_failed_or_open_reservation_cannot_certify_an_outcome():
+    session = TelemetrySession()
+    session.begin_episode("failed-receipt")
+    reservation = session.reserve_decision(
+        seat=0, position_key="position", decision_key="decision")
+    session.fail_decision(
+        record_id=reservation["record_id"], phase="emission", error_type="ValueError")
+    receipt = session.close_episode()
+
+    assert receipt["certified"] is False
+    with pytest.raises(ValueError, match="certified Episode Telemetry Receipt"):
+        build_outcome_record(
+            episode_key="failed-receipt", decision_records=[], telemetry_receipt=receipt,
+            winner=None, terminal_reason="draw", public_prizes={0: 1, 1: 1},
+            rewards={0: 0.0, 1: 0.0}, duration_seconds=1.0)
+
+
+def _emittable_decision():
+    state = ObservationStateBuilder().root(printout())
+    scale = ValueScale("ledger-worth", 1)
+    baseline = StateValuation(state.position_key, 0.0, scale, state.seat, "eval")
+    action = Action(ActionIdentity("end_turn"), (0,))
+    state = replace(state, legal_actions=(action,))
+    candidate = ValuedCandidate(
+        action, DecisionDelta(0.0, scale), CandidateDisposition.ENDS_TURN,
+        EvaluationStatus.COMPLETE,
+    )
+    roster = CandidateRoster.from_legal_actions(state.legal_actions, (candidate,))
+    result = DecisionResult(action, baseline, roster, SearchResult(baseline, roster))
+    return state, RootDecision((0,), action.identity, 0.0, True, {}, result)
+
+
+def test_emission_and_delivery_failures_preserve_choice_but_make_episode_uncertifiable():
+    state, decision = _emittable_decision()
+    common = {
+        "seat": state.seat, "state": state,
+        "evaluation_model": EvaluationModel.build(),
+        "compute_configuration": ComputeConfiguration(),
+        "provenance": {"agent": "test", "artifact": "fixture", "code": "abc", "data": {}},
+    }
+    emission = TelemetrySession()
+    emission.begin_episode("emission-failure")
+    invalid_provider = {**_provider_configuration(), "backend": None}
+    with pytest.raises(ValueError, match="provider configuration"):
+        emit(decision, session=emission, provider_configuration=invalid_provider,
+             out=StringIO(), **common)
+    emission_receipt = emission.close_episode()
+
+    class BrokenTransport:
+        def write(self, _value):
+            raise OSError("transport down")
+
+    delivery = TelemetrySession()
+    delivery.begin_episode("delivery-failure")
+    with pytest.raises(OSError, match="transport down"):
+        emit(decision, session=delivery, provider_configuration=_provider_configuration(),
+             out=BrokenTransport(), **common)
+    delivery_receipt = delivery.close_episode()
+
+    assert decision.chosen == (0,)
+    assert emission_receipt["reservations"][0]["status"] == "emission_failed"
+    assert delivery_receipt["reservations"][0]["status"] == "delivery_failed"
+    assert not emission_receipt["certified"] and not delivery_receipt["certified"]
+
+
+def test_decision_record_rejects_a_circular_unproven_candidate_roster():
+    state, decision = _emittable_decision()
+    candidate = decision.decision_result.roster.candidates[0]
+    roster = CandidateRoster((candidate,))
+    result = DecisionResult(
+        candidate.action, decision.decision_result.baseline, roster,
+        SearchResult(decision.decision_result.baseline, roster))
+
+    with pytest.raises(ValueError, match="authoritative legal-action roster proof"):
+        build_decision_record(
+            result, state, episode_key="unproven", decision_index=0,
+            parent_decision_id=None, selection=(0,),
+            evaluation_model=EvaluationModel.build(),
+            compute_configuration=ComputeConfiguration(),
+            provider_configuration=_provider_configuration(),
+            provenance={"agent": "test", "artifact": "fixture", "code": "abc", "data": {}},
+            decision_seconds=0.01)
+
+
 def test_schema_rejects_unknown_fields_versions_and_bellman_migration():
+    receipt = build_episode_receipt(episode_key="episode-10", reservations=[])
     record = build_outcome_record(
         episode_key="episode-10",
         decision_records=[],
+        telemetry_receipt=receipt,
         winner=None,
         terminal_reason="draw",
         public_prizes={0: 1, 1: 1},
@@ -308,17 +442,38 @@ def test_schema_rejects_unknown_fields_versions_and_bellman_migration():
     with pytest.raises(ValueError, match="unknown outcome result fields"):
         validate_record(with_unknown)
     with pytest.raises(ValueError, match="unsupported telemetry schema version"):
-        validate_record({**record, "schema_version": 2})
+        validate_record({**record, "schema_version": 1})
+    with pytest.raises(ValueError, match="unsupported telemetry schema version"):
+        validate_record({**record, "schema_version": 3})
+    with pytest.raises(ValueError, match="diagnostic-only"):
+        migrate_record({**record, "schema_version": 1})
     with pytest.raises(ValueError, match="diagnostic-only"):
         migrate_record({"bellman": True, "chosen": [0]})
     with pytest.raises(ValueError, match="record id"):
         validate_record({**record, "record_id": "tampered"})
     with pytest.raises(ValueError, match="outcome duration"):
+        negative_receipt = build_episode_receipt(
+            episode_key="negative-duration", reservations=[])
         build_outcome_record(
             episode_key="negative-duration", decision_records=[], winner=None,
+            telemetry_receipt=negative_receipt,
             terminal_reason="draw", public_prizes={0: 1, 1: 1},
             rewards={0: 0.0, 1: 0.0}, duration_seconds=-1.0,
         )
+
+
+def test_runtime_provenance_separates_real_source_artifact_and_data_identities():
+    provenance = runtime_provenance(
+        deck_name="fixture", opponent_knowledge_identity="opponent-data")
+    commit = subprocess.run(
+        ["git", "rev-parse", "HEAD"], cwd=Path(__file__).resolve().parents[2],
+        check=True, capture_output=True, text=True).stdout.strip()
+
+    assert provenance["code"] == commit
+    assert len(provenance["artifact"]) == 64
+    assert provenance["artifact"] != provenance["code"]
+    assert provenance["data"]["cards"]
+    assert provenance["data"]["opponent_knowledge"] == "opponent-data"
 
 
 def test_successor_observation_rejects_a_visible_opponent_hand():
@@ -327,6 +482,7 @@ def test_successor_observation_rejects_a_visible_opponent_hand():
     scale = ValueScale("ledger-worth", 1)
     baseline = StateValuation(state.position_key, 0.0, scale, state.seat, "eval")
     action = Action(ActionIdentity("end_turn"), (0,))
+    state = replace(state, legal_actions=(action,))
     successor = SuccessorResult(
         1.0, baseline, True, leaked,
         TransitionTrace(1, state.position_key, (action.identity,), state.position_key),
@@ -336,7 +492,7 @@ def test_successor_observation_rejects_a_visible_opponent_hand():
         action, DecisionDelta(0.0, scale), CandidateDisposition.ENDS_TURN,
         EvaluationStatus.COMPLETE, (successor,),
     )
-    roster = CandidateRoster((candidate,))
+    roster = CandidateRoster.from_legal_actions(state.legal_actions, (candidate,))
 
     with pytest.raises(ValueError, match="opponent hand must be hidden"):
         build_decision_record(
@@ -344,9 +500,28 @@ def test_successor_observation_rejects_a_visible_opponent_hand():
             episode_key="hidden-successor", decision_index=0, parent_decision_id=None,
             selection=(0,), evaluation_model=EvaluationModel.build(),
             compute_configuration=ComputeConfiguration(),
+            provider_configuration=_provider_configuration(),
             provenance={"agent": "test", "artifact": "fixture", "code": "abc123", "data": {}},
             decision_seconds=0.01,
         )
+
+
+def test_decision_record_rejects_a_selection_outside_its_chosen_action():
+    state, decision = _emittable_decision()
+    record = build_decision_record(
+        decision.decision_result, state,
+        episode_key="selection-mismatch", decision_index=0,
+        parent_decision_id=None, selection=(0,),
+        evaluation_model=EvaluationModel.build(),
+        compute_configuration=ComputeConfiguration(),
+        provider_configuration=_provider_configuration(),
+        provenance={"agent": "test", "artifact": "fixture", "code": "abc", "data": {}},
+        decision_seconds=0.01)
+    record = json.loads(json.dumps(record))
+    record["decision"]["selection"] = [999]
+
+    with pytest.raises(ValueError, match="selection differs"):
+        validate_record(record)
 
 
 def test_hidden_opponent_hand_truth_cannot_change_a_decision_record():
@@ -361,11 +536,12 @@ def test_hidden_opponent_hand_truth_cannot_change_a_decision_record():
         scale = ValueScale("ledger-worth", 1)
         baseline = StateValuation(state.position_key, 0.0, scale, state.seat, "eval")
         action = Action(ActionIdentity("end_turn"), (0,))
+        state = replace(state, legal_actions=(action,))
         candidate = ValuedCandidate(
             action, DecisionDelta(0.0, scale), CandidateDisposition.ENDS_TURN,
             EvaluationStatus.COMPLETE,
         )
-        roster = CandidateRoster((candidate,))
+        roster = CandidateRoster.from_legal_actions(state.legal_actions, (candidate,))
         return build_decision_record(
             DecisionResult(action, baseline, roster, SearchResult(baseline, roster)),
             state,
@@ -375,6 +551,7 @@ def test_hidden_opponent_hand_truth_cannot_change_a_decision_record():
             selection=(0,),
             evaluation_model=EvaluationModel.build(),
             compute_configuration=ComputeConfiguration(),
+            provider_configuration=_provider_configuration(),
             provenance={"agent": "test", "artifact": "fixture", "code": "abc123", "data": {}},
             decision_seconds=0.01,
         )
@@ -387,10 +564,11 @@ def test_failure_telemetry_keeps_codes_but_drops_exception_text():
     scale = ValueScale("ledger-worth", 1)
     baseline = StateValuation(state.position_key, 0.0, scale, state.seat, "eval")
     action = Action(ActionIdentity("end_turn"), (0,))
+    state = replace(state, legal_actions=(action,))
     candidate = ValuedCandidate(
         action, None, CandidateDisposition.FORCED, EvaluationStatus.UNAVAILABLE,
     )
-    roster = CandidateRoster((candidate,))
+    roster = CandidateRoster.from_legal_actions(state.legal_actions, (candidate,))
     failure = DecisionFailure(
         DecisionFailureStage.PROVIDER,
         "PrivateProviderError",
@@ -410,6 +588,7 @@ def test_failure_telemetry_keeps_codes_but_drops_exception_text():
         selection=(0,),
         evaluation_model=EvaluationModel.build(),
         compute_configuration=ComputeConfiguration(),
+        provider_configuration=_provider_configuration(),
         provenance={"agent": "test", "artifact": "fixture", "code": "abc123", "data": {}},
         decision_seconds=0.01,
     )

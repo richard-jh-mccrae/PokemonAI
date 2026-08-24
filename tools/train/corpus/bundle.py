@@ -11,7 +11,7 @@ from .io import atomic_json, canonical_bytes, digest_bytes, digest_file
 
 
 BUNDLE_SCHEMA = "ledger.episode-bundle"
-BUNDLE_VERSION = 1
+BUNDLE_VERSION = 2
 
 
 def _replay_episode(replay: dict) -> str | None:
@@ -19,19 +19,28 @@ def _replay_episode(replay: dict) -> str | None:
     return None if value is None else str(value)
 
 
-def audit_records(records: list[dict], replay: dict) -> tuple[list[dict], dict]:
+def audit_records(records: list[dict], replay: dict) -> tuple[list[dict], dict, dict]:
     validated = [dict(validate_record(record)) for record in records]
     decisions = [record for record in validated if record["record_type"] == "decision"]
+    receipts = [record for record in validated
+                if record["record_type"] == "telemetry_receipt"]
     outcomes = [record for record in validated if record["record_type"] == "outcome"]
+    if len(receipts) != 1:
+        raise ValueError("Episode Bundle requires exactly one Episode Telemetry Receipt")
     if len(outcomes) != 1:
         raise ValueError("Episode Bundle requires exactly one Outcome record")
+    receipt = receipts[0]
     outcome = outcomes[0]
     episode = outcome["episode"]["key"]
-    if any(record["episode"]["key"] != episode for record in decisions):
+    if receipt["episode"]["key"] != episode \
+            or any(record["episode"]["key"] != episode for record in decisions):
         raise ValueError("Episode Bundle mixes episode keys")
     decision_ids = [record["record_id"] for record in decisions]
     if outcome["decision_ids"] != decision_ids:
         raise ValueError("Outcome decision set or order is incomplete")
+    if not receipt["certified"] or receipt["decision_ids"] != decision_ids \
+            or outcome["telemetry_receipt_id"] != receipt["record_id"]:
+        raise ValueError("Episode Telemetry Receipt does not certify the Outcome decision set")
     external = outcome["episode"]["external_id"]
     replay_episode = _replay_episode(replay)
     if external is not None and replay_episode != str(external):
@@ -40,7 +49,7 @@ def audit_records(records: list[dict], replay: dict) -> tuple[list[dict], dict]:
             for record in decisions]
     if len(keys) != len(set(keys)):
         raise ValueError("Episode Bundle repeats a seat decision index")
-    return decisions, outcome
+    return decisions, receipt, outcome
 
 
 def _strict_records(lines: list[str]) -> list[dict]:
@@ -74,9 +83,9 @@ def stage_episode_bundle(*, replay_path: Path, telemetry_path: Path,
     replay_path, telemetry_path = Path(replay_path), Path(telemetry_path)
     replay = json.loads(replay_path.read_text(encoding="utf-8"))
     records = _strict_records(telemetry_path.read_text(encoding="utf-8").splitlines())
-    decisions, outcome = audit_records(records, replay)
+    decisions, receipt, outcome = audit_records(records, replay)
     record_bytes = b"".join(canonical_bytes(record) + b"\n"
-                            for record in [*decisions, outcome])
+                            for record in [*decisions, receipt, outcome])
     identity = digest_bytes(canonical_bytes({
         "replay_sha256": digest_file(replay_path),
         "records_sha256": digest_bytes(record_bytes),
@@ -92,7 +101,8 @@ def stage_episode_bundle(*, replay_path: Path, telemetry_path: Path,
         atomic_json(temporary / "manifest.json", {
             "schema": BUNDLE_SCHEMA, "schema_version": BUNDLE_VERSION,
             "bundle_id": identity, "episode_key": outcome["episode"]["key"],
-            "decision_count": len(decisions), "outcome_id": outcome["record_id"],
+            "decision_count": len(decisions), "receipt_id": receipt["record_id"],
+            "outcome_id": outcome["record_id"],
             "files": {
                 "replay.json": digest_file(temporary / "replay.json"),
                 "telemetry.jsonl": digest_file(temporary / "telemetry.jsonl"),
@@ -105,7 +115,7 @@ def stage_episode_bundle(*, replay_path: Path, telemetry_path: Path,
     return destination
 
 
-def load_episode_bundle(path: Path) -> tuple[dict, list[dict], dict, dict]:
+def load_episode_bundle(path: Path) -> tuple[dict, list[dict], dict, dict, dict]:
     path = Path(path)
     manifest = json.loads((path / "manifest.json").read_text(encoding="utf-8"))
     if manifest.get("schema") != BUNDLE_SCHEMA or manifest.get("schema_version") != BUNDLE_VERSION:
@@ -117,5 +127,7 @@ def load_episode_bundle(path: Path) -> tuple[dict, list[dict], dict, dict]:
     records = [json.loads(line) for line in
                (path / "telemetry.jsonl").read_text(encoding="utf-8").splitlines()
                if line.strip()]
-    decisions, outcome = audit_records(records, replay)
-    return manifest, decisions, outcome, replay
+    decisions, receipt, outcome = audit_records(records, replay)
+    if manifest.get("receipt_id") != receipt["record_id"]:
+        raise ValueError("Episode Bundle receipt identity mismatch")
+    return manifest, decisions, receipt, outcome, replay

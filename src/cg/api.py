@@ -630,13 +630,5 @@ def search_end() -> None:
     """Terminate the search. Memory used during the search will be reused in the next search."""
     lib.SearchEnd(agent_ptr)
 
-def search_release(search_id: int) -> None:
-    """Delete the state with the specified ID and make the memory available for reuse.
-    
-    Args:
-        search_id: Search ID.
-    """
-    lib.SearchRelease(agent_ptr, search_id)
-
 #endregion functions
 

@@ -9,7 +9,7 @@ from .algebra import (
     WeightedEdge,
 )
 from .cards import card_store, play_clauses
-from .option_equivalence import option_in_play_source_id
+from .option_equivalence import AREA_STADIUM, _ZONE_REFS, _card_at
 from .options import LegalAction, recycled_card_ids
 from .information import draw_outcomes, reveal_sets
 from .cards.functions.fetch import WINDOW, fetch_target_matches
@@ -29,6 +29,28 @@ AREA_PRIZE = 6
 COIN_BRANCH_PROBABILITY = 0.5
 ENERGY_REMOVAL_INDEX_SLOT = 2
 DEFAULT_REVEAL_AMOUNT = 1
+
+
+def _option_in_play_source_id(option, frame, seat):
+    if not isinstance(option, dict):
+        return None
+    if option.get("cardId") is not None:
+        return int(option["cardId"])
+    if option.get("playerIndex") is not None:
+        seat = option["playerIndex"]
+    for area_key, index_key in reversed(_ZONE_REFS):
+        area = option.get(area_key)
+        if area is None:
+            continue
+        index = option.get(index_key)
+        if area == AREA_STADIUM:
+            cards = ((frame or {}).get("current") or {}).get("stadium") or []
+            card = cards[index] if isinstance(index, int) and 0 <= index < len(cards) else None
+        else:
+            card = _card_at(frame, seat, area, index)
+        return (int(card["id"]) if isinstance(card, dict) and card.get("id") is not None
+                else None)
+    return None
 
 
 def _expand(counts) -> list[int]:
@@ -205,7 +227,7 @@ class CgpyTransitionProvider:
             if isinstance(hand_index, int) and 0 <= hand_index < len(hand) and hand[hand_index]:
                 card_id = int(hand[hand_index]["id"])
         if kind in {"ability", "skill"}:
-            card_id = option_in_play_source_id(option, _payload(state), seat)
+            card_id = _option_in_play_source_id(option, _payload(state), seat)
         recipient_id = None
         if kind == "attach":
             area = option.get("inPlayArea")
@@ -574,6 +596,7 @@ class LedgerCgpyProvider(PreviewBinding, CgpyTransitionProvider):
     excludes this module and scans shipped content for offline-engine references."""
 
     backend = "cgpy-ledger"
+    version = 2
 
     def __init__(self, root, **kwargs):
         self._preview_tokens = _count()

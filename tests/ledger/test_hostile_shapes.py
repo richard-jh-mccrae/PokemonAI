@@ -18,7 +18,7 @@ from common.observation import (KnownOwnPrizes, LegalKnowledge, ObservationConst
                                 ObservationStateBuilder)
 from common.ledger import (ComputeConfiguration, EvaluationModel, LedgerDecider,
                            ValuationConfiguration, evaluate)
-from common.ledger.chance import refresh_value
+from common.ledger.chance import refresh_outcomes
 from common.ledger.decider import LedgerUnavailable
 from common.options import enumerate_legal_actions
 from common.decision import safe_legal_selection
@@ -38,7 +38,7 @@ def test_a_non_finite_swing_scores_zero_and_logs_the_gap():
     with pytest.raises(ValueError):
         ValuationConfiguration(
             {**dict(ValuationConfiguration.general()), "result.win": math.inf},
-            schema_version=1)
+            schema_version=ValuationConfiguration.general().schema_version)
 
 
 def test_refresh_tolerates_idless_hand_rows():
@@ -47,10 +47,11 @@ def test_refresh_tolerates_idless_hand_rows():
     obs = printout(me=player(active=body(DRAGAPULT, 1), hand=[LILLIES, FIRE_E]))
     obs["current"]["players"][0]["hand"].extend([{"id": None, "serial": 9}, {"serial": 10}])
     board = ObservationStateBuilder((DRAGAPULT,) * 30).root(obs)
-    value, _gaps = refresh_value(obs, board, LILLIES, ((6, 0),), False,
-                                 lambda synthetic: evaluate(synthetic, EvaluationModel.build()),
-                                 ComputeConfiguration())
-    assert math.isfinite(value)
+    valuation, _gaps, _outcomes = refresh_outcomes(
+        obs, board, LILLIES, ((6, 0),), False,
+        lambda synthetic: evaluate(synthetic, EvaluationModel.build()),
+        ComputeConfiguration())
+    assert math.isfinite(valuation.total)
 
 
 def test_observation_boundary_rejects_a_single_entry_players_list():

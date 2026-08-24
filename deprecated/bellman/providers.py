@@ -10,7 +10,7 @@ from functools import partial
 from common.engine import terminal_effects_supported
 from common.engine import CgpyTransitionProvider
 from common.native_engine import NativeCgTransitionProvider
-from common.option_equivalence import option_in_play_source_id
+from .option_sources import option_in_play_source_id
 from common.refresh import played_card_id
 from common.strategy.context import _ACTIVE, _BENCH
 

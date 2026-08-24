@@ -1,11 +1,10 @@
-from types import SimpleNamespace
-
 from ledger_helpers import ScriptedProvider, action, body, player, printout
 
 from common.algebra import Deterministic
 from common.ledger import PrizeMap, ValuationConfiguration
 from common.ledger.chance import _average
 from common.ledger.evaluate import Valuation
+from common.opponent import OpponentSnapshot
 from common.runtime import AgentRuntime
 from common.strategy import PrizePlan, Roles, Strategy
 from deprecated.bellman.state import DecisionState
@@ -16,9 +15,8 @@ DECK = (CINDERACE, MEGA_STARMIE) * 30
 
 
 class _OpponentModel:
-    def update(self, _evidence):
-        return SimpleNamespace(candidates=(), unknown_mass=1.0,
-                               identity="unknown-opponent")
+    def update(self, evidence):
+        return OpponentSnapshot(evidence, {}, (), 1.0)
 
 
 def _state(observation):

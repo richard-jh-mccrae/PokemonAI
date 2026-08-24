@@ -3,8 +3,8 @@
 The Ledger's preview needs neither the canonical state copy nor the semantic key the providers
 built per successor to key their engine maps: the preview walk never merges transpositions, so
 a per-successor identity token keys the map for free, and `PreviewState` carries just the raw
-printout, the seat, and a lazily-enumerated menu. Bellman's own path is untouched — it keeps
-DecisionState successors through the same `_bind`/`_key` hooks. Measurements live in ADR-0146.
+printout, the seat, and a lazily-enumerated menu. Offline providers keep their full successors
+through the same `_bind`/`_key` hooks. Measurements live in ADR-0146.
 
 This module must stay free of any offline-engine reference: it ships in the Kaggle bundle,
 whose packager scans content. Offline providers REGISTER their preview variants here
@@ -61,6 +61,8 @@ class PreviewBinding:
 
 class LedgerNativeProvider(PreviewBinding, NativeCgTransitionProvider):
     backend = "native-cg-ledger"
+    version = 2
+    requires_observation_roster = True
 
     def __init__(self, root, **kwargs):
         # Identity keys never merge hidden worlds, and choosing per-world inside a forced menu

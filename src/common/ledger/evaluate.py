@@ -3,12 +3,15 @@ from __future__ import annotations
 
 from collections import Counter
 from dataclasses import dataclass
+import math
 
 from common.observation import ObservationState
 from common.observation.nodes import Body, Side
 from common.cards import card_clauses
 from common.cards.card_facts import EnergyCard, PokemonCard
 
+from .activation import (DAMAGE_UNIT_HP, ActivationCompiler, ActivationEnvironment,
+                         FeatureActivation)
 from .features import FEATURE_CATALOG
 from .prizes import PrizeMap, derive_prize_map
 from .worth import (Demand, DemandState, EvaluationModel, _liveness, _unfilled,
@@ -16,13 +19,6 @@ from .worth import (Demand, DemandState, EvaluationModel, _liveness, _unfilled,
                     development_reach_units,
                     legal_line_reach, line_reach, opponent_evaluation,
                     opponent_line_reach, best_payable_damage, usable_units)
-
-
-@dataclass(frozen=True)
-class FeatureActivation:
-    feature: str
-    value: float
-    provenance: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -47,23 +43,41 @@ class Valuation:
         return next((value for label, value in self.parts if label == name), 0.0)
 
 
+DRAW_RESULT_CODE = 2
+
+
 class _Trace:
     def __init__(self, ctx: EvaluationModel):
         self.ctx = ctx
+        self.compiler = ActivationCompiler()
         self.by_feature: dict[str, float] = {}
         self.provenance: dict[str, set[str]] = {}
         self.by_part: dict[str, float] = {}
         self.gaps: list[str] = []
 
-    def add(self, part: str, feature: str, activation: float, *,
-            provenance: str | None = None) -> None:
-        activation = float(activation)
+    def emit(self, part: str, source: str, claims, activation: float, *,
+             provenance: str | None = None, **environment) -> None:
+        claims = tuple(claims)
+        if not self.compiler.catalog.has_activation_rules(source, claims):
+            raise KeyError(f"Feature Catalog has no {source!r} rule for {claims!r}")
+        compiled = self.compiler.compile(
+            source, claims, ActivationEnvironment(scale=activation, **environment))
+        for item in compiled:
+            self.record(part, item, provenance=provenance)
+
+    def record(self, part: str, item: FeatureActivation, *,
+               provenance: str | None = None) -> None:
+        feature = item.feature
+        activation = float(item.value)
+        if not math.isfinite(activation):
+            raise ValueError(f"non-finite activation for {feature!r}")
         if not activation:
             return
         if feature not in FEATURE_CATALOG:
             raise KeyError(f"unregistered Valuation Feature {feature!r}")
         self.by_feature[feature] = self.by_feature.get(feature, 0.0) + activation
-        self.provenance.setdefault(feature, set()).add(provenance or part)
+        self.provenance.setdefault(feature, set()).update(
+            item.provenance or (provenance or part,))
         self.by_part[part] = self.by_part.get(part, 0.0) + (
             activation * self.ctx.configuration[feature])
 
@@ -87,17 +101,19 @@ def evaluate(board: ObservationState, ctx: EvaluationModel) -> Valuation:
         trace.gaps.extend(opponent.failures)
     _opponent_traits(trace, ctx, board, opponent)
     result = board.turn.result
-    if isinstance(result, int) and not isinstance(result, bool) and result >= 0 and result != 2:
-        trace.add("result", "result.win", 1.0 if result == board.seat else -1.0)
+    if isinstance(result, int) and not isinstance(result, bool) \
+            and result >= 0 and result != DRAW_RESULT_CODE:
+        trace.emit("result", "observation", ("terminal_win",),
+                   1.0 if result == board.seat else -1.0)
 
     for label, side, sign in (("me", board.me, 1.0), ("them", board.them, -1.0)):
         _side(trace, label, side, sign, ctx, board, opponent,
               deck_counts=board.deck_counts if sign > 0 else None)
 
-    trace.add("prize_race", "prize.race",
-              board.them.prize_count - board.me.prize_count)
+    trace.emit("prize_race", "observation", ("prize_advantage",),
+               board.them.prize_count - board.me.prize_count)
     prize_map = derive_prize_map(board, ctx)
-    trace.add("prize_map", "prize.race", prize_map.overrun)
+    trace.emit("prize_map", "observation", ("prize_advantage",), prize_map.overrun)
     result = trace.finish()
     return Valuation(result.total, result.parts, result.gaps, result.activations,
                      result.contributions, prize_map)
@@ -107,89 +123,30 @@ def _opponent_traits(trace: _Trace, ctx: EvaluationModel, board: ObservationStat
                      opponent) -> None:
     if opponent is None:
         return
+    compiler = ActivationCompiler()
     for candidate in opponent.candidates:
         for trait in candidate.traits:
             if trait.value is False:
                 continue
-            feature = (f"trait.{trait.name}.{trait.value}"
-                       if isinstance(trait.value, str) else f"trait.{trait.name}")
-            context = _trait_context(trait.name, board, ctx, candidate, trait.value)
-            trace.add(
-                "opponent.traits", feature, candidate.probability * context,
-                provenance=f"belief:{candidate.archetype or 'anonymous'}:{trait.name}")
+            provenance = f"belief:{candidate.archetype or 'anonymous'}:{trait.name}"
+            activations = compiler.compile(
+                "opponent_trait", (trait.name,), ActivationEnvironment(
+                    scale=candidate.probability, provenance=(provenance,), board=board,
+                    evaluation_model=ctx, opponent=board.them, candidate=candidate,
+                    claim_value=trait.value))
+            for activation in activations:
+                trace.record("opponent.traits", activation, provenance=provenance)
         for mechanic in candidate.mechanics:
-            context = _mechanic_context(mechanic.name, board, ctx)
-            trace.add(
-                "opponent.mechanics", f"mechanic.{mechanic.name}",
-                candidate.probability * mechanic.probability * context,
-                provenance=f"cards:{candidate.archetype or 'anonymous'}:{mechanic.name}")
-    trace.add("opponent.beliefs", "belief.unknown_archetype", opponent.unknown_mass)
-
-
-def _trait_context(name: str, board: ObservationState, ctx: EvaluationModel,
-                   candidate, value=None) -> float:
-    """Observable exposure that makes an opponent claim relevant on this board."""
-    if name == "deckout_vulnerability":
-        return max(0, 10 - board.them.deck_count)
-    if name == "heal_wall":
-        return sum(max(0, body.max_hp - body.hp) for body in board.them.bodies) / 100.0
-    if name == "opening_fragility":
-        return float(len(board.them.bench) == 0)
-    if name == "setup_dependency":
-        return sum(value in candidate.roles.get(body.card.card_id, ())
-                   for body in board.them.bodies)
-    if name == "tempo":
-        turn = max(0, board.turn.number)
-        return {"fast": 1.0 / (turn + 1.0), "midrange": 1.0,
-                "slow": turn / (turn + 1.0)}[value]
-    raise KeyError(f"opponent Trait {name!r} has no context compiler")
-
-
-def _mechanic_context(name: str, board: ObservationState, ctx: EvaluationModel) -> float:
-    if name == "item_lock":
-        return sum(getattr(ctx.facts(card.card_id), "kind", None) == "item"
-                   for card in (board.me.hand or ()))
-    if name == "spread":
-        return len(board.me.bench)
-    if name == "hand_size_attack":
-        return board.me.hand_count
-    if name == "special_energy_only":
-        return sum(getattr(ctx.facts(card.card_id), "kind", None) == "special_energy"
-                   for body in board.them.bodies for card in body.energy_cards)
-    if name == "no_pivot":
-        active = board.them.active
-        if active is None:
-            return 0.0
-        pressured = any(getattr(board.them, status) for status in (
-            "asleep", "paralyzed", "confused", "poisoned", "burned"))
-        return float(pressured or getattr(ctx.facts(active.card.card_id), "retreat_cost", 0) > 0)
-    if name == "single_prize":
-        return sum(_prize_value(body, ctx) == 1 for body in board.them.bodies)
-    if name == "damage_cap":
-        return max((attack.damage for body in board.me.bodies
-                    for attack in getattr(ctx.facts(body.card.card_id), "attacks", ()) or ()), default=0) / 100.0
-    if name == "comeback_disruption":
-        return max(0, board.them.prize_count - board.me.prize_count)
-    if name == "effect_immunity":
-        effect_kinds = {
-            "attack_debuff", "attack_lock", "burn", "confuse", "damage_counters",
-            "discard_opp_energy", "no_retreat", "poison", "push_out", "retreat_lock",
-            "sleep",
-        }
-        effect_attacks = sum(bool(effect_kinds.intersection(
-            clause.kind for clause in attack.clauses))
-                   for body in board.me.bodies
-                   for attack in getattr(ctx.facts(body.card.card_id), "attacks", ()) or ())
-        ex_bodies = sum(bool(getattr(ctx.facts(body.card.card_id), "ex", False)
-                             or getattr(ctx.facts(body.card.card_id), "mega_ex", False))
-                        for body in board.me.bodies)
-        return effect_attacks + ex_bodies
-    if name == "piercing":
-        active = board.me.active
-        statuses = sum(bool(getattr(board.me, status)) for status in (
-            "asleep", "paralyzed", "confused", "poisoned", "burned"))
-        return statuses + (len(active.tools) if active is not None else 0)
-    raise KeyError(f"opponent Mechanic {name!r} has no context compiler")
+            provenance = f"cards:{candidate.archetype or 'anonymous'}:{mechanic.name}"
+            activations = compiler.compile(
+                "opponent_mechanic", (mechanic.name,), ActivationEnvironment(
+                    scale=candidate.probability * mechanic.probability,
+                    provenance=(provenance,), board=board, evaluation_model=ctx,
+                    candidate=candidate))
+            for activation in activations:
+                trace.record("opponent.mechanics", activation, provenance=provenance)
+    trace.emit("opponent.beliefs", "observation", ("unknown_opponent_archetype",),
+               opponent.unknown_mass)
 
 
 def _side(trace: _Trace, label: str, side: Side, sign: float, ctx: EvaluationModel,
@@ -212,135 +169,143 @@ def _side(trace: _Trace, label: str, side: Side, sign: float, ctx: EvaluationMod
             deck_counts, sign=sign)
         copies = seen.get(body.card.card_id, 0)
         if copies:
-            trace.add(f"{label}.bodies", "copy.surplus_in_play", -sign * copies)
+            trace.emit(f"{label}.bodies", "observation", ("surplus_in_play_copy",),
+                       -sign * copies)
         seen[body.card.card_id] = copies + 1
 
     if side.active is not None:
-        trace.add(f"{label}.active", "active.premium", sign)
+        trace.emit(f"{label}.active", "observation", ("active_body",), sign)
         if not any_attack_payable(ctx.facts(side.active.card.card_id), side.active.energies):
-            trace.add(f"{label}.active", "active.unready_fraction", -sign)
-    trace.add(f"{label}.bench_slots", "bench.open_slot",
-              sign * max(0, side.bench_max - len(side.bench)))
-    trace.add(f"{label}.liability", "body.prize_liability", -sign * sum(
-        max(0, _prize_value(body, ctx) - 1) for body in side.bodies))
+            trace.emit(f"{label}.active", "observation", ("unready_active",), -sign)
+    trace.emit(f"{label}.bench_slots", "observation", ("open_bench_slot",),
+               sign * max(0, side.bench_max - len(side.bench)))
+    trace.emit(f"{label}.liability", "observation", ("extra_prize_liability",),
+               -sign * sum(max(0, _prize_value(body, ctx) - 1)
+                           for body in side.bodies))
 
     if sign > 0 and side.hand is not None:
         demand = Demand.read(side, ctx, board.turn)
         copies = Counter(demand.body_id_counts)
         for card in side.hand:
             facts = ctx.facts(card.card_id)
-            provision = (facts.clause("energy_provide")
-                         if isinstance(facts, EnergyCard) else None)
-            evolved_targets = [body for body in demand.bodies
-                               if getattr(ctx.facts(body.card.card_id), "evolves_from", None)]
-            if (provision is not None and provision.amount_on_evolution
-                    and any(_can_absorb_multi_provision(body, provision, ctx)
-                            for body in evolved_targets)):
-                extra = max(0, int(provision.amount_on_evolution)
-                            - int(provision.amount or 1))
-                trace.add(f"{label}.hand", "continuation.multi_provision_in_hand",
-                          sign * extra)
-            feature, capacity = _hand_feature(
+            claim, capacity = _hand_claim(
                 card.card_id, facts, demand, copies[card.card_id], ctx, deck_counts)
             placement = {
-                "zone.in_hand": "in_hand_live",
-                "demand.dead": "in_hand_dead",
-                "demand.setup": "in_hand_setup",
-                "demand.colorless_only": "in_hand_colorless",
-                "copy.surplus": "in_hand_surplus",
-            }[feature]
+                "card_in_hand": "in_hand_live",
+                "dead_hand_card": "in_hand_dead",
+                "setup_hand_card": "in_hand_setup",
+                "colorless_only_hand_card": "in_hand_colorless",
+                "surplus_hand_copy": "in_hand_surplus",
+            }[claim]
             _card(trace, f"{label}.hand", card.card_id, facts, sign, ctx, own=True,
                   placement=placement, opponent=opponent)
             _situational_functions(
                 trace, f"{label}.hand", facts, side, board.them, demand, ctx,
                 deck_counts, sign=sign)
-            trace.add(f"{label}.hand", feature, sign)
+            trace.emit(f"{label}.hand", "observation", (claim,), sign)
             if (isinstance(facts, PokemonCard) and facts.evolves_from
                     and demand.body_name_counts.get(facts.evolves_from, 0)):
-                trace.add(f"{label}.hand", "development.ready_evolution", sign)
+                trace.emit(f"{label}.hand", "observation",
+                           ("ready_evolution_in_hand",), sign)
             copies[card.card_id] += 1
     else:
-        trace.add(f"{label}.hand", "context.opponent_unknown_hand",
-                  sign * side.hand_count)
-        trace.add(f"{label}.hand", "zone.in_hand", sign * side.hand_count)
+        trace.emit(f"{label}.hand", "observation", ("unknown_opponent_hand_card",),
+                   sign * side.hand_count)
+        trace.emit(f"{label}.hand", "observation", ("card_in_hand",),
+                   sign * side.hand_count)
 
     if sign > 0 and deck_counts is not None:
         for card_id, count in deck_counts:
             facts = ctx.facts(card_id)
             _card(trace, f"{label}.deck", card_id, facts, sign * count, ctx, own=True,
                   placement="in_deck", opponent=opponent)
-            trace.add(f"{label}.deck", "zone.in_deck", sign * count)
+            trace.emit(f"{label}.deck", "observation", ("card_in_deck",),
+                       sign * count)
     else:
-        unknown = ("belief.unknown_deck_card" if sign > 0
-                   else "context.opponent_unknown_deck")
-        trace.add(f"{label}.deck", unknown, sign * side.deck_count)
-        trace.add(f"{label}.deck", "zone.in_deck", sign * side.deck_count)
+        unknown = ("unknown_own_deck_card" if sign > 0
+                   else "unknown_opponent_deck_card")
+        trace.emit(f"{label}.deck", "observation", (unknown,), sign * side.deck_count)
+        trace.emit(f"{label}.deck", "observation", ("card_in_deck",),
+                   sign * side.deck_count)
 
     for card in side.discard:
         _card(trace, f"{label}.discard", card.card_id, ctx.facts(card.card_id), sign, ctx,
               own=sign > 0, placement="in_discard", opponent=opponent)
-        trace.add(f"{label}.discard", "zone.in_discard", sign)
+        trace.emit(f"{label}.discard", "observation", ("card_in_discard",), sign)
 
     for status in ("asleep", "paralyzed", "confused", "poisoned", "burned"):
-        trace.add(f"{label}.status", f"status.{status}",
-                  -sign * float(getattr(side, status, 0) or 0))
+        trace.emit(f"{label}.status", "observation", (f"{status}_status",),
+                   -sign * float(getattr(side, status, 0) or 0))
 
 
 def _body(trace: _Trace, part: str, body: Body, sign: float, ctx: EvaluationModel, *,
           own: bool, active: bool, doomed: bool, reach, opponent) -> None:
     body_facts = ctx.facts(body.card.card_id)
     if body_facts is not None and not isinstance(body_facts, PokemonCard):
-        trace.add(part, "coverage.unknown_card", sign)
-        trace.add(part, "zone.in_play", sign)
-        trace.add(part, "body.hp_per_100", sign * body.max_hp / 100.0)
+        trace.emit(part, "observation", ("uncovered_card",), sign)
+        trace.emit(part, "observation", ("card_in_play",), sign)
+        trace.emit(part, "observation", ("body_hp_units",),
+                   sign * body.max_hp / DAMAGE_UNIT_HP)
         trace.gaps.append(f"{part}: non-Pokemon body {body.card.card_id}")
         return
     _card(trace, part, body.card.card_id, body_facts, sign, ctx, own=own,
           placement="in_play", opponent=opponent)
-    trace.add(part, "zone.in_play", sign)
-    trace.add(part, "body.hp_per_100", sign * body.max_hp / 100.0)
+    trace.emit(part, "observation", ("card_in_play",), sign)
+    trace.emit(part, "observation", ("body_hp_units",),
+               sign * body.max_hp / DAMAGE_UNIT_HP)
     missing = 0.0
     if body.max_hp > 0:
         missing = max(0.0, min(1.0, (body.max_hp - max(0, body.hp)) / body.max_hp))
-        trace.add(part, "damage.floor", -sign * missing)
+        trace.emit(part, "observation", ("body_damage_fraction",), -sign * missing)
     if doomed:
-        trace.add(part, "active.doomed", -sign)
+        trace.emit(part, "observation", ("doomed_active",), -sign)
 
     usable = usable_units(body_facts, body.energies, ctx, reach)
     visible_reach, next_reach = development_reach_units(
         body_facts, body.energies, ctx, reach)
     useless = max(0, len(body.energies) - usable)
     rentals = 0
-    priced_energy_cards = [card for card in body.energy_cards
-                           if active or not _discards_end_of_turn(ctx.facts(card.card_id))]
-    interaction_amount = (sign * min(1.0, usable / len(priced_energy_cards))
-                          if priced_energy_cards else 0.0)
+    energy_rows = []
     for card in body.energy_cards:
         facts = ctx.facts(card.card_id)
-        if not active and _discards_end_of_turn(facts):
+        riders = tuple(clause.rider for clause in card_clauses(facts)
+                       if clause.rider is not None)
+        rental = (() if active else ActivationCompiler().compile(
+            "attached_energy", riders, ActivationEnvironment(scale=sign)))
+        energy_rows.append((card, facts, rental))
+    priced_energy_cards = [card for card, _facts, rental in energy_rows if not rental]
+    interaction_amount = (sign * min(1.0, usable / len(priced_energy_cards))
+                          if priced_energy_cards else 0.0)
+    for card, facts, rental in energy_rows:
+        if rental:
             rentals += 1
+            for activation in rental:
+                trace.record(part, activation)
             continue
         _card(trace, part, card.card_id, facts, sign, ctx, own=own,
               placement="attached_usable", interaction_amount=interaction_amount,
               opponent=opponent)
     if body.energies and not body.energy_cards:
-        trace.add(part, "kind.energy", sign * len(body.energies))
+        trace.emit(part, "card", ("kind:energy",), sign * len(body.energies))
     usable = max(0, usable - rentals)
-    trace.add(part, "zone.attached_usable", sign * usable)
-    trace.add(part, "development.visible_reach", sign * visible_reach)
-    trace.add(part, "development.next_turn_reach", sign * next_reach)
-    trace.add(part, "zone.attached_useless", sign * useless)
-    trace.add(part, "context.damaged_attached", sign * usable * missing)
-    trace.add(part, "energy.concentration", sign * max(0, usable - 1))
+    trace.emit(part, "observation", ("usable_attached_energy",), sign * usable)
+    trace.emit(part, "observation", ("visible_development_reach",),
+               sign * visible_reach)
+    trace.emit(part, "observation", ("next_turn_development_reach",), sign * next_reach)
+    trace.emit(part, "observation", ("useless_attached_energy",), sign * useless)
+    trace.emit(part, "observation", ("usable_energy_on_damaged_body",),
+               sign * usable * missing)
+    trace.emit(part, "observation", ("concentrated_energy",),
+               sign * max(0, usable - 1))
 
     for card in body.tools:
         _card(trace, part, card.card_id, ctx.facts(card.card_id), sign, ctx, own=own,
               placement="tool_attached", opponent=opponent)
-        trace.add(part, "zone.tool_attached", sign)
+        trace.emit(part, "observation", ("attached_tool",), sign)
     for card in body.pre_evolution:
         _card(trace, part, card.card_id, ctx.facts(card.card_id), sign, ctx, own=own,
               placement="under_body", opponent=opponent)
-        trace.add(part, "zone.under_body", sign)
+        trace.emit(part, "observation", ("card_under_body",), sign)
 
 
 def _card(trace: _Trace, part: str, card_id: int, facts, amount: float,
@@ -350,32 +315,28 @@ def _card(trace: _Trace, part: str, card_id: int, facts, amount: float,
     declared = ctx.card_roles(card_id) if own else ()
     roles = set(declared or getattr(facts, "default_roles", ()) or ())
     expected: dict[str, float] = {role: 1.0 for role in roles}
-    if not own and opponent is not None:
-        observed = set(opponent.observed_roles.get(int(card_id), ()))
-        for role in observed:
-            expected[role] = 1.0
     for role, probability in expected.items():
-        trace.add(part, f"role.{role}", amount * probability)
-        trace.add(part, f"interaction.role.{role}.{placement}", situated * probability)
+        trace.emit(part, "card", (f"role:{role}",), amount * probability)
+        trace.emit(part, "card", (f"role:{role}:{placement}",),
+                   situated * probability)
     if not own and opponent is not None:
-        observed = set(opponent.observed_roles.get(int(card_id), ()))
         for candidate in opponent.candidates:
             for role in candidate.roles.get(int(card_id), ()):
-                if role not in observed and role not in roles:
-                    trace.add(
-                        part, f"role.{role}", amount * candidate.probability,
+                if role not in roles:
+                    trace.emit(
+                        part, "card", (f"role:{role}",), amount * candidate.probability,
                         provenance=f"{part}:belief:{candidate.archetype or 'anonymous'}")
-                    trace.add(
-                        part, f"interaction.role.{role}.{placement}",
+                    trace.emit(
+                        part, "card", (f"role:{role}:{placement}",),
                         situated * candidate.probability,
                         provenance=f"{part}:belief:{candidate.archetype or 'anonymous'}")
 
     if facts is None:
-        trace.add(part, "coverage.unknown_card", amount)
+        trace.emit(part, "observation", ("uncovered_card",), amount)
         trace.gaps.append(f"{part}: unknown card {int(card_id)}")
         return
     if getattr(facts, "covers", None) != "full":
-        trace.add(part, "coverage.unknown_card", amount)
+        trace.emit(part, "observation", ("uncovered_card",), amount)
         verdict = getattr(facts, "covers", None) or "unruled"
         trace.gaps.append(f"{part}: incomplete card coverage {int(card_id)} ({verdict})")
     if isinstance(facts, PokemonCard):
@@ -384,90 +345,32 @@ def _card(trace: _Trace, part: str, card_id: int, facts, amount: float,
         kind = "special_energy" if facts.kind == "special_energy" else "energy"
     else:
         kind = getattr(facts, "kind", "item")
-    trace.add(part, f"kind.{kind}", amount)
-    interaction = f"interaction.kind.{kind}.{placement}"
-    if interaction not in FEATURE_CATALOG:
-        raise KeyError(f"unregistered Valuation Feature {interaction!r} for card {card_id}")
-    trace.add(part, interaction, situated)
-def _hand_feature(card_id, facts, demand: Demand, copies_before: int,
-                  ctx: EvaluationModel, deck_counts) -> tuple[str, int | None]:
+    trace.emit(part, "card", (f"kind:{kind}",), amount)
+    trace.emit(part, "card", (f"kind:{kind}:{placement}",), situated)
+
+
+def _hand_claim(card_id, facts, demand: Demand, copies_before: int,
+                ctx: EvaluationModel, deck_counts) -> tuple[str, int | None]:
     scale, capacity = _liveness(card_id, facts, demand, ctx, deck_counts)
     if capacity is not None and copies_before >= capacity:
-        return "copy.surplus", capacity
+        return "surplus_hand_copy", capacity
     if scale is DemandState.DEAD:
-        return "demand.dead", capacity
+        return "dead_hand_card", capacity
     if scale is DemandState.SETUP:
-        return "demand.setup", capacity
+        return "setup_hand_card", capacity
     if scale is DemandState.COLORLESS_ONLY:
-        return "demand.colorless_only", capacity
-    return "zone.in_hand", capacity
+        return "colorless_only_hand_card", capacity
+    return "card_in_hand", capacity
 
 
 def _situational_functions(trace: _Trace, part: str, facts, side: Side, opponent: Side,
                            demand: Demand, ctx: EvaluationModel, deck_counts, *, sign: float) -> None:
-    clauses = list(getattr(facts, "clauses", ()) or ())
-    for ability in getattr(facts, "abilities", ()) or ():
-        clauses.extend(ability.clauses)
-    for attack in getattr(facts, "attacks", ()) or ():
-        clauses.extend(attack.clauses)
-    kinds = {clause.kind for clause in clauses}
-    def emit(feature, value):
-        trace.add(part, feature, sign * value)
-    if "draw" in kinds:
-        emit("function.draw.hand_deficit", max(0, 7 - side.hand_count) / 7)
-    if "fetch" in kinds:
-        state, _capacity = _liveness(0, facts, demand, ctx, deck_counts)
-        emit("function.fetch.live_target", float(state is not DemandState.DEAD))
-    if "gust" in kinds:
-        emit("function.gust.bench_target", float(bool(opponent.bench)))
-    if "heal" in kinds:
-        damage = sum(max(0, body.max_hp - body.hp) for body in side.bodies)
-        emit("function.heal.damage_present", min(1.0, damage / 100.0))
-    if kinds.intersection({"accel", "energy_double", "energy_recur", "move_energy"}):
-        open_slots = sum(any(_unfilled(attack.cost, Counter(body.energies)) != (Counter(), 0)
-                             for attack in getattr(ctx.facts(body.card.card_id), "attacks", ()) or ())
-                         for body in side.bodies)
-        emit("function.accel.open_energy_slot", min(1.0, open_slots))
-    if kinds.intersection({"self_switch", "switch_self", "push_out"}):
-        emit("function.switch.active_pressure", float(side.active is not None and bool(side.bench)))
-    if kinds.intersection({"opp_hand_to_deck", "mill"}):
-        emit("function.disruption.opponent_hand", max(0, opponent.hand_count - 3) / 4)
-    if kinds.intersection({"discard_opp_energy", "energy_bounce", "item_lock", "attack_lock",
-                           "no_retreat", "retreat_lock"}):
-        resources = sum(len(body.energies) for body in opponent.bodies)
-        emit("function.denial.opponent_resource", min(1.0, resources))
-    if kinds.intersection({"bench_snipe", "bench_spread", "damage_counters"}):
-        emit("function.bench_pressure.target_count", len(opponent.bench))
-    if kinds.intersection({"damage_protection", "damage_reduction", "prevent_damage",
-                           "prevent_effects", "hp_bonus"}):
-        pressure = max((attack.damage for body in opponent.bodies
-                        for attack in getattr(ctx.facts(body.card.card_id), "attacks", ()) or ()), default=0)
-        emit("function.protection.incoming_pressure", pressure / 100.0)
-    if kinds.intersection({"attack_debuff", "burn", "confuse", "sleep"}):
-        emit("function.status.active_target", float(opponent.active is not None))
-    if kinds.intersection({"attack_cost_reduction", "cost_reduction", "retreat_reduction"}):
-        open_cost = sum(bool(_unfilled(attack.cost, Counter(body.energies)) != (Counter(), 0))
-                        for body in side.bodies
-                        for attack in getattr(ctx.facts(body.card.card_id), "attacks", ()) or ())
-        emit("function.cost_reduction.open_cost", min(1.0, open_cost))
-    if kinds.intersection({"recoil", "self_discard_energy", "self_mill", "self_return",
-                           "self_shuffle_in"}):
-        emit("function.self_cost.exposure", 1.0)
-    if "ability_suppression" in kinds:
-        emit("function.suppression.ability_target", sum(
-            bool(getattr(ctx.facts(body.card.card_id), "abilities", ()))
-            for body in opponent.bodies))
-    if "evolve_early" in kinds:
-        emit("function.development.board_fit", sum(
-            bool(getattr(ctx.facts(body.card.card_id), "evolves_from", None))
-            for body in side.bodies))
-    if "move_damage" in kinds:
-        damage = sum(max(0, body.max_hp - body.hp) for body in side.bodies)
-        emit("function.move_damage.damage_present", damage / 100.0)
-    if "ko" in kinds:
-        emit("function.ko.active_target", float(opponent.active is not None))
-    if kinds.intersection({"stadium_static", "stadium_trigger"}):
-        emit("function.stadium.board_fit", len(side.bodies) + len(opponent.bodies))
+    kinds = {clause.kind for clause in card_clauses(facts)}
+    environment = ActivationEnvironment(
+        scale=sign, evaluation_model=ctx, side=side, opponent=opponent,
+        demand=demand, facts=facts, deck_counts=deck_counts)
+    for activation in ActivationCompiler().compile("function", kinds, environment):
+        trace.record(part, activation)
 
 
 def _active_doomed(attacker: Side, defender: Side, ctx: EvaluationModel) -> bool:
@@ -479,19 +382,6 @@ def _active_doomed(attacker: Side, defender: Side, ctx: EvaluationModel) -> bool
                                  attacker.active.energies,
                                  ctx.facts(defender.active.card.card_id))
     return 0 < defender.active.hp <= damage
-
-
-def _can_absorb_multi_provision(body: Body, provision, ctx: EvaluationModel) -> bool:
-    amount = int(provision.amount_on_evolution or 0)
-    attached = Counter(body.energies)
-    return any(sum(open_typed.values()) + open_colorless >= amount
-               for attack in getattr(ctx.facts(body.card.card_id), "attacks", ()) or ()
-               for open_typed, open_colorless in [_unfilled(attack.cost, attached)])
-
-
-def _discards_end_of_turn(facts) -> bool:
-    clause = facts.clause("energy_provide") if facts is not None else None
-    return clause is not None and clause.rider == "discard_eot"
 
 
 def _prize_value(body: Body, ctx: EvaluationModel) -> int:

@@ -70,29 +70,4 @@ def _int_or(value, default):
         return default
 
 
-def body_serials(body: Mapping) -> tuple[str, ...]:
-    """A body's serial plus every card beneath it: a lock predates an evolution on the stack."""
-    serials = []
-    if body.get("serial") is not None:
-        serials.append(str(int(body["serial"])))
-    for card in body.get("preEvolution") or ():
-        if card and card.get("serial") is not None:
-            serials.append(str(int(card["serial"])))
-    return tuple(serials)
-
-
-def locked_attack_ids(locks: Mapping | None, body: Mapping, turn: int) -> frozenset:
-    """Attack ids this body may not use at ``turn``, on either seat."""
-    # A lock stamped for L bars exactly L; reading L-onward as barred can under-credit our own
-    # readiness by a turn, which is the safe side — over-credit buys a knockout we cannot make.
-    if not locks:
-        return frozenset()
-    barred = set()
-    for serial in body_serials(body):
-        for attack_id, locked_turn in (locks.get(serial) or {}).items():
-            if int(locked_turn) >= int(turn):
-                barred.add(int(attack_id))
-    return frozenset(barred)
-
-
-__all__ = ("LOCK_TURN_STRIDE", "body_serials", "fold_attack_locks", "locked_attack_ids")
+__all__ = ("LOCK_TURN_STRIDE", "fold_attack_locks")

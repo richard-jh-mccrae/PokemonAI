@@ -2,8 +2,8 @@
 from __future__ import annotations
 
 from common.cards.functions.energy import (
-    ENERGY_COLORLESS, ENERGY_FIRE, ENERGY_WATER, ENERGY_WILDCARD, payment_fraction,
-    unmet_cost_slots)
+    ENERGY_COLORLESS, ENERGY_FIRE, ENERGY_WATER, ENERGY_WILDCARD)
+from deprecated.bellman.energy import payment_fraction, unmet_cost_slots
 
 
 def test_a_wildcard_is_spent_only_where_no_exact_colour_can_pay():

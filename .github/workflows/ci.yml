@@ -195,7 +195,8 @@ jobs:
         run: >-
           python -m pytest tests/observation tests/cards tests/common
           tests/ledger tests/parity tests/scouting tests/train
-          tests/test_import_hygiene.py -q -n auto --tb=short
+          tests/test_import_hygiene.py tests/test_source_reachability.py
+          -q -n auto --tb=short
 
   test-cgpy:
     name: tests / cgpy

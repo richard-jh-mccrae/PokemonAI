@@ -37,6 +37,13 @@ from common.engine import (CgpyTransitionProvider,
                            determinized_prize_knowledge)  # noqa: E402 - offline replay only
 from deprecated.bellman.effects import CardEffects  # noqa: E402 - replay coverage facts (ADR-0147)
 from common.runtime import build_runtime  # noqa: E402
+from common.cards import card_store  # noqa: E402
+from common.decision import (ComputeConfiguration, PolicyConfiguration,
+                             SearchConfiguration)  # noqa: E402
+from common.ledger import (EvaluationModel, LedgerDecider, OpponentProfile,
+                           ValuationConfiguration)  # noqa: E402
+from common.opponent import OpponentMechanic, OpponentTrait  # noqa: E402
+from common.strategy import PrizePlan  # noqa: E402
 from train.blunder.store import load_corrections  # noqa: E402
 from train.blunder.decode import option_label  # noqa: E402
 from train.blunder.reviewed import load_reviewed, partition_reviewed  # noqa: E402
@@ -51,7 +58,7 @@ SEMANTIC_DECISIONS = frozenset({
 })
 
 
-def _build_runtime(deck_name: str, weight_overrides=None):
+def _build_runtime(deck_name: str, weight_overrides=None, *, provider_backend="cgpy-ledger"):
     agent_dir = REPO / "src" / "agents" / deck_name
     spec = importlib.util.spec_from_file_location("_ledger_corpus_strategy",
                                                   agent_dir / "strategy.py")
@@ -64,10 +71,70 @@ def _build_runtime(deck_name: str, weight_overrides=None):
         from common.ledger import ValuationConfiguration
 
         valuation_configuration = ValuationConfiguration.general().with_values(weight_overrides)
-    replay_provider = partial(CgpyTransitionProvider, effects=CardEffects.load())
+    if provider_backend == "cgpy-ledger":
+        replay_provider = partial(CgpyTransitionProvider, effects=CardEffects.load())
+    elif provider_backend == "native-cg-ledger":
+        replay_provider = None
+    else:
+        raise ValueError(f"unsupported replay provider {provider_backend!r}")
     return build_runtime(module.STRATEGY, deck, provider_factory=replay_provider,
                          valuation_configuration=valuation_configuration,
                          decision_parity_oracle=assert_runtime_parity)
+
+
+def _recorded_model(configuration: dict) -> EvaluationModel:
+    def pairs(value):
+        return value.items() if isinstance(value, dict) else value
+
+    saved = configuration["evaluation_model"]
+    valuation = saved["valuation"]
+    model = EvaluationModel(
+        ValuationConfiguration(valuation["values"],
+                               schema_version=valuation["schema_version"]),
+        {int(card_id): tuple(roles) for card_id, roles in saved["roles"].items()},
+        card_store(),
+        PrizePlan(tuple(saved["prize_plan"]["protect"]),
+                  tuple(saved["prize_plan"]["offer"])),
+        {name: OpponentProfile(
+            {int(card_id): tuple(roles) for card_id, roles in pairs(profile["roles"])},
+            tuple(OpponentTrait(*trait) for trait in profile["traits"]),
+            tuple(OpponentMechanic(*mechanic) for mechanic in profile["mechanics"]),
+            {int(card_id): float(value) for card_id, value in pairs(profile["resources"])},
+        ) for name, profile in saved["opponent_profiles"].items()},
+    )
+    if model.store_identity != saved["card_store_identity"] \
+            or model.configuration.identity != valuation["identity"] \
+            or model.prize_plan.identity != saved["prize_plan"]["identity"] \
+            or model.identity != saved["identity"]:
+        raise ValueError("recorded Evaluation Model identity cannot be resolved")
+    return model
+
+
+def _recorded_compute(configuration: dict) -> ComputeConfiguration:
+    saved = configuration["compute"]
+    search = {key: value for key, value in saved["search"].items() if key != "identity"}
+    policy = {key: value for key, value in saved["policy"].items() if key != "identity"}
+    policy["accepted_statuses"] = tuple(policy["accepted_statuses"])
+    compute = ComputeConfiguration(
+        schema_version=saved["schema_version"],
+        search=SearchConfiguration(**search), policy=PolicyConfiguration(**policy))
+    if compute.search.identity != saved["search"]["identity"] \
+            or compute.policy.identity != saved["policy"]["identity"] \
+            or compute.identity != saved["identity"]:
+        raise ValueError("recorded Compute Configuration identity cannot be resolved")
+    return compute
+
+
+def _build_replay_ledger(deck_name: str, configuration: dict, *, provider_backend: str,
+                         deck) -> LedgerDecider:
+    shell = _build_runtime(deck_name, provider_backend=provider_backend)
+    return LedgerDecider(
+        deck, deck_name, _recorded_model(configuration),
+        provider_factory=shell.ledger.provider_factory,
+        provider_kwargs=shell.ledger.provider_kwargs,
+        compute=_recorded_compute(configuration),
+        parity_oracle=shell.ledger.parity_oracle,
+    )
 
 
 def _satisfies_one(chosen, correct, equivalence) -> bool:

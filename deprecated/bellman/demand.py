@@ -17,9 +17,10 @@ from common.cards.card_facts import (
     BASIC, BASIC_ENERGY, SUPPORTER, Clause, EnergyCard, PokemonCard, TrainerCard)
 from .damage import bench_reach, compute_active_damage
 from common.cards.functions.fetch import REACH, WINDOW, fetch_target_matches
-from common.cards.functions.energy import ENERGY_COLORLESS, pays_energy_type, provision_units, unmet_cost_slots
+from common.cards.functions.energy import ENERGY_COLORLESS, provision_units
+from .energy import pays_energy_type, unmet_cost_slots
 from .information import OutcomeGroup, hypergeometric_classes
-from common.option_equivalence import option_source_card
+from .option_sources import option_source_card
 from .card_text import name_in_family
 from common.strategy.context import _ACTIVE, _ATTACK, _BENCH
 

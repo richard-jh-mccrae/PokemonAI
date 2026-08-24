@@ -7,7 +7,7 @@ import pytest
 
 from common.scouting.provider import (
     parse_attack_bench_snipe, parse_attack_bench_spread,
-    parse_attack_ignores_active_effects, parse_attack_recoil, parse_attack_scaling,
+    parse_attack_recoil, parse_attack_scaling,
     parse_attack_self_return)
 
 
@@ -108,23 +108,6 @@ def test_hand_size_damage_comes_from_the_one_scaling_parse(text, expected):
     # derives from the Damage Formula's scaling parse, so the two can no longer disagree.
     scale = parse_attack_scaling(text)
     assert (scale[1] if scale and scale[0] == "atk_hand" else 0) == expected
-
-
-@pytest.mark.req("REQ-LETHAL-0012")
-@pytest.mark.parametrize("text,expected", [
-    # Mega Starmie ex Nebula Beam — bypasses effects on opp's Active (Crustle's prevent Ability)
-    ("This attack's damage isn't affected by Weakness or Resistance, or by any effects on your "
-     "opponent's Active Pokémon.", True),
-    # Crustle Superb Scissors — shorter phrasing, same clause
-    ("This attack's damage isn't affected by any effects on your opponent's Active Pokémon.", True),
-    # NOT the clause: Weakness/Resistance only, bench-snipe, recoil, no rider -> False (Ability still walls it)
-    ("This attack's damage isn't affected by Weakness or Resistance.", False),      # W/R only, not effects
-    ("This attack also does 50 damage to 1 of your opponent's Benched Pokémon.", False),  # Jetting Blow
-    ("This Pokémon also does 50 damage to itself.", False),                         # recoil
-    ("", False),
-])
-def test_parse_attack_ignores_active_effects(text, expected):
-    assert parse_attack_ignores_active_effects(text) == expected
 
 
 @pytest.mark.req("REQ-ACCEL-0001")

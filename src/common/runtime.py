@@ -19,6 +19,7 @@ from common.deck_tracker import OwnCardModel
 from common.ledger import (ComputeConfiguration, DeckOverlay, EvaluationModel,
                            LedgerDecider, OpponentProfile, ValuationConfiguration,
                            preview_provider_factory)
+from common.ledger.worth import content_identity
 from common.opponent import (OpponentEvidence, OpponentKnowledgeBase, OpponentModel,
                              OpponentSnapshot)
 from common.scouting.artifact import load_artifact
@@ -80,7 +81,9 @@ class _ProviderFactSources:
     """Typed card facts consumed by engine transition adapters."""
 
     def __init__(self):
-        self.facts = _FactsView(card_store())
+        store = card_store()
+        self.facts = _FactsView(store)
+        self.identity = content_identity(store)
 
 
 class AgentRuntime:
@@ -316,6 +319,7 @@ def make_agent(strategy):
                                session=runtime.telemetry_session,
                                evaluation_model=runtime.ledger.ctx,
                                compute_configuration=runtime.ledger.compute,
+                               provider_configuration=runtime.ledger.provider_configuration,
                                provenance=telemetry.runtime_provenance(
                                    deck_name=runtime.ledger.deck_name,
                                    opponent_knowledge_identity=getattr(

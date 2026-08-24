@@ -6,9 +6,11 @@ import base64
 import hashlib
 import json
 import math
+import subprocess
 import sys
 import zlib
 from concurrent.futures import ThreadPoolExecutor
+from functools import lru_cache
 from pathlib import Path
 from time import perf_counter
 from uuid import uuid4
@@ -25,7 +27,7 @@ _CAPTURE: ContextVar[list[dict] | None] = ContextVar("telemetry_capture", defaul
 _SUPPRESS_OUTPUT: ContextVar[bool] = ContextVar("telemetry_suppress_output", default=False)
 _EPISODE_CONTEXT: ContextVar[str | None] = ContextVar("telemetry_episode", default=None)
 SCHEMA = "ledger.telemetry"
-SCHEMA_VERSION = 1
+SCHEMA_VERSION = 2
 _DECISION_FIELDS = {
     "schema", "schema_version", "record_type", "record_id", "episode", "decision",
     "observation", "opponent_snapshot", "actions", "root", "candidates", "search",
@@ -33,7 +35,11 @@ _DECISION_FIELDS = {
 }
 _OUTCOME_FIELDS = {
     "schema", "schema_version", "record_type", "record_id", "episode", "decision_ids",
-    "result",
+    "telemetry_receipt_id", "result",
+}
+_RECEIPT_FIELDS = {
+    "schema", "schema_version", "record_type", "record_id", "episode", "reservations",
+    "decision_ids", "certified",
 }
 _EVALUATION_MODEL_CACHE: dict[str, dict] = {}
 _COMPUTE_CONFIGURATION_CACHE: dict[str, dict] = {}
@@ -50,7 +56,39 @@ class _ValidatedRecord(dict):
 
 
 class _CapturedRecords(list):
-    emit_seconds = 0.0
+    def __init__(self):
+        super().__init__()
+        self.emit_seconds = 0.0
+        self.construction_seconds = 0.0
+        self.delivery_seconds = 0.0
+        self._sessions = []
+
+    def register_session(self, session) -> None:
+        if all(found is not session for found in self._sessions):
+            self._sessions.append(session)
+
+    def receipt(self, episode_key: str) -> dict:
+        journal = {}
+        for session in self._sessions:
+            if session.episode_key == episode_key:
+                for row in session.close_episode()["reservations"]:
+                    journal[row["record_id"]] = dict(row)
+        reservations = []
+        for record in self:
+            if record.get("record_type") != "decision" \
+                    or record["episode"]["key"] != episode_key:
+                continue
+            saved = journal.pop(record["record_id"], None)
+            reservations.append(saved or {
+                "record_id": record["record_id"],
+                "seat": record["decision"]["seat"],
+                "index": record["decision"]["index"],
+                "status": "delivery_failed",
+                "error_type": "TelemetryReservationUnavailable",
+            })
+        reservations.extend(journal.values())
+        return build_episode_receipt(
+            episode_key=episode_key, reservations=reservations)
 
 
 class _ValidatedObservation(dict):
@@ -81,7 +119,7 @@ def _validate_action(value) -> None:
             or not all(isinstance(item, int) and not isinstance(item, bool)
                        for item in value["selection"]):
         raise ValueError("invalid action")
-    if value["id"] != _identifier({"identity": identity, "selection": value["selection"]}):
+    if value["id"] != _identifier(identity):
         raise ValueError("action id mismatch")
 
 
@@ -176,15 +214,18 @@ def _validate_candidate(value) -> None:
 
 
 def _validate_configuration(value, *, pregame: bool) -> None:
-    _exact_fields(value, {"evaluation_model", "compute"}, "decision configuration")
+    _exact_fields(value, {"evaluation_model", "compute", "provider"},
+                  "decision configuration")
     if pregame:
-        if value != {"evaluation_model": None, "compute": None}:
+        if value != {"evaluation_model": None, "compute": None, "provider": None}:
             raise ValueError("pregame record contains Ledger configuration")
         return
     model = value["evaluation_model"]
     compute = value["compute"]
+    provider = value["provider"]
     _exact_fields(model, {
-        "identity", "valuation", "roles", "prize_plan", "opponent_profiles",
+        "identity", "card_store_identity", "valuation", "roles", "prize_plan",
+        "opponent_profiles",
     }, "evaluation model")
     _exact_fields(model["valuation"], {
         "identity", "schema_version", "values",
@@ -203,6 +244,14 @@ def _validate_configuration(value, *, pregame: bool) -> None:
         "identity", "schema_version", "noise_tolerance", "tie_seed", "accepted_statuses",
         "unavailable_fallback",
     }, "policy configuration")
+    _exact_fields(provider, {
+        "identity", "backend", "factory", "version", "kwargs", "factory_kwargs",
+    }, "provider configuration")
+    if not all(isinstance(provider[field], str) and provider[field]
+               for field in ("identity", "backend", "factory")) \
+            or not isinstance(provider["kwargs"], dict) \
+            or not isinstance(provider["factory_kwargs"], dict):
+        raise ValueError("invalid provider configuration")
 
 
 def validate_record(record: dict) -> dict:
@@ -213,7 +262,41 @@ def validate_record(record: dict) -> dict:
     if record.get("schema_version") != SCHEMA_VERSION:
         raise ValueError("unsupported telemetry schema version")
     record_type = record.get("record_type")
-    if record_type == "outcome":
+    if record_type == "telemetry_receipt":
+        _exact_fields(record, _RECEIPT_FIELDS, "Episode Telemetry Receipt")
+        _exact_fields(record["episode"], {"key"}, "receipt episode")
+        if not isinstance(record["reservations"], list):
+            raise ValueError("invalid telemetry reservations")
+        delivered = []
+        reservation_ids = []
+        terminal = True
+        for reservation in record["reservations"]:
+            _exact_fields(reservation, {
+                "record_id", "seat", "index", "status", "error_type",
+            }, "telemetry reservation")
+            _number(reservation["seat"], "reservation seat", minimum=0, integer=True)
+            _number(reservation["index"], "reservation index", minimum=0, integer=True)
+            if reservation["status"] not in {
+                    "reserved", "committed", "delivered", "emission_failed",
+                    "delivery_failed"}:
+                raise ValueError("invalid telemetry reservation status")
+            failed = reservation["status"].endswith("_failed")
+            if failed is not (isinstance(reservation["error_type"], str)
+                              and bool(reservation["error_type"])):
+                raise ValueError("telemetry reservation failure disagrees with error type")
+            terminal = terminal and reservation["status"] in {
+                "delivered", "emission_failed", "delivery_failed"}
+            reservation_ids.append(reservation["record_id"])
+            if reservation["status"] == "delivered":
+                delivered.append(reservation["record_id"])
+        if len(set(reservation_ids)) != len(reservation_ids):
+            raise ValueError("telemetry reservations must be unique")
+        if record["decision_ids"] != delivered:
+            raise ValueError("receipt decision ids do not match delivered reservations")
+        certified = terminal and len(delivered) == len(record["reservations"])
+        if record["certified"] is not certified:
+            raise ValueError("receipt certification disagrees with reservations")
+    elif record_type == "outcome":
         _exact_fields(record, _OUTCOME_FIELDS, "outcome record")
         _exact_fields(record["episode"], {"key", "external_id"}, "outcome episode")
         _exact_fields(record["result"], {
@@ -226,6 +309,9 @@ def validate_record(record: dict) -> dict:
             raise ValueError("invalid outcome decision ids")
         if len(set(record["decision_ids"])) != len(record["decision_ids"]):
             raise ValueError("outcome decision ids must be unique")
+        if not isinstance(record["telemetry_receipt_id"], str) \
+                or not record["telemetry_receipt_id"]:
+            raise ValueError("outcome requires an Episode Telemetry Receipt")
         if result["winner"] not in (None, 0, 1) \
                 or result["draw"] is not (result["winner"] is None):
             raise ValueError("outcome winner and draw disagree")
@@ -295,6 +381,10 @@ def validate_record(record: dict) -> dict:
         if len(set(action_ids)) != len(action_ids) \
                 or record["decision"]["chosen_action_id"] not in action_ids:
             raise ValueError("decision action ids are inconsistent")
+        chosen_action = record["actions"][
+            action_ids.index(record["decision"]["chosen_action_id"])]
+        if record["decision"]["selection"] != chosen_action["selection"]:
+            raise ValueError("decision selection differs from the chosen legal action")
         if variant == "ledger" \
                 and [candidate["action_id"] for candidate in record["candidates"]] != action_ids:
             raise ValueError("candidate roster does not match legal actions")
@@ -326,6 +416,9 @@ def validate_record(record: dict) -> dict:
                     "evaluator", "evaluation_model", "search", "policy_model", "decision_policy",
                     "fail_safe_policy", "provider", "compute", "prize_plan",
                 }, "behavior identity")
+                if record["configuration"]["provider"]["identity"] \
+                        != record["behavior_identity"]["provider"]:
+                    raise ValueError("provider configuration identity disagrees with behavior")
             if record["completeness"] not in {"complete", "estimated", "unavailable"}:
                 raise ValueError("unknown decision completeness")
         else:
@@ -343,6 +436,8 @@ def validate_record(record: dict) -> dict:
 def migrate_record(record: dict, *, target_version: int = SCHEMA_VERSION) -> dict:
     if record.get("bellman") is True:
         raise ValueError("Bellman telemetry is diagnostic-only and cannot migrate")
+    if record.get("schema_version") != SCHEMA_VERSION:
+        raise ValueError("legacy telemetry is diagnostic-only and cannot migrate")
     if target_version != SCHEMA_VERSION:
         raise ValueError("no one-step telemetry migration is registered")
     return validate_record(record)
@@ -362,11 +457,13 @@ class TelemetrySession:
         self.episode_key: str | None = None
         self._indices: dict[int, int] = {}
         self._parents: dict[int, str] = {}
+        self._reservations: dict[str, dict] = {}
 
     def begin_episode(self, episode_key: str | None = None) -> str:
         self.episode_key = str(episode_key or _EPISODE_CONTEXT.get() or uuid4().hex)
         self._indices.clear()
         self._parents.clear()
+        self._reservations.clear()
         return self.episode_key
 
     def next_decision(self, *, seat: int) -> dict:
@@ -381,7 +478,50 @@ class TelemetrySession:
         }
 
     def commit_decision(self, *, seat: int, record_id: str) -> None:
+        reservation = self._reservations.get(str(record_id))
+        if reservation is not None:
+            if reservation["status"] != "reserved":
+                raise ValueError("telemetry reservation cannot be committed")
+            reservation["status"] = "committed"
         self._parents[int(seat)] = str(record_id)
+
+    def reserve_decision(self, *, seat: int, position_key: str,
+                         decision_key: str) -> dict:
+        link = self.next_decision(seat=seat)
+        record_id = _identifier({
+            "schema": SCHEMA, "schema_version": SCHEMA_VERSION,
+            "episode": link["episode_key"], "seat": int(seat),
+            "index": link["decision_index"], "position_key": str(position_key),
+            "decision_key": str(decision_key),
+        })
+        self._reservations[record_id] = {
+            "record_id": record_id, "seat": int(seat),
+            "index": int(link["decision_index"]), "status": "reserved",
+            "error_type": None,
+        }
+        return {**link, "record_id": record_id}
+
+    def deliver_decision(self, *, record_id: str) -> None:
+        reservation = self._reservations.get(str(record_id))
+        if reservation is None or reservation["status"] != "committed":
+            raise ValueError("telemetry reservation cannot be delivered")
+        reservation["status"] = "delivered"
+
+    def fail_decision(self, *, record_id: str, phase: str, error_type: str) -> None:
+        if phase not in {"emission", "delivery"}:
+            raise ValueError("unknown telemetry failure phase")
+        reservation = self._reservations.get(str(record_id))
+        if reservation is None or reservation["status"] not in {"reserved", "committed"}:
+            raise ValueError("telemetry reservation cannot fail")
+        reservation["status"] = f"{phase}_failed"
+        reservation["error_type"] = str(error_type)
+
+    def close_episode(self) -> dict:
+        if self.episode_key is None:
+            raise ValueError("telemetry episode has not begun")
+        return build_episode_receipt(
+            episode_key=self.episode_key,
+            reservations=list(self._reservations.values()))
 
 
 def _canonical_bytes(value: dict) -> bytes:
@@ -479,6 +619,7 @@ def _evaluation_model_configuration(value) -> dict:
         return cached
     result = {
         "identity": value.identity,
+        "card_store_identity": value.store_identity,
         "valuation": {
             "identity": value.configuration.identity,
             "schema_version": int(value.configuration.schema_version),
@@ -539,7 +680,7 @@ def _action(action) -> dict:
     else:
         wire_identity = _allowed(identity)
     selection = list(getattr(action, "selection", ()))
-    return {"id": _identifier({"identity": wire_identity, "selection": selection}),
+    return {"id": _identifier(wire_identity),
             "identity": wire_identity, "selection": selection}
 
 
@@ -605,20 +746,33 @@ def _opponent_snapshot(value) -> dict | None:
 def build_decision_record(result, state, *, episode_key: str, decision_index: int,
                           parent_decision_id: str | None, selection: tuple[int, ...],
                           evaluation_model: dict, compute_configuration: dict,
+                          provider_configuration: dict,
                           provenance: dict, decision_seconds: float,
                           decision_limit_seconds: float | None = None,
                           deadline_hit: bool | None = None,
                           opponent_snapshot=None) -> dict:
     """Build one lossless, hidden-safe record from the typed coordinator result."""
 
-    actions = [_action(candidate.action) for candidate in result.roster.candidates]
-    action_ids = {candidate.action: action["id"]
-                  for candidate, action in zip(result.roster.candidates, actions)}
+    if not result.roster.legal_actions_proven:
+        raise ValueError("telemetry requires an authoritative legal-action roster proof")
+    legal_actions = tuple(state.legal_actions)
+    legal_proof = tuple((action.identity, tuple(action.selection))
+                        for action in legal_actions)
+    if legal_proof != result.roster.legal_action_identities:
+        raise ValueError("telemetry legal actions differ from the proven candidate roster")
+    actions = [_action(action) for action in legal_actions]
+    action_ids = {
+        tuple(getattr(action, "selection", ())): saved["id"]
+        for action, saved in zip(legal_actions, actions)
+    }
     candidates = []
     for candidate in result.roster.candidates:
         delta = candidate.delta
+        action_id = action_ids.get(tuple(getattr(candidate.action, "selection", ())))
+        if action_id is None:
+            raise ValueError("candidate cannot join the ObservationState legal action table")
         candidates.append({
-            "action_id": action_ids[candidate.action],
+            "action_id": action_id,
             "disposition": candidate.disposition.value,
             "status": candidate.status.value,
             "delta": None if delta is None else {
@@ -636,7 +790,10 @@ def build_decision_record(result, state, *, episode_key: str, decision_index: in
             "policy_tie_break": _allowed(candidate.policy_tie_break),
             "policy_evidence": _policy_evidence(candidate.policy_evidence),
         })
-    chosen_id = action_ids[result.chosen]
+    chosen = result.chosen_candidate
+    if chosen is None:
+        raise ValueError("Ledger decision requires a chosen candidate")
+    chosen_id = action_ids[tuple(getattr(chosen.action, "selection", ()))]
     record = {
         "schema": SCHEMA,
         "schema_version": SCHEMA_VERSION,
@@ -682,6 +839,7 @@ def build_decision_record(result, state, *, episode_key: str, decision_index: in
         "configuration": {
             "evaluation_model": _evaluation_model_configuration(evaluation_model),
             "compute": _compute_configuration(compute_configuration),
+            "provider": _allowed(provider_configuration),
         },
         "provenance": _allowed(provenance),
         "timing": {
@@ -736,7 +894,7 @@ def build_pregame_record(decision, state, *, episode_key: str, decision_index: i
         "candidates": [],
         "search": None,
         "behavior_identity": {"pregame_policy": "declarative-pregame-v1"},
-        "configuration": {"evaluation_model": None, "compute": None},
+        "configuration": {"evaluation_model": None, "compute": None, "provider": None},
         "provenance": _allowed(provenance),
         "timing": {
             "decision_seconds": float(decision_seconds),
@@ -754,16 +912,66 @@ def runtime_provenance(*, deck_name: str, opponent_knowledge_identity: str = "")
     path = Path(__file__).with_name("build_provenance.json")
     if path.exists():
         loaded = json.loads(path.read_text(encoding="utf-8"))
-        return _allowed(loaded)
+        result = _allowed(loaded)
+        _exact_fields(result, {"agent", "artifact", "code", "data"},
+                      "runtime provenance")
+        if result["artifact"] == "source-tree" or result["code"] == "source-tree":
+            raise ValueError("runtime provenance contains placeholder identity")
+        return result
+    artifact, code, cards = _source_provenance()
     return {
-        "artifact": "source-tree",
-        "code": "source-tree",
+        "artifact": artifact,
+        "code": code,
         "agent": str(deck_name),
-        "data": {"opponent_knowledge": str(opponent_knowledge_identity)},
+        "data": {
+            "cards": cards,
+            "opponent_knowledge": str(opponent_knowledge_identity),
+        },
     }
 
 
+@lru_cache(maxsize=1)
+def _source_provenance() -> tuple[str, str, str]:
+    root = next((parent for parent in Path(__file__).resolve().parents
+                 if (parent / ".git").exists()), None)
+    if root is None:
+        raise ValueError("runtime source provenance is unavailable")
+    code = subprocess.run(
+        ["git", "rev-parse", "HEAD"], cwd=root, check=True,
+        capture_output=True, text=True,
+    ).stdout.strip()
+    digest = hashlib.sha256()
+    for source in sorted((root / "src").rglob("*.py")):
+        digest.update(source.relative_to(root).as_posix().encode("utf-8"))
+        digest.update(source.read_bytes())
+    from common.cards import card_store
+    from common.ledger.worth import content_identity
+
+    return digest.hexdigest(), code, content_identity(card_store())
+
+
+def build_episode_receipt(*, episode_key: str, reservations) -> dict:
+    if reservations is None:
+        raise ValueError("Episode Telemetry Receipt requires journal reservations")
+    rows = [_allowed(dict(row)) for row in reservations]
+    delivered = [row["record_id"] for row in rows if row["status"] == "delivered"]
+    certified = bool(all(row["status"] == "delivered" for row in rows))
+    record = {
+        "schema": SCHEMA,
+        "schema_version": SCHEMA_VERSION,
+        "record_type": "telemetry_receipt",
+        "record_id": "",
+        "episode": {"key": str(episode_key)},
+        "reservations": rows,
+        "decision_ids": delivered,
+        "certified": certified,
+    }
+    record["record_id"] = _record_identifier(record)
+    return validate_record(record)
+
+
 def build_outcome_record(*, episode_key: str, decision_records: list[dict],
+                         telemetry_receipt: dict,
                          winner: int | None, terminal_reason: str,
                          public_prizes: dict[int, int], rewards: dict[int, float],
                          duration_seconds: float,
@@ -778,6 +986,13 @@ def build_outcome_record(*, episode_key: str, decision_records: list[dict],
         decision_ids.append(str(decision["record_id"]))
     if len(set(decision_ids)) != len(decision_ids):
         raise ValueError("outcome decision ids must be unique")
+    receipt = validate_record(telemetry_receipt)
+    if receipt["record_type"] != "telemetry_receipt" \
+            or receipt["episode"]["key"] != episode_key \
+            or not receipt["certified"]:
+        raise ValueError("Outcome requires a certified Episode Telemetry Receipt")
+    if receipt["decision_ids"] != decision_ids:
+        raise ValueError("Episode Telemetry Receipt does not match outcome decisions")
     duration = float(duration_seconds)
     if not math.isfinite(duration) or duration < 0.0:
         raise ValueError("outcome duration must be finite and non-negative")
@@ -788,6 +1003,7 @@ def build_outcome_record(*, episode_key: str, decision_records: list[dict],
         "record_id": "",
         "episode": {"key": str(episode_key), "external_id": external_episode_id},
         "decision_ids": decision_ids,
+        "telemetry_receipt_id": receipt["record_id"],
         "result": {
             "winner": None if winner is None else int(winner),
             "draw": winner is None,
@@ -913,7 +1129,7 @@ def parse_lines(lines) -> list[dict]:
 
 def _build_emission(decision, opponent, seat, state, decision_seconds,
                     decision_limit_seconds, deadline_hit, evaluation_model,
-                    compute_configuration, provenance, link) -> dict:
+                    compute_configuration, provider_configuration, provenance, link) -> dict:
     if decision.decision_result is None:
         return build_pregame_record(
             decision, state, provenance=provenance or {},
@@ -924,6 +1140,7 @@ def _build_emission(decision, opponent, seat, state, decision_seconds,
         decision.decision_result, state, selection=tuple(decision.chosen),
         evaluation_model=evaluation_model,
         compute_configuration=compute_configuration,
+        provider_configuration=provider_configuration,
         provenance=provenance or {},
         decision_seconds=float(decision_seconds or 0.0),
         decision_limit_seconds=decision_limit_seconds,
@@ -932,39 +1149,60 @@ def _build_emission(decision, opponent, seat, state, decision_seconds,
 
 def emit(decision, *, opponent=None, seat=None, state=None, out=None, decision_seconds=None,
          decision_limit_seconds=None, deadline_hit=None, session=None,
-         evaluation_model=None, compute_configuration=None, provenance=None) -> None:
+         evaluation_model=None, compute_configuration=None, provider_configuration=None,
+         provenance=None) -> None:
     started = perf_counter()
     if state is None or seat is None or session is None:
         raise ValueError("Ledger telemetry requires state, seat, and session")
-    link = session.next_decision(seat=int(seat))
+    reservation = session.reserve_decision(
+        seat=int(seat), position_key=state.position_key, decision_key=state.decision_key)
+    reserved_id = reservation["record_id"]
+    link = {key: reservation[key] for key in (
+        "episode_key", "decision_index", "parent_decision_id")}
     captured = _CAPTURE.get()
-    reserved_id = _identifier({
-        "schema": SCHEMA, "schema_version": SCHEMA_VERSION,
-        "episode": link["episode_key"], "seat": int(seat),
-        "index": link["decision_index"], "position_key": state.position_key,
-        "decision_key": state.decision_key,
-    })
-    session.commit_decision(seat=int(seat), record_id=reserved_id)
-
-    def produce() -> dict:
+    if captured is not None:
+        captured.register_session(session)
+    try:
         record = _build_emission(
             decision, opponent, seat, state, decision_seconds, decision_limit_seconds,
-            deadline_hit, evaluation_model, compute_configuration, provenance, link)
+            deadline_hit, evaluation_model, compute_configuration, provider_configuration,
+            provenance, link)
         if record["record_id"] != reserved_id:
             raise ValueError("reserved telemetry decision id mismatch")
-        if not _SUPPRESS_OUTPUT.get():
-            print("\n".join(frame_record(record)), file=out or sys.stderr, flush=True)
+    except Exception as exc:
+        session.fail_decision(
+            record_id=reserved_id, phase="emission", error_type=type(exc).__name__)
+        raise
+    session.commit_decision(seat=int(seat), record_id=reserved_id)
+    constructed = perf_counter()
+    if captured is not None:
+        captured.construction_seconds += constructed - started
+    suppress_output = _SUPPRESS_OUTPUT.get()
+
+    def deliver() -> dict:
+        delivery_started = perf_counter()
+        try:
+            if not suppress_output:
+                print("\n".join(frame_record(record)), file=out or sys.stderr, flush=True)
+            session.deliver_decision(record_id=reserved_id)
+        except Exception as exc:
+            session.fail_decision(
+                record_id=reserved_id, phase="delivery", error_type=type(exc).__name__)
+            raise
+        finally:
+            if captured is not None:
+                captured.delivery_seconds += perf_counter() - delivery_started
         return record
 
     if captured is not None or out is not None:
-        record = produce()
+        record = deliver()
         if captured is not None:
             captured.append(record)
             captured.emit_seconds += perf_counter() - started
         return
 
     global _CALLER_SECONDS
-    future = _EMITTER.submit(produce)
+    future = _EMITTER.submit(deliver)
     _PENDING[:] = [pending for pending in _PENDING
                    if not pending.done() or pending.exception() is not None]
     _PENDING.append(future)
@@ -1002,7 +1240,7 @@ def capture_records(*, suppress_output: bool = False):
 
 __all__ = [
     "MAX_FRAME_BYTES", "RecordAssembler", "TAG", "TelemetrySession",
-    "build_decision_record", "build_outcome_record", "build_pregame_record",
+    "build_decision_record", "build_episode_receipt", "build_outcome_record",
     "capture_records", "emit", "episode_context", "flush", "frame_record",
     "migrate_record", "runtime_provenance", "take_caller_seconds",
     "validate_record",

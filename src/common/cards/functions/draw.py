@@ -1,4 +1,4 @@
-"""Scalar draw-clause interpretation for Bellman chance nodes."""
+"""Scalar draw-clause interpretation for Ledger refresh transitions."""
 from __future__ import annotations
 
 from collections.abc import Mapping

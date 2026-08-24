@@ -1,10 +1,50 @@
 from __future__ import annotations
 
+import hashlib
+import json
+import math
 from dataclasses import dataclass
 from types import MappingProxyType
 
-from common.cards.function_catalog import FUNCTION_FEATURES
 from common.cards.pokemon_roles import POKEMON_ROLES
+
+
+CATALOG_ID_DIGEST_BYTES = 16
+
+
+ACTIVATION_OPERATIONS = frozenset({
+    "ability_target", "active_retreat_cost", "active_target", "active_tool_count",
+    "bench_target", "board_body_count", "body_clause_count", "body_flag_count",
+    "candidate_role_bodies", "constant", "evolution_target", "fetch_live_target",
+    "incoming_pressure", "multi_provision_capacity", "open_cost", "open_energy_slot",
+    "opponent_bench", "opponent_empty_bench",
+    "opponent_damage_units", "opponent_deck_count", "opponent_energy_count",
+    "opponent_hand_count", "opponent_single_prize_count",
+    "opponent_special_energy_count", "own_bench_count", "own_damage_units",
+    "own_hand_count", "own_item_count", "own_max_attack_units", "prize_difference",
+    "side_damage_units", "side_hand_count", "side_status_count", "switch_target",
+    "turn_number",
+})
+
+
+@dataclass(frozen=True, slots=True)
+class ActivationRule:
+    source: str
+    claims: tuple[str, ...]
+    operation: str
+    argument: str | None = None
+    parameters: tuple[str, ...] = ()
+
+    def __post_init__(self):
+        claims = tuple(sorted({str(claim) for claim in self.claims}))
+        if not self.source or not claims or not self.operation:
+            raise ValueError("activation rule requires source, claims, and operation")
+        object.__setattr__(self, "source", str(self.source))
+        object.__setattr__(self, "claims", claims)
+        object.__setattr__(self, "operation", str(self.operation))
+        if self.argument is not None:
+            object.__setattr__(self, "argument", str(self.argument))
+        object.__setattr__(self, "parameters", tuple(str(value) for value in self.parameters))
 
 
 @dataclass(frozen=True, slots=True)
@@ -12,6 +52,15 @@ class FeatureSpec:
     key: str
     default: float
     activation_shape: str = "scalar"
+    rules: tuple[ActivationRule, ...] = ()
+
+    def __post_init__(self):
+        object.__setattr__(self, "key", str(self.key))
+        object.__setattr__(self, "default", float(self.default))
+        if not math.isfinite(self.default):
+            raise ValueError("feature default must be finite")
+        object.__setattr__(self, "activation_shape", str(self.activation_shape))
+        object.__setattr__(self, "rules", tuple(self.rules))
 
 
 class FeatureCatalog:
@@ -20,7 +69,21 @@ class FeatureCatalog:
         by_key = {spec.key: spec for spec in specs}
         if len(by_key) != len(specs):
             raise ValueError("feature keys must be unique")
+        if any(not isinstance(rule, ActivationRule)
+               for spec in specs for rule in spec.rules):
+            raise TypeError("feature activation rules must be ActivationRule values")
+        unknown_operations = {rule.operation for spec in specs for rule in spec.rules} \
+            - ACTIVATION_OPERATIONS
+        if unknown_operations:
+            raise KeyError(f"unknown activation operation {sorted(unknown_operations)[0]!r}")
         self._specs = MappingProxyType(by_key)
+        indexed = {}
+        for spec in (by_key[key] for key in sorted(by_key)):
+            for rule in spec.rules:
+                for claim in rule.claims:
+                    indexed.setdefault((rule.source, claim), []).append((spec, rule))
+        self._rules_by_source_claim = MappingProxyType({
+            key: tuple(value) for key, value in indexed.items()})
         self.schema_version = int(schema_version)
 
     def __contains__(self, key) -> bool:
@@ -32,6 +95,186 @@ class FeatureCatalog:
     @property
     def priced_keys(self) -> tuple[str, ...]:
         return tuple(sorted(self._specs))
+
+    @property
+    def specs(self) -> tuple[FeatureSpec, ...]:
+        return tuple(self._specs[key] for key in sorted(self._specs))
+
+    def activation_rules(self, source: str, claims) -> tuple[tuple[FeatureSpec, ActivationRule], ...]:
+        found = {}
+        for claim in {str(claim) for claim in claims}:
+            for spec, rule in self._rules_by_source_claim.get((str(source), claim), ()):
+                found[(spec.key, rule)] = (spec, rule)
+        return tuple(found[key] for key in sorted(found, key=lambda item: (
+            item[0], self[item[0]].rules.index(item[1]))))
+
+    def has_activation_rules(self, source: str, claims) -> bool:
+        return any((str(source), str(claim)) in self._rules_by_source_claim
+                   for claim in claims)
+
+    @property
+    def identity(self) -> str:
+        payload = {
+            "schema_version": self.schema_version,
+            "specs": tuple((spec.key, spec.default, spec.activation_shape,
+                            tuple((rule.source, rule.claims, rule.operation, rule.argument,
+                                   rule.parameters)
+                                  for rule in spec.rules))
+                           for spec in self.specs),
+        }
+        blob = json.dumps(payload, sort_keys=True, separators=(",", ":")).encode("utf-8")
+        return hashlib.blake2b(blob, digest_size=CATALOG_ID_DIGEST_BYTES).hexdigest()
+
+
+def _rule(source, claims, operation, argument=None, parameters=()):
+    return ActivationRule(source, tuple(claims), operation, argument, tuple(parameters))
+
+
+_DECLARED_RULES = {
+    "function.draw.available": _rule("function", ("draw",), "constant"),
+    "function.draw.hand_count": _rule("function", ("draw",), "side_hand_count"),
+    "function.fetch.live_target": _rule("function", ("fetch",), "fetch_live_target"),
+    "function.gust.bench_target": _rule("function", ("gust",), "bench_target"),
+    "function.heal.damage_present": _rule("function", ("heal",), "side_damage_units"),
+    "function.accel.open_energy_slot": _rule(
+        "function", ("accel", "energy_double", "energy_recur", "move_energy"),
+        "open_energy_slot"),
+    "function.switch.active_pressure": _rule(
+        "function", ("self_switch", "switch_self", "push_out"), "switch_target"),
+    "function.disruption.opponent_hand": _rule(
+        "function", ("opp_hand_to_deck", "mill"), "opponent_hand_count"),
+    "function.denial.opponent_resource": _rule(
+        "function", ("discard_opp_energy", "energy_bounce", "item_lock", "attack_lock",
+                     "no_retreat", "retreat_lock"), "opponent_energy_count"),
+    "function.bench_pressure.target_count": _rule(
+        "function", ("bench_snipe", "bench_spread", "damage_counters"),
+        "opponent_bench"),
+    "function.protection.incoming_pressure": _rule(
+        "function", ("damage_protection", "damage_reduction", "prevent_damage",
+                     "prevent_effects", "hp_bonus"), "incoming_pressure"),
+    "function.status.active_target": _rule(
+        "function", ("attack_debuff", "confuse", "sleep"), "active_target"),
+    "function.cost_reduction.open_cost": _rule(
+        "function", ("attack_cost_reduction", "cost_reduction", "retreat_reduction"),
+        "open_cost"),
+    "function.self_cost.exposure": _rule(
+        "function", ("recoil", "self_discard_energy", "self_mill", "self_return",
+                     "self_shuffle_in"), "constant"),
+    "function.suppression.ability_target": _rule(
+        "function", ("ability_suppression",), "ability_target"),
+    "function.development.board_fit": _rule(
+        "function", ("evolve_early",), "evolution_target"),
+    "function.move_damage.damage_present": _rule(
+        "function", ("move_damage",), "own_damage_units"),
+    "function.ko.active_target": _rule(
+        "function", ("ko",), "active_target"),
+    "function.stadium.board_fit": _rule(
+        "function", ("stadium_static", "stadium_trigger"), "board_body_count"),
+    "continuation.multi_provision_in_hand": _rule(
+        "function", ("energy_provide",), "multi_provision_capacity"),
+    "energy.end_of_turn_rental": _rule(
+        "attached_energy", ("discard_eot",), "constant"),
+}
+
+_OBSERVATION_CLAIMS = {
+    "zone.in_play": "card_in_play",
+    "zone.in_hand": "card_in_hand",
+    "zone.in_deck": "card_in_deck",
+    "zone.in_discard": "card_in_discard",
+    "zone.under_body": "card_under_body",
+    "zone.attached_usable": "usable_attached_energy",
+    "zone.attached_useless": "useless_attached_energy",
+    "zone.tool_attached": "attached_tool",
+    "demand.dead": "dead_hand_card",
+    "demand.colorless_only": "colorless_only_hand_card",
+    "demand.setup": "setup_hand_card",
+    "development.ready_evolution": "ready_evolution_in_hand",
+    "development.visible_reach": "visible_development_reach",
+    "development.next_turn_reach": "next_turn_development_reach",
+    "copy.surplus": "surplus_hand_copy",
+    "copy.surplus_in_play": "surplus_in_play_copy",
+    "damage.floor": "body_damage_fraction",
+    "body.hp_per_100": "body_hp_units",
+    "bench.open_slot": "open_bench_slot",
+    "body.prize_liability": "extra_prize_liability",
+    "energy.concentration": "concentrated_energy",
+    "active.doomed": "doomed_active",
+    "active.premium": "active_body",
+    "active.unready_fraction": "unready_active",
+    "prize.race": "prize_advantage",
+    "result.win": "terminal_win",
+    "belief.unknown_card": "unknown_card_belief",
+    "coverage.unknown_card": "uncovered_card",
+    "belief.unknown_deck_card": "unknown_own_deck_card",
+    "belief.unknown_archetype": "unknown_opponent_archetype",
+    "context.opponent_unknown_card": "unknown_opponent_card",
+    "context.opponent_unknown_hand": "unknown_opponent_hand_card",
+    "context.opponent_unknown_deck": "unknown_opponent_deck_card",
+    "context.damaged_attached": "usable_energy_on_damaged_body",
+    "status.asleep": "asleep_status",
+    "status.paralyzed": "paralyzed_status",
+    "status.confused": "confused_status",
+    "status.poisoned": "poisoned_status",
+    "status.burned": "burned_status",
+}
+
+_CONTINUATION_CLAIMS = {
+    "action.opportunity_cost": "continued_action",
+    "continuation.zone_created": "zone_created",
+    "continuation.zone_replaced": "zone_replaced",
+    "continuation.allowance_consumed": "allowance_consumed",
+    "continuation.usable_output": "usable_output",
+    "continuation.opportunity_created": "opportunity_created",
+    "continuation.opportunity_preserved": "opportunity_preserved",
+    "continuation.opportunity_consumed": "opportunity_consumed",
+}
+
+_TRAIT_RULES = {
+    "trait.deckout_vulnerability": _rule(
+        "opponent_trait", ("deckout_vulnerability",), "opponent_deck_count"),
+    "trait.heal_wall": _rule("opponent_trait", ("heal_wall",), "opponent_damage_units"),
+    "trait.opening_fragility": _rule(
+        "opponent_trait", ("opening_fragility",), "opponent_empty_bench"),
+    **{f"trait.tempo.{tempo}": _rule(
+        "opponent_trait", ("tempo",), "constant", tempo)
+       for tempo in ("fast", "midrange", "slow")},
+    **{f"trait.tempo.{tempo}.turn": _rule(
+        "opponent_trait", ("tempo",), "turn_number", tempo)
+       for tempo in ("fast", "midrange", "slow")},
+}
+
+_MECHANIC_RULES = {
+    "mechanic.comeback_disruption": _rule(
+        "opponent_mechanic", ("comeback_disruption",), "prize_difference"),
+    "mechanic.damage_cap": _rule(
+        "opponent_mechanic", ("damage_cap",), "own_max_attack_units"),
+    "mechanic.effect_immunity": _rule(
+        "opponent_mechanic", ("effect_immunity",), "body_clause_count",
+        parameters=("attack_debuff", "attack_lock", "burn", "confuse", "damage_counters",
+                    "discard_opp_energy", "no_retreat", "poison", "push_out",
+                    "retreat_lock", "sleep")),
+    "mechanic.effect_immunity.ex_body_count": _rule(
+        "opponent_mechanic", ("effect_immunity",), "body_flag_count",
+        parameters=("ex", "mega_ex")),
+    "mechanic.hand_size_attack": _rule(
+        "opponent_mechanic", ("hand_size_attack",), "own_hand_count"),
+    "mechanic.item_lock": _rule(
+        "opponent_mechanic", ("item_lock",), "own_item_count"),
+    "mechanic.no_pivot": _rule(
+        "opponent_mechanic", ("no_pivot",), "side_status_count", "them"),
+    "mechanic.no_pivot.retreat_cost": _rule(
+        "opponent_mechanic", ("no_pivot",), "active_retreat_cost", "them"),
+    "mechanic.piercing": _rule(
+        "opponent_mechanic", ("piercing",), "side_status_count", "me"),
+    "mechanic.piercing.active_tools": _rule(
+        "opponent_mechanic", ("piercing",), "active_tool_count", "me"),
+    "mechanic.single_prize": _rule(
+        "opponent_mechanic", ("single_prize",), "opponent_single_prize_count"),
+    "mechanic.special_energy_only": _rule(
+        "opponent_mechanic", ("special_energy_only",), "opponent_special_energy_count"),
+    "mechanic.spread": _rule(
+        "opponent_mechanic", ("spread",), "own_bench_count"),
+}
 
 _ROLE_DEFAULTS = {
     "primary_attacker": 0.50,
@@ -125,6 +368,7 @@ _SCALAR_DEFAULTS = {
     "context.opponent_unknown_deck": 0.018,
     "context.damaged_attached": -1.0,
     "continuation.multi_provision_in_hand": 0.05,
+    "energy.end_of_turn_rental": 0.0,
     "continuation.zone_created": 0.001,
     "continuation.zone_replaced": 0.0002,
     "continuation.allowance_consumed": -0.001,
@@ -132,7 +376,8 @@ _SCALAR_DEFAULTS = {
     "continuation.opportunity_created": 0.001,
     "continuation.opportunity_preserved": 0.0005,
     "continuation.opportunity_consumed": -0.001,
-    "function.draw.hand_deficit": 0.0,
+    "function.draw.available": 0.0,
+    "function.draw.hand_count": 0.0,
     "function.fetch.live_target": 0.0,
     "function.gust.bench_target": 0.0,
     "function.heal.damage_present": 0.0,
@@ -162,10 +407,13 @@ _BELIEF_DEFAULTS = {
     "mechanic.comeback_disruption": 0.0,
     "mechanic.damage_cap": 0.0,
     "mechanic.effect_immunity": 0.0,
+    "mechanic.effect_immunity.ex_body_count": 0.0,
     "mechanic.hand_size_attack": 0.0,
     "mechanic.item_lock": 0.0,
     "mechanic.no_pivot": 0.0,
+    "mechanic.no_pivot.retreat_cost": 0.0,
     "mechanic.piercing": 0.0,
+    "mechanic.piercing.active_tools": 0.0,
     "mechanic.single_prize": 0.0,
     "mechanic.special_energy_only": 0.0,
     "mechanic.spread": 0.0,
@@ -175,37 +423,52 @@ _BELIEF_DEFAULTS = {
     "trait.tempo.fast": 0.0,
     "trait.tempo.midrange": 0.0,
     "trait.tempo.slow": 0.0,
+    "trait.tempo.fast.turn": 0.0,
+    "trait.tempo.midrange.turn": 0.0,
+    "trait.tempo.slow.turn": 0.0,
 }
 
 
 FEATURE_CATALOG = FeatureCatalog(
-    tuple(FeatureSpec(key, value) for key, value in _SCALAR_DEFAULTS.items())
-    + tuple(FeatureSpec(key, value, "posterior")
+    tuple(FeatureSpec(key, value, rules=(
+        *((_DECLARED_RULES[key],) if key in _DECLARED_RULES else ()),
+        *((_rule("observation", (_OBSERVATION_CLAIMS[key],), "constant"),)
+          if key in _OBSERVATION_CLAIMS else ()),
+        *((_rule("continuation", (_CONTINUATION_CLAIMS[key],), "constant"),)
+          if key in _CONTINUATION_CLAIMS else ()),
+    ))
+          for key, value in _SCALAR_DEFAULTS.items())
+    + tuple(FeatureSpec(key, value, "posterior",
+                        ((_TRAIT_RULES[key],) if key in _TRAIT_RULES
+                         else (_MECHANIC_RULES[key],)))
             for key, value in _BELIEF_DEFAULTS.items())
-    + tuple(FeatureSpec(f"trait.setup_dependency.{role}", 0.0, "posterior")
+    + tuple(FeatureSpec(
+        f"trait.setup_dependency.{role}", 0.0, "posterior",
+        (_rule("opponent_trait", ("setup_dependency",), "candidate_role_bodies", role),))
             for role in POKEMON_ROLES)
-    + tuple(FeatureSpec(f"kind.{kind}", value, "count")
+    + tuple(FeatureSpec(f"kind.{kind}", value, "count",
+                        (_rule("card", (f"kind:{kind}",), "constant"),))
             for kind, value in _KIND_DEFAULTS.items())
     + tuple(FeatureSpec(f"role.{role}", _ROLE_DEFAULTS[role],
-                        "count")
+                        "count", (_rule("card", (f"role:{role}",), "constant"),))
             for role in POKEMON_ROLES)
     + tuple(FeatureSpec(f"interaction.role.{role}.{placement}",
                         value * factor,
-                        "situational_count")
+                        "situational_count",
+                        (_rule("card", (f"role:{role}:{placement}",), "constant"),))
             for role, value in _ROLE_DEFAULTS.items()
             for placement in _ROLE_PLACEMENTS
             for factor in (_PLACEMENT_FACTORS[placement],))
     + tuple(FeatureSpec(f"interaction.kind.{kind}.{placement}",
                         value * factor,
-                        "situational_count")
+                        "situational_count",
+                        (_rule("card", (f"kind:{kind}:{placement}",), "constant"),))
             for kind, value in _KIND_DEFAULTS.items()
             for placement in _KIND_PLACEMENTS[kind]
             for factor in (_PLACEMENT_FACTORS[placement],)),
-    schema_version=1,
+    schema_version=2,
 )
-_missing_function_features = set(FUNCTION_FEATURES.values()) - set(FEATURE_CATALOG.priced_keys)
-if _missing_function_features:
-    raise ValueError(f"card Function outputs lack Feature entries: {sorted(_missing_function_features)}")
 
 
-__all__ = ("FEATURE_CATALOG", "FeatureCatalog", "FeatureSpec")
+__all__ = ("ACTIVATION_OPERATIONS", "ActivationRule", "FEATURE_CATALOG",
+           "FeatureCatalog", "FeatureSpec")

@@ -7,17 +7,15 @@ from common.observation import ObservationRecord
 from common.telemetry import build_decision_record
 
 
-def _unresolved(decision: dict, reason: str) -> dict:
-    action_ids = [action["id"] for action in decision["actions"]]
-    return {
-        "schema_version": 1, "mode": "not_replayed",
-        "recorded_legal_actions_valid": decision["decision"]["chosen_action_id"] in action_ids,
-        "recorded_evaluation_valid": decision["decision"]["variant"] != "ledger"
-        or decision["root"] is not None,
-        "recorded_successors_valid": True,
-        "legal_actions_exact": None, "root_exact": None, "successors_exact": None,
-        "full_choice_exact": None, "exclusion": reason,
-    }
+class CorpusRejection(ValueError):
+    def __init__(self, decision: dict, reason: str):
+        self.decision_id = str(decision.get("record_id", "unknown"))
+        self.reason = reason
+        super().__init__(f"{self.decision_id}: {reason}")
+
+
+def _reject(decision: dict, reason: str):
+    raise CorpusRejection(decision, reason)
 
 
 def _raw_observation(replay: dict, decision: dict) -> dict | None:
@@ -35,38 +33,50 @@ def certify_replay(decision: dict, replay: dict) -> dict:
     """Re-evaluate one Ledger record when its exact local behavior identity resolves."""
 
     if decision["decision"]["variant"] != "ledger":
-        return _unresolved(decision, "pregame_has_no_ledger_evaluation")
+        return _reject(decision, "pregame_has_no_ledger_evaluation")
     agent = str(decision["provenance"]["agent"])
     repo = Path(__file__).resolve().parents[3]
     if not (repo / "src" / "agents" / agent / "strategy.py").exists():
-        return _unresolved(decision, "agent_artifact_unavailable")
+        return _reject(decision, "agent_artifact_unavailable")
     raw = _raw_observation(replay, decision)
     if raw is None:
-        return _unresolved(decision, "replay_observation_unavailable")
-    from train.ledger_corpus import _build_runtime
-
-    runtime = _build_runtime(agent)
-    recorded_behavior = decision["behavior_identity"]
-    current_behavior = dataclasses.asdict(runtime.ledger.behavior_identity)
-    if recorded_behavior != current_behavior:
-        return _unresolved(decision, "behavior_identity_unavailable")
-    recorded_model = decision["configuration"]["evaluation_model"]["identity"]
-    recorded_compute = decision["configuration"]["compute"]["identity"]
-    if runtime.ledger.ctx.identity != recorded_model or runtime.ledger.compute.identity != recorded_compute:
-        return _unresolved(decision, "configuration_identity_unavailable")
+        return _reject(decision, "replay_observation_unavailable")
+    recorded_provider = decision["configuration"]["provider"]
     state = ObservationRecord(
         decision["observation"]["schema_version"],
         decision["observation"]["payload"],
     ).to_state()
-    replayed = runtime.ledger.decide(raw, state=state)
+    from train.ledger_corpus import _build_replay_ledger
+
+    try:
+        ledger = _build_replay_ledger(
+            agent, decision["configuration"], provider_backend=recorded_provider["backend"],
+            deck=state.decklist)
+    except (ImportError, RuntimeError, ValueError) as error:
+        reason = ("configuration_identity_unavailable"
+                  if str(error).startswith("recorded ")
+                  else "provider_identity_unavailable")
+        return _reject(decision, f"{reason}:{type(error).__name__}")
+    if ledger.provider_configuration != recorded_provider:
+        return _reject(decision, "provider_substitution")
+    recorded_behavior = decision["behavior_identity"]
+    current_behavior = dataclasses.asdict(ledger.behavior_identity)
+    if recorded_behavior != current_behavior:
+        return _reject(decision, "behavior_identity_unavailable")
+    recorded_model = decision["configuration"]["evaluation_model"]["identity"]
+    recorded_compute = decision["configuration"]["compute"]["identity"]
+    if ledger.ctx.identity != recorded_model or ledger.compute.identity != recorded_compute:
+        return _reject(decision, "configuration_identity_unavailable")
+    replayed = ledger.decide(raw, state=state)
     rebuilt = build_decision_record(
         replayed.decision_result, state,
         episode_key=decision["episode"]["key"],
         decision_index=decision["decision"]["index"],
         parent_decision_id=decision["decision"]["parent_id"],
         selection=tuple(replayed.chosen),
-        evaluation_model=runtime.ledger.ctx,
-        compute_configuration=runtime.ledger.compute,
+        evaluation_model=ledger.ctx,
+        compute_configuration=ledger.compute,
+        provider_configuration=ledger.provider_configuration,
         provenance=decision["provenance"],
         decision_seconds=decision["timing"]["decision_seconds"],
         decision_limit_seconds=decision["timing"]["decision_limit_seconds"],
@@ -79,13 +89,25 @@ def certify_replay(decision: dict, replay: dict) -> dict:
                     or decision["timing"]["deadline_hit"] is True)
     full_exact = None if time_limited else (
         rebuilt["decision"]["chosen_action_id"] == decision["decision"]["chosen_action_id"]
+        and rebuilt["decision"]["selection"] == decision["decision"]["selection"]
         and rebuilt["decision"]["policy_reason"] == decision["decision"]["policy_reason"]
         and rebuilt["search"] == decision["search"])
+    if not legal_exact:
+        return _reject(decision, "legal_actions_drift")
+    if not root_exact:
+        return _reject(decision, "root_valuation_drift")
+    if not successor_exact:
+        return _reject(decision, "successor_evaluation_drift")
+    if full_exact is False:
+        return _reject(decision, "full_choice_drift")
     return {
-        "schema_version": 1, "mode": "offline_replay",
+        "schema_version": 2, "mode": "offline_replay",
         "recorded_legal_actions_valid": True, "recorded_evaluation_valid": True,
         "recorded_successors_valid": True,
         "legal_actions_exact": legal_exact, "root_exact": root_exact,
         "successors_exact": successor_exact, "full_choice_exact": full_exact,
         "exclusion": "time_budgeted_full_choice" if time_limited else None,
     }
+
+
+__all__ = ("CorpusRejection", "certify_replay")
