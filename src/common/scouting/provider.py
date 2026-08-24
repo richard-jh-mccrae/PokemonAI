@@ -1,4 +1,4 @@
-"""Card-stat providers (docs/scouting.md): the Scout resolves opponent card ids to stats through
+"""Card-stat providers: the Scout resolves opponent card ids to stats through
 one, so recognition stays decoupled from the engine. Runtime uses ``EngineCardStatProvider``, tests
 inject ``DictCardStatProvider``. This module owns the typed records and the adapters; text->facts
 lives in ``card_text`` and the name-keyed indexes in ``forward_index`` (ADR-0054)."""

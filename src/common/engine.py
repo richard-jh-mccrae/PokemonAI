@@ -242,17 +242,14 @@ class CgpyTransitionProvider:
             if (action.identity.kind in {"ability", "skill"}
                     and not self.terminal_action_supported(state, action)
                     and isinstance(successor, Deterministic)
-                    # An ability that has PAUSED for a required sub-selection has not failed, it
-                    # has merely not finished: a cost-first Ability (Lunar Cycle discards a Basic
-                    # {F} Energy before drawing) resolves nothing until the choice is answered, so
-                    # `current` is legitimately unchanged and the walk continues through the menu.
+                    # A paused required sub-selection has not failed. Cost-first Abilities may
+                    # leave `current` unchanged until the choice resolves, so continue the menu.
                     and int((_payload(successor.state).get("select") or {}).get(
                         "context", _MAIN)) == _MAIN):
                 before = _payload(state).get("current") or {}
                 after = _payload(successor.state).get("current") or {}
-                # Same comparison the old deepcopy-then-freeze form made: every key except the
-                # action counter, by value.  Both trees come out of ``thaw`` and are never
-                # mutated, so they can be compared in place.
+                # Compare every value except the action counter. Both thawed trees stay immutable,
+                # so an in-place comparison preserves the former deepcopy-then-freeze semantics.
                 if all(before.get(key) == after.get(key)
                        for key in before.keys() | after.keys()
                        if key != "turnActionCount"):
@@ -287,11 +284,8 @@ class CgpyTransitionProvider:
         deck[:] = remaining + list(reversed(chosen))
 
     def _revealing_transition(self, state, engine, action):
-        """Enumerate reveal windows; the resulting engine menu remains a Bellman Choice.
-
-        Probability describes what the window exposes. Which exposed card to take is not encoded
-        here: the authoritative engine poses that choice and the solver values each continuation.
-        """
+        """Enumerate reveal windows while leaving the resulting engine menu as a Choice.
+        Probability exposes the window; the engine poses the take and Search values continuations."""
         card_id = self._played_card_id(engine, action)
         clauses = play_clauses(self.cards.get(int(card_id))) if card_id else ()
         dig_clauses = tuple(clause for clause in clauses
@@ -399,12 +393,8 @@ class CgpyTransitionProvider:
         return bodies[index] if bodies and 0 <= index < len(bodies) else None
 
     def _local_nested_transition(self, state, action):
-        """Resolve a recorded mid-effect menu when its opaque historical frame is unavailable.
-
-        Live searches retain the exact cgpy frame.  Old correction observations do not, so this
-        adapter applies the one visible, fully specified nested consequence and stops.  It is an
-        engine-fact bridge, not a target chooser.
-        """
+        """Resolve one visible, fully specified nested consequence when an old frame is unavailable.
+        This bridges recorded engine facts; it never chooses a target."""
         try:
             obs = copy.deepcopy(_payload(state))
             select = obs.get("select") or {}
@@ -500,9 +490,8 @@ class CgpyTransitionProvider:
                     elif area == _DISCARD:
                         card = copy.deepcopy(players[seat]["discard"][index])
                     elif area == AREA_PRIZE:
-                        # A post-KO prize menu exposes only interchangeable card backs.  Credit the
-                        # observable prize progress now; the revealed card enters the real next
-                        # observation and is valued after the mandatory replan.
+                        # Post-KO prizes expose interchangeable backs. Credit visible progress now;
+                        # value the revealed card after the mandatory replan.
                         prize_picks.append((seat, index))
                         continue
                     else:

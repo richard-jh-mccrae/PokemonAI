@@ -150,10 +150,8 @@ class AgentRuntime:
                      if option.type is not None and int(option.type) == option_type), None)
 
     def _hand_has_setup_starter(self, state: ObservationState) -> bool:
-        """Whether the hand can legally supply the setup Active.
-
-        Printed setup Functions remain legal starters when the ordinary stage is not Basic.
-        """
+        """Return whether the hand can legally supply the setup Active.
+        Printed setup Functions remain legal starters when their ordinary stage is not Basic."""
         for card in state.me.hand:
             card_id = card.card_id
             stat = self.stats.get(card_id) if self.stats else None
@@ -245,9 +243,8 @@ class AgentRuntime:
             self._in_pregame = True
             return self._pregame(state)
         self._in_pregame = False
-        # One decision allocates heavily but builds trees, so cyclic garbage is rare and the
-        # collector's constant generational scans reclaim almost nothing until the search ends.
-        # Pause it for the decision; collection resumes with the first allocation afterwards.
+        # Decision trees allocate heavily but rarely create cycles. Pause unproductive collector
+        # scans until the decision ends; the next allocation resumes collection.
         collector_was_enabled = gc.isenabled()
         if collector_was_enabled:
             gc.disable()

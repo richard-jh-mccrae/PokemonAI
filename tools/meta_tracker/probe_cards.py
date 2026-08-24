@@ -1,4 +1,4 @@
-"""Engine probe harness: play each card and capture what it does (see docs/card-functions.md).
+"""Engine probe harness: play each card and capture what it does.
 
 Two layers, split for testability and to keep imports lib-free until actually driving the
 engine:

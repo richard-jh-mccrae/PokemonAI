@@ -1,7 +1,6 @@
 """Pin the native engine's undocumented determinism facts (ADR-0050, milestone M0).
 
-Each probe answers one fact empirically against the live DLL; findings are transcribed into
-`docs/pyeng/determinism.md` and pinned by `tests/parity/` engine tests.
+Each probe answers one fact empirically against the live DLL; parity tests pin the findings.
 
 Probes:
   serials    — how card serials map to (seat, submitted deck position)

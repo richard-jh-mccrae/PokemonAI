@@ -1,4 +1,4 @@
-"""The shipped meta artifact (docs/scouting.md): recognition priors/likelihoods and per-Archetype
+"""The shipped meta artifact: recognition priors/likelihoods and per-Archetype
 Dossiers, cards by id. Card *stats* are NOT here — they come from the engine at runtime.
 """
 from __future__ import annotations

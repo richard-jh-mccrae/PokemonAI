@@ -1,4 +1,4 @@
-"""Offline compiler: synthetic meta -> shipped artifact dict (docs/scouting.md)."""
+"""Offline compiler: synthetic meta to shipped artifact dict."""
 import pytest
 
 from meta_tracker.compile_scouting import compile_artifact

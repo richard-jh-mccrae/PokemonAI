@@ -27,7 +27,7 @@ MAX_COMMENT_LINES = 2
 MAX_DOCSTRING_LINES = 2
 MAX_MODULE_DOC_LINES = 15
 
-EXCLUDED = ("src/cg/",)
+EXCLUDED = ("src/cg/", "deprecated/")
 
 
 @dataclass

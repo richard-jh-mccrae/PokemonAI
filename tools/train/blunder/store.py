@@ -5,7 +5,7 @@ Filed by the build that played the game; unparseable build identity goes to ``_u
 
 Reads are deduplicated by Scope subject (ADR-0049), because a duplicate otherwise amplifies the
 weight fit; a differing category/correct on the same subject is a *conflict* and is kept. The
-on-disk file stays append-only — ``tools/train/dedup_corrections.py`` physically compacts it.
+on-disk file stays append-only.
 """
 from __future__ import annotations
 

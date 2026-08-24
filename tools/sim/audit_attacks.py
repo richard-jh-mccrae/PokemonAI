@@ -9,7 +9,7 @@ and a coin fork. Records accumulate in ``reports/attack_audit/measurements.json`
 Two layers: the **pure helpers** above the fold are lib-free; the **drive shell** below lazily
 imports ``cg``. The REQ-AUDIT ids the tests mark against are reasoned in ADR-0032 and ADR-0083.
 
-REQ-AUDIT ids this module is graded against are tabled in `docs/attack-effects.md`.
+ADR-0032 and ADR-0083 own the REQ-AUDIT decisions this module is graded against.
 """
 from __future__ import annotations
 

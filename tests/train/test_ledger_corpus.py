@@ -81,11 +81,7 @@ def test_markdown_render_carries_the_rationale_beside_the_miss():
 
 
 def test_the_real_producer_feeds_the_dashboard_shape():
-    """Every other test here builds rows with the `row()` fixture, a hand-maintained mirror of
-    `_replay_one`'s output — the check-the-serializer trap. This replays ONE real correction
-    frame through the real producer (fresh runtime, live Ledger brain, cgpy previews) and runs
-    the result through payload + render_markdown, so a shape drift between the producer and
-    the consumers fails here instead of shipping silently."""
+    """Run one real correction through producer and consumers to catch shape drift."""
     from pathlib import Path
 
     from train.blunder.store import load_corrections

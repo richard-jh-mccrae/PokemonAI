@@ -154,9 +154,7 @@ def _suppressed_output():
 def _import_make():
     """Import Kaggle's CABT factory without loading unrelated bundled environments."""
     prev_disable = logging.root.manager.disable
-    # LiteLLM registers models during this import.  Some upstream model IDs are absent from its
-    # cost table, producing harmless WARNING records and then handler errors on some installs.
-    # Suppress only import-time logging; restore the caller's setting immediately afterwards.
+    # LiteLLM registration can emit harmless handler errors; suppress only during import.
     logging.disable(logging.WARNING)
     try:
         with _suppressed_output(), warnings.catch_warnings():  # fd-level: native open_spiel stderr dump

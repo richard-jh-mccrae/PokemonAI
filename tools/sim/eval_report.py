@@ -1,4 +1,4 @@
-"""The C3 eval report (contract C3 in docs/plans/ml/ml-training-contracts.md): the JSON the eval
+"""The C3 eval report (ADR-0053): the JSON the eval
 harness emits and the G2 adoption gate consumes. This module owns the verdict rule, the
 checkpoint regression tripwire, the pure checkpoint-pool resolution, and the report assembler.
 

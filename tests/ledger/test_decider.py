@@ -166,11 +166,7 @@ def test_refresh_pricing_is_deterministic_and_reports_missing_successor_inventor
 
 
 def test_lillies_prices_higher_when_the_hand_it_shuffles_away_is_dead():
-    """The supporter-decision handoff's core demand: the play is judged by the states it
-    produces, so trading a dead hand for six draws beats trading a live one. Both hands are
-    two basic energies of EQUAL base worth (pinned below) and the shuffle pool is the same
-    multiset either way, so demand liveness is the ONLY thing separating the two swings —
-    with the demand system deleted, this fails."""
+    """Equal base worth isolates demand liveness as the only swing difference."""
     deck = tuple([LILLIES] + [DARK_E] * 2 + [FIRE_E] * 42)
 
     def swing_of(extra_hand):

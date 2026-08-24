@@ -32,7 +32,7 @@ src:
   - 'tests/test_import_hygiene.py'
 
 # The quarantined Bellman teacher (ADR-0149). Marked known so it does not trip the fail-closed
-# all-jobs fallback; CI deliberately runs NONE of its tests — run `pytest deprecated/tests` locally.
+# all-jobs fallback. CI runs none of its tests; the archived suite currently fails collection.
 deprecated:
   - 'deprecated/**'
 
@@ -104,8 +104,16 @@ mega_starmie:
 docs:
   - 'docs/**'
   - '**/*.md'
+  - 'src/**/*.py'
+  - 'tools/**/*.py'
+  - 'tests/**/*.py'
+  - 'tools/doc_budget.py'
+  - 'tools/prose_policy.py'
+  - 'tests/test_adr_index.py'
+  - 'tests/test_comment_budget.py'
   - 'tests/test_doc_links_resolve.py'
   - 'tests/test_line_endings_policy.py'
+  - 'tests/test_prose_policy.py'
 
 # Operational history does not change runtime or test inputs.
 operational_data:

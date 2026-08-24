@@ -1,4 +1,4 @@
-"""Card-stat providers (docs/scouting.md). The engine transform is tested lib-free."""
+"""Card-stat providers; the engine transform is tested lib-free."""
 from types import SimpleNamespace
 
 import pytest

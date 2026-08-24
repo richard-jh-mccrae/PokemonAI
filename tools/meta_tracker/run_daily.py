@@ -4,7 +4,7 @@ Pulls from the official daily top-episode datasets: read the index manifest,
 then for each day download only the episode `<id>.json` files not already in the
 store. Each episode is banded by its participants' current rating (leaderboard
 name->score join); episodes below the kept range are dropped. Raw files are
-deleted after parsing (ADR-0002); see docs/adr/0001 for the source.
+deleted after parsing (ADR-0002); ADR-0001 records the historical source decision.
 
 Run via the path-shimming wrapper (this module uses package-relative imports, so it
 isn't launched directly):

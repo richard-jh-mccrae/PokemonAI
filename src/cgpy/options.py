@@ -1,7 +1,7 @@
 """Option-list builders — ALL option generation and ordering lives here (ADR-0059).
 
 Ordering is the highest-risk parity surface — agents choose by INDEX — so every builder encodes the
-pinned rules from docs/pyeng/determinism.md §3. NOT the only builder: `chain.py` builds sub-select
+pinned parity rules. NOT the only builder: `chain.py` builds sub-select
 option lists at a dozen sites.
 """
 from __future__ import annotations

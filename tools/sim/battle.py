@@ -237,11 +237,7 @@ class AgentServer:
         return self.proc.poll() is None
 
     def act(self, obs: dict, timeout=None) -> list[int] | None:
-        """The chosen indices, or None after a process failure or decision timeout.
-
-        `last_seconds` is the harness-side round trip — search *plus* whatever telemetry the
-        contestant serialises back down the pipe. Unlike the agent's own `decision_seconds`
-        it survives `AGENT_NO_TELEMETRY=1`, so it is the one clock that compares the two."""
+        """Return chosen indices; `last_seconds` is the telemetry-independent round-trip clock."""
         self.last_timeout = False
         self.last_telemetry = []
         self.last_telemetry_seconds = 0.0

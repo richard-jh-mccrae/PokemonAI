@@ -75,10 +75,7 @@ def _opening_frame(film: list[dict]) -> int:
 
 
 def _live_on_the_wire(record: dict | None) -> dict | None:
-    """``diagnostics`` is the decision's whole Bellman search trace — ~650 KB per Decision, which is
-    99% of this payload — and the pane reads none of it: the two numbers it shows are distilled into
-    ``search_timing``/``lethal_proof_seconds`` here, and a saved Correction re-reads the full record
-    server-side. So it never goes to the browser."""
+    """Keep the large archived search trace server-side; the pane uses distilled timings."""
     return None if record is None else {k: v for k, v in record.items() if k != "diagnostics"}
 
 

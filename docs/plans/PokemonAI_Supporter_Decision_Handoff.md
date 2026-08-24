@@ -87,8 +87,7 @@ This naturally compares playing the Supporter against preserving the current han
 ```text
 Supporter
    -> sample resulting hand
-   -> Bellman continuation search
-   -> initial leaf evaluator
+   -> Ledger evaluation of observable consequences
    -> average outcomes
 ```
 
@@ -97,7 +96,7 @@ Supporter
 ```text
 Supporter
    -> sample resulting hand
-   -> short selective search
+   -> generic Search Algorithm continuation
    -> learned V(s)
    -> average outcomes
 ```

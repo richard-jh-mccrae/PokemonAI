@@ -1,6 +1,6 @@
 """Replay a recorded native trace through cgpy and localize the first divergence (ADR-0059).
 
-Randomness binds from the recorded logs (docs/pyeng/determinism.md); deck/prize ORDER re-syncs
+Randomness binds from recorded native logs; deck/prize ORDER re-syncs
 UNCONDITIONALLY from the god frame every step, so only a MULTISET mismatch is a divergence.
 
 The per-frame comparison is exact — the mover's live obs must equal the recorded one with NO

@@ -3,9 +3,8 @@
 **Purpose.** The competition writeup must explain *how we came to each design choice and why* —
 with the prior art and its measured success. This document is that ledger: every load-bearing
 choice in the Value System (tracker issue #136), the precedent it rests on, the measured result
-that justified it, and the source. Compiled from the 2026-07-23 deep-research pass (five parallel
-research angles over 2020–2026 primary sources) plus the earlier ML deep-research report
-(`docs/research/ml-training-system.md`, 2026-07-11, whose own source list this complements).
+that justified it, and the source. Compiled from the 2026-07-23 deep-research pass over 2020–2026
+primary sources and the earlier research ledger attached to Issue #136.
 
 **Verification honesty (state this in the writeup too).** Sources marked **[P]** were fetched and
 read at the primary location (author-maintained repos/docs). Sources marked **[S]** were verified
@@ -34,14 +33,14 @@ search — instead of an end-to-end neural policy.
   work. https://github.com/sbl1996/ygo-agent [P]
 - **Compute reality** (prior report): master-level end-to-end Hearthstone took 24 V100s + 5,856
   CPU cores × 23 days (arXiv 2303.05197); a single-desktop PPO pipeline plateaued ~50–59%
-  (Entertainment Computing 2023). See `docs/research/ml-training-system.md` §5. [S]
+  (Entertainment Computing 2023). [S]
 - **Our constraint:** Kaggle grader = 2 vCPUs, ~10 min/match, pure-Python-stdlib runtime
-  (`docs/agent-checks.md`). [I]
+  (`tools/sim/CONTEXT.md`). [I]
 
-## 2. Throughput-preserving evaluation: the NNUE lesson (StateModel incrementalism)
+## 2. Throughput-preserving evaluation: immutable observations and additive features
 
-**Choice:** one enriched board snapshot (StateModel) with an incremental `apply(action)` delta
-path; terms declare update rules; evaluation stays shallow.
+**Choice:** ObservationState is the immutable legal-view boundary; the Ledger evaluates one Feature
+Catalog through additive marginal valuation (ADR-0154–ADR-0156). Future search consumes that seam.
 
 - **Stockfish NNUE** (merged Aug 2020) — merge-time gain **+92.77 ±2.1 Elo** (60k games); the
   architecture wins through an incrementally-updated first-layer accumulator, extreme shallowness
@@ -183,7 +182,7 @@ frozen-checkpoint opponent pool now, league/exploiter deferred.
 - **Paired-seed theory** (arXiv 2512.24145, 2025) + **TAG framework practice** (arXiv 2503.02686)
   — seed pairing provably reduces variance under positive seed-outcome correlation. NOTE: literal
   duplicate deals are **engine-blocked here** (no deal seed; forks reshuffle hidden zones —
-  `docs/pyeng/determinism.md` §4 [I]); we keep the paired estimator + control variate, which is
+  `src/cgpy/CONTEXT.md` [I]); we keep the paired estimator + control variate, which is
   most of the benefit. [S]
 - **AlphaStar league** (DeepMind, Nature 2019) — leagues fix exploitability/forgetting rather than
   raw Elo; **Minimax Exploiter** (Ubisoft, AAMAS 2024) shows exploiter value at modest scale but
@@ -191,7 +190,7 @@ frozen-checkpoint opponent pool now, league/exploiter deferred.
   scale → league deferred, checkpoints kept. [S]
 - **Suphx** (MSR 2020, arXiv 2003.13590) — value-delta credit assignment under luck (the
   global-reward-predictor Φ-delta recipe) — the template for the automatic blunder labeler.
-  See also `docs/research/ml-training-system.md` §2. [S]
+  See also the research ledger attached to Issue #136. [S]
 - **Our own instruments** — the merged eval harness (PR #112: ~9k games detects a 3% win-delta;
   duplicate-position auxiliary mode) and blunder labeler (PR #115) with measured internal A/Bs
   (e.g., doom-relax: 4,800-game gauntlet, verdict ON). [I]
@@ -222,22 +221,20 @@ to turn new-set onboarding into review-and-correct.
 - **Zero-score index-tie CRITICAL bugs** (ADR-0062; mega_starmie ep82867148 f48/f87; mega_lucario
   ep83661652 f33/f40/f44) → the deterministic tie-break policy and the continuous scalar. [I]
 - **Dense hand-crafted reward shaping worse than sparse win/loss** (LOCM, Entertainment
-  Computing 2023; see `docs/research/ml-training-system.md` §8) → learned value deltas, never
+  Computing 2023) → learned value deltas, never
   heuristic potentials, for credit assignment. [S]
 - **Naive self-play non-convergence in imperfect-info games** (Schmid thesis, arXiv 2111.05884;
   see prior report) → checkpoint pools, eventual league. [S]
 
 ---
 
-*Related internal documents: `docs/research/ml-training-system.md` (2026-07-11 deep-research
-report with its own 21-source list), `docs/adr/` (decision records), the Value System tracker
-(GitHub issue #136) and its phase issues (#137–#150), each carrying the per-phase evidence.*
+*Related internal records: `docs/adr/`, the Value System tracker (Issue #136), and its phase issues
+(#137–#150), each carrying the per-phase evidence.*
 
-## 11. Production Bellman search allocation
+## 11. Offline teacher and future Search Algorithm allocation
 
-**Choice:** exact hidden-world transpositions plus equal root probes and Bellman-ranked successive
-halving. No depth horizon and no card/action-specific admission rules. Full measurements and rejected
-alternatives: `docs/research/bellman-search-latency.md`.
+**Historical choice:** the quarantined Bellman teacher used exact hidden-world transpositions, equal
+root probes, and ranked successive halving. The live Ledger does not run this traversal.
 
 - **Hyperband / successive halving** (Li et al., JMLR 2018) — primary precedent for allocating a
   small equal budget broadly, then concentrating computation on promising incomplete candidates.
@@ -254,8 +251,7 @@ alternatives: `docs/research/bellman-search-latency.md`.
 
 **Choice:** integrate hidden redraw identities out as exact hypergeometric need-coverage classes.
 Do not construct a hypothetical hand or search actions using cards that have not actually been
-drawn. Implementation and competition-write-up wording: `docs/agent-architecture.md` and
-`docs/research/bellman-search-latency.md`.
+drawn. Current planning language lives in `docs/plans/PokemonAI_Supporter_Decision_Handoff.md`.
 
 - **Multivariate hypergeometric distribution** — sampling identities without replacement; supplies
   the exact probability mass over semantic need-coverage classes. [S]

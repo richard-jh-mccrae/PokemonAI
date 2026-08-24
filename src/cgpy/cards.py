@@ -1,5 +1,5 @@
 """CardDB — the engine's card/attack tables, read from `defs/{card_data,attack_data}.json` so cgpy
-needs no native lib (ADR-0059). Codes and shapes are pinned in docs/pyeng/determinism.md.
+needs no native lib (ADR-0059). Codes and shapes are pinned by parity tests.
 """
 from __future__ import annotations
 

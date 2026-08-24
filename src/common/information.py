@@ -77,9 +77,8 @@ def draw_outcomes(pool_ids, draws: int, *,
             exact.append(DrawOutcome(ways / denominator, signature, True))
         return tuple(exact)
 
-    # One midpoint from each equal-mass stratum of physical-card subsets. Unlike seeded Monte Carlo,
-    # a rare hand cannot consume several branches because of seed luck; unlike signature ordering,
-    # no card identity or value determines the strata. Duplicate signatures are merged.
+    # Use one midpoint per equal-mass physical-card stratum, independent of identity or value.
+    # This prevents seed-lucky rare hands from taking several branches; merge duplicate signatures.
     expanded = tuple(sorted(pool.elements()))
     quantiles = tuple((index + STRATIFIED_BIN_MIDPOINT) / max_outcomes
                       for index in range(max_outcomes))

@@ -318,9 +318,8 @@ def any_attack_payable(body_facts, attached) -> bool:
 
 
 def _slot_fill(unit: int, body_facts, attached, ctx: EvaluationModel, reach=None) -> str:
-    """What one MORE unit of this color would fill on this body: a typed slot (through the
-    forward line), a colorless slot (own attacks in full; a line evolution's only through a
-    positive reach gate), or nothing."""
+    """Classify the slot filled by one more Energy unit on this body or forward line.
+    Forward-line colorless slots require positive reach; typed slots do not."""
     counts = Counter(attached)
     gates = reach or {}
     for attack, evo_id in _line_entries(body_facts, ctx):
@@ -372,10 +371,8 @@ def best_payable_damage(attacker_facts, attached, defender_facts) -> int:
 
 
 def usable_units(body_facts, attached, ctx: EvaluationModel, reach=None) -> float:
-    """The largest attached-unit count any single attack absorbs — typed and colorless slots
-    for the body's own attacks; for the forward line's, typed in full and colorless scaled by
-    that evolution's reach gate (charging Staryu for Nebula Beam is real value exactly as far
-    as Mega Starmie is real)."""
+    """Return the largest attached-unit count one attack absorbs.
+    Forward-line colorless absorption scales by that evolution's reach gate."""
     counts = Counter(attached)
     total = sum(counts.values())
     if total == 0 or body_facts is None:
@@ -480,11 +477,8 @@ def _liveness(card_id, facts, demand: Demand, ctx: EvaluationModel, deck_counts)
 
 
 def _multi_provision_live(facts, body, ctx: EvaluationModel) -> bool:
-    """A special energy whose record provides several units to THIS body (Ignition's
-    `energy_provide` clause: one, or three on an evolution) reads fully live when the body can
-    absorb at least two of them at once — one card doing two basics' work. Bodies are read as
-    they stand: multi-provision on a future evolution is the speculative colorless value the
-    marginal model refuses to pay (module docstring)."""
+    """Return whether this body can absorb at least two units from one special Energy.
+    Ignore speculative multi-provision that only a future evolution could absorb."""
     body_facts = ctx.facts(body.card.card_id)
     if body_facts is None:
         return False

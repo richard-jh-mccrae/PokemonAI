@@ -172,7 +172,7 @@ _Avoid_: Activation, hidden term
 **Valuation Configuration**:
 The complete versioned coefficients applied to Valuation Features. A Deck Overlay changes
 coefficients but never extraction.
-_Avoid_: Pilot Profile, deck branch
+_Avoid_: legacy deck-profile names, deck branch
 
 **Deck Overlay**:
 Sparse residuals from our deck added to the general Valuation Configuration.

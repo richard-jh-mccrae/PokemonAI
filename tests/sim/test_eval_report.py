@@ -1,5 +1,4 @@
-"""Eval harness (tools/sim/eval_report, ADR-0053 WP2), engine-free. This is the contract G2 reads
-(C3 in docs/plans/ml/ml-training-contracts.md)."""
+"""Engine-free eval harness contract consumed by the G2 adoption gate (ADR-0053 WP2)."""
 import sys
 from pathlib import Path
 

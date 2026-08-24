@@ -118,17 +118,15 @@ census lesson). The notes are the gap-closing worklist.
 
 ---
 
-## 6. Runtime placement: replace Bellman now, keep it in tree
+## 6. Runtime placement: Ledger live, Bellman quarantined
 
 - The Ledger becomes the one live decide() path for all deck agents.
-- Bellman stays in the codebase, callable but unplugged: it is the phase-2 search skeleton and
-  the offline deep teacher ("preserve the deep teacher").
+- Bellman is quarantined under `deprecated/` as an offline teacher only. Future sequence search
+  belongs to the generic Search Algorithm.
 - **Rename first, own commit:** Bellman's `algebra.Ledger` class becomes `BellmanLedger` so the
   new system owns the name. Mechanical sweep across the kept code and tests.
 - No mid-match fallback to Bellman — mixed-brain training data was explicitly rejected.
-- Tests pinned to Bellman internals keep running against Bellman directly. Tests that pinned
-  "the agent's choice" through the live path are re-pointed or quarantined case by case in the
-  swap commit, since the live brain is now a different, initially untrained one.
+- Archived Bellman tests are historical evidence, not a current validation suite.
 
 ---
 

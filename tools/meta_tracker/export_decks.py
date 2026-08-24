@@ -2,10 +2,10 @@
 
 The meta-tracker owns the meta; this is its deck-export half. For each of the top-N
 Variant Clusters by play-rate it ships the cluster's Representative Build as a
-``deck.csv`` (sorted ids, deck-genie format) + ``deck.txt`` (Limitless render) under
+``deck.csv`` (sorted ids) + ``deck.txt`` (Limitless render) under
 ``data/meta/decks/<slug>/``, plus a ranked ``index.json`` menu carrying each cluster's
-``covers`` (member Archetype strings) so ``matchup-genie`` can stamp a Brief's ``covers:``
-list without re-deriving it. Standalone (reads the store, no scrape); the output is
+``covers`` (member Archetype strings) so downstream Brief authoring need not re-derive it.
+Standalone (reads the store, no scrape); the output is
 gitignored + regenerated. See CONTEXT.md → Variant Cluster / Representative Build.
 """
 from __future__ import annotations

@@ -122,9 +122,7 @@ def test_choice_takes_the_best_leg_for_us_and_the_worst_when_theirs():
 
 
 def test_reveal_choice_honors_its_actor_in_both_directions():
-    """The revealed set holds both continuations: we pick our best; the opponent, priced as
-    the chooser, picks OUR worst — pricing their reveal as if they helped us is the refuted
-    direction."""
+    """Our chooser takes our best continuation; theirs takes our worst."""
     good_swing, _, _ = price_of(Deterministic(GOOD))
     bad_swing, _, _ = price_of(Deterministic(BAD))
     choices = (Edge("good", Deterministic(GOOD)), Edge("bad", Deterministic(BAD)))

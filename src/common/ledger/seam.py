@@ -20,9 +20,8 @@ from common.observation.provider import ProviderState
 
 
 class PreviewState(ProviderState):
-    """Everything a preview node is ever asked for: the printout, the seat, the menu — plus,
-    on a ROOT, the deck knowledge the provider constructors determinize hidden zones from
-    (sourced from ObservationState, so the Ledger path builds no DecisionState at all)."""
+    """Preview printout, seat, menu, and root deck knowledge for hidden-zone determinization.
+    ObservationState supplies the root knowledge, avoiding DecisionState construction."""
 
     __slots__ = ("preview_key",)
 
@@ -80,9 +79,8 @@ def register_preview_variant(base: type, variant: type) -> None:
 
 
 def preview_provider_factory(factory):
-    """The Ledger's provider for a runtime-configured factory: registered engine seams map to
-    their preview variants; anything else (test doubles) is used as given, which is correct —
-    just slower, since its successors carry full DecisionStates."""
+    """Map registered engine factories to preview variants.
+    Preserve unregistered test doubles, whose successors may carry full DecisionStates."""
     if factory is None:
         return LedgerNativeProvider
     is_partial = isinstance(factory, partial)

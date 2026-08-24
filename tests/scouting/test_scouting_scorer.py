@@ -1,4 +1,4 @@
-"""Scouting recognition scorer: presence-only Naive Bayes posterior (docs/scouting.md)."""
+"""Scouting recognition scorer: presence-only Naive Bayes posterior."""
 import pytest
 
 from common.scouting.scorer import posterior

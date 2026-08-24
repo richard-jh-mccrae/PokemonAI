@@ -187,9 +187,8 @@ _OP_POSES = {
     "effectSwitchEnemy": {(int(SelectType.CARD), int(SelectContext.SWITCH))},
     "trashEnergyEnemy": {(int(SelectType.ENERGY), int(SelectContext.DISCARD_ENERGY))},
     "xHealMegaBounceEnergy": {(int(SelectType.CARD), int(SelectContext.HEAL))},
-    # Turbo Flare's rider asks for the Basic Energies before it asks where each one goes.  A live
-    # CABT observation carries a native (not cgpy) search token, so this first rider ask must be
-    # reconstructible from the attack definition before the public attack log is emitted.
+    # Turbo Flare asks for Basic Energies before targets. Native search tokens make that first ask
+    # reconstructible only from the attack definition, before its public attack log exists.
     "xDeckEnergyAttachDistribute": {(int(SelectType.CARD), int(SelectContext.ATTACH_TO))},
     "xDeckEvolveInPlayAndShuffle": {
         (int(SelectType.CARD), int(SelectContext.EVOLVES_TO)),
@@ -199,12 +198,8 @@ _OP_POSES = {
 
 
 def _reconstruct_effect_frame(gs: GameState, select: dict, seat: int, logs: list[dict]) -> None:
-    """Rebuild a first-ask EffectFrame when the opaque token is not a cgpy token.
-
-    The observation already reflects everything before the pending ask.  Trainer programs and an
-    attack rider whose posing op is its first stateful operation can therefore resume at that op
-    with empty vars.  Anything ambiguous still fails closed.
-    """
+    """Rebuild a first-ask EffectFrame from an observation carrying a native token.
+    Resume only an unambiguous first stateful posing operation; otherwise fail closed."""
     from .chain import def_for
     eff = gs.pending.effect_card
     if eff is None:
@@ -373,9 +368,8 @@ def state_from_obs(obs: dict,
             visible_serials.update(pokemon.tools)
         visible_serials.update(gs.stadium)
         visible_serials.update(gs.looking or ())
-        # Some multi-ask effects keep a card in its source deck while exposing it as contextCard
-        # for the next target ask (Salvatore: evolution, then Pokémon).  _ingest_pending has already
-        # registered that serial, so reserve its hidden deck slot instead of counting it as unseen.
+        # Multi-ask effects may expose a source-deck card as contextCard for the next target ask.
+        # Reserve the registered serial's hidden slot instead of counting it as unseen.
         reserved_deck = []
         context_card = gs.pending.context_card if gs.pending is not None else None
         if (not revealed_deck and context_card is not None and gs.owner(context_card) == seat

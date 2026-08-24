@@ -1,6 +1,6 @@
 """The records answer single-card interpretation questions (Stat Provider seam, ADR-0051).
 
-``CardStat``/``AttackStat`` carry the interpretation the Pilot used to re-derive from raw
+``CardStat``/``AttackStat`` carry the interpretation the retired decider derived from raw
 fields at 60+ call sites (the ex/megaEx prize ladder, ``cardType`` comparisons, the
 ``(minAttackCost or 99)`` affordability idiom). Both provider adapters hand out the same
 record classes, so a hand-built record in a test answers exactly like the engine path.
@@ -81,7 +81,7 @@ def test_can_pay_cheapest_is_the_fail_closed_affordability_idiom():
     assert not CardStat(678, synthetic=True, minAttackCost=0).can_pay_cheapest(4)
 
 
-# --- AttackStat determinism (ports Pilot._attack_is_deterministic) ----------------------
+# --- AttackStat determinism (ports the retired decider's interpretation) ----------------
 
 @pytest.mark.req("REQ-STAT-0001")
 def test_attack_is_deterministic_requires_fixed_bounds_and_no_scaling():

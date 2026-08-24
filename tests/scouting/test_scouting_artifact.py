@@ -1,4 +1,4 @@
-"""Artifact JSON loader: round-trip + fail-safe (docs/scouting.md)."""
+"""Artifact JSON loader: round-trip and fail-safe behavior."""
 import json
 
 import pytest

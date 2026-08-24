@@ -1,4 +1,4 @@
-"""Compile the shipped Scouting artifact from the meta store (see docs/scouting.md).
+"""Compile the shipped Scouting artifact from the meta store.
 
 Reads `data/meta/meta.db` + `cards.json` and writes
 `src/common/scouting/artifact.json`. Native-lib-free. Run after the daily
