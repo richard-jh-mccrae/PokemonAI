@@ -14,7 +14,7 @@ from .card_worth import (
 )
 from .declarations import BellmanDeclarations
 
-from common.algebra import BellmanLedger
+from .algebra import BellmanLedger
 from common.api import ActionIdentity
 from common.cards import card_store, play_clauses
 from common.cards.card_facts import BASIC_ENERGY, COLORLESS, EnergyCard, PokemonCard

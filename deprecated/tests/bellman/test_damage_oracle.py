@@ -7,7 +7,7 @@ from __future__ import annotations
 
 from common.cards.card_facts import (
     BASIC, Ability, Attack, Clause, FIGHTING, FIRE, PokemonCard, STAGE1, WATER)
-from common.cards.functions.damage import bench_reach, compute_active_damage, wr_adjust
+from deprecated.bellman.damage import bench_reach, compute_active_damage, wr_adjust
 
 
 def attack(damage=100, clauses=(), cost=(FIRE,)):

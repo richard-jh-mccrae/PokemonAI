@@ -1,10 +1,9 @@
-"""Immutable Bellman node and diagnostic algebra."""
+"""Immutable transition-result algebra shared by transition providers and consumers."""
 from __future__ import annotations
 
 from dataclasses import dataclass
 from enum import Enum
 import math
-from typing import Mapping
 
 
 PROBABILITY_MIN = 0.0
@@ -16,32 +15,6 @@ MINIMUM_CARD_ID = 1
 class Actor(str, Enum):
     OURS = "ours"
     OPPONENT = "opponent"
-
-
-@dataclass(frozen=True)
-class BellmanLedger:
-    benefits: tuple[tuple[str, float], ...] = ()
-    costs: tuple[tuple[str, float], ...] = ()
-    continuation: float = 0.0
-
-    def __post_init__(self) -> None:
-        values = [value for _key, value in self.benefits + self.costs]
-        values.append(self.continuation)
-        if any(not math.isfinite(float(value)) for value in values):
-            raise ValueError("ledger values must be finite")
-
-    @property
-    def immediate(self) -> float:
-        return sum(value for _key, value in self.benefits) - sum(value for _key, value in self.costs)
-
-    @property
-    def total(self) -> float:
-        return self.immediate + self.continuation
-
-    def as_dict(self) -> dict:
-        return {"benefits": dict(self.benefits), "costs": dict(self.costs),
-                "immediate": self.immediate, "continuation": self.continuation,
-                "total": self.total}
 
 
 @dataclass(frozen=True)
@@ -145,7 +118,6 @@ class Refresh:
 class Terminal:
     state: object
     result: str
-    ledger: BellmanLedger = BellmanLedger()
 
 
 @dataclass(frozen=True)
@@ -161,28 +133,7 @@ class Unknown:
 TransitionResult = Deterministic | Choice | Chance | RevealChoice | Refresh | Terminal | Unknown
 
 
-@dataclass(frozen=True)
-class ActionDiagnostic:
-    action_key: str
-    ledger: BellmanLedger
-    complete: bool
-    reason: str = ""
-    branches: tuple[Mapping, ...] = ()
-    decisions: float = 0.0
-
-
-@dataclass(frozen=True)
-class RootDiagnostics:
-    chosen_key: str
-    end: ActionDiagnostic
-    alternatives: tuple[ActionDiagnostic, ...]
-    nodes: int
-    cache_hits: int
-    stopped_reason: str
-
-
 __all__ = (
-    "ActionDiagnostic", "Actor", "Chance", "Choice", "Deterministic", "Edge", "BellmanLedger",
-    "Refresh", "RevealChoice", "RevealOutcome", "RootDiagnostics", "Terminal", "TransitionResult", "Unknown",
-    "WeightedEdge",
+    "Actor", "Chance", "Choice", "Deterministic", "Edge", "Refresh", "RevealChoice",
+    "RevealOutcome", "Terminal", "TransitionResult", "Unknown", "WeightedEdge",
 )

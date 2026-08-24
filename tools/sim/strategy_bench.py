@@ -121,7 +121,7 @@ def paired_telemetry_overhead(emitting, baseline) -> dict:
 
 
 def decision_metrics(records, *, match_index, contestants) -> list[dict]:
-    from common.telemetry import lethal_proof_seconds
+    from deprecated.bellman.telemetry import lethal_proof_seconds
 
     rows = []
     for record in records:

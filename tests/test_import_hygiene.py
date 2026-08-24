@@ -106,6 +106,20 @@ def test_no_live_source_imports_the_deprecated_quarantine():
         f"live source imports the deprecated quarantine — {offenders}")
 
 
+def test_bellman_only_surfaces_are_absent_from_live_source():
+    retired = re.compile(r"\b(?:" + "|".join((
+        "ActionDiagnostic", "BellmanLedger", "DrawClass", "OutcomeGroup", "RootDiagnostics",
+        "compute_active_damage", "hypergeometric_classes", "lethal_proof_seconds",
+        "name_in_family", "wr_adjust",
+    )) + r")\b")
+    offenders = []
+    for path in (REPO / "src").rglob("*.py"):
+        text = path.read_text(encoding="utf-8")
+        if retired.search(text):
+            offenders.append(path.relative_to(REPO).as_posix())
+    assert offenders == [], f"Bellman-only surfaces remain live — {offenders}"
+
+
 def test_observation_state_is_the_only_live_legal_view_surface():
     retired = re.compile(r"\b(?:common\.board|BoardState|LedgerContext|OpponentLayer)\b")
     enrichments = ("bellmanActor", "bellmanBeliefKey", "bellmanRecycledCardIds",

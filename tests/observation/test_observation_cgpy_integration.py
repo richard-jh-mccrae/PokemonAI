@@ -19,7 +19,6 @@ from cgpy.rng import SeededRng
 from common.observation import HiddenHand, ObservationState, VisibleHand
 from common.cards import card_store
 from common.cards.card_facts import WATER
-from common.cards.functions.damage import compute_active_damage
 from common.cards.functions.energy import (
     payment_fraction, provision_units, unmet_cost_slots)
 
@@ -92,14 +91,10 @@ def test_affordability_reads_straight_off_the_board_nodes():
     assert unmet_cost_slots(active.energies, jetting_blow.cost) == ((0, WATER),)
 
 
-def test_damage_prices_off_the_pinned_facts():
+def test_damage_facts_remain_on_observation_cards():
     board = build_observation(_obs(_rich_state(), 0))
-    attacker = card_store()[board.me.active.card.card_id]
     defender = card_store()[board.them.active.card.card_id]
-    attacks = {attack.attack_id: attack for attack in attacker.attacks}
     assert defender.weakness == WATER
-    assert compute_active_damage(attacks[1487], attacker, defender) == 240   # 120 doubled
-    assert compute_active_damage(attacks[1488], attacker, defender) == 210   # pierces W/R
 
 
 def _deck(agent):

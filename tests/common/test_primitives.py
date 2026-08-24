@@ -1,16 +1,11 @@
 from __future__ import annotations
 
-import json
-
-from common import RootDecision
 from deprecated.bellman.state import DecisionState
 from common.option_equivalence import (
     class_representatives, fan_out, fingerprint_source_card_id, option_in_play_source_id,
     option_source_card, semantic_option_fingerprint,
 )
 from common.strategy import Roles
-from deprecated.bellman.telemetry import to_record
-from common.observation import ObservationStateBuilder
 from observation_helpers import engine_opt
 
 
@@ -101,46 +96,6 @@ def test_fingerprint_source_card_id_reads_the_embedded_reference():
     assert fingerprint_source_card_id("not json", IN_PLAY_FRAME) is None
 
 
-def test_telemetry_exposes_only_the_bellman_decision_contract():
-    decision = RootDecision((2,), None, 3.5, True, {"backend": "test"})
-    record = to_record(decision)
-    assert record == {
-        "bellman": True, "chosen": [2], "action": None, "value": 3.5,
-        "complete": True, "diagnostics": {"backend": "test"}, "belief": None,
-    }
-
-
-def test_telemetry_records_whole_decision_duration():
-    decision = RootDecision((2,), None, 3.5, True, {"backend": "test"})
-
-    record = to_record(decision, decision_seconds=0.125)
-
-    assert record["decision_seconds"] == 0.125
-
-
-def test_telemetry_persists_the_versioned_observation_record():
-    state = ObservationStateBuilder().root({
-        "select": None, "logs": [], "current": {
-            "yourIndex": 0, "turn": 1, "firstPlayer": 0, "supporterPlayed": False,
-            "stadiumPlayed": False, "energyAttached": False, "retreated": False,
-            "result": None, "stadium": [], "looking": None, "players": [
-                {"active": [], "bench": [], "hand": [], "handCount": 0,
-                 "discard": [], "prize": [], "deckCount": 0, "benchMax": 5,
-                 "poisoned": False, "burned": False, "asleep": False,
-                 "paralyzed": False, "confused": False},
-                {"active": [], "bench": [], "hand": None, "handCount": 0,
-                 "discard": [], "prize": [], "deckCount": 0, "benchMax": 5,
-                 "poisoned": False, "burned": False, "asleep": False,
-                 "paralyzed": False, "confused": False}],
-        }})
-    decision = RootDecision((0,), None, 0.0, True, {})
-
-    record = to_record(decision, state=state)
-
-    assert record["observation_record"]["schema_version"] == 1
-    assert record["observation_record"]["payload"]["$type"] == "ObservationState"
-
-
 def test_search_session_resume_blob_is_not_part_of_plan_suffix_identity():
     observation = {"current": {"yourIndex": 0, "players": []}, "search_begin_input": "opaque"}
     without_blob = {"current": {"yourIndex": 0, "players": []}}
@@ -150,36 +105,3 @@ def test_search_session_resume_blob_is_not_part_of_plan_suffix_identity():
 
     assert with_blob.semantic_key != without_blob.semantic_key
     assert with_blob.plan_key == without_blob.plan_key
-
-
-def test_live_telemetry_compacts_production_evidence():
-    candidate = {
-        "action": "ActionIdentity(kind='attach', parts=('" + "x" * 10_000 + "',))",
-        "family": "attachment", "features": {"ready": 1.0},
-        "contributions": {"ready": 2.5}, "score": 2.5, "gap": 0.0,
-        "wave": 0, "status": "leader", "shadow": True,
-    }
-    decision = RootDecision((2,), None, 3.5, True, {
-        "backend": "test",
-        "root": {"chosen_key": candidate["action"], "nodes": 12, "cache_hits": 3,
-                 "stopped_reason": "complete", "alternatives": [candidate] * 20},
-        "production": {"family_candidates": [candidate], "structural_prunes": [{
-            "proof_type": "commutativity", "pruned": candidate["action"],
-            "retained_event": "attach:active",
-        }]},
-    })
-
-    record = to_record(decision, compact=True)
-    evidence = record["diagnostics"]["production"]["family_candidates"]
-
-    assert len(json.dumps(record)) < 2_000
-    assert evidence == [{
-        "action_key": evidence[0]["action_key"], "family": "attachment",
-        "features": {"ready": 1.0}, "contributions": {"ready": 2.5},
-        "score": 2.5, "gap": 0.0, "wave": 0, "status": "leader", "shadow": True,
-    }]
-    assert len(evidence[0]["action_key"]) == 20
-    assert record["diagnostics"]["production"]["structural_prunes"] == [{
-        "proof_type": "commutativity", "retained_event": "attach:active",
-        "pruned_key": evidence[0]["action_key"],
-    }]

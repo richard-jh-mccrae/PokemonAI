@@ -11,7 +11,6 @@ from common import (
     Chance,
     Choice,
     Deterministic,
-    BellmanLedger,
     Refresh,
     Terminal,
     Unknown,
@@ -57,7 +56,7 @@ def test_belief_mass_and_node_algebra_are_explicit():
     with pytest.raises(ValueError, match="sum"):
         Chance((WeightedEdge(0.4, "heads", deterministic),))
     assert Unknown("unsupported", "card clause").missing_fact == "card clause"
-    assert Terminal(state, "end", BellmanLedger()).ledger.total == 0.0
+    assert Terminal(state, "end").result == "end"
     refresh = Refresh(900, ((5, 3), (3, 5)), True)
     assert refresh.draws == ((5, 3), (3, 5))
     assert not hasattr(refresh, "state")
