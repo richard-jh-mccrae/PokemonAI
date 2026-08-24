@@ -5,9 +5,10 @@ import copy
 from collections import Counter
 from math import sqrt
 
-from common.algebra import BellmanLedger, Refresh
+from common.algebra import Refresh
 from common.cards import card_store
 
+from .algebra import BellmanLedger
 from .demand import DemandModel, access_probability
 from .value import KNOWN_CARD_FLOOR, held_card_worth, worth_to_prizes
 

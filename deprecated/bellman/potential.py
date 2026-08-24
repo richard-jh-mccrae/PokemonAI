@@ -15,7 +15,7 @@ from common.cards.functions.attack_lock import locked_attack_ids
 from .card_worth import KNOWN_CARD_FLOOR, function_role
 from common.cards.functions.energy import ENERGY_COLORLESS, payment_fraction, provision_units
 from .belief import BellmanDeckProfile
-from common.cards.functions.damage import bench_reach, compute_active_damage
+from .damage import bench_reach, compute_active_damage
 from .damage_context import SideFacts, damage_context
 from common.strategy.context import _DAMAGE, _TO_ACTIVE
 from .value import Potential, ValueRegistry, worth_to_prizes

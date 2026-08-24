@@ -911,18 +911,6 @@ def parse_lines(lines) -> list[dict]:
     return records
 
 
-def lethal_proof_seconds(record: dict | None) -> float | None:
-    if not isinstance(record, dict):
-        return None
-    proof = ((record.get("diagnostics") or {}).get("terminal_proof") or {})
-    value = proof.get("elapsed_ms")
-    if proof.get("attempted") is not True or isinstance(value, bool) \
-            or not isinstance(value, (int, float)):
-        return None
-    seconds = float(value) / 1000.0
-    return seconds if math.isfinite(seconds) and seconds >= 0.0 else None
-
-
 def _build_emission(decision, opponent, seat, state, decision_seconds,
                     decision_limit_seconds, deadline_hit, evaluation_model,
                     compute_configuration, provenance, link) -> dict:
@@ -1016,6 +1004,6 @@ __all__ = [
     "MAX_FRAME_BYTES", "RecordAssembler", "TAG", "TelemetrySession",
     "build_decision_record", "build_outcome_record", "build_pregame_record",
     "capture_records", "emit", "episode_context", "flush", "frame_record",
-    "lethal_proof_seconds", "migrate_record", "runtime_provenance", "take_caller_seconds",
+    "migrate_record", "runtime_provenance", "take_caller_seconds",
     "validate_record",
 ]

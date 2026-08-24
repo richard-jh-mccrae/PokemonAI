@@ -11,7 +11,8 @@ import math
 import re
 from pathlib import Path
 
-from common.telemetry import lethal_proof_seconds, parse_lines
+from common.telemetry import parse_lines
+from deprecated.bellman.telemetry import lethal_proof_seconds
 
 from .decisions import iter_decisions
 
@@ -142,7 +143,7 @@ def _record_matches(record: dict, decision) -> bool:
                 and (record.get("decision") or {}).get("selection") == decision.chosen)
     if record.get("chosen") != decision.chosen:
         return False
-    if not record.get("bellman") and record.get("schema") not in {"bellman", "setup"} \
+    if not record.get("bellman") and record.get("schema") not in {"bellman", "ledger", "setup"} \
             and len(record.get("opts", [])) != len(decision.options):
         return False
     return True

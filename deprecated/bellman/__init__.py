@@ -4,6 +4,12 @@ Re-exports the surface `src/common/__init__.py` used to carry for these modules,
 teacher-side consumer rewrites `from common import X` to `from deprecated.bellman import X`.
 """
 
+from common.algebra import (Actor, Chance, Choice, Deterministic, Edge, Refresh, RevealChoice,
+                            RevealOutcome, Unknown, WeightedEdge)
+from common.api import ActionIdentity
+from common.options import enumerate_legal_actions
+
+from .algebra import ActionDiagnostic, BellmanLedger, RootDiagnostics, Terminal
 from .belief import BellmanDeckProfile, opponent_belief
 from .budget_prototype import DecisionClock, FairBudgetPrototype
 from .contracts import (END_VALUE, BellmanPlanner, BellmanUnavailable, PlanRequest, PlanStep,
@@ -37,15 +43,18 @@ from .terminal import ProofStep, TerminalLimits, TerminalProof, TerminalProver
 from .value import CardFacts, Potential, ValueOracle, ValueRegistry, WorthSeeds
 
 __all__ = (
-    "ActionFocus", "BellmanCgpyProvider", "BellmanDeckProfile", "BellmanNativeProvider",
+    "ActionDiagnostic", "ActionFocus", "ActionIdentity", "Actor", "BellmanCgpyProvider",
+    "BellmanDeckProfile", "BellmanLedger", "BellmanNativeProvider",
     "BellmanTeacherRuntime", "BellmanTurnPlanner", "BoardPotential", "CardFacts",
-    "CoverageEdge", "DEFAULT_PILOT_PROFILE", "DEFINITIONS", "DecisionClock", "DemandModel",
+    "Chance", "Choice", "CoverageEdge", "DEFAULT_PILOT_PROFILE", "DEFINITIONS",
+    "DecisionClock", "DemandModel", "Deterministic", "Edge",
     "DecisionState", "DemandSlot", "FairBudgetPrototype", "OpponentBelief", "PilotProfile", "Potential", "ProductionLimits",
-    "ProductionSolver", "ProofStep", "ReferenceSolver", "RefreshEvaluator",
+    "ProductionSolver", "ProofStep", "ReferenceSolver", "Refresh", "RefreshEvaluator",
+    "RevealChoice", "RevealOutcome", "RootDiagnostics",
     "ResolvedAssignment", "RetainedAssignment", "RetainedOption", "SearchLimits",
-    "StrategyBeam", "TerminalLimits", "TerminalProof", "TerminalProver",
+    "StrategyBeam", "Terminal", "TerminalLimits", "TerminalProof", "TerminalProver",
     "TransitionProvider", "TurnBudgets", "UtilityScale", "ValueOracle", "ValueRegistry", "WorthSeeds",
     "access_probability", "bellman_provider_factory", "build_teacher_runtime",
-    "opponent_belief", "END_VALUE", "BellmanPlanner", "BellmanUnavailable", "PlanRequest",
-    "PlanStep", "RootDecision",
+    "enumerate_legal_actions", "opponent_belief", "END_VALUE", "BellmanPlanner",
+    "BellmanUnavailable", "PlanRequest", "PlanStep", "RootDecision", "Unknown", "WeightedEdge",
 )

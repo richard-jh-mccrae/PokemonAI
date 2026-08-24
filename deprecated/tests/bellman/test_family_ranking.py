@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from types import SimpleNamespace
 
-from common import ActionIdentity, Deterministic, BellmanLedger
+from deprecated.bellman import ActionIdentity, BellmanLedger, Deterministic
 from deprecated.bellman.family_ranking import apply_family_ordering, rank_actions
 from common.options import LegalAction
 from deprecated.bellman.pilot_profile import PilotProfile

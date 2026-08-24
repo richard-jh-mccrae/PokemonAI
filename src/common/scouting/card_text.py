@@ -26,16 +26,6 @@ def normalize_card_name(name: str) -> str:
     return " ".join((name or "").translate(_APOSTROPHES).split())
 
 
-def name_in_family(name: str | None, family: str | None) -> bool:
-    """True when ``family`` is None; else a normalised PREFIX test — the owner prefix IS part of the
-    printed card name (``docs/rules.md`` §9). Unknown name against a real gate is False: fail-CLOSED."""
-    if not family:
-        return True
-    if not name:
-        return False
-    return normalize_card_name(name).startswith(normalize_card_name(family) + " ")
-
-
 def _parse_tool_holder_family(card) -> str | None:
     """The owner family a Tool restricts its modifiers to; ONE parse per card, whatever the modifier."""
     for text in _skill_texts(card):

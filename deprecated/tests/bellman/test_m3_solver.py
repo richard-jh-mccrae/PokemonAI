@@ -6,7 +6,7 @@ from types import SimpleNamespace
 
 import pytest
 
-from common import (
+from deprecated.bellman import (
     ActionIdentity,
     Actor,
     Chance,

@@ -4,7 +4,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 import math
 
-from common.algebra import BellmanLedger
+from .algebra import BellmanLedger
 from .pilot_profile import PilotProfile
 
 

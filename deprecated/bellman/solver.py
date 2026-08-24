@@ -8,10 +8,9 @@ import sys
 from time import monotonic
 from typing import Protocol
 
-from common.algebra import (
-    ActionDiagnostic, Actor, Chance, Choice, Deterministic, BellmanLedger, Refresh, RevealChoice,
-    RootDiagnostics, Terminal, Unknown,
-)
+from common.algebra import (Actor, Chance, Choice, Deterministic, Refresh, RevealChoice,
+                            Terminal, Unknown)
+from .algebra import ActionDiagnostic, BellmanLedger, RootDiagnostics
 from .contracts import PlanStep, RootDecision
 from .budget_prototype import FairBudgetPrototype
 from .commutativity import ActionFootprint, independent
@@ -119,6 +118,10 @@ class SleepEvent:
 def _combine(base: BellmanLedger, continuation: float, extra: BellmanLedger = BellmanLedger()) -> BellmanLedger:
     return BellmanLedger(base.benefits + extra.benefits, base.costs + extra.costs,
                   base.continuation + extra.immediate + float(continuation))
+
+
+def _terminal_ledger(node: Terminal) -> BellmanLedger:
+    return getattr(node, "ledger", BellmanLedger())
 
 
 def _ordered_evaluation(result: Evaluation, actor: Actor) -> tuple[float, bool, float]:
@@ -383,7 +386,8 @@ class ReferenceSolver:
             return Evaluation(ledger.total, ledger, True, "End resolved", decisions=1.0,
                               execution_complete=True)
         if isinstance(node, Terminal):
-            ledger = _combine(self._ledger(before, node.state, action), 0.0, node.ledger)
+            ledger = _combine(self._ledger(before, node.state, action), 0.0,
+                              _terminal_ledger(node))
             return Evaluation(ledger.total, ledger, True, node.result, decisions=1.0,
                               execution_complete=True)
         if isinstance(node, Chance):
@@ -417,7 +421,7 @@ class ReferenceSolver:
                               execution_complete=continuation.evaluation.execution_complete)
         if isinstance(node, Terminal):
             base = self._ledger(before, node.state, action)
-            ledger = _combine(base, 0.0, node.ledger)
+            ledger = _combine(base, 0.0, _terminal_ledger(node))
             return Evaluation(ledger.total, ledger, True, node.result, decisions=1.0,
                               execution_complete=True)
         if isinstance(node, Choice):
@@ -1235,7 +1239,7 @@ class ProductionSolver(ReferenceSolver):
             return self._ledger(state, node.state, action).immediate
         if isinstance(node, Terminal):
             return _combine(self._ledger(state, node.state, action), 0.0,
-                            node.ledger).immediate
+                            _terminal_ledger(node)).immediate
         return -math.inf
 
     @staticmethod
@@ -1388,7 +1392,8 @@ class ProductionSolver(ReferenceSolver):
         if isinstance(node, Refresh):
             return math.inf, {"unknown": "analytic refresh"}
         if isinstance(node, Terminal):
-            ledger = _combine(self._ledger(before, node.state, action), 0.0, node.ledger)
+            ledger = _combine(self._ledger(before, node.state, action), 0.0,
+                              _terminal_ledger(node))
             return ledger.total, {"delta_v_upper": ledger.total, "continuation": 0.0,
                                   "reachable_upper": 0.0}
         if isinstance(node, Deterministic):

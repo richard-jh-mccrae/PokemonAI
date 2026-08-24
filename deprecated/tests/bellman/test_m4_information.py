@@ -5,7 +5,7 @@ from math import comb
 
 import pytest
 
-from common import (
+from deprecated.bellman import (
     ActionIdentity,
     Actor,
     Chance,
@@ -18,7 +18,8 @@ from common import (
 from deprecated.bellman.state import DecisionState
 from deprecated.bellman import ReferenceSolver
 from common.algebra import WeightedEdge
-from common.information import OutcomeGroup, draw_outcomes, hypergeometric_classes
+from common.information import draw_outcomes
+from deprecated.bellman.information import OutcomeGroup, hypergeometric_classes
 from deprecated.bellman.belief import BellmanDeckProfile, opponent_belief
 from common.options import LegalAction
 from common.native_engine import _own_hidden_zones, _stratified_order

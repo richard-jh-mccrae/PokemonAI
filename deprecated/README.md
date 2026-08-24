@@ -7,7 +7,8 @@ rounds retire it — but the dependency is one-way: this tree may import `src/`,
 
 ## Layout
 
-- `bellman/`: the search brain, its value stack, and its canonical `state.py` (DecisionState).
+- `bellman/`: the search brain, its value stack, Bellman algebra, damage/information helpers,
+  card-family matching, telemetry compatibility, and canonical `state.py` (DecisionState).
   `runtime.BellmanTeacherRuntime`
   extends the live `common.runtime.AgentRuntime`; `build_teacher_runtime(...)` is the drop-in
   for the old `build_runtime(..., brain="bellman")`. `providers.py` restores the search-only

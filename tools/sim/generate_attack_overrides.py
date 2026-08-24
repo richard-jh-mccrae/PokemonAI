@@ -286,7 +286,7 @@ def _scaler(recs: list[dict], st) -> tuple[dict, list[dict]]:
 
 def _apply_rules(recs: list[dict], st, text: str = "") -> tuple[dict, list[dict]]:
     """Rules against one attack -> ``(delta, records that establish it)``. A bound may not ship for
-    an attack with a scaler: `compute_active_damage` REPLACES the base, so both counts it twice."""
+    an attack with a scaler: the legacy evaluator replaces the base, so both counts it twice."""
     bound, bound_ev = _coin_bounds(recs, st)
     fixed, fixed_ev = _fixed_damage(recs, st, text)
     scaler, scaler_ev = _scaler(recs, st)

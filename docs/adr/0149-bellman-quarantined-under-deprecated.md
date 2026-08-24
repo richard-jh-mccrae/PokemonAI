@@ -20,8 +20,9 @@ one-way: `deprecated/` may ride `src/`, never the reverse.
   checkout file and fails if `src/` or `tools/submit/` imports `deprecated`.
 - **`deprecated/bellman/`** holds the moved brain (solver, planner, demand, potential, value,
   value_equations, family_ranking, terminal, commutativity, transition_value, pilot_profile,
-  budget_prototype, DecisionState, the strategy activation engine, the refresh evaluator, deck
-  beliefs, dragapult's potential subclass) and re-exports the surface `common/__init__.py`
+  budget_prototype, DecisionState, the strategy activation engine, the refresh evaluator, Bellman
+  algebra, damage/information helpers, telemetry compatibility, deck beliefs, dragapult's potential
+  subclass) and re-exports the surface `common/__init__.py`
   used to carry for it. What stays in `src/common` outside cards/board/ledger is exactly the
   live agent's dependency set plus the offline engine twin the Ledger corpus and its tests run
   on (`engine.py`, `information.py`) and the scouting layer PR #576 wires into the Ledger.
@@ -38,8 +39,8 @@ one-way: `deprecated/` may ride `src/`, never the reverse.
   `terminal_action_supported` for the same reason.
 - **Splits at the seam**: `refresh.py` keeps the printed-counts `Refresh` transition (the Ledger
   prices those nodes); the Bellman valuation became `refresh_evaluator.py`. `information.py`
-  keeps the exact draw/reveal outcome classes (the offline provider's chance modelling); deck
-  profiles and opponent beliefs became `belief.py`; the strategy declaration/activation catalog
+  keeps provider draw/reveal outcomes; Bellman demand-count classes moved with their sole consumer;
+  deck profiles and opponent beliefs became `belief.py`; the strategy declaration/activation catalog
   was deleted once the Ledger became the live decider. `state.py` (DecisionState, the providers'
   canonical-state build) moved whole: the live path
   constructs none (ADR-0146's pin) and both providers are duck-typed over the state shape, so

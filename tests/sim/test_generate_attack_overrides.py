@@ -147,7 +147,7 @@ def test_the_same_board_reached_by_two_plans_is_ONE_board():
 
 @pytest.mark.req("REQ-AUDIT-0014")
 def test_a_measured_bound_never_ships_beside_a_FITTED_scaler():
-    """`compute_active_damage` REPLACES the base with the bound, then adds `scalePerUnit x count` —
+    """The legacy evaluator REPLACES the base with the bound, then adds `scalePerUnit x count` —
     so a bound measured where the scaler contributes adds that contribution twice."""
     parsed = {923: AttackStat(attackId=923, damage=60)}
     recs = _bench_axis(923, 60, per_atk=20, per_def=20)

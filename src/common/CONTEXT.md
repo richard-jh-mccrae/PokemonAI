@@ -359,14 +359,15 @@ The live decision path:
   events, and parent-relative delta;
 - `cards/`: the unified card store — one record module per card, carrying typed clauses,
   coverage verdicts, and engine stat corrections (ADR-0143/0153) — and the per-function
-  mechanics (`fetch.py`, `draw.py`, `damage.py`, `energy.py`, `attack_lock.py`);
+  mechanics (`fetch.py`, `draw.py`, `energy.py`, `attack_lock.py`) and live bench reach in
+  `damage.py`;
 - `native_engine.py`: the production `cg` transition provider — forks the engine, enumerates and
   applies actions, never ranks; unknown zones use low-discrepancy identity spacing so the
   deployment world cannot inherit numeric-id ordering as fake draw knowledge;
 - `engine.py`: offline cgpy twin of the provider, excluded from submissions;
 - `refresh.py`: the printed-counts shuffle-refresh transition both providers emit and the Ledger
   prices analytically;
-- `information.py`: exact hypergeometric draw/reveal outcome classes for the offline provider;
+- `information.py`: exact draw/reveal outcomes for the offline provider;
 - `algebra.py`, `api.py`, `options.py`: the transition algebra, decision contracts, and
   legal-action construction (the providers' old DecisionState moved to the quarantine — the live
   path builds none, pinned in `tests/ledger`).

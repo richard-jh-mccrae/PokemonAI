@@ -1,9 +1,10 @@
-"""Diagnostic-only serializer for quarantined Bellman teacher records."""
+"""Diagnostic-only serializer and timing helpers for quarantined Bellman records."""
 from __future__ import annotations
 
 import dataclasses
 import hashlib
 import json
+import math
 
 
 def _wire(value):
@@ -16,6 +17,18 @@ def _wire(value):
     if hasattr(value, "value"):
         return _wire(value.value)
     return value
+
+
+def lethal_proof_seconds(record: dict | None) -> float | None:
+    if not isinstance(record, dict):
+        return None
+    proof = ((record.get("diagnostics") or {}).get("terminal_proof") or {})
+    value = proof.get("elapsed_ms")
+    if proof.get("attempted") is not True or isinstance(value, bool) \
+            or not isinstance(value, (int, float)):
+        return None
+    seconds = float(value) / 1000.0
+    return seconds if math.isfinite(seconds) and seconds >= 0.0 else None
 
 
 def _action_key(value) -> str:
@@ -89,4 +102,4 @@ def to_record(decision, *, opponent=None, seat=None, compact=False, state=None,
     return record
 
 
-__all__ = ("to_record",)
+__all__ = ("lethal_proof_seconds", "to_record")
