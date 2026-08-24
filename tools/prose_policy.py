@@ -24,6 +24,11 @@ RETIRED_IDENTIFIERS = (
     "matchup-genie",
     "update-strategy",
 )
+RETIRED_CLAIMS = (
+    re.compile(r"Bellman stays in the codebase", re.IGNORECASE),
+    re.compile(r"Bellman[^\n]*(?:callable|live search|search skeleton)", re.IGNORECASE),
+    re.compile(r"tests? pinned to Bellman[^\n]*(?:keep|still) running", re.IGNORECASE),
+)
 EXCLUDED_PREFIXES = ("deprecated/", "src/cg/")
 EXCLUDED_FILES = ("docs/plans/ledger-corpus-dashboard.md",)
 
@@ -126,6 +131,9 @@ def scan_text(path: str, text: str) -> list[Violation]:
             for retired in RETIRED_IDENTIFIERS:
                 if re.search(rf"(?<![\w-]){re.escape(retired)}(?![\w-])", value):
                     violations.append(Violation(path, line, "retired identifier", retired))
+            for claim in RETIRED_CLAIMS:
+                if claim.search(value):
+                    violations.append(Violation(path, line, "retired claim", claim.pattern))
         for match in (() if path == "docs/adr/README.md" else _PATH.finditer(value)):
             target = match.group(0)
             if not _path_resolves(target):

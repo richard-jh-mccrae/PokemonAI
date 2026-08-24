@@ -16,8 +16,7 @@ its number (2026-07-14):
 | 0033 | **0058** | the Arena (0033 stays the **transient-effect tracker**) |
 | 0050 | **0059** | the cgpy engine twin (0050 stays **multi-step lethal verification**) |
 
-`0050-glossary.md` is *not* an ADR — it is the companion vocabulary doc for ADR-0050 (lethal
-verification), and its filename prefix is correct.
+The retired `0050-glossary.md` was a companion vocabulary doc for ADR-0050, not an ADR.
 
 *(**0106 was SKIPPED deliberately, not lost, and then landed anyway — as the OTHER branch's ADR.**
 Issue #313 item 2g's ADR took **0107** on 2026-08-02: a disk scan of the rebased branch said 0106

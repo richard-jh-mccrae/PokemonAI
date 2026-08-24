@@ -23,9 +23,7 @@ def test_option_equivalence_helpers_preserve_the_best_member():
     assert fan_out([5.0, 10.0, None, 7.0], classes) == [5.0, 10.0, None, 10.0]
 
 
-#: A main-menu Play exactly as `cg.game` emits it: EVERY field present, unused ones ``None``. A
-#: hand-written ``{"type": 7, "index": 1}`` omits `area` and so exercises a shape the engine never
-#: produces — the gap that let `option_source_card` return None for every real Play.
+#: A real main-menu Play shape; omitted fields once masked `option_source_card` failures.
 ENGINE_PLAY_OPTION = {
     "area": None, "attackId": None, "cardId": None, "count": None, "energyIndex": None,
     "inPlayArea": None, "inPlayIndex": None, "index": 1, "number": None, "playerIndex": None,

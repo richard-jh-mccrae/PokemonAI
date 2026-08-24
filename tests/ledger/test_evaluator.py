@@ -79,9 +79,7 @@ def test_fire_energy_on_bare_dragapult_is_positive():
 
 
 def test_dark_energy_on_bare_dreepy_is_negative_once_its_line_is_gone():
-    """Dreepy's own attacks cost Psychic and Fire+Psychic — no colorless slot. Dragapult's
-    one-colorless Jet Headbutt could someday take the dark, so the reach gate must be CLOSED
-    (no evolution left anywhere) for the unit to be unusable even speculatively."""
+    """Close evolution reach so Dark Energy has no speculative colorless slot."""
     no_line = [DARK_E] * 10                      # a decklist holding no Drakloak or Dragapult
     before = board(me=player(active=body(DREEPY, 1), hand=[DARK_E]), decklist=no_line)
     after = board(me=player(active=body(DREEPY, 1, energies=(DARKNESS,)), hand=[]),
@@ -161,10 +159,7 @@ def test_benching_the_wincon_basic_is_positive_even_on_the_last_slot():
 
 
 def test_benching_a_duplicate_of_a_fielded_body_on_the_last_slot_is_negative():
-    """Every basic in the store carries a Role, so 'redundant' means DUPLICATED: three
-    Makuhita already field the backup-attacker job; a fourth on the last slot is refused.
-    Pinned with size-as-worth zeroed: the armed hp_value default pays bulk for any body,
-    which at 0.2 offsets this refusal — the surplus/last-slot mechanism itself must hold."""
+    """Zero HP worth to isolate duplicate-role refusal on the last bench slot."""
     context = ctx(overrides={"body.hp_per_100": 0.0})
     filler = [body(MAKUHITA, 10 + i) for i in range(3)] + [body(LUNATONE, 14)]
     before = board(me=player(active=body(DRAGAPULT, 1), bench=filler, hand=[MAKUHITA]))
@@ -193,10 +188,7 @@ def test_evolution_in_hand_prices_higher_with_its_base_in_play():
 
 
 def test_the_pair_in_hand_outprices_either_alone():
-    """Drakloak's marginal worth is higher when Dreepy shares the hand — the nonlinearity the
-    sampled-hand chance model feeds on (plan §1). The margin is the point: without the pair
-    term the two marginals are equal to within float noise, and a bare `>` would pass on one
-    ULP (the ADR-0128 lesson)."""
+    """Demand a margin because a bare comparison can pass on float noise; see ADR-0128."""
     context = ctx()
 
     def value(hand):
@@ -338,9 +330,7 @@ def test_a_zero_max_hp_body_prices_as_intact():
 # --- demand branches: colorless-only, bench-full basics, surplus, fetch vocabulary ---
 
 def test_colorless_only_energy_prices_between_dead_and_typed():
-    """The same dark energy in hand: nothing on a line-gone Dreepy, a colorless slot on Mega
-    Starmie's Nebula Beam, and a typed slot is worth the most of the three. The dead leg pins
-    its decklist so the reach gate is truly closed, not merely unknown."""
+    """Pin the dead decklist so reach is closed rather than unknown."""
     context = ctx()
     no_line = [DARK_E] * 10
     dead = evaluate(board(me=player(active=body(DREEPY, 1), hand=[DARK_E]),
@@ -437,12 +427,7 @@ def test_body_played_this_turn_retains_next_turn_but_not_current_reach():
 # --- Ignition: the multi-unit provision clause read at the demand seam ---
 
 def test_ignition_reads_fully_live_beside_a_multi_slot_evolution():
-    """Mega Starmie's Nebula Beam has three colorless slots and Ignition provides three units
-    on an evolution: one card doing three basics' work is fully live, not colorless-discounted.
-    Dragapult ex is the control — also an evolution with a colorless slot, but only ONE, so
-    the multi-provision read must not fire there. The special-energy worth is pinned here so
-    the MECHANISM stays testable while the tuning rounds move the general default — the
-    asserted margins scale with that worth."""
+    """Pin special-Energy worth to isolate multi-provision from a one-slot control."""
     context = ctx(overrides={"kind.special_energy": 0.10})
     beside_mega = evaluate(board(me=player(active=body(MEGA_STARMIE, 1), hand=[IGNITION])),
                            context)
@@ -455,9 +440,7 @@ def test_ignition_reads_fully_live_beside_a_multi_slot_evolution():
 
 
 def test_concentration_prefers_finishing_the_started_twin():
-    """ADR-0150: with the lever armed (the 2026-08-21 default), 2-and-0 across twin attackers
-    out-values 1-and-1 — the second energy toward Nebula Beam's three slots beats the first on
-    a fresh body. Zeroed, the term is off and the splits price identically."""
+    """ADR-0150: armed concentration prefers 2–0; zeroed concentration ties 1–1."""
     def split(started_units, bare_units):
         return board(me=player(
             active=body(STARYU, 9),
@@ -494,10 +477,7 @@ def test_rental_energy_on_the_bench_prices_zero():
 
 
 def test_hp_value_makes_the_evolve_pay_for_its_hand_card():
-    """ADR-0151: evolving reads NEGATIVE at defaults (the hand pays full worth while the
-    board credits role parity — the diagnosed evolution underpricing); with size priced,
-    the 260-HP jump out-pays the spend. The armed default (0.2, 2026-08-21) must keep
-    the cure; the zeroed control documents the disease."""
+    """ADR-0151: compare armed HP pricing with a zeroed underpricing control."""
     before = board(me=player(active=body(DRAGAPULT, 9),
                              bench=[body(STARYU, 1, hp=70, max_hp=70)],
                              hand=[MEGA_STARMIE]))
@@ -525,9 +505,7 @@ def test_hp_value_prices_chip_damage_and_unknown_threats():
 
 
 def test_doomed_active_discount_prices_the_killable_active_as_spent():
-    """ADR-0152: an opponent active OUR paid-up active can KO outright is mostly spent — so
-    gusting up the killable body beats gusting up the safe one. Weakness doubles the reach:
-    Mega Starmie's 120 covers a 160 HP Cinderace only through its {W} weakness. 0.0 = off."""
+    """ADR-0152: weakness makes Cinderace killable; zero disables doom discount."""
     def against(defender):
         # Our active sits at full 330 so the conservative incoming read (their side's
         # projected attach + evolution) never dooms US — this test isolates THEIR side.
@@ -565,9 +543,7 @@ def test_our_doomed_read_uses_only_currently_payable_damage():
 
 
 def test_usable_energy_on_our_doomed_active_is_ammunition_not_investment():
-    """The d98fc4c74107 ruling: a doomed active converts usable Energy into damage this very
-    turn, so the doom discount spares that Energy — attaching to the doomed carrier prices
-    the same swing armed or not, while the body itself still reads mostly spent."""
+    """Ruling d98fc4c74107: usable Energy on a doomed active remains ammunition."""
     def ours(energies):
         return board(me=player(active=body(MEGA_STARMIE, 1, hp=150, max_hp=330,
                                            energies=energies)),

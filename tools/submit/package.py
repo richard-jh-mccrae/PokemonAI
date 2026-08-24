@@ -72,9 +72,7 @@ def artifact_stem(name: str, *, when: datetime | None = None, git_hash: str | No
 def package(name: str, dist: Path, *, agents_root: Path | None = None, stamp: bool = True,
             prev_deck: dict | None = None, prev_build_id: int | None = None,
             prev_hyps: dict | None = None) -> Path:
-    """Stage `dist/<name>/` and zip it -> the zip path. Only the ZIP carries the stamp, so a build
-    history accumulates while the staged dir is scratch. Shared runtime packages always come from
-    `src/`."""
+    """Stage scratch files and return a stamped ZIP built from `src/` runtime packages."""
     name = Path(name).name or name  # accept a path (e.g. tab-completed) or bare name
     agent_dir = (Path(agents_root) if agents_root else MS / "agents") / name
     if not (agent_dir / "main.py").exists():

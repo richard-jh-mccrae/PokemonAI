@@ -5,9 +5,7 @@ from common.strategy.context import _DAMAGE_COUNTER_ANY
 
 
 def test_fail_safe_avoids_placing_damage_on_a_body_already_at_zero_hp():
-    """Phantom Dive's free-placement counters must not pile onto a corpse: a body already
-    at or below 0 hp is being knocked out and discarded once the attack resolves, so any
-    further counter placed on it is pure waste versus chipping a body still in play."""
+    """Do not spend free counters on a body discarded when the attack resolves."""
     observation = {
         "select": {
             "context": _DAMAGE_COUNTER_ANY,

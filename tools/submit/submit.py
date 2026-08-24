@@ -78,9 +78,7 @@ def _resolve(rows: list[dict], build_id: int | None) -> dict:
 def submit(build_id: int | None = None, *, out=DEFAULT_OUT, builds=DEFAULT_BUILDS,
            history=DEFAULT_HISTORY, agents_root=None, allow_dirty=False, skip_check=False,
            when=None, check_fn=None, upload_fn=None) -> dict:
-    """Upload the chosen build (default: latest) and record it. Raises SystemExit *before*
-    uploading on any gate failure. ``skip_check=True`` uploads with no deployability check at
-    all — the artifact could crash or forfeit every match on Kaggle with no local warning."""
+    """Upload and record a build; fail gates before upload unless `skip_check` disables them."""
     row = dict(_resolve(read_history(builds), build_id))   # copy: don't mutate ledger entry
     zip_path = Path(out) / f"{row['artifact']}.zip"
     if not zip_path.exists():

@@ -27,7 +27,6 @@ def test_budget_scope_includes_cgpy_and_excludes_vendored_and_deprecated() -> No
     assert not any(path.startswith("deprecated/") for path in paths)
 
 
-def test_live_source_stays_within_the_prose_budget() -> None:
-    paths = [path for path in doc_budget.python_files() if path.startswith("src/")]
-    offences = doc_budget.scan(paths).offences
+def test_tracked_python_stays_within_the_prose_budget() -> None:
+    offences = doc_budget.scan().offences
     assert not offences, "\n" + "\n".join(str(item) for item in offences)

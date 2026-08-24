@@ -62,9 +62,7 @@ def test_unsupported_shapes_refuse_rather_than_guess():
 
 
 def test_fezandipiti_flip_the_script_prices_through_the_ko_condition_gate():
-    """The store ships `condition='pokemon_ko_last_turn'` (engine-gated: the option only appears
-    when it held) plus the unmodelled `allowance` param; both must stay priceable. If draw.py is
-    ever tightened, this real card must fail loudly here, not silently un-price."""
+    """Keep the real gated condition and unmodelled allowance priceable."""
     from common.cards import pokemon_card_store
     clause = pokemon_card_store()[140].abilities[0].clauses[0]
     assert clause == Clause("draw", amount=3, condition="pokemon_ko_last_turn",

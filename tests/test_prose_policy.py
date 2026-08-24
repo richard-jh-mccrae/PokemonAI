@@ -18,6 +18,13 @@ def test_scanner_rejects_each_policy_failure() -> None:
     assert "missing command" in _kinds("Run python -m tools.does_not_exist.")
 
 
+def test_scanner_rejects_live_bellman_claim_but_allows_offline_teacher() -> None:
+    stale = prose_policy.scan_text("docs/live.md", "Bellman stays in the codebase, callable but unplugged.")
+    current = prose_policy.scan_text("docs/live.md", "Bellman is quarantined as an offline teacher.")
+    assert [item.kind for item in stale] == ["retired claim", "retired claim"]
+    assert not current
+
+
 def test_scanner_ignores_non_prose_python_tokens() -> None:
     text = 'StateModel = "docs/does-not-exist.md"\n# Current prose.\n'
     assert not prose_policy.scan_text("src/example.py", text)
