@@ -18,7 +18,7 @@ httpx>=0.27                   # fastapi.testclient transport (tests)
 
 # --- Ledger corpus (tools/train/corpus) ---
 numpy==2.2.6                  # bounded NumPy 2 ABI required by kaggle-environments
-pyarrow==17.0.0               # pinned ABI and deterministic Parquet Training Views (ADR-TEMP-586)
+pyarrow==17.0.0               # pinned ABI and deterministic Parquet Training Views (ADR-0189)
 bottleneck==1.6.0             # NumPy 2-compatible pandas acceleration loaded by Arrow
 
 # --- Tests (python -m pytest tests/ -q) ---

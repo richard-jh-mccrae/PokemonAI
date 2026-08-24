@@ -1,4 +1,4 @@
-# ADR-TEMP-586 — Schema compatibility is a lossless migration chain
+# ADR-0191 — Schema compatibility is a lossless migration chain
 
 Supported evidence advances through validated one-version Corpus Migrations into the current
 canonical schema while retaining its source hash, version, and migration identities. Unknown future

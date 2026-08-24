@@ -1,4 +1,4 @@
-# ADR-TEMP-586 — The Canonical Corpus is manifested JSONL
+# ADR-0189 — The Canonical Corpus is manifested JSONL
 
 The Canonical Corpus uses deterministic content-addressed gzip JSONL shards referenced by immutable
 snapshot manifests. Unchanged canonical shards are reused; Arrow becomes a pinned dependency for

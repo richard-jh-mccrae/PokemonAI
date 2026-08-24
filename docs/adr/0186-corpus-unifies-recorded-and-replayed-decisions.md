@@ -1,4 +1,4 @@
-# ADR-TEMP-586 — The corpus unifies recorded and replayed decisions
+# ADR-0186 — The corpus unifies recorded and replayed decisions
 
 Match execution first closes replay and authoritative telemetry into a hashed Episode Bundle.
 Validated native telemetry and deterministic legal-view replay evaluation then produce Corpus

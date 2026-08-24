@@ -142,7 +142,7 @@ fires, the first-merged-keeps-it convention established above still applies: ref
 recompute, rename again. See `.claude/skills/grill-with-docs/SKILL.md` and
 `.claude/skills/open-pr/SKILL.md` for the full mechanics.
 
-**Next free number: 0185.**
+**Next free number: 0193.**
 
 ## Index
 
@@ -333,3 +333,11 @@ recompute, rename again. See `.claude/skills/grill-with-docs/SKILL.md` and
 | [0182](0182-post-pregame-decisions-have-one-coordinator-entry.md) | Post-pregame decisions have one coordinator entry | Accepted; built for Issue #584. |
 | [0183](0183-ledger-telemetry-is-strict-self-contained-and-framed.md) | Ledger telemetry is strict, self-contained, and framed | Accepted; built for Issue #585. |
 | [0184](0184-episode-owner-finalizes-outcomes.md) | The Episode owner finalizes Ledger outcomes | Accepted; built for Issue #585. |
+| [0185](0185-one-corpus-decision-per-choice-point.md) | One Corpus Decision per choice point | Accepted; built for Issue #586. |
+| [0186](0186-corpus-unifies-recorded-and-replayed-decisions.md) | The corpus unifies recorded and replayed decisions | Accepted; built for Issue #586. |
+| [0187](0187-corpus-publication-is-transactional.md) | Corpus publication is transactional | Accepted; built for Issue #586. |
+| [0188](0188-supervision-channels-stay-separate.md) | Supervision channels stay separate | Accepted; built for Issue #586. |
+| [0189](0189-canonical-corpus-is-manifested-jsonl.md) | The Canonical Corpus is manifested JSONL | Accepted; built for Issue #586. |
+| [0190](0190-replay-certifies-evaluation-before-decision.md) | Replay certifies evaluation before decision | Accepted; built for Issue #586. |
+| [0191](0191-schema-compatibility-is-a-lossless-migration-chain.md) | Schema compatibility is a lossless migration chain | Accepted; built for Issue #586. |
+| [0192](0192-diagnostics-separate-replay-policy-and-outcome.md) | Diagnostics separate replay, policy, and outcome | Accepted; built for Issue #586. |
