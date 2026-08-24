@@ -6,7 +6,7 @@ back a choice — everything a training film needs. Process isolation is the ONL
 (the in-process selfplay loader collides in `sys.modules` on two decks' bare
 ``from strategy import STRATEGY``), so the cross-deck gauntlet corpus is recorded HERE, off the same
 loop that already runs the A/B, and emitted in the exact `visualize` shape the shipped readers expect
-(`train.blunder.decisions._film` / `iter_decisions`, `tools/train/value/extract`, `meta_tracker`) —
+(`train.blunder.decisions._film` / `iter_decisions`, the Corpus readers, `meta_tracker`) —
 one corpus format across every replay tool, no new extractor.
 
 The one subtlety is the cabt film's **+1 offset**: the choice made in response to the prompt at frame

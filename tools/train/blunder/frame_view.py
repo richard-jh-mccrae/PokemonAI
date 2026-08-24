@@ -214,7 +214,7 @@ def _energy_symbols(energies) -> str:
 
 
 def _prize_value(stat) -> tuple[int, str]:
-    """Prizes a KO on this Pokémon awards, per docs/rules.md §6 (megaEx 3 / ex 2 / else 1)."""
+    """Prizes a KO awards, per docs/rulebook.txt §6 (Mega ex 3, ex 2, otherwise 1)."""
     if stat is None:
         return 1, "1 prize (assumed — card table off)"
     if getattr(stat, "megaEx", False):
@@ -923,7 +923,7 @@ def render(hit: FrameHit, *, deck_order: bool = False, cards: _Cards | None = No
     out.add("attack: 1/turn, and it ENDS the turn", indent=1)
     if turn == 1 and tp is not None and first == tp:
         out.add("first player, turn 1: CANNOT attack and CANNOT play a Supporter "
-                "(docs/rules.md §2)", indent=1)
+                "(docs/rulebook.txt §2)", indent=1)
 
     stadium = cur.get("stadium")
     if isinstance(stadium, list) and stadium:

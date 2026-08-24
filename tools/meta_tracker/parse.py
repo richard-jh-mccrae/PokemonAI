@@ -1,7 +1,7 @@
 """Replay JSON -> compact episode extract.
 
 Full decks live in an agent-0-only ``visualize`` field (the agent observation
-hides the opponent) — see docs/adr/0001. We keep both 60-card decklists plus the
+hides the opponent) — see ADR-0001's historical summary. We keep both 60-card decklists plus the
 result and sampling context; the 44-frame play-by-play is discarded (ADR-0002).
 """
 from __future__ import annotations

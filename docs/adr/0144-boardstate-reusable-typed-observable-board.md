@@ -2,9 +2,8 @@
 
 Superseded by ADR-0154. The historical `BoardState` name and `common.board` package are retired.
 
-Status: Accepted (2026-08-19); LIVE since 2026-08-20 — the Ledger (ADR-0145) is the production
-consumer: every live decision builds/advances BoardState, and the preview seam (ADR-0146)
-sources root deck knowledge from it.
+Status: Superseded by ADR-0154. The package and type are retired. The historical benchmark command
+was deleted; its measurements remain historical evidence and are not directly reproducible.
 
 ## Context
 

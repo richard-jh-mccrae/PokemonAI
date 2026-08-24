@@ -6,7 +6,7 @@ same exception classes as the native shim (ValueError on a malformed list, Index
 ``SelectionError`` — on an illegal selection); ``visualize_data()`` returns the god-frame
 JSON string ({current, selected, logs} per posed select, ``selected`` riding one frame
 behind the choice it answers, log types as CamelCase name-strings — probed from native
-traces, docs/pyeng/determinism.md §7).
+traces and parity tests).
 
 Each observation's ``search_begin_input`` carries the cgpy state token
 (`cgpy.search.export_token`): engine internals a lone observation cannot express, so a

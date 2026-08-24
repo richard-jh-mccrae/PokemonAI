@@ -46,9 +46,8 @@ def _card_from_select(observation: Mapping, option: Mapping, area_key: str, inde
 
 def _fingerprint(observation: Mapping, option: Mapping) -> str:
     semantic = {key: value for key, value in option.items() if value is not None}
-    # MAIN PLAY options identify a card by its hand index but omit the redundant HAND area.  Add
-    # that structural reference for identity only, so two physical copies cannot consume two beam
-    # slots.  The representative still submits the engine's original index.
+    # Main Play options omit the redundant Hand area. Add it only to identity so physical copies
+    # share one beam slot; the representative still submits the engine's original index.
     if (semantic.get("type") == _PLAY and "area" not in semantic
             and isinstance(semantic.get("index"), int)):
         semantic["area"] = _HAND

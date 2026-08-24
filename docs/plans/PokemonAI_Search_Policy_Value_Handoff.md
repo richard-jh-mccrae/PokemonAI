@@ -7,14 +7,8 @@
 
 ## 1. Executive Summary
 
-The current agent uses Bellman-style tree search to plan multi-action turn sequences, usually ending a branch when new information appears.
-
-Observed runtime characteristics:
-
-- Full traversal: roughly **10–90 seconds per search**
-- Roughly **1–4 searches per turn**
-- Strategy-directed traversal often finds strong lines in roughly **5–15 seconds**
-- This is still too costly for a ladder environment with a hard match clock
+The current agent uses the Ledger for live decisions. Bellman is quarantined as an offline teacher;
+its former production latency measurements are historical, not a description of the deployed agent.
 
 The target architecture **keeps sequence search**.
 
@@ -123,9 +117,9 @@ Eventually:
 V(s) ~= P(win | current observation, strong future play)
 ```
 
-Legacy linear features can bootstrap `P`.
+Ledger features can bootstrap `P`.
 
-Bellman/search computes or updates `Q`.
+A Search Algorithm computes or updates `Q`.
 
 `V` approximates what much deeper search and eventual outcomes would reveal.
 
@@ -193,7 +187,7 @@ Avoid designs where the search is only useful after completing a predetermined t
 
 ### 4.4 Generalize the search interface
 
-Do not permanently bind the project to the current Bellman traversal.
+Do not bind the project to the quarantined Bellman traversal.
 
 Use interfaces such as:
 
@@ -208,7 +202,7 @@ TranspositionTable
 
 This allows benchmarking:
 
-- current Bellman-style traversal
+- quarantined Bellman teacher traversal
 - MCTS
 - PUCT
 - dynamic lookahead
@@ -354,7 +348,7 @@ manual features
 search ordering
       |
       v
-deep Bellman/search
+deep offline teacher search
 ```
 
 If the manual prior ranks one action highest but deep search consistently discovers another action or line is better, that disagreement becomes an automatic policy correction.
@@ -468,7 +462,7 @@ learned P
 budget allocation
     |
     v
-selective Bellman/search
+selective Search Algorithm
     |
     v
 learned V at leaves
@@ -786,7 +780,7 @@ A 60–90 second search can be unacceptable online but valuable as offline super
 
 ### Phase A — Search infrastructure
 
-1. Map the existing Bellman/search implementation.
+1. Map the quarantined teacher and the live Ledger contracts it must not cross.
 2. Identify state mutation, action generation, search ordering, leaf evaluation, and information boundaries.
 3. Refactor behind `SearchAlgorithm`, `SearchPolicy`, and `ValueEvaluator`.
 4. Preserve current playing behavior.
@@ -847,7 +841,7 @@ A 60–90 second search can be unacceptable online but valuable as offline super
 
 ### Phase J — Search alternatives
 
-35. Benchmark current Bellman, MCTS, PUCT, sparse sampling, and dynamic lookahead using the same P/V interfaces.
+35. Benchmark the quarantined teacher, MCTS, PUCT, sparse sampling, and dynamic lookahead through the same P/V interfaces.
 
 ### Phase K — Budget learning
 
@@ -908,34 +902,13 @@ Do **not**:
 - deep-search every training state
 - train only mirror matches
 - let P/V consume hidden simulator truth
-- assume current Bellman traversal must remain the final search algorithm
+- assume the quarantined Bellman traversal must become the final Search Algorithm
 - judge improvement only against the immediately previous generation
 - create one permanently independent model per deck unless measurements show a real need
 
 ---
 
-## 30. Initial Codex Task
-
-The first implementation milestone should be infrastructure, not a neural-network rewrite.
-
-Codex should first:
-
-1. Inspect the current Bellman/search implementation.
-2. Document search entry points, state representation, branch generation, search-order hooks, leaf evaluation, and information-boundary handling.
-3. Introduce the conceptual P/Q/V separation in interfaces.
-4. Preserve current behavior.
-5. Add `ObservationState`.
-6. Add hidden-information leak tests.
-7. Add canonical hashing/transposition support or document blockers.
-8. Add per-search telemetry.
-9. Add configurable tiered budgets.
-10. Add deterministic benchmark-position replay.
-11. Only then prototype learned `V`.
-12. After V is measurable, prototype learned `P`.
-
----
-
-## 31. Final Architectural View
+## 30. Final Architectural View
 
 ```text
                          ObservationState

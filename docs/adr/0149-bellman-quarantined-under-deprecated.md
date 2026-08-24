@@ -66,8 +66,7 @@ one-way: `deprecated/` may ride `src/`, never the reverse.
   replaced that vector with the effective Valuation Configuration.
 - **CI runs none of it** (owner's ruling): the moved suites leave every CI job; `deprecated/**`
   stays a known path in the filters only so it does not trip the fail-closed all-jobs fallback.
-  The teacher is validated on demand — `python -m pytest deprecated/tests` — accepting that a
-  live-tree change can break it between manual runs.
+  The archived suite currently fails during collection, so it is not a truthful validation command.
 
 ## Consequences
 

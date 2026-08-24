@@ -6,7 +6,7 @@ A single Replay file tags one Episode; a directory (e.g. data/replays/<build_ste
 mode -- the shell's ◀/▶ steps across its Replays in episode-id order without leaving the tool.
 Serves the local tagging shell (official viewer + side panel) and appends each tagged blunder to
 the Correction log. Turn-plan tags can execute the full alternate line through cgpy, prove safe
-action reordering, and persist a machine-gradeable proof. See docs/blunder-inspector.md.
+action reordering, and persist a machine-gradeable proof. The implementation lives in `tools/train/blunder/`.
 """
 from __future__ import annotations
 

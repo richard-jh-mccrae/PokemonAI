@@ -26,7 +26,7 @@ parity, verified by trace replay. `src/cg/` is never modified; cgpy never import
   mechanical answer to ADR-0010's drift objection. CI runs it as a named step.
 - **Pin** — an empirical fact about native behavior established by probe or trace divergence
   (serial scheme, option ordering, mulligan protocol, LIFO returns, …). Recorded in
-  `docs/pyeng/determinism.md`; load-bearing ones are enforced by
+  this context; load-bearing ones are enforced by
   `tests/parity/test_determinism_pins_engine.py` (skips without the DLL).
 - **ChainDef** — a card's behavior as DATA: a list of ops over the recovered effect-DSL
   vocabulary, interpreted by `chain.py` on a resumable **EffectFrame** stack. Hand-authored
@@ -77,7 +77,7 @@ gate (52/54 ops trace-pinned), the cross-engine audit seam (`CG_ENGINE=py
 audit_attacks.py` + `diff_audit_engines.py` — sample 46/46 equal incl. Crustle's defense
 passive), `from_cabt.py` god-free replays (take-time prize binding, listing-order
 adoption), `onboard_card.py` (the future-card one-command), and a DLL-free self-play
-smoke. New behavior pins: docs/pyeng/determinism.md §9–10. The 2026-07-12 ability-tail
+smoke. New behavior pins live in parity tests. The 2026-07-12 ability-tail
 batch added the god-free reveal-oracle channels (draw-side prize swap, pre-step listing
 adoption, `look_feed` DECK→LOOKING binding) and the **kaggle-episode ladder**: all 414
 real episodes under the main checkout's `data/replays/` convert + replay

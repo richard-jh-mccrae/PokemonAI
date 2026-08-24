@@ -3,13 +3,13 @@ plus its committed provenance sidecar, emitted in one pass.
 
 Overrides are DELTAS — a field the parser already got right is never re-stated. Merge rule: the
 generator may retract what it AUTHORED, never what a human RULED (`--prune`/`--rule` opt in).
-REQ-PROV-0001..0008 are tabled in `docs/attack-effects.md`; the REQ-AUDIT ids are ADR-0083's.
+ADR-0032 owns REQ-PROV-0001..0008; ADR-0083 owns the REQ-AUDIT decisions.
 
     python tools/sim/generate_attack_overrides.py             # writes the table + the sidecar
     python tools/sim/generate_attack_overrides.py --dry-run   # print, don't write
     python tools/sim/generate_attack_overrides.py --rule      # accept a fit OVER a human ruling
 
-REQ-AUDIT ids this module is graded against are tabled in `docs/attack-effects.md`.
+ADR-0032 and ADR-0083 own the requirements this module is graded against.
 """
 from __future__ import annotations
 

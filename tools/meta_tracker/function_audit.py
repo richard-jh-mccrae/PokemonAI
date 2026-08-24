@@ -1,7 +1,7 @@
 """Cross-check function tags against card rules-text — an *independent* oracle for the probe.
 
 The tags are derived by **probing** the engine; we deliberately never parse text (it's lossy —
-see docs/card-functions.md). That makes the text a perfect independent check: agreement raises
+see `src/common/cards/function_catalog.py`). That makes text an independent check: agreement raises
 confidence, disagreement points at exactly the cards to inspect.
 
   * **unsupported** — a behavioral tag whose card text shows *no* supporting cue → suspect the

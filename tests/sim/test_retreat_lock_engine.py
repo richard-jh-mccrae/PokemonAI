@@ -4,7 +4,7 @@ Maractus Corners the defender; the engine must OMIT RETREAT from the locked side
 offer it on the pre-lock turn.
 
 This is the reason there is NO `retreat_lock` transient field: the engine enforces the lock at the
-menu, so a menu-driven Pilot has nothing to read. Re-adding a parse needs a real consumer AND this
+menu, so a menu-driven decider has nothing to read. Re-adding a parse needs a real consumer AND this
 enforcement fact changing.
 
 REQ-TRANS-0006.

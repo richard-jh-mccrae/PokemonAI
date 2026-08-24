@@ -1,4 +1,4 @@
-"""Compile the meta into the shipped Scouting artifact (see docs/scouting.md).
+"""Compile the meta into the shipped Scouting artifact.
 
 Pure and native-lib-free: reads episode dicts (as `store.load_episodes` returns) plus
 card metadata (`cards.json`), and emits the artifact dict the runtime Scout loads. Each

@@ -1,7 +1,7 @@
 """Game flow: the setup/mulligan machine, the turn loop, and attack/KO/promotion (ADR-0059 M1).
 
-The setup protocol reproduces the native sequences exactly; docs/pyeng/determinism.md §5 is the
-specification. Win/draw adjudication includes simultaneous-win = DRAW, a competition delta."""
+Parity tests specify the native setup sequence. Win/draw adjudication includes simultaneous-win =
+DRAW, a competition delta."""
 from __future__ import annotations
 
 from .options import (main_options, numbers, opt_card, pose, pose_main,
@@ -456,7 +456,7 @@ def _resolve_attack(gs: GameState, seat: int, attack_id: int) -> None:
         for aid in gs.stat(attacker.top).attacks:
             attacker.attack_locks[str(aid)] = gs.turn + 2
     if b.confused:
-        # Confusion gate (docs/rules.md §8, seeded shape): flip before attacking —
+        # Confusion gate (docs/rulebook.txt §8, seeded shape): flip before attacking —
         # tails: the attack fails and the attacker takes 3 damage counters.
         if not gs.coin_flip(seat):
             attacker.hp = max(0, attacker.hp - 30)

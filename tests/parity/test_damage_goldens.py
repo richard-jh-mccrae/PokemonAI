@@ -46,7 +46,7 @@ def test_nebula_beam_ignores_weakness():
 
 
 def test_resistance_reduces_30():
-    """Resistance -30 after weakness, floor 0 (docs/rules.md §5)."""
+    """Resistance -30 after weakness, floor 0 (docs/rulebook.txt §5)."""
     found = None
     for d in DB.cards.values():
         if d.cardType != 0 or d.resistance is None:

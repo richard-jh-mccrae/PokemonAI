@@ -3,7 +3,7 @@
 The pool catalogs each card under one canonical printing (ADR-0013), and
 EN_Card_Data.csv carries its (Expansion, Collection No.) — which maps straight
 onto the Limitless CDN's official-scan URLs. We download the whole pool ONCE per
-host into tools/arena/static/cards/<id>.png (gitignored) and serve from there, so
+host into the Arena's gitignored static image cache and serve from there, so
 visitors never hit a third-party CDN and the board renders fast.
 
 Usage (one-time per host, ~1260 files @ ~50 KB):

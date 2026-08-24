@@ -3,8 +3,8 @@
 One frozen record per printing — `PokemonCard` under `pokemon_cards/`, `TrainerCard` under
 `trainer_cards/` — served as one dict by `common.cards.card_store()`. Every field is stored,
 none derived at query time, so a mid-game read is one dict hit plus attribute access.
-`Clause` is a `kind` plus that card's own named parameters; an unset parameter reads as None, so the vocabulary can grow per card without
-touching this module. Amounts are DAMAGE POINTS, never counters; Energy codes are the engine
+`Clause` is a `kind` plus that card's own named parameters; unset parameters read as None, so the
+vocabulary can grow per card without touching this module. Amounts are DAMAGE POINTS; Energy codes are the engine
 wire ints, defined here so the function modules read them off the ground layer."""
 from __future__ import annotations
 

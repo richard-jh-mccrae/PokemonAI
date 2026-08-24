@@ -1,6 +1,6 @@
 """Engine pins for the native-engine determinism facts cgpy relies on (ADR-0059, M0).
 
-Each test re-verifies one empirical fact from docs/pyeng/determinism.md against the live native
+Each test re-verifies one empirical fact recorded by the parity suite against the live native
 lib. If a future engine build changes one, THIS suite fails (a named fact), rather than the
 parity corpus failing obscurely. Skips cleanly when the native lib can't load. REQ-CGPY-0001.
 """

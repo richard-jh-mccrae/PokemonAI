@@ -13,9 +13,8 @@ from .observation.provider import provider_payload as _payload
 from common.strategy.context import _MAIN, _NO, _YES
 
 
-# One authoritative native world is the deployed latency budget.  Additional worlds are an
-# injectable offline diagnostic seam; multiplying complete full-turn searches in a live agent
-# turns one legal decision into minutes of native search and prevents a match from completing.
+# Deployment budgets one authoritative native world. Extra injectable diagnostic worlds would
+# multiply a full-turn search into minutes per decision.
 NATIVE_BELIEF_WORLD_COUNT = 1
 MANUAL_COIN_CONTEXT = 46
 COIN_BRANCH_PROBABILITY = 0.5
@@ -89,13 +88,8 @@ def _hidden_signature(observation: dict, root_seat: int) -> str:
 
 
 def _stratified_order(cards: tuple[int, ...], world_index: int, world_count: int) -> list[int]:
-    """Low-discrepancy hidden-zone order, then one midpoint from each world stratum.
-
-    A grouped-by-id order makes a one-world deployment treat arbitrary numeric ids as draw
-    probability.  Space every identity's physical copies across the unit interval with a stable
-    phase, then rotate worlds through equal-mass strata.  No Worth, role, function, effect, or card
-    name enters the construction.
-    """
+    """Build a low-discrepancy hidden-zone order and select one midpoint per world stratum.
+    Stable phases spread physical copies without using Worth, roles, effects, or card names."""
     if not cards:
         return []
     counts = Counter(int(card_id) for card_id in cards)

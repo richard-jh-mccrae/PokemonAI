@@ -1,4 +1,4 @@
-"""Presence-only Naive Bayes recognition scorer (docs/scouting.md): ranks Archetypes given the
+"""Presence-only Naive Bayes recognition scorer: ranks Archetypes given the
 opponent cards revealed so far. Pure — no I/O, no engine."""
 from __future__ import annotations
 

@@ -6,8 +6,7 @@ body, and fingerprinting only the body calls *different Energies onto one Pokém
 ``serial`` is the ONLY field ignored. A reference the snapshot does not REVEAL makes the WHOLE option
 unfingerprintable, so it joins no class — blind implies conservative, structurally.
 
-Pure and lib-free: `tools/train/gates.py` imports this and must stay loadable with NO DLL, so nothing
-here may import `cg.api` because a bare import maps the native library.
+Pure and lib-free: nothing here imports `cg.api`, because a bare import maps the native library.
 
 Distinct from `gates.option_slot` (*which one identity does this option target*) and from
 `transposition_probe._bodykey` (deliberately lossy — it drops ``hp``).
@@ -75,9 +74,8 @@ def _card_at(frame, seat, area, index):
 
 
 def _is_implicit_play(option: dict) -> bool:
-    """Main-menu Play encodes its hand slot as a bare ``index`` rather than an explicit HAND area.
-    The engine still EMITS the ``area`` key holding ``None``, so a ``get("area", AREA_HAND)``
-    default never fires — every consumer must normalize the area, not lean on a fallback."""
+    """Detect Play options whose hand slot is implicit because area is present but None.
+    Consumers must normalize this shape; a mapping default cannot."""
     return option.get("type") in (OPTION_PLAY, "Play") and option.get("area") is None
 
 
@@ -95,9 +93,8 @@ def option_source_card(option: dict, frame: dict | None):
 
 
 def option_in_play_source_id(option, frame: dict | None, seat: int | None = None) -> int | None:
-    """The card id an ability/skill/tool option acts through. Present-but-None keys are absent
-    (the deployed shape, PR #532); a reference that materializes but does not resolve fails
-    closed — never a guess from the other pair."""
+    """Resolve the card id an ability, skill, or tool acts through.
+    Treat present-but-None keys as absent and fail closed on unresolved references."""
     if not isinstance(option, dict):
         return None
     card_id = option.get("cardId")
@@ -124,9 +121,8 @@ def option_in_play_source_id(option, frame: dict | None, seat: int | None = None
 
 
 def fingerprint_source_card_id(part, frame: dict | None) -> int | None:
-    """Source card id from one ``ActionIdentity`` part. The semantic shape ``[seat, fields,
-    cards]`` EXCLUDES referenced area/index keys from ``fields`` — the embedded card is the only
-    place the reference survives; the fallback ``[public, enriched]`` keeps raw keys."""
+    """Resolve a source card id from one ActionIdentity part.
+    Semantic identities embed the card; fallback identities retain raw area/index keys."""
     if not isinstance(part, str):
         return None
     try:

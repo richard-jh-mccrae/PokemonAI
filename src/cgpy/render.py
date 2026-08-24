@@ -1,6 +1,6 @@
 """Observation rendering: per-seat masking identical to native GetBattleData (ADR-0059).
 
-The live-obs contract is pinned from raw native dumps in docs/pyeng/determinism.md §7. The traps:
+The live-observation contract is pinned from raw native dumps in parity tests. The traps:
 select always carries all ten keys (absent ones null), options are SPARSE dicts, opponent hand is
 null rather than absent, and a facedown active renders [null] EVEN TO ITS OWNER.
 """

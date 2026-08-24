@@ -96,12 +96,8 @@ class RevealChoice:
 
 @dataclass(frozen=True)
 class Refresh:
-    """A shuffle-refresh valued analytically before real randomness resolves.
-
-    ``draws`` contains the printed own/opponent redraw counts for each equally likely card-effect
-    branch (for example, the two sides of a coin).  It deliberately contains no sampled cards and
-    no successor state: the live engine resolves the gamble after the solver commits the play.
-    """
+    """An analytic pre-resolution shuffle-refresh with printed redraw-count branches.
+    It carries no sampled cards or successor; the engine resolves those after commitment."""
 
     card_id: int
     draws: tuple[tuple[int, int], ...]
