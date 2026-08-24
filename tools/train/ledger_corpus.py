@@ -28,7 +28,7 @@ import sys
 import time
 
 REPO = Path(__file__).resolve().parents[2]
-sys.path[:0] = [str(REPO / "tools"), str(REPO / "src")]
+sys.path[:0] = [str(REPO), str(REPO / "tools"), str(REPO / "src")]
 
 from common.option_equivalence import class_of, option_equivalence  # noqa: E402
 from functools import partial
@@ -314,6 +314,9 @@ def sweep(*, store, decks=DECKS, limit=None, workers: int = 1,
 
 
 def main(argv=None) -> int:
+    argv = list(sys.argv[1:] if argv is None else argv)
+    if argv and argv[0] in {"stage", "build", "view"}:
+        return _corpus_main(argv)
     parser = argparse.ArgumentParser()
     parser.add_argument("--store", default=str(REPO / "data" / "corrections"))
     parser.add_argument("--decks", nargs="+", default=list(DECKS))
@@ -342,6 +345,39 @@ def main(argv=None) -> int:
           f"| written to {args.output}")
     return 1 if (result["unexplained_regressions"]
                  or not result["generality_floor_retained"]) else 0
+
+
+def _corpus_main(argv) -> int:
+    from train.corpus import (build_snapshot, build_training_view, certify_replay,
+                              stage_episode_bundle)
+
+    parser = argparse.ArgumentParser(description="Publish lossless Ledger Corpus Snapshots")
+    commands = parser.add_subparsers(dest="command", required=True)
+    stage = commands.add_parser("stage", help="close one replay and telemetry stream into a bundle")
+    stage.add_argument("--replay", type=Path, required=True)
+    stage.add_argument("--telemetry", type=Path, required=True)
+    stage.add_argument("--out", type=Path, required=True)
+    build = commands.add_parser("build", help="publish audited Episode Bundles")
+    build.add_argument("--bundles", type=Path, required=True)
+    build.add_argument("--out", type=Path, required=True)
+    view = commands.add_parser("view", help="materialize a pinned machine-readable view")
+    view.add_argument("--snapshot", type=Path, required=True)
+    view.add_argument("--out", type=Path, required=True)
+    view.add_argument("--name", default="ledger_diagnostics")
+    view.add_argument("--profile", type=Path)
+    args = parser.parse_args(argv)
+    if args.command == "stage":
+        result = stage_episode_bundle(replay_path=args.replay, telemetry_path=args.telemetry,
+                                      output_root=args.out)
+    elif args.command == "build":
+        result = build_snapshot(bundles_root=args.bundles, output_root=args.out,
+                                replay_certifier=certify_replay)
+    else:
+        result = build_training_view(snapshot_path=args.snapshot, output_root=args.out,
+                                     name=args.name, **({"profile_path": args.profile}
+                                                        if args.profile else {}))
+    print(result)
+    return 0
 
 
 if __name__ == "__main__":

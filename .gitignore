@@ -44,6 +44,8 @@ htmlcov/
 /data/decks/
 /data/meta/
 /data/replays/
+# Local Canonical Corpus snapshots and derived views; schemas and fixtures stay committed.
+/data/corpus/
 # machine (auto-labeled) corrections — regenerable from the corpus by tools/train/label (WP3,
 # design s3a §D4). The committed human correction tree stays gold; a fresh clone / CI sees none.
 /data/corrections/machine/
