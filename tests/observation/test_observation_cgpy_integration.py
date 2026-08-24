@@ -19,8 +19,8 @@ from cgpy.rng import SeededRng
 from common.observation import HiddenHand, ObservationState, VisibleHand
 from common.cards import card_store
 from common.cards.card_facts import WATER
-from common.cards.functions.energy import (
-    payment_fraction, provision_units, unmet_cost_slots)
+from common.cards.functions.energy import provision_units
+from deprecated.bellman.energy import payment_fraction, unmet_cost_slots
 
 REPO = Path(__file__).resolve().parents[2]
 

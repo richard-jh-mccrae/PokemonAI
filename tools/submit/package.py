@@ -22,7 +22,8 @@ from pathlib import Path
 
 REPO = Path(__file__).resolve().parents[2]
 MS = REPO / "src"
-_IGNORE = shutil.ignore_patterns("__pycache__", "*.pyc", "*.md", "docs", "engine.py")
+_IGNORE = shutil.ignore_patterns(
+    "__pycache__", "*.pyc", "*.md", "docs", "engine.py", "information.py")
 FORBIDDEN_KAGGLE_TOKEN = b"cgpy"
 
 

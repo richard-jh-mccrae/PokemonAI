@@ -8,7 +8,7 @@ from __future__ import annotations
 from collections import Counter
 import hashlib
 import json
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, fields, is_dataclass
 from functools import lru_cache
 from enum import Enum
 from types import MappingProxyType
@@ -26,6 +26,11 @@ from common.strategy import PrizePlan
 from .configuration import DeckOverlay, ValuationConfiguration
 
 
+CONTENT_ID_DIGEST_BYTES = 16
+MODEL_ID_DIGEST_BYTES = 8
+MULTI_PROVISION_UNITS = 2
+
+
 @dataclass(frozen=True)
 class EvaluationModel:
     """Everything deck-scoped the evaluator needs: configuration, Roles, and card facts."""
@@ -36,6 +41,12 @@ class EvaluationModel:
     prize_plan: PrizePlan = PrizePlan()
     opponent_profiles: Mapping[str, "OpponentProfile"] = field(
         default_factory=dict, repr=False)
+    store_identity: str = field(init=False)
+
+    def __post_init__(self):
+        identity = (_default_store_identity() if self.store is card_store()
+                    else content_identity(self.store))
+        object.__setattr__(self, "store_identity", identity)
 
     @classmethod
     def build(cls, *, roles: Mapping[int, tuple[str, ...]] | None = None,
@@ -72,18 +83,49 @@ class EvaluationModel:
             "configuration": self.configuration.identity,
             "prize_plan": self.prize_plan.identity,
             "roles": tuple(sorted(self.roles.items())),
+            "store": self.store_identity,
             "opponent_profiles": {
                 name: profile.canonical_data()
                 for name, profile in self.opponent_profiles.items()},
         }
         blob = json.dumps(payload, sort_keys=True).encode("utf-8")
-        return hashlib.blake2b(blob, digest_size=8).hexdigest()
+        return hashlib.blake2b(blob, digest_size=MODEL_ID_DIGEST_BYTES).hexdigest()
 
     def facts(self, card_id: int):
         return self.store.get(int(card_id))
 
     def card_roles(self, card_id: int) -> tuple[str, ...]:
         return self.roles.get(int(card_id), ())
+
+
+def _canonical(value):
+    if is_dataclass(value) and not isinstance(value, type):
+        return tuple((item.name, _canonical(getattr(value, item.name)))
+                     for item in fields(value))
+    if isinstance(value, Mapping):
+        return tuple((_canonical(key), _canonical(child))
+                     for key, child in sorted(value.items(), key=lambda item: repr(item[0])))
+    if isinstance(value, Enum):
+        return _canonical(value.value)
+    if isinstance(value, (tuple, list)):
+        return tuple(_canonical(child) for child in value)
+    if isinstance(value, (set, frozenset)):
+        return tuple(sorted((_canonical(child) for child in value), key=repr))
+    if value is None or isinstance(value, (bool, int, float, str)):
+        return value
+    if hasattr(value, "kind") and isinstance(getattr(value, "params", None), Mapping):
+        return (("kind", str(value.kind)), ("params", _canonical(value.params)))
+    raise TypeError(f"unsupported Evaluation Model identity input {type(value).__name__}")
+
+
+def content_identity(value) -> str:
+    blob = json.dumps(_canonical(value), sort_keys=True, separators=(",", ":")).encode("utf-8")
+    return hashlib.blake2b(blob, digest_size=CONTENT_ID_DIGEST_BYTES).hexdigest()
+
+
+@lru_cache(maxsize=1)
+def _default_store_identity() -> str:
+    return content_identity(card_store())
 
 
 # --- energy usability -------------------------------------------------------------------
@@ -202,7 +244,6 @@ def legal_line_reach(body, reach, ctx: EvaluationModel, hand=(), turn=None) -> M
 
 @dataclass(frozen=True)
 class OpponentEvaluation:
-    observed_roles: Mapping[int, tuple[str, ...]]
     candidates: tuple[ArchetypeBelief, ...]
     unknown_mass: float
     failures: tuple[str, ...] = ()
@@ -224,15 +265,6 @@ class OpponentProfile:
         }
 
 
-def opponent_profiles_from_snapshot(snapshot) -> Mapping[str, OpponentProfile]:
-    return MappingProxyType({
-        candidate.archetype: OpponentProfile(
-            candidate.roles, candidate.traits, candidate.mechanics,
-            candidate.resources)
-        for candidate in snapshot.candidates
-    })
-
-
 def opponent_evaluation(board, ctx: EvaluationModel) -> OpponentEvaluation | None:
     evidence = board.knowledge.opponent.decision_evidence
     if evidence is None:
@@ -252,10 +284,9 @@ def opponent_evaluation(board, ctx: EvaluationModel) -> OpponentEvaluation | Non
     ) for candidate in evidence.candidates
       for profile in (ctx.opponent_profiles.get(
           candidate.archetype, OpponentProfile({}, (), (), {})),))
-    observed = {card_id: tuple(roles) for card_id, roles in evidence.observed_roles}
     unknown = probability(evidence.unknown_mass)
     failures = tuple(f"missing opponent profile: {archetype}" for archetype in missing)
-    return OpponentEvaluation(observed, candidates, unknown, failures)
+    return OpponentEvaluation(candidates, unknown, failures)
 
 
 def opponent_line_reach(ctx: EvaluationModel, opponent=None) -> Mapping[int, float]:
@@ -339,18 +370,13 @@ def _slot_fill(unit: int, body_facts, attached, ctx: EvaluationModel, reach=None
     return "dead"
 
 
-def unit_fills_a_slot(unit: int, body_facts, attached, ctx: EvaluationModel, reach=None) -> bool:
-    """Marginal usability of one MORE unit of this color on this body."""
-    return _slot_fill(unit, body_facts, attached, ctx, reach) != "dead"
-
-
 def _wr_adjusted(damage: int, attacker_type, defender_facts) -> int:
     """Printed damage through the defender's weakness (x2) / resistance (-30) record."""
     if defender_facts is not None and attacker_type is not None:
         if getattr(defender_facts, "weakness", None) == attacker_type:
-            damage *= 2
+            damage *= WEAKNESS_MULTIPLIER
         if getattr(defender_facts, "resistance", None) == attacker_type:
-            damage = max(0, damage - 30)
+            damage = max(0, damage - RESISTANCE_REDUCTION)
     return damage
 
 
@@ -480,15 +506,15 @@ def _multi_provision_live(facts, body, ctx: EvaluationModel) -> bool:
     """Return whether this body can absorb at least two units from one special Energy.
     Ignore speculative multi-provision that only a future evolution could absorb."""
     body_facts = ctx.facts(body.card.card_id)
-    if body_facts is None:
+    if not isinstance(body_facts, PokemonCard):
         return False
     provided = provision_units(facts, evolved=body_facts.evolves_from is not None)
-    if provided < 2:
+    if provided < MULTI_PROVISION_UNITS:
         return False
     counts = Counter(body.energies)
     for attack in getattr(body_facts, "attacks", ()) or ():
         _, open_colorless = _unfilled(attack.cost, counts)
-        if open_colorless >= 2:
+        if open_colorless >= MULTI_PROVISION_UNITS:
             return True
     return False
 
@@ -512,6 +538,10 @@ def _fetch_liveness(fetches, demand: Demand, ctx: EvaluationModel, deck_counts) 
             break
     return best
 
+WEAKNESS_MULTIPLIER = 2
+RESISTANCE_REDUCTION = 30
+
+
 __all__ = ("Demand", "EvaluationModel",
            "any_attack_payable", "legal_line_reach", "line_reach", "opponent_line_reach",
-           "unit_fills_a_slot", "usable_units")
+           "usable_units")

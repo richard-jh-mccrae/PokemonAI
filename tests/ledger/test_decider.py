@@ -4,6 +4,8 @@ A fake provider returns prepared algebra nodes, so these pin the POLICY (turn sp
 argmax, chain resolution, refresh sampling determinism) without an engine in the loop."""
 from __future__ import annotations
 
+from dataclasses import replace
+
 from ledger_helpers import (DARK_E, DARKNESS, DRAGAPULT, DRAKLOAK, DREEPY, FIRE, FIRE_E,
                             HARLEQUIN, LILLIES, PSYCHIC, PSYCHIC_E, ScriptedProvider, action, body,
                             player, printout)
@@ -17,6 +19,7 @@ from common.ledger import EvaluationModel, LedgerDecider, PrizeMap
 from common.ledger.decider import LedgerUnavailable
 from common.ledger.decision import LEDGER_VALUE_SCALE
 from common.ledger.search import GreedyDecisionPolicy
+from common.scouting.provider import CardStat, DictCardStatProvider
 from deprecated.bellman.state import DecisionState
 
 
@@ -286,6 +289,79 @@ def test_an_unavailable_provider_returns_a_typed_fail_safe_decision():
     assert decision.diagnostics["policy_reason"] == "fail_safe_provider_failure"
     assert decision.diagnostics["failure"]["stage"] == "provider"
     assert decision.complete is False
+
+
+def test_provider_effective_options_change_behavior_identity():
+    plain = LedgerDecider(DECK, "test", EvaluationModel.build(),
+                          provider_factory=lambda _state, **_kwargs: None)
+    configured = LedgerDecider(
+        DECK, "test", EvaluationModel.build(),
+        provider_factory=plain.provider_factory, provider_kwargs={"world_count": 2})
+
+    assert plain.behavior_identity.provider != configured.behavior_identity.provider
+
+
+def test_provider_fact_source_content_changes_behavior_identity():
+    left = DictCardStatProvider({1: CardStat(1, maxDamage=10)})
+    right = DictCardStatProvider({1: CardStat(1, maxDamage=20)})
+    factory = lambda _state, **_kwargs: None
+    first = LedgerDecider(DECK, "test", EvaluationModel.build(),
+                          provider_factory=factory, provider_kwargs={"stats": left})
+    second = LedgerDecider(DECK, "test", EvaluationModel.build(),
+                           provider_factory=factory, provider_kwargs={"stats": right})
+
+    assert first.behavior_identity.provider != second.behavior_identity.provider
+
+
+def test_opaque_provider_inputs_cannot_share_a_behavior_identity():
+    with pytest.raises(TypeError, match="must expose an identity"):
+        LedgerDecider(
+            DECK, "test", EvaluationModel.build(),
+            provider_factory=lambda _state, **_kwargs: None,
+            provider_kwargs={"registry": object()})
+
+
+def test_presentation_failure_returns_one_typed_fail_safe_result():
+    root_obs = printout(me=player(active=body(DRAGAPULT, 1), hand=[FIRE_E]))
+    weird, end = action("ability", (0,)), action("end", (1,))
+    provider = ScriptedProvider(
+        menus={"root": (weird, end)},
+        nodes={("root", weird.identity): Unknown("no model", "forces gap sink")})
+
+    def broken_sink(_record):
+        raise RuntimeError("presentation sink failed")
+
+    decision = make_decider(provider, sink=broken_sink).decide(root_obs)
+
+    assert decision.decision_result is not None
+    assert decision.diagnostics["policy_reason"] == "fail_safe_presentation_failure"
+    assert decision.diagnostics["failure"]["stage"] == "presentation"
+
+
+def test_fail_safe_policy_failure_returns_one_typed_last_resort_result():
+    class DeadProvider:
+        available = False
+        _error = "engine session refused"
+
+        def __init__(self, *_args, **_kwargs):
+            pass
+
+    class BrokenFailSafe:
+        def choose(self, *_args, **_kwargs):
+            raise RuntimeError("fail-safe policy failed")
+
+    decider = LedgerDecider(
+        (DRAGAPULT, FIRE_E, DARK_E) * 20, "test", EvaluationModel.build(),
+        provider_factory=lambda _state, **_kwargs: DeadProvider())
+    decider.coordinator = replace(
+        decider.coordinator, fail_safe_policy=BrokenFailSafe())
+
+    decision = decider.decide(
+        printout(me=player(active=body(DRAGAPULT, 1), hand=[FIRE_E])))
+
+    assert decision.decision_result is not None
+    assert decision.diagnostics["policy_reason"] == "fail_safe_policy_failure"
+    assert decision.diagnostics["failure"]["stage"] == "policy"
 
 
 def test_harlequin_legs_average_exactly_on_a_uniform_pool():

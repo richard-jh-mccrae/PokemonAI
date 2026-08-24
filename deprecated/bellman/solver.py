@@ -18,7 +18,7 @@ from common.cards import play_clauses
 from common.cards.card_facts import PokemonCard, TOOL, TrainerCard
 from common.cards.functions.fetch import DEADNESS, WINDOW, fetch_target_matches
 from common.options import LegalAction
-from common.option_equivalence import option_source_card
+from .option_sources import option_source_card
 from .demand import (StrategyBeamBuilder, look_class_clauses, outcome_identity,
                      semantic_action_key)
 from common.refresh import played_card_id

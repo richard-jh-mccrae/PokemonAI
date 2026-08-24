@@ -98,11 +98,14 @@ def test_save_telemetry_writes_seat_specific_inspector_logs(tmp_path):
 
 
 def test_save_telemetry_writes_the_authoritative_episode_stream(tmp_path):
-    from common.telemetry import RecordAssembler, build_outcome_record
+    from common.telemetry import (RecordAssembler, build_episode_receipt,
+                                  build_outcome_record)
 
+    receipt = build_episode_receipt(episode_key="42", reservations=[])
     outcome = build_outcome_record(
         episode_key="42",
         decision_records=[],
+        telemetry_receipt=receipt,
         winner=None,
         terminal_reason="draw",
         public_prizes={0: 1, 1: 1},
@@ -111,12 +114,12 @@ def test_save_telemetry_writes_the_authoritative_episode_stream(tmp_path):
         external_episode_id="42",
     )
 
-    _save_telemetry(tmp_path, 42, [outcome])
+    _save_telemetry(tmp_path, 42, [receipt, outcome])
 
     assembler = RecordAssembler()
     records = [record for line in (tmp_path / "episode-42-telemetry.jsonl").read_text().splitlines()
                if (record := assembler.ingest(line)) is not None]
-    assert records == [outcome]
+    assert records == [receipt, outcome]
 
 
 @pytest.mark.req("REQ-SIM-0009")

@@ -1,4 +1,4 @@
-"""Dependency-free mirrors of native engine enum values used by Bellman."""
+"""Dependency-free mirrors of native engine enum values used by decision adapters."""
 
 # OptionType
 _NUMBER = 0

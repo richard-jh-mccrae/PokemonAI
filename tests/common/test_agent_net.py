@@ -260,6 +260,9 @@ def test_live_runtime_captures_the_typed_ledger_record(monkeypatch):
     assert records[0]["candidates"][0]["status"] == "complete"
     assert records[0]["configuration"]["evaluation_model"]["identity"] \
         == runtime.ledger.ctx.identity
+    assert records.construction_seconds > 0.0
+    assert records.delivery_seconds > 0.0
+    assert records.emit_seconds >= records.construction_seconds
 
 
 def test_pregame_telemetry_is_explicit_and_has_no_invented_ledger_values(monkeypatch):
@@ -380,7 +383,7 @@ def test_every_post_pregame_menu_enters_the_decision_coordinator_once():
     assert decision.diagnostics["policy_reason"] == "fail_safe_runtime_failure"
 
 
-def test_a_post_coordinator_mapping_bug_is_not_routed_through_a_second_entry():
+def test_a_post_coordinator_mapping_bug_returns_the_same_typed_choice_without_reentry():
     runtime = _mega_starmie_runtime(
         provider_factory=lambda _state, **_kwargs: (_ for _ in ()).throw(
             RuntimeError("provider unavailable")))
@@ -393,16 +396,21 @@ def test_a_post_coordinator_mapping_bug_is_not_routed_through_a_second_entry():
             entered += 1
             return real.decide(*args, **kwargs)
 
+        def recover(self, *args, **kwargs):
+            return real.recover(*args, **kwargs)
+
     runtime.ledger.coordinator = RecordingCoordinator()
     runtime.ledger._root_decision = lambda *_args, **_kwargs: (_ for _ in ()).throw(
         RuntimeError("mapping bug"))
 
-    with pytest.raises(RuntimeError, match="mapping bug"):
-        runtime.decide(_menu([
-            engine_opt(type=3, area=2, index=0),
-            engine_opt(type=14),
-        ], context=0, turn=2))
+    decision = runtime.decide(_menu([
+        engine_opt(type=3, area=2, index=0),
+        engine_opt(type=14),
+    ], context=0, turn=2))
     assert entered == 1
+    assert decision.decision_result is not None
+    assert decision.chosen == tuple(decision.decision_result.chosen_candidate.action.selection)
+    assert decision.diagnostics["failure"]["stage"] == "presentation"
 
 
 def test_pregame_draw_count_survives_a_dense_non_number_option():

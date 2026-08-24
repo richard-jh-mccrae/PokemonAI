@@ -267,17 +267,89 @@ def test_play_match_owner_appends_one_outcome_with_the_exact_decision_set(monkey
                 "record_type": "decision",
                 "record_id": "seat-0-decision-0",
                 "episode": {"key": self.episode_key},
+                "decision": {"seat": 0, "index": 0},
+            }]
+            self.delivered = [{
+                "record_id": "seat-0-decision-0", "seat": 0, "index": 0,
+                "status": "delivered", "error_type": None,
             }]
             return [0]
+
+        def telemetry_receipt(self, episode_key):
+            from common.telemetry import build_episode_receipt
+
+            return build_episode_receipt(
+                episode_key=episode_key, reservations=getattr(self, "delivered", []))
 
     records = []
     play_match(CapturingServer(), CapturingServer(), [], [], telemetry=records)
 
-    assert [record["record_type"] for record in records] == ["decision", "outcome"]
+    assert [record["record_type"] for record in records] == [
+        "decision", "telemetry_receipt", "outcome"]
     outcome = records[-1]
     assert outcome["decision_ids"] == ["seat-0-decision-0"]
     assert outcome["result"]["winner"] == 1
     assert outcome["result"]["public_prizes"] == {"0": 2, "1": 0}
+
+
+def test_play_match_refuses_an_outcome_when_an_agent_receipt_is_unavailable(monkeypatch):
+    live = {"current": {"result": -1, "yourIndex": 0, "players": [
+        {"prize": [None]}, {"prize": [None]},
+    ]}, "select": {"context": 0}}
+    over = {"current": {"result": 0, "yourIndex": 0, "players": [
+        {"prize": []}, {"prize": [None]},
+    ]}, "select": None}
+    monkeypatch.setattr("cg.game.battle_start", lambda _a, _b: (
+        live, SimpleNamespace(errorPlayer=-1)))
+    monkeypatch.setattr("cg.game.battle_select", lambda _choice: over)
+    monkeypatch.setattr("cg.game.battle_finish", lambda: None)
+
+    class MissingReceiptServer:
+        last_timeout = False
+        last_seconds = 0.01
+
+        def begin_episode(self, episode_key):
+            self.episode_key = episode_key
+
+        def act(self, _obs, timeout=None):
+            self.last_telemetry = [{
+                "record_type": "decision",
+                "record_id": "seat-0-decision-0",
+                "episode": {"key": self.episode_key},
+                "decision": {"seat": 0, "index": 0},
+            }]
+            return [0]
+
+        def telemetry_receipt(self, episode_key):
+            return None
+
+    records = []
+    play_match(MissingReceiptServer(), MissingReceiptServer(), [], [], telemetry=records)
+
+    assert [record["record_type"] for record in records] == [
+        "decision", "telemetry_receipt"]
+    assert not records[-1]["certified"]
+    assert {row["error_type"] for row in records[-1]["reservations"]
+            if row["status"] == "delivery_failed"} == {
+                "TelemetryReceiptUnavailable", "TelemetryReservationUnavailable"}
+
+    def incomplete_receipt(self, episode_key):
+        from common.telemetry import build_episode_receipt
+
+        return build_episode_receipt(episode_key=episode_key, reservations=[])
+
+    MissingReceiptServer.telemetry_receipt = incomplete_receipt
+    records = []
+    play_match(MissingReceiptServer(), MissingReceiptServer(), [], [], telemetry=records)
+
+    assert [record["record_type"] for record in records] == [
+        "decision", "telemetry_receipt"]
+    assert not records[-1]["certified"]
+    assert any(row["record_id"] == "seat-0-decision-0"
+               and row["status"] == "delivery_failed"
+               for row in records[-1]["reservations"])
+    assert {row["error_type"] for row in records[-1]["reservations"]
+            if row["status"] == "delivery_failed"} == {"TelemetryReservationUnavailable"}
 
 
 def test_illegal_deck_still_gets_exactly_one_owner_outcome(monkeypatch):
@@ -290,9 +362,9 @@ def test_illegal_deck_still_gets_exactly_one_owner_outcome(monkeypatch):
     result = play_match(SimpleNamespace(), SimpleNamespace(), [], [], telemetry=records)
 
     assert result.winner == 1
-    assert len(records) == 1
-    assert records[0]["record_type"] == "outcome"
-    assert records[0]["result"]["terminal_reason"] == "illegal_deck"
+    assert [record["record_type"] for record in records] == [
+        "telemetry_receipt", "outcome"]
+    assert records[-1]["result"]["terminal_reason"] == "illegal_deck"
 
 
 @pytest.mark.req("REQ-SIM-0007")

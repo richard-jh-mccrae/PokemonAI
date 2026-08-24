@@ -13,16 +13,11 @@ from .algebra import (
     Unknown,
 )
 from .native_engine import NativeCgTransitionProvider
-from .information import (
-    RevealSet,
-    reveal_sets,
-)
 from .options import LegalAction, enumerate_legal_actions
 
 __all__ = (
     "ActionIdentity", "Actor", "Chance", "Choice", "Deterministic",
     "LegalAction", "NativeCgTransitionProvider",
-    "Refresh", "RevealChoice", "RevealOutcome", "RevealSet",
+    "Refresh", "RevealChoice", "RevealOutcome",
     "RootDecision", "Terminal", "Unknown", "enumerate_legal_actions",
-    "reveal_sets",
 )

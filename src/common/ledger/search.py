@@ -3,6 +3,7 @@ from __future__ import annotations
 import hashlib
 import math
 from dataclasses import dataclass
+from pathlib import Path
 
 from common.decision import (
     CandidateDisposition,
@@ -22,13 +23,23 @@ from common.decision import (
     StateValuation,
     ValuationCache,
     ValuedCandidate,
+    neutral_lottery_choice,
     safe_legal_selection,
 )
 from common.observation.provider import provider_payload
 from common.strategy.context import _MAIN
 
-from .decision import ledger_valuation_from_state, value_components
+from .decision import (evaluator_semantics_identity, ledger_valuation_from_state,
+                       value_components)
 from .preview import price_actions
+
+
+LOTTERY_DIGEST_BYTES = 8
+SEARCH_SEMANTICS_IDENTITY = evaluator_semantics_identity((
+    Path(__file__),
+    Path(__file__).with_name("chance.py"),
+    Path(__file__).with_name("preview.py"),
+))
 
 
 class DecisionExecutionError(RuntimeError):
@@ -60,7 +71,7 @@ class TransitionProviderSource:
 
 
 class UniformPolicyModel:
-    identity = "uniform-policy-model-v1"
+    identity = f"uniform-policy-model-v1:{SEARCH_SEMANTICS_IDENTITY}"
 
     def priors(self, state, actions):
         del state
@@ -69,7 +80,7 @@ class UniformPolicyModel:
 
 
 class LedgerOnePlySearch:
-    identity = "ledger-one-ply-v1"
+    identity = f"ledger-one-ply-v2:{SEARCH_SEMANTICS_IDENTITY}"
 
     def search(self, request, evaluator, policy_model, provider, configuration):
         root = request.state
@@ -103,7 +114,7 @@ class LedgerOnePlySearch:
             )
             return SearchResult(
                 baseline,
-                CandidateRoster((candidate,), forced=True),
+                CandidateRoster.from_legal_actions(actions, (candidate,), forced=True),
                 stop_reason="forced",
             )
         budget = BudgetController(configuration)
@@ -128,7 +139,8 @@ class LedgerOnePlySearch:
             raise ValueError("policy model must return one prior per candidate")
         if (any(not math.isfinite(prior) or prior < 0.0 for prior in prior_values)
                 or (prior_values and not math.isclose(sum(prior_values), 1.0,
-                                                      rel_tol=1e-9, abs_tol=1e-9))):
+                                                      rel_tol=configuration.noise_tolerance,
+                                                      abs_tol=configuration.noise_tolerance))):
             raise ValueError("policy priors must be a finite normalized distribution")
         candidates = []
         for price, prior in zip(prices, prior_values):
@@ -162,9 +174,12 @@ class LedgerOnePlySearch:
                 prior,
                 (() if price.prize_map is None else price.prize_map.plan_rank_key()),
                 price.prize_map))
+        legal_actions = (actions if getattr(provider, "requires_observation_roster", False)
+                         else tuple(price.action for price in prices))
         return SearchResult(
             baseline,
-            CandidateRoster(tuple(candidates), forced),
+            CandidateRoster.from_legal_actions(
+                legal_actions, tuple(candidates), forced=forced),
             nodes_visited=budget.nodes,
             stop_reason=budget.stop_reason,
             frontier=tuple(budget.frontier),
@@ -172,7 +187,7 @@ class LedgerOnePlySearch:
 
 
 class GreedyDecisionPolicy:
-    identity = "ledger-spend-then-end-v1"
+    identity = f"ledger-spend-then-end-v1:{SEARCH_SEMANTICS_IDENTITY}"
 
     def choose(self, roster, configuration):
         candidates = tuple(candidate for candidate in roster.candidates
@@ -219,7 +234,7 @@ class GreedyDecisionPolicy:
                 item[1].policy_tie_break if exact else (),
                 hashlib.blake2b(
                     f"{configuration.tie_seed}:{item[0]}".encode("utf-8"),
-                    digest_size=8).digest())))
+                    digest_size=LOTTERY_DIGEST_BYTES).digest())))
             ranked.extend(candidate for _index, candidate in tied)
             used = {index for index, _candidate in tied}
             indexed = [(index, candidate) for index, candidate in indexed
@@ -228,24 +243,24 @@ class GreedyDecisionPolicy:
 
 
 class FailSafeDecisionPolicy:
-    identity = "ledger-fail-safe-v1"
+    identity = f"ledger-fail-safe-v1:{SEARCH_SEMANTICS_IDENTITY}"
 
     _REASONS = {
         DecisionFailureStage.EVALUATION: DecisionReason.FAIL_SAFE_EVALUATION_FAILURE,
         DecisionFailureStage.PROVIDER: DecisionReason.FAIL_SAFE_PROVIDER_FAILURE,
         DecisionFailureStage.SEARCH: DecisionReason.FAIL_SAFE_SEARCH_FAILURE,
         DecisionFailureStage.POLICY: DecisionReason.FAIL_SAFE_POLICY_FAILURE,
+        DecisionFailureStage.PRESENTATION: DecisionReason.FAIL_SAFE_PRESENTATION_FAILURE,
         DecisionFailureStage.RUNTIME: DecisionReason.FAIL_SAFE_RUNTIME_FAILURE,
     }
 
     def choose(self, roster, configuration, state, failure):
-        del configuration
         payload = state.observation if isinstance(state, FailSafeRequest) else provider_payload(state)
         selection = tuple(safe_legal_selection(payload))
         candidate = next((item for item in roster.candidates
                           if selection in getattr(item.action, "equivalent_selections", ())), None)
         if candidate is None:
-            candidate = min(roster.candidates, key=lambda item: item.action.selection)
+            candidate = neutral_lottery_choice(roster.candidates, configuration)
         return DecisionChoice(candidate.action, self._REASONS[failure.stage])
 
 
@@ -272,7 +287,8 @@ def unavailable_ledger_result(request, failure):
         gaps=baseline.gaps,
     ) for action in actions)
     return SearchResult(
-        baseline, CandidateRoster(candidates, forced), stop_reason=failure.stage.value,
+        baseline, CandidateRoster.from_legal_actions(actions, candidates, forced=forced),
+        stop_reason=failure.stage.value,
         failure=failure)
 
 

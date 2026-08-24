@@ -1,10 +1,10 @@
 from __future__ import annotations
 
 from deprecated.bellman.state import DecisionState
-from common.option_equivalence import (
-    class_representatives, fan_out, fingerprint_source_card_id, option_in_play_source_id,
-    option_source_card, semantic_option_fingerprint,
+from deprecated.bellman.option_sources import (
+    fingerprint_source_card_id, option_in_play_source_id, option_source_card,
 )
+from common.option_equivalence import semantic_option_fingerprint
 from common.strategy import Roles
 from observation_helpers import engine_opt
 
@@ -15,12 +15,6 @@ def test_roles_resolve_reads_store_defaults_and_deck_overrides():
     assert roles[119] == ["primary_attacker"]
     assert roles[120] == ["primary_attacker", "draw_engine"]
     assert roles[121] == ["primary_attacker"]
-
-
-def test_option_equivalence_helpers_preserve_the_best_member():
-    classes = {1: frozenset({1, 3}), 3: frozenset({1, 3})}
-    assert class_representatives(classes, 5) == [0, 1, 2, 4]
-    assert fan_out([5.0, 10.0, None, 7.0], classes) == [5.0, 10.0, None, 10.0]
 
 
 #: A real main-menu Play shape; omitted fields once masked `option_source_card` failures.

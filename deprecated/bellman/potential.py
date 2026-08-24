@@ -11,9 +11,10 @@ from dataclasses import dataclass
 
 from common.cards import card_store
 from common.cards.card_facts import BASIC_ENERGY, EnergyCard, PokemonCard, STAGE2
-from common.cards.functions.attack_lock import locked_attack_ids
+from .attack_locks import locked_attack_ids
 from .card_worth import KNOWN_CARD_FLOOR, function_role
-from common.cards.functions.energy import ENERGY_COLORLESS, payment_fraction, provision_units
+from common.cards.functions.energy import ENERGY_COLORLESS, provision_units
+from .energy import payment_fraction
 from .belief import BellmanDeckProfile
 from .damage import bench_reach, compute_active_damage
 from .damage_context import SideFacts, damage_context

@@ -3,48 +3,92 @@ from __future__ import annotations
 import json
 import gzip
 from pathlib import Path
-from dataclasses import dataclass
+from dataclasses import replace
 
 import pyarrow.parquet as pq
 import pytest
 
 from ledger_helpers import printout
-from common.api import ActionIdentity
+from common.api import ActionIdentity, RootDecision
 from common.decision import (CandidateDisposition, CandidateRoster, ComputeConfiguration,
                              DecisionDelta, DecisionResult, EvaluationStatus, SearchResult,
                              StateValuation, ValueScale, ValuedCandidate)
-from common.ledger import EvaluationModel
+from common.ledger import BehaviorIdentity, EvaluationModel
 from common.observation import ObservationStateBuilder
-from common.telemetry import (build_decision_record, build_outcome_record, frame_record,
-                              runtime_provenance)
-from train.corpus import (build_snapshot, build_training_view, certify_replay, load_snapshot,
-                          stage_episode_bundle)
+from common.options import LegalAction
+from common.telemetry import (build_decision_record, build_episode_receipt, build_pregame_record,
+                              build_outcome_record, frame_record, runtime_provenance)
+from train.corpus import (CorpusIntegrityError, CorpusRejection, build_snapshot, build_training_view,
+                          certify_replay, load_snapshot, stage_episode_bundle)
 
 
-@dataclass(frozen=True)
-class _Action:
-    identity: ActionIdentity
-    selection: tuple[int, ...]
+def _Action(identity, selection):
+    return LegalAction(identity, selection, (selection,), ())
 
 
-def _episode(tmp_path: Path, *, episode="42") -> tuple[Path, Path]:
+def _fixture_certificate(_decision: dict, _replay: dict) -> dict:
+    return {
+        "schema_version": 2, "mode": "offline_replay",
+        "recorded_legal_actions_valid": True, "recorded_evaluation_valid": True,
+        "recorded_successors_valid": True, "legal_actions_exact": True,
+        "root_exact": True, "successors_exact": True, "full_choice_exact": True,
+        "exclusion": None,
+    }
+
+
+def _fixture_provider_configuration() -> dict:
+    return {
+        "identity": "fixture-provider", "backend": "fixture",
+        "factory": "tests.FixtureProvider", "version": 2,
+        "kwargs": {}, "factory_kwargs": {},
+    }
+
+
+def _episode(tmp_path: Path, *, episode="42", include_pregame=False) -> tuple[Path, Path]:
+    records = []
+    parent_id = None
+    if include_pregame:
+        pregame_state = ObservationStateBuilder().root(printout(turn=0, select={
+            "context": 0, "minCount": 1, "maxCount": 1, "option": [{"type": 14}],
+        }))
+        legal = pregame_state.legal_actions[0]
+        pregame = build_pregame_record(
+            RootDecision(legal.selection, legal.identity, 0.0, True, {}), pregame_state,
+            episode_key=episode, decision_index=0, parent_decision_id=None,
+            provenance={"agent": "fixture", "artifact": "test", "code": "abc", "data": {}},
+            decision_seconds=0.001,
+        )
+        records.append(pregame)
+        parent_id = pregame["record_id"]
     state = ObservationStateBuilder().root(printout())
     action = _Action(ActionIdentity("end_turn"), (0,))
+    state = replace(state, legal_actions=(action,))
     scale = ValueScale("ledger-worth", 1)
     baseline = StateValuation(state.position_key, 0.0, scale, state.seat, "fixture-evaluator")
     candidate = ValuedCandidate(action, DecisionDelta(0.0, scale),
                                 CandidateDisposition.FORCED, EvaluationStatus.COMPLETE)
-    roster = CandidateRoster((candidate,))
+    roster = CandidateRoster.from_legal_actions(state.legal_actions, (candidate,))
+    behavior = BehaviorIdentity(
+        "fixture-evaluator", "fixture-model", "fixture-search", "fixture-prior",
+        "fixture-policy", "fixture-fail-safe", "fixture-provider", "fixture-compute",
+        "fixture-prize-plan")
     decision = build_decision_record(
-        DecisionResult(action, baseline, roster, SearchResult(baseline, roster)), state,
-        episode_key=episode, decision_index=0, parent_decision_id=None,
+        DecisionResult(action, baseline, roster, SearchResult(baseline, roster),
+                       behavior_identity=behavior), state,
+        episode_key=episode, decision_index=int(include_pregame), parent_decision_id=parent_id,
         selection=(0,), evaluation_model=EvaluationModel.build(),
         compute_configuration=ComputeConfiguration(),
+        provider_configuration=_fixture_provider_configuration(),
         provenance={"agent": "fixture", "artifact": "test", "code": "abc", "data": {}},
         decision_seconds=0.01,
     )
+    records.append(decision)
+    receipt = build_episode_receipt(episode_key=episode, reservations=[{
+        "record_id": record["record_id"], "seat": record["decision"]["seat"],
+        "index": record["decision"]["index"], "status": "delivered", "error_type": None,
+    } for record in records])
     outcome = build_outcome_record(
-        episode_key=episode, decision_records=[decision], winner=0,
+        episode_key=episode, decision_records=records, telemetry_receipt=receipt, winner=0,
         terminal_reason="prizes_taken", public_prizes={0: 0, 1: 2},
         rewards={0: 1.0, 1: -1.0}, duration_seconds=3.5,
         external_episode_id=episode,
@@ -53,7 +97,9 @@ def _episode(tmp_path: Path, *, episode="42") -> tuple[Path, Path]:
     replay.write_text(json.dumps({"info": {"EpisodeId": int(episode)}, "steps": []}),
                       encoding="utf-8")
     telemetry = tmp_path / "telemetry.jsonl"
-    telemetry.write_text("\n".join((*frame_record(decision), *frame_record(outcome))) + "\n",
+    telemetry.write_text("\n".join((*(line for record in records for line in frame_record(record)),
+                                    *frame_record(receipt),
+                                    *frame_record(outcome))) + "\n",
                          encoding="utf-8")
     return replay, telemetry
 
@@ -62,7 +108,8 @@ def test_closed_bundle_publishes_snapshot_and_readable_diagnostic_view(tmp_path)
     replay, telemetry = _episode(tmp_path)
     bundle = stage_episode_bundle(replay_path=replay, telemetry_path=telemetry,
                                   output_root=tmp_path / "bundles")
-    snapshot = build_snapshot(bundles_root=bundle, output_root=tmp_path / "corpus")
+    snapshot = build_snapshot(bundles_root=bundle, output_root=tmp_path / "corpus",
+                              replay_certifier=_fixture_certificate)
     manifest, rows = load_snapshot(snapshot)
 
     assert manifest["decision_count"] == 1
@@ -70,22 +117,47 @@ def test_closed_bundle_publishes_snapshot_and_readable_diagnostic_view(tmp_path)
     assert rows[0]["supervision"]["human"] == {
         "accepted_action_ids": [], "annotations": []}
     assert rows[0]["origin"]["source_schema"] == "ledger.telemetry"
+    assert rows[0]["origin"]["telemetry_receipt_id"]
+    assert set(manifest["identities"]) == {
+        "code", "data", "schema", "evaluator", "configuration", "provider", "behavior"}
 
     view = build_training_view(snapshot_path=snapshot, output_root=tmp_path / "views")
     table = pq.read_table(view / "part-00000.parquet")
     saved = table.to_pylist()[0]
     assert saved["episode_key"] == "42"
     assert saved["seat_reward"] == 1.0
-    assert saved["replay_drift"] is None
+    assert saved["replay_drift"] is False
     assert saved["policy_inconsistency"] is False
     assert json.loads((view / "manifest.json").read_text())["quality"]["status"] == "not_assessed"
+
+
+def test_pregame_is_receipt_certified_and_explicitly_excluded_from_training(tmp_path):
+    replay, telemetry = _episode(tmp_path, include_pregame=True)
+    bundle = stage_episode_bundle(replay_path=replay, telemetry_path=telemetry,
+                                  output_root=tmp_path / "bundles")
+    snapshot = build_snapshot(bundles_root=bundle, output_root=tmp_path / "corpus",
+                              replay_certifier=_fixture_certificate)
+    manifest, rows = load_snapshot(snapshot)
+
+    assert len(rows) == 2
+    excluded = next(row for row in rows if row.get("exclusion"))
+    ledger = next(row for row in rows if not row.get("exclusion"))
+    assert excluded["exclusion"] == {"reason": "pregame_not_ledger"}
+    assert excluded["decision"]["decision"]["variant"] == "declarative_pregame"
+    assert manifest["training_exclusions"] == [{
+        "decision_id": manifest["training_exclusions"][0]["decision_id"],
+        "bundle_id": manifest["bundle_ids"][0],
+        "telemetry_receipt_id": ledger["origin"]["telemetry_receipt_id"],
+        "reason": "pregame_not_ledger", "receipt_certified": True,
+    }]
 
 
 def test_health_is_only_unhealthy_against_a_named_profile_threshold(tmp_path):
     replay, telemetry = _episode(tmp_path)
     bundle = stage_episode_bundle(replay_path=replay, telemetry_path=telemetry,
                                   output_root=tmp_path / "bundles")
-    snapshot = build_snapshot(bundles_root=bundle, output_root=tmp_path / "corpus")
+    snapshot = build_snapshot(bundles_root=bundle, output_root=tmp_path / "corpus",
+                              replay_certifier=_fixture_certificate)
     profile = tmp_path / "strict.json"
     profile.write_text(json.dumps({
         "name": "latency-test", "schema_version": 1,
@@ -105,9 +177,11 @@ def test_publication_is_deterministic_and_reuses_content_addressed_artifacts(tmp
                                         output_root=tmp_path / "bundles")
     second_bundle = stage_episode_bundle(replay_path=replay, telemetry_path=telemetry,
                                          output_root=tmp_path / "bundles")
-    first = build_snapshot(bundles_root=tmp_path / "bundles", output_root=tmp_path / "corpus")
+    first = build_snapshot(bundles_root=tmp_path / "bundles", output_root=tmp_path / "corpus",
+                           replay_certifier=_fixture_certificate)
     before = (first / "decisions-00000.jsonl.gz").read_bytes()
-    second = build_snapshot(bundles_root=tmp_path / "bundles", output_root=tmp_path / "corpus")
+    second = build_snapshot(bundles_root=tmp_path / "bundles", output_root=tmp_path / "corpus",
+                            replay_certifier=_fixture_certificate)
 
     assert first_bundle == second_bundle
     assert first == second
@@ -136,10 +210,42 @@ def test_bundle_hash_tampering_blocks_snapshot_publication(tmp_path):
                                   output_root=tmp_path / "bundles")
     (bundle / "replay.json").write_text("{}", encoding="utf-8")
     with pytest.raises(ValueError, match="hash mismatch"):
-        build_snapshot(bundles_root=bundle, output_root=tmp_path / "corpus")
+        build_snapshot(bundles_root=bundle, output_root=tmp_path / "corpus",
+                       replay_certifier=_fixture_certificate)
 
 
-def test_offline_replay_certifies_recorded_ledger_evaluation():
+def test_integrity_gate_collects_replay_rejections_without_advancing_latest(tmp_path):
+    replay, telemetry = _episode(tmp_path)
+    bundle = stage_episode_bundle(replay_path=replay, telemetry_path=telemetry,
+                                  output_root=tmp_path / "bundles")
+
+    def reject(decision, _replay):
+        raise ValueError(f"cannot resolve {decision['record_id']}")
+
+    with pytest.raises(CorpusIntegrityError) as caught:
+        build_snapshot(bundles_root=bundle, output_root=tmp_path / "corpus",
+                       replay_certifier=reject)
+
+    assert len(caught.value.rejections) == 1
+    assert not (tmp_path / "corpus" / "latest.json").exists()
+
+
+def test_unjustified_full_choice_omission_is_a_corpus_rejection(tmp_path):
+    replay, telemetry = _episode(tmp_path)
+    bundle = stage_episode_bundle(replay_path=replay, telemetry_path=telemetry,
+                                  output_root=tmp_path / "bundles")
+
+    def omitted(_decision, _replay):
+        return {**_fixture_certificate({}, {}), "full_choice_exact": None}
+
+    with pytest.raises(CorpusIntegrityError, match="full_choice_exact"):
+        build_snapshot(bundles_root=bundle, output_root=tmp_path / "corpus",
+                       replay_certifier=omitted)
+    assert not (tmp_path / "corpus" / "latest.json").exists()
+
+
+@pytest.fixture(scope="module")
+def replay_evidence():
     from train.blunder.decisions import iter_decisions
     from train.ledger_corpus import _build_runtime
 
@@ -149,19 +255,61 @@ def test_offline_replay_certifies_recorded_ledger_evaluation():
     decisions = iter_decisions(replay)
     frame = next(item for item in decisions if item.obs is not None and item.turn > 0)
     decision_index = [item for item in decisions if item.seat == frame.seat].index(frame)
-    runtime = _build_runtime("mega_starmie")
+    runtime = _build_runtime("mega_starmie", weight_overrides={"zone.in_hand": 7.0})
     root = runtime.decide(frame.obs)
     record = build_decision_record(
         root.decision_result, runtime.last_state,
         episode_key=str(frame.episode_id), decision_index=decision_index,
         parent_decision_id=None, selection=tuple(root.chosen),
         evaluation_model=runtime.ledger.ctx, compute_configuration=runtime.ledger.compute,
+        provider_configuration=runtime.ledger.provider_configuration,
         provenance=runtime_provenance(deck_name="mega_starmie"),
         decision_seconds=0.01, opponent_snapshot=runtime.opponent_snapshot,
     )
+    return record, replay
+
+
+def test_offline_replay_certifies_recorded_ledger_evaluation(replay_evidence):
+    record, replay = replay_evidence
 
     certificate = certify_replay(record, replay)
     assert certificate["mode"] == "offline_replay"
     assert certificate["legal_actions_exact"] is True
     assert certificate["root_exact"] is True
     assert certificate["successors_exact"] is True
+
+
+def test_unresolved_identity_and_provider_substitution_reject_before_publication(replay_evidence):
+    record, replay = replay_evidence
+    unresolved = json.loads(json.dumps(record))
+    unresolved["provenance"]["agent"] = "missing-agent"
+    with pytest.raises(CorpusRejection, match="agent_artifact_unavailable"):
+        certify_replay(unresolved, replay)
+
+    substituted = json.loads(json.dumps(record))
+    substituted["configuration"]["provider"]["backend"] = "native-cg-ledger"
+    with pytest.raises(CorpusRejection, match="provider_substitution"):
+        certify_replay(substituted, replay)
+
+
+@pytest.mark.parametrize(("mutation", "reason"), [
+    (lambda row: row["actions"].reverse(), "legal_actions_drift"),
+    (lambda row: row["root"].__setitem__("total", row["root"]["total"] + 1.0),
+     "root_valuation_drift"),
+    (lambda row: row["root"]["components"][0].__setitem__(
+        "activation", row["root"]["components"][0]["activation"] + 1.0),
+     "root_valuation_drift"),
+    (lambda row: row["root"]["components"][0].__setitem__(
+        "value", row["root"]["components"][0]["value"] + 1.0),
+     "root_valuation_drift"),
+    (lambda row: row["candidates"][0]["delta"].__setitem__(
+        "total", row["candidates"][0]["delta"]["total"] + 1.0),
+     "successor_evaluation_drift"),
+])
+def test_exact_replay_rejects_legal_root_activation_contribution_and_successor_drift(
+        replay_evidence, mutation, reason):
+    record, replay = replay_evidence
+    changed = json.loads(json.dumps(record))
+    mutation(changed)
+    with pytest.raises(CorpusRejection, match=reason):
+        certify_replay(changed, replay)

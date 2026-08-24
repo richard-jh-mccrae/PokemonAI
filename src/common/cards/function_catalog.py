@@ -131,55 +131,5 @@ _SCHEMAS = {
 
 FUNCTION_CATALOG = FunctionCatalog(_SCHEMAS)
 
-# Mechanical clauses remain rule-engine facts. Clauses with a standing-value reading declare
-# their Ledger output here; evaluation supplies the board-dependent activation.
-FUNCTION_FEATURES = MappingProxyType({
-    "accel": "function.accel.open_energy_slot",
-    "ability_suppression": "function.suppression.ability_target",
-    "attack_lock": "function.denial.opponent_resource",
-    "attack_cost_reduction": "function.cost_reduction.open_cost",
-    "attack_debuff": "function.status.active_target",
-    "bench_snipe": "function.bench_pressure.target_count",
-    "bench_spread": "function.bench_pressure.target_count",
-    "confuse": "function.status.active_target",
-    "cost_reduction": "function.cost_reduction.open_cost",
-    "damage_counters": "function.bench_pressure.target_count",
-    "damage_protection": "function.protection.incoming_pressure",
-    "damage_reduction": "function.protection.incoming_pressure",
-    "discard_opp_energy": "function.denial.opponent_resource",
-    "draw": "function.draw.hand_deficit",
-    "energy_bounce": "function.denial.opponent_resource",
-    "energy_double": "function.accel.open_energy_slot",
-    "energy_recur": "function.accel.open_energy_slot",
-    "evolve_early": "function.development.board_fit",
-    "fetch": "function.fetch.live_target",
-    "gust": "function.gust.bench_target",
-    "heal": "function.heal.damage_present",
-    "hp_bonus": "function.protection.incoming_pressure",
-    "item_lock": "function.denial.opponent_resource",
-    "mill": "function.disruption.opponent_hand",
-    "move_damage": "function.move_damage.damage_present",
-    "move_energy": "function.accel.open_energy_slot",
-    "no_retreat": "function.denial.opponent_resource",
-    "opp_hand_to_deck": "function.disruption.opponent_hand",
-    "prevent_damage": "function.protection.incoming_pressure",
-    "prevent_effects": "function.protection.incoming_pressure",
-    "push_out": "function.switch.active_pressure",
-    "ko": "function.ko.active_target",
-    "retreat_lock": "function.denial.opponent_resource",
-    "retreat_reduction": "function.cost_reduction.open_cost",
-    "recoil": "function.self_cost.exposure",
-    "self_discard_energy": "function.self_cost.exposure",
-    "self_mill": "function.self_cost.exposure",
-    "self_return": "function.self_cost.exposure",
-    "self_shuffle_in": "function.self_cost.exposure",
-    "self_switch": "function.switch.active_pressure",
-    "sleep": "function.status.active_target",
-    "stadium_static": "function.stadium.board_fit",
-    "stadium_trigger": "function.stadium.board_fit",
-    "switch_self": "function.switch.active_pressure",
-})
 
-
-__all__ = ("FUNCTION_CATALOG", "FUNCTION_FEATURES", "FunctionCatalog", "FunctionSpec",
-           "card_clauses")
+__all__ = ("FUNCTION_CATALOG", "FunctionCatalog", "FunctionSpec", "card_clauses")

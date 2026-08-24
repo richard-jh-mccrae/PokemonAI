@@ -208,7 +208,7 @@ def test_unknown_card_scores_the_floor_and_logs_a_gap():
 
 
 def test_non_pokemon_rendered_as_a_body_is_explicit_coverage_unknown():
-    valuation = evaluate(board(me=player(active=body(ULTRA_BALL, 1))), ctx())
+    valuation = evaluate(board(me=player(active=body(ULTRA_BALL, 1), hand=[IGNITION])), ctx())
 
     assert any("non-Pokemon body" in gap for gap in valuation.gaps)
     assert any(item.feature == "coverage.unknown_card" and item.value > 0

@@ -19,11 +19,15 @@ from common.decision import EvaluationStatus, SearchConfiguration, SuccessorResu
 from common.observation import ObservationState, ObservationStateBuilder, TransitionTrace
 from common.strategy.context import _MAIN
 
+from .activation import ActivationCompiler, ActivationEnvironment
 from .chance import refresh_outcomes
 from .decision import state_valuation_from_ledger
 from .evaluate import FeatureActivation, FeatureContribution, Valuation, evaluate
 from .prizes import PrizeMap
 from .worth import EvaluationModel
+
+LOTTERY_DIGEST_BYTES = 8
+
 
 @dataclass(frozen=True)
 class ContinuationFootprint:
@@ -97,12 +101,10 @@ def price_actions(state, board: ObservationState, baseline: float, provider,
         ends_turn = end_probability >= 1.0
         state_delta = successor.total - baseline
         activation = -(1.0 - end_probability)
-        opportunity_coefficient = ctx.configuration["action.opportunity_cost"]
-        opportunity_cost = activation * opportunity_coefficient
-        action_contribution = (() if not activation else (
-            FeatureContribution("action.opportunity_cost", activation,
-                                opportunity_coefficient, opportunity_cost,
-                                ("continuation",)),))
+        action_contribution = _event_contributions(
+            "continuation", (("continued_action", activation),), ctx,
+            "continuation")
+        opportunity_cost = sum(item.value for item in action_contribution)
         state_contributions = _state_contributions(baseline_valuation, successor, ctx)
         footprint_values = _root_footprint(
             board, provider, state, landings, walk.gaps)
@@ -259,7 +261,7 @@ class _Walk:
         def lottery(indexed_entry):
             index, _entry = indexed_entry
             payload = f"{self.compute.tie_seed}:{salt}:{index}".encode("utf-8")
-            return hashlib.blake2b(payload, digest_size=8).digest()
+            return hashlib.blake2b(payload, digest_size=LOTTERY_DIGEST_BYTES).digest()
 
         return min(indexed, key=lottery)[1]
 
@@ -294,11 +296,9 @@ def _root_footprint(board: ObservationState, provider, state, landings, gaps) ->
         "zones_created", "zones_replaced", "allowances_consumed",
         "immediately_usable_outputs", "opportunities_created",
         "opportunities_preserved", "opportunities_consumed")}
-    activations = {feature: 0.0 for feature in (
-        "continuation.zone_created", "continuation.zone_replaced",
-        "continuation.allowance_consumed", "continuation.usable_output",
-        "continuation.opportunity_created", "continuation.opportunity_preserved",
-        "continuation.opportunity_consumed")}
+    activations = {claim: 0.0 for claim in (
+        "zone_created", "zone_replaced", "allowance_consumed", "usable_output",
+        "opportunity_created", "opportunity_preserved", "opportunity_consumed")}
     before = zones(board)
     before_actions = _legal_inventory(provider, state, gaps)
     allowances = ("supporter_played", "stadium_played", "energy_attached", "retreated")
@@ -361,12 +361,22 @@ def _legal_inventory(provider, state, gaps) -> Counter[str]:
 
 
 def _footprint_contributions(values, ctx):
+    return _event_contributions(
+        "continuation", values.activations, ctx, "continuation.footprint")
+
+
+def _event_contributions(source, events, ctx, provenance):
     contributions = []
-    for feature, activation in values.activations:
-        coefficient = ctx.configuration[feature]
-        contributions.append(FeatureContribution(
-            feature, activation, coefficient, activation * coefficient,
-            ("continuation.footprint",)))
+    compiler = ActivationCompiler()
+    for claim, value in events:
+        if not compiler.catalog.has_activation_rules(source, (claim,)):
+            raise KeyError(f"Feature Catalog has no {source!r} rule for {claim!r}")
+        for activation in compiler.compile(
+                source, (claim,), ActivationEnvironment(scale=value)):
+            coefficient = ctx.configuration[activation.feature]
+            contributions.append(FeatureContribution(
+                activation.feature, activation.value, coefficient,
+                activation.value * coefficient, (provenance,)))
     return tuple(contributions)
 
 

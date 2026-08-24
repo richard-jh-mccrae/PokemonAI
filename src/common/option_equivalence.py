@@ -79,72 +79,6 @@ def _is_implicit_play(option: dict) -> bool:
     return option.get("type") in (OPTION_PLAY, "Play") and option.get("area") is None
 
 
-def option_source_card(option: dict, frame: dict | None):
-    """Resolve the visible card selected by an option's primary area/index reference."""
-    if not isinstance(option, dict):
-        return None
-    seat = option.get("playerIndex")
-    if seat is None:
-        seat = ((frame or {}).get("current") or {}).get("yourIndex", 0)
-    area = option.get("area", AREA_HAND)
-    if area is None and _is_implicit_play(option):
-        area = AREA_HAND
-    return _card_at(frame, seat, area, option.get("index"))
-
-
-def option_in_play_source_id(option, frame: dict | None, seat: int | None = None) -> int | None:
-    """Resolve the card id an ability, skill, or tool acts through.
-    Treat present-but-None keys as absent and fail closed on unresolved references."""
-    if not isinstance(option, dict):
-        return None
-    card_id = option.get("cardId")
-    if card_id is not None:                          # SKILL options name the card directly
-        return int(card_id)
-    if option.get("playerIndex") is not None:
-        seat = option["playerIndex"]
-    if seat is None:
-        seat = ((frame or {}).get("current") or {}).get("yourIndex", 0)
-    for area_key, index_key in reversed(_ZONE_REFS):
-        area = option.get(area_key)
-        if area is None:
-            continue
-        index = option.get(index_key)
-        if area == AREA_STADIUM:
-            cards = ((frame or {}).get("current") or {}).get("stadium") or []
-            card = (cards[index] if isinstance(index, int) and 0 <= index < len(cards)
-                    else None)
-        else:
-            card = _card_at(frame, seat, area, index)
-        return (int(card["id"]) if isinstance(card, dict) and card.get("id") is not None
-                else None)
-    return None
-
-
-def fingerprint_source_card_id(part, frame: dict | None) -> int | None:
-    """Resolve a source card id from one ActionIdentity part.
-    Semantic identities embed the card; fallback identities retain raw area/index keys."""
-    if not isinstance(part, str):
-        return None
-    try:
-        decoded = json.loads(part)
-    except (TypeError, ValueError):
-        return None
-    if not isinstance(decoded, list) or not decoded:
-        return None
-    head = decoded[0]
-    if isinstance(head, dict):                       # fallback shape: [public, enriched]
-        return option_in_play_source_id(head, frame)
-    fields = decoded[1] if len(decoded) > 1 and isinstance(decoded[1], dict) else {}
-    if fields.get("cardId") is not None:
-        return int(fields["cardId"])
-    cards = decoded[2] if len(decoded) > 2 and isinstance(decoded[2], list) else []
-    for reference in cards:
-        if (isinstance(reference, list) and len(reference) == _FINGERPRINT_REFERENCE_LENGTH
-                and isinstance(reference[1], dict) and reference[1].get("id") is not None):
-            return int(reference[1]["id"])
-    return None
-
-
 def option_fingerprint(option: dict, frame: dict | None) -> str | None:
     """None = "joins no class", returned whenever ANY zone reference fails to resolve — never a
     partial fingerprint over the references that happened to work. An option naming no zone is None."""
@@ -221,28 +155,6 @@ def option_equivalence(options, frame: dict | None) -> dict:
             for i in members}
 
 
-def classes(equiv: dict) -> list:
-    """One frame's classes as a sorted list of sorted index lists."""
-    return sorted(sorted(members) for members in {frozenset(v) for v in (equiv or {}).values()})
-
-
 def class_of(equiv: dict, index: int) -> frozenset:
     """The class ``index`` belongs to — itself alone when it is in none."""
     return (equiv or {}).get(index) or frozenset({index})
-
-
-def class_representatives(equiv: dict, count: int) -> list:
-    """One index per class plus every unclassed option, ascending. The representative is the LOWEST
-    index in its class so the choice is a pure function of the menu (Issue #178 reproducibility)."""
-    return [i for i in range(count) if min(class_of(equiv, i)) == i]
-
-
-def fan_out(values, equiv: dict) -> list:
-    """Spread each representative's value across its class — the class MAXIMUM, index-aligned. Sound
-    by isomorphism; the minimum was rejected for discarding a line the simulator proved attainable."""
-    out = []
-    for i in range(len(values)):
-        scored = [values[m] for m in class_of(equiv, i)
-                  if m < len(values) and values[m] is not None]
-        out.append(max(scored) if scored else None)
-    return out

@@ -44,10 +44,9 @@ def _ledger_diagnostic_row(row: dict) -> dict:
         "deadline_hit": decision["timing"]["deadline_hit"],
         "seat_reward": row["terminal_target"]["seat_reward"],
         "winner": row["terminal_target"]["winner"],
-        "replay_drift": (None if row["replay_certificate"]["mode"] == "not_replayed"
-                         else not all(row["replay_certificate"][field]
-                                      for field in ("legal_actions_exact", "root_exact",
-                                                    "successors_exact"))),
+        "replay_drift": not all(row["replay_certificate"][field]
+                                for field in ("legal_actions_exact", "root_exact",
+                                              "successors_exact")),
         "policy_inconsistency": (None if not accepted else chosen not in set(accepted)),
         "full_choice_replayed": row["replay_certificate"]["full_choice_exact"] is not None,
     }
@@ -103,7 +102,7 @@ def build_training_view(*, snapshot_path: Path, output_root: Path,
     except ImportError as error:
         raise RuntimeError("Training Views require the pinned pyarrow dependency") from error
     manifest, corpus_rows = load_snapshot(Path(snapshot_path))
-    rows = [_ledger_diagnostic_row(row) for row in corpus_rows]
+    rows = [_ledger_diagnostic_row(row) for row in corpus_rows if not row.get("exclusion")]
     profile = json.loads(Path(profile_path).read_text(encoding="utf-8"))
     if set(profile) != {"name", "schema_version", "thresholds"} \
             or profile["schema_version"] != 1 or not isinstance(profile["thresholds"], dict):

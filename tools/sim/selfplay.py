@@ -130,10 +130,13 @@ def generate_corpus(agent: str, n: int, *, agents_root, out_root, when, sha, ove
             (run_dir / f"{eid}.json").write_text(json.dumps(tagged, ensure_ascii=False),
                                                  encoding="utf-8")
             winner, prizes, rewards = _terminal_facts(tagged)
+            receipt = captured.receipt(str(eid))
+            captured.append(receipt)
             captured.append(build_outcome_record(
                 episode_key=str(eid),
                 decision_records=[record for record in captured
                                   if record.get("record_type") == "decision"],
+                telemetry_receipt=receipt,
                 winner=winner,
                 terminal_reason="engine_win" if winner is not None else "draw",
                 public_prizes=prizes,

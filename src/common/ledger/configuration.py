@@ -11,6 +11,9 @@ from .features import FEATURE_CATALOG, FeatureCatalog
 from common.decision import ComputeConfiguration
 
 
+CONFIGURATION_ID_DIGEST_BYTES = 8
+
+
 def _finite(key, value) -> float:
     number = float(value)
     if not math.isfinite(number):
@@ -23,12 +26,26 @@ class DeckOverlay:
     residuals: tuple[tuple[str, float], ...]
 
     def __init__(self, residuals: Mapping[str, float] | None = None):
-        unknown = set(residuals or ()) - set(FEATURE_CATALOG.priced_keys)
+        pairs = _coefficient_pairs(residuals or (), "deck overlay")
+        unknown = {key for key, _value in pairs} - set(FEATURE_CATALOG.priced_keys)
         if unknown:
             raise KeyError(f"unknown valuation feature {sorted(unknown)[0]!r}")
         values = tuple(sorted((str(key), _finite(key, value))
-                              for key, value in (residuals or {}).items()))
+                              for key, value in pairs))
         object.__setattr__(self, "residuals", values)
+
+    @classmethod
+    def complete(cls, values, catalog: FeatureCatalog = FEATURE_CATALOG):
+        pairs = _coefficient_pairs(values, "complete deck overlay")
+        keys = {key for key, _value in pairs}
+        expected = set(catalog.priced_keys)
+        if keys != expected:
+            missing = sorted(expected - keys)
+            unknown = sorted(keys - expected)
+            detail = f"missing {missing[0]!r}" if missing else f"unknown {unknown[0]!r}"
+            raise ValueError(f"complete deck overlay must cover exact catalog: {detail}")
+        general = ValuationConfiguration.general(catalog)
+        return cls({key: _finite(key, value) - general[key] for key, value in pairs})
 
 
 @dataclass(frozen=True, init=False)
@@ -41,7 +58,8 @@ class ValuationConfiguration(Mapping[str, float]):
         version = int(schema_version)
         if version != FEATURE_CATALOG.schema_version:
             raise ValueError("valuation schema version does not match feature catalog")
-        keys = {str(key) for key in values}
+        pairs = _coefficient_pairs(values, "valuation configuration")
+        keys = {key for key, _value in pairs}
         expected = set(FEATURE_CATALOG.priced_keys)
         if keys != expected:
             missing = sorted(expected - keys)
@@ -50,7 +68,7 @@ class ValuationConfiguration(Mapping[str, float]):
             raise ValueError(f"valuation configuration must cover exact catalog: {detail}")
         object.__setattr__(self, "schema_version", version)
         normalized = tuple(sorted(
-            (str(key), _finite(key, value)) for key, value in values.items()))
+            (str(key), _finite(key, value)) for key, value in pairs))
         object.__setattr__(self, "values", normalized)
         object.__setattr__(self, "_lookup", MappingProxyType(dict(normalized)))
 
@@ -97,7 +115,8 @@ class ValuationConfiguration(Mapping[str, float]):
     def identity(self) -> str:
         payload = {"schema_version": self.schema_version, "values": self.values}
         blob = json.dumps(payload, sort_keys=True).encode("utf-8")
-        return hashlib.blake2b(blob, digest_size=8).hexdigest()
+        return hashlib.blake2b(
+            blob, digest_size=CONFIGURATION_ID_DIGEST_BYTES).hexdigest()
 
 
 @dataclass(frozen=True, slots=True)
@@ -111,6 +130,16 @@ class BehaviorIdentity:
     provider: str
     compute: str
     prize_plan: str
+
+
+def _coefficient_pairs(values, label: str) -> list[tuple[str, float]]:
+    pairs = list(values.items() if isinstance(values, Mapping) else values)
+    normalized = [(str(key), value) for key, value in pairs]
+    keys = [key for key, _value in normalized]
+    duplicate = next((key for index, key in enumerate(keys) if key in keys[:index]), None)
+    if duplicate is not None:
+        raise ValueError(f"{label} contains duplicate feature {duplicate!r}")
+    return normalized
 
 
 __all__ = ("BehaviorIdentity", "ComputeConfiguration", "DeckOverlay",

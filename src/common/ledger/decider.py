@@ -11,9 +11,13 @@ from __future__ import annotations
 
 import os
 import sys
+import hashlib
+import json
+from collections.abc import Mapping
 
 from common.api import RootDecision
-from common.decision import DecisionCoordinator, FailSafeRequest, fail_safe_request
+from common.decision import (DecisionCoordinator, DecisionFailure, DecisionFailureStage,
+                             FailSafeRequest, fail_safe_request)
 from common.observation import (KnownOwnPrizes, ObservationStateBuilder, OpponentBelief,
                                 reduce_knowledge)
 from common.strategy.context import _MAIN
@@ -25,12 +29,54 @@ from .search import (FailSafeDecisionPolicy, GreedyDecisionPolicy, LedgerOnePlyS
 from .seam import LedgerNativeProvider, PreviewState
 from .worth import EvaluationModel
 
+
+PROVIDER_ID_DIGEST_BYTES = 16
+
 class LedgerUnavailable(RuntimeError):
     """The transition seam could not open for this observation."""
 
 
 class DecisionPostprocessingError(RuntimeError):
     coordinator_entered = True
+
+
+def _provider_descriptor(factory, kwargs) -> dict:
+    target = getattr(factory, "func", factory)
+    factory_name = f"{target.__module__}.{target.__qualname__}"
+    return {
+        "backend": getattr(target, "backend", None) or f"python:{factory_name}",
+        "factory": factory_name,
+        "version": getattr(target, "version", None),
+        "kwargs": _identity_input(kwargs),
+        "factory_kwargs": _identity_input(getattr(factory, "keywords", None) or {}),
+    }
+
+
+def _provider_identity(factory, kwargs) -> str:
+    descriptor = _provider_descriptor(factory, kwargs)
+    blob = json.dumps(descriptor, sort_keys=True, separators=(",", ":")).encode("utf-8")
+    return hashlib.blake2b(blob, digest_size=PROVIDER_ID_DIGEST_BYTES).hexdigest()
+
+
+def _identity_input(value):
+    if isinstance(value, Mapping):
+        return {str(key): _identity_input(child)
+                for key, child in sorted(value.items(), key=lambda item: str(item[0]))}
+    if isinstance(value, (tuple, list)):
+        return [_identity_input(child) for child in value]
+    if isinstance(value, (set, frozenset)):
+        return sorted((_identity_input(child) for child in value), key=repr)
+    if value is None or isinstance(value, (bool, int, float, str)):
+        return value
+    identity = getattr(value, "identity", None)
+    if identity is not None:
+        return {"type": f"{type(value).__module__}.{type(value).__qualname__}",
+                "identity": str(identity)}
+    if callable(value):
+        return {"callable": f"{value.__module__}.{value.__qualname__}"}
+    raise TypeError(
+        f"provider identity input {type(value).__module__}.{type(value).__qualname__} "
+        "must expose an identity")
 
 
 class LedgerDecider:
@@ -51,11 +97,13 @@ class LedgerDecider:
         self.coordinator = self._build_coordinator()
 
     @property
+    def provider_configuration(self) -> dict:
+        descriptor = _provider_descriptor(self.provider_factory, self.provider_kwargs)
+        return {"identity": _provider_identity(self.provider_factory, self.provider_kwargs),
+                **descriptor}
+
+    @property
     def behavior_identity(self) -> BehaviorIdentity:
-        provider = self.provider_factory
-        target = getattr(provider, "func", provider)
-        provider_name = (getattr(provider, "backend", None)
-                         or f"{target.__module__}.{target.__qualname__}")
         return BehaviorIdentity(
             LedgerValueEvaluator.identity,
             self.ctx.identity,
@@ -63,7 +111,7 @@ class LedgerDecider:
             UniformPolicyModel.identity,
             GreedyDecisionPolicy.identity,
             FailSafeDecisionPolicy.identity,
-            provider_name,
+            _provider_identity(self.provider_factory, self.provider_kwargs),
             self.compute.identity,
             self.ctx.prize_plan.identity,
         )
@@ -103,10 +151,24 @@ class LedgerDecider:
                         policy_configuration=policy_configuration)
             finally:
                 provider.close()
-            return self._root_decision(
-                result, board, opponent, policy_configuration,
-                decision_parity=self.parity_oracle is not None and provider.instance is not None,
-                cleanup_failure=provider.close_failure)
+            try:
+                return self._root_decision(
+                    result, board, opponent, policy_configuration,
+                    decision_parity=(self.parity_oracle is not None
+                                     and provider.instance is not None),
+                    cleanup_failure=provider.close_failure)
+            except LedgerUnavailable:
+                raise
+            except Exception as exc:
+                failure = DecisionFailure.capture(DecisionFailureStage.PRESENTATION, exc)
+                result = self.coordinator.recover(state, result.search, failure)
+                self.gap_sink = None
+                try:
+                    return self._root_decision(
+                        result, board, opponent, policy_configuration,
+                        decision_parity=False, cleanup_failure=provider.close_failure)
+                except Exception:
+                    return self._emergency_projection(result)
         except Exception as exc:
             if isinstance(exc, LedgerUnavailable):
                 raise
@@ -151,6 +213,27 @@ class LedgerDecider:
             failure_handler=unavailable_ledger_result,
         )
 
+    @staticmethod
+    def _emergency_projection(result):
+        chosen = result.chosen_candidate
+        if chosen is None:
+            raise LedgerUnavailable("no chosen candidate")
+        value = None if chosen.delta is None else chosen.delta.total
+        failure = result.search.failure
+        return RootDecision(
+            chosen=tuple(chosen.action.selection), action=chosen.action.identity,
+            value=0.0 if value is None else value, complete=value is not None,
+            diagnostics={
+                "backend": "ledger", "behavior": result.behavior_identity,
+                "policy_reason": getattr(result.policy_reason, "value", result.policy_reason),
+                "failure": None if failure is None else {
+                    "stage": failure.stage.value, "error_type": failure.error_type,
+                    "message": failure.message, "traceback_tail": failure.traceback_tail,
+                },
+            },
+            decision_result=result,
+        )
+
     def _root_decision(self, result, board, opponent, policy_configuration, *,
                        decision_parity, cleanup_failure=None,
                        fail_safe_request: FailSafeRequest | None = None):
@@ -171,8 +254,9 @@ class LedgerDecider:
             )
 
         candidates = result.roster.candidates
-        chosen = next(candidate for candidate in candidates
-                      if candidate.action is result.chosen)
+        chosen = result.chosen_candidate
+        if chosen is None:
+            raise LedgerUnavailable("no chosen candidate")
         context_value = (fail_safe_request.context if fail_safe_request is not None else
                          None if board.select is None else board.select.context)
         context = _MAIN if context_value is None else int(context_value)
@@ -193,7 +277,6 @@ class LedgerDecider:
                                             else board.decision_key),
                            "gaps": sorted(set(gaps)),
                            "chosen": list(chosen.action.selection)})
-        ranked = GreedyDecisionPolicy._ranked(candidates, policy_configuration)
         return RootDecision(
             chosen=tuple(chosen.action.selection), action=chosen.action.identity,
             value=0.0 if chosen_value is None else chosen_value,
@@ -263,7 +346,7 @@ class LedgerDecider:
                                      } for item in (() if candidate.delta is None
                                                    else candidate.delta.components)),
                                  })}
-                                for candidate in ranked),
+                                for candidate in candidates),
             },
             decision_result=result,
         )

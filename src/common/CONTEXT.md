@@ -164,6 +164,11 @@ _Avoid_: Weight field, emitted string, subsystem registry
 A sparse observed or derived quantity emitted independently of coefficients.
 _Avoid_: Contribution, configured weight
 
+**Activation Rule**:
+A typed, coefficient-independent Feature Catalog declaration mapping legal facts to one Feature
+Activation.
+_Avoid_: Mechanic branch, Strategic coefficient, Evaluator switch
+
 **Feature Contribution**:
 A Ledger Value Component equal to one Feature Activation multiplied once by its resolved Valuation
 Coefficient.
@@ -243,6 +248,11 @@ _Avoid_: Bellman record, diagnostics dump, chosen action
 **Outcome Record**:
 One Episode's terminal public facts and labels, linked to every Decision Record in that Episode.
 _Avoid_: Terminal decision, reward row
+
+**Episode Telemetry Receipt**:
+Match-scoped closure proof for every reserved Decision Record and its commit or delivery failure. An
+incomplete receipt cannot certify an Outcome Record or Episode Bundle.
+_Avoid_: Flush flag, Best-effort count, Log scrape
 
 **Opponent Belief**:
 Scouting's immutable evidence-level estimate of the opponent: candidate-conditioned probabilities,

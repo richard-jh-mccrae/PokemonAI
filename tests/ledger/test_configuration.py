@@ -1,16 +1,20 @@
 from common.ledger import (
+    ActivationCompiler,
+    ActivationEnvironment,
+    ActivationRule,
     BehaviorIdentity,
     ComputeConfiguration,
     FEATURE_CATALOG,
     DeckOverlay,
     EvaluationModel,
+    FeatureCatalog,
+    FeatureSpec,
+    OpponentProfile,
     ValuationConfiguration,
-    opponent_profiles_from_snapshot,
 )
 from dataclasses import replace
 import pytest
-from common.cards import (FUNCTION_CATALOG, FUNCTION_FEATURES, Attack, Clause, PokemonCard,
-                          card_store)
+from common.cards import FUNCTION_CATALOG, Attack, Clause, PokemonCard, card_store
 from common.cards.pokemon_roles import POKEMON_ROLES
 from common.ledger.worth import _compile_forward_lines, usable_units
 from common.opponent import (
@@ -26,6 +30,12 @@ def _snapshot(*, observed_roles=None, candidates=(), unknown_mass=1.0):
     state = ObservationStateBuilder().root(printout())
     return OpponentSnapshot(
         OpponentEvidence.from_state(state), observed_roles or {}, candidates, unknown_mass)
+
+
+def _profiles(snapshot):
+    return {candidate.archetype: OpponentProfile(
+        candidate.roles, candidate.traits, candidate.mechanics, candidate.resources)
+            for candidate in snapshot.candidates}
 
 
 def test_runtime_context_resolves_the_complete_catalog_with_a_deck_residual():
@@ -62,6 +72,42 @@ def test_evaluation_model_excludes_deployment_compute_configuration():
 
     assert not hasattr(context, "compute")
     assert context.identity
+
+
+def test_evaluation_model_identity_covers_canonical_card_store_content():
+    context = EvaluationModel.build()
+    card_id, card = next(iter(context.store.items()))
+    changed = replace(context, store={**context.store, card_id: replace(
+        card, name=f"{card.name} changed")})
+
+    assert changed.configuration.identity == context.configuration.identity
+    assert changed.identity != context.identity
+
+
+def test_evaluation_model_identity_covers_roles_profiles_and_valuation():
+    base = EvaluationModel.build()
+    role = EvaluationModel.build(roles={999_995: ("healer",)})
+    profile = EvaluationModel.build(opponent_profiles={
+        "fixture": OpponentProfile({}, (), (), {1: 0.5})})
+    valued = EvaluationModel.build(configuration=
+                                   ValuationConfiguration.general().with_values({
+                                       "prize.race": 2.0}))
+
+    assert len({base.identity, role.identity, profile.identity, valued.identity}) == 4
+
+
+def test_feature_catalog_identity_covers_activation_semantics():
+    left = FeatureCatalog((FeatureSpec(
+        "synthetic", 1.0,
+        rules=(ActivationRule("function", ("draw",), "constant"),)),),
+        schema_version=1)
+    right = FeatureCatalog((FeatureSpec(
+        "synthetic", 1.0,
+        rules=(ActivationRule("function", ("fetch",), "constant"),)),),
+        schema_version=1)
+
+    assert left.priced_keys == right.priced_keys
+    assert left.identity != right.identity
 
 
 def test_behavior_identity_covers_every_decision_component():
@@ -117,7 +163,7 @@ def test_partial_known_card_emits_coverage_unknown_activation_and_gap():
     assert any("incomplete card coverage 1052" in gap for gap in valuation.gaps)
 
 
-def test_opponent_roles_use_observed_facts_plus_continuous_posterior_expectation():
+def test_opponent_roles_use_continuous_posterior_expectation_not_compiled_claims():
     card_id = 999_998
     beliefs = _snapshot(
         observed_roles={card_id: ("support_pokemon",)},
@@ -129,13 +175,13 @@ def test_opponent_roles_use_observed_facts_plus_continuous_posterior_expectation
         unknown_mass=0.25,
     )
     context = EvaluationModel.build(
-        opponent_profiles=opponent_profiles_from_snapshot(beliefs))
+        opponent_profiles=_profiles(beliefs))
     knowledge = LegalKnowledge(opponent=OpponentBelief.from_snapshot(beliefs))
     valuation = evaluate(ObservationStateBuilder().root(printout(
         them=player(own=False, active=body(card_id, 1))), knowledge=knowledge), context)
     activation = {item.feature: item.value for item in valuation.activations}
 
-    assert activation["role.support_pokemon"] == -1.0
+    assert "role.support_pokemon" not in activation
     assert activation["role.primary_attacker"] == -0.25
     assert activation["role.healer"] == -0.50
 
@@ -153,7 +199,42 @@ def test_general_configuration_can_replace_values_for_training_trials():
 
 def test_partial_or_extra_configuration_refuses_at_construction():
     with pytest.raises(ValueError, match="exact catalog"):
-        ValuationConfiguration({"zone.in_hand": 1.0}, schema_version=1)
+        ValuationConfiguration(
+            {"zone.in_hand": 1.0}, schema_version=FEATURE_CATALOG.schema_version)
+
+
+def test_complete_deck_overlay_rejects_missing_duplicate_and_non_finite_coefficients():
+    values = dict(ValuationConfiguration.general())
+    with pytest.raises(ValueError, match="exact catalog"):
+        DeckOverlay.complete({"zone.in_hand": 1.0})
+    with pytest.raises(ValueError, match="duplicate"):
+        DeckOverlay.complete([*values.items(), ("zone.in_hand", 2.0)])
+    with pytest.raises(ValueError, match="finite"):
+        DeckOverlay.complete({**values, "zone.in_hand": float("nan")})
+
+
+def test_two_complete_deck_overlays_reverse_a_generic_state_ranking():
+    general = dict(ValuationConfiguration.general())
+    positive = DeckOverlay.complete({**general, "kind.item": 5.0})
+    negative = DeckOverlay.complete({**general, "kind.item": -5.0})
+    item = ObservationStateBuilder().root(printout(me=player(hand=[ULTRA_BALL])))
+    empty = ObservationStateBuilder().root(printout(me=player(hand=[])))
+
+    assert evaluate(item, EvaluationModel.build(overlay=positive)).total \
+        > evaluate(empty, EvaluationModel.build(overlay=positive)).total
+    assert evaluate(item, EvaluationModel.build(overlay=negative)).total \
+        < evaluate(empty, EvaluationModel.build(overlay=negative)).total
+
+
+def test_valuation_multiplies_each_activation_once_and_sums_every_contribution():
+    valuation = evaluate(
+        ObservationStateBuilder().root(printout(me=player(hand=[ULTRA_BALL]))),
+        EvaluationModel.build())
+
+    assert all(item.value == pytest.approx(item.activation * item.coefficient)
+               for item in valuation.contributions)
+    assert valuation.total == pytest.approx(sum(
+        item.value for item in valuation.contributions))
 
 
 def test_every_card_function_compiles_against_the_closed_parameter_schema():
@@ -170,9 +251,85 @@ def test_every_card_function_compiles_against_the_closed_parameter_schema():
         FUNCTION_CATALOG.compile((Clause("typo_function"),))
 
 
-def test_every_valued_card_function_declares_a_catalogued_feature():
-    assert set(FUNCTION_FEATURES) <= set(FUNCTION_CATALOG.kinds)
-    assert set(FUNCTION_FEATURES.values()) <= set(FEATURE_CATALOG.priced_keys)
+def test_feature_catalog_executes_declared_function_rules_without_a_second_registry():
+    catalog = FeatureCatalog((FeatureSpec(
+        "function.synthetic", 2.0,
+        rules=(ActivationRule("function", ("synthetic",), "constant"),)),),
+        schema_version=99)
+
+    activations = ActivationCompiler(catalog).compile(
+        "function", {"synthetic"}, ActivationEnvironment(scale=3.0))
+
+    assert [(item.feature, item.value) for item in activations] == [
+        ("function.synthetic", 3.0)]
+
+
+def test_every_valued_card_function_is_owned_by_a_feature_activation_rule():
+    declared = {claim for spec in FEATURE_CATALOG.specs for rule in spec.rules
+                if rule.source == "function" for claim in rule.claims}
+
+    assert declared <= set(FUNCTION_CATALOG.kinds)
+    assert "draw" in declared
+
+
+def test_every_valuation_feature_owns_a_typed_activation_rule_without_direct_bypass():
+    assert all(spec.rules for spec in FEATURE_CATALOG.specs)
+    assert not any(rule.source == "direct" for spec in FEATURE_CATALOG.specs
+                   for rule in spec.rules)
+
+
+def test_catalog_maps_legal_facts_to_feature_identity():
+    activations = ActivationCompiler().compile(
+        "observation", ("unready_active",), ActivationEnvironment(scale=-1.0))
+
+    assert [(item.feature, item.value) for item in activations] == [
+        ("active.unready_fraction", -1.0)]
+
+
+def test_evaluator_identity_tracks_executable_semantics_but_not_prose(tmp_path):
+    from common.ledger.decision import evaluator_semantics_identity
+
+    source = tmp_path / "semantics.py"
+    source.write_text('"""one"""\ndef value():\n    return 1\n', encoding="utf-8")
+    first = evaluator_semantics_identity((source,))
+    source.write_text('"""two"""\ndef value():\n    return 1\n', encoding="utf-8")
+    prose_only = evaluator_semantics_identity((source,))
+    source.write_text('"""two"""\ndef value():\n    return 2\n', encoding="utf-8")
+
+    assert prose_only == first
+    assert evaluator_semantics_identity((source,)) != first
+
+
+def test_evaluator_identity_tracks_catalog_rule_selection_semantics(tmp_path):
+    from common.ledger.decision import evaluator_semantics_identity
+
+    source = tmp_path / "features.py"
+    source.write_text(
+        "def activation_rules(rule, source):\n    return rule.source == source\n",
+        encoding="utf-8")
+    first = evaluator_semantics_identity((source,))
+    source.write_text(
+        "def activation_rules(rule, source):\n    return rule.source != source\n",
+        encoding="utf-8")
+
+    assert evaluator_semantics_identity((source,)) != first
+
+
+def test_behavior_component_identities_cover_all_ranking_semantic_dependencies():
+    from pathlib import Path
+
+    from common.ledger import LedgerOnePlySearch, LedgerValueEvaluator
+    from common.ledger.decision import evaluator_semantics_identity
+    from common.ledger import decision, search
+
+    evaluator_paths = tuple(Path(decision.__file__).with_name(name) for name in (
+        "activation.py", "evaluate.py", "features.py", "prizes.py", "worth.py"))
+    search_paths = (
+        Path(search.__file__), Path(search.__file__).with_name("chance.py"),
+        Path(search.__file__).with_name("preview.py"))
+
+    assert evaluator_semantics_identity(evaluator_paths) in LedgerValueEvaluator.identity
+    assert evaluator_semantics_identity(search_paths) in LedgerOnePlySearch.identity
 
 
 def test_reusable_in_play_function_emits_a_situational_activation():
@@ -180,13 +337,13 @@ def test_reusable_in_play_function_emits_a_situational_activation():
         ObservationStateBuilder().root(printout(me=player(active=body(120, 1), hand=[]))),
         EvaluationModel.build())
 
-    assert any(item.feature == "function.draw.hand_deficit" and item.value > 0
+    assert any(item.feature == "function.draw.available" and item.value > 0
                for item in valuation.activations)
 
     opponent = evaluate(
         ObservationStateBuilder().root(printout(them=player(own=False, active=body(120, 1), hand=[]))),
         EvaluationModel.build())
-    assert any(item.feature == "function.draw.hand_deficit" and item.value < 0
+    assert any(item.feature == "function.draw.available" and item.value < 0
                for item in opponent.activations)
 
 
@@ -230,7 +387,7 @@ def test_opponent_traits_compile_through_the_full_posterior_with_provenance():
         0.4, mechanics=(OpponentMechanic("item_lock", 1.0),), archetype="lock-deck")
     snapshot = _snapshot(candidates=(belief,), unknown_mass=0.6)
     context = EvaluationModel.build(
-        opponent_profiles=opponent_profiles_from_snapshot(snapshot))
+        opponent_profiles=_profiles(snapshot))
     knowledge = LegalKnowledge(opponent=OpponentBelief.from_snapshot(snapshot))
 
     valuation = evaluate(ObservationStateBuilder().root(printout(
@@ -240,6 +397,66 @@ def test_opponent_traits_compile_through_the_full_posterior_with_provenance():
 
     assert activation.value == 0.4
     assert activation.provenance == ("cards:lock-deck:item_lock",)
+
+
+def test_opening_fragility_activates_only_while_the_opponent_bench_is_empty():
+    candidate = ArchetypeBelief(
+        1.0, traits=(OpponentTrait("opening_fragility", True),),
+        archetype="fragile-opener")
+    snapshot = _snapshot(candidates=(candidate,), unknown_mass=0.0)
+    context = EvaluationModel.build(opponent_profiles=_profiles(snapshot))
+    knowledge = LegalKnowledge(opponent=OpponentBelief.from_snapshot(snapshot))
+
+    empty = evaluate(ObservationStateBuilder().root(printout(
+        them=player(own=False, active=body(1031, 1))), knowledge=knowledge), context)
+    developed = evaluate(ObservationStateBuilder().root(printout(
+        them=player(own=False, active=body(1031, 1), bench=[body(1031, 2)])),
+        knowledge=knowledge), context)
+
+    assert next(item for item in empty.activations
+                if item.feature == "trait.opening_fragility").value == 1.0
+    assert not any(item.feature == "trait.opening_fragility"
+                   for item in developed.activations)
+
+
+def test_opponent_belief_keeps_public_evidence_not_compiled_roles():
+    card_id = 999_997
+    state = ObservationStateBuilder().root(printout(
+        them=player(own=False, active=body(card_id, 1))))
+    source = OpponentSnapshot(
+        OpponentEvidence.from_state(state), {card_id: ("support_pokemon",)},
+        (ArchetypeBelief(
+            1.0, roles={card_id: ("primary_attacker",)}, archetype="candidate"),), 0.0)
+    belief = OpponentBelief.from_snapshot(source)
+
+    assert not hasattr(belief.decision_evidence, "observed_roles")
+    assert card_id in belief.decision_evidence.revealed_card_ids
+
+
+def test_same_opponent_belief_can_be_interpreted_by_two_evaluation_models():
+    card_id = 999_996
+    evidence = OpponentEvidence.from_state(ObservationStateBuilder().root(printout(
+        them=player(own=False, active=body(card_id, 1)))))
+    attacker = OpponentSnapshot(
+        evidence, {}, (ArchetypeBelief(
+            1.0, roles={card_id: ("primary_attacker",)}, archetype="candidate"),), 0.0)
+    healer = OpponentSnapshot(
+        evidence, {}, (ArchetypeBelief(
+            1.0, roles={card_id: ("healer",)}, archetype="candidate"),), 0.0)
+    knowledge = LegalKnowledge(opponent=OpponentBelief.from_snapshot(attacker))
+    state = ObservationStateBuilder().root(
+        printout(them=player(own=False, active=body(card_id, 1))), knowledge=knowledge)
+
+    attacker_value = evaluate(state, EvaluationModel.build(
+        opponent_profiles=_profiles(attacker)))
+    healer_value = evaluate(state, EvaluationModel.build(
+        opponent_profiles=_profiles(healer)))
+
+    assert any(item.feature == "role.primary_attacker"
+               for item in attacker_value.activations)
+    assert not any(item.feature == "role.primary_attacker"
+                   for item in healer_value.activations)
+    assert any(item.feature == "role.healer" for item in healer_value.activations)
 
 
 def test_card_functions_compile_to_situational_feature_activations():

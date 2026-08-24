@@ -4,7 +4,9 @@ inject ``DictCardStatProvider``. This module owns the typed records and the adap
 lives in ``card_text`` and the name-keyed indexes in ``forward_index`` (ADR-0054)."""
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import asdict, dataclass
+import hashlib
+import json
 
 # Re-exports (ADR-0054): tests and tools import these through this module — keep every name bound.
 from .card_text import (  # noqa: F401
@@ -15,7 +17,6 @@ from .card_text import (  # noqa: F401
     _parse_retreat_free_grant,
     _parse_tool_retreat_free_at_hp,
     _parse_tool_retreat_reduction,
-    normalize_card_name,
     parse_attack_bench_requirement,
     parse_tool_damage_reduction,
     parse_attack_bench_snipe,
@@ -25,7 +26,6 @@ from .card_text import (  # noqa: F401
     parse_attack_energy_recover,
     parse_attack_hidden_scale,
     parse_attack_ignores,
-    parse_attack_ignores_active_effects,
     parse_attack_recoil,
     parse_attack_scaling,
     parse_attack_self_return,
@@ -147,6 +147,15 @@ class CardStat:
         return (self.minAttackCost or 99) <= energy
 
 
+def _stat_identity(stats, attacks) -> str:
+    payload = {
+        "cards": {str(key): asdict(value) for key, value in sorted(stats.items())},
+        "attacks": {str(key): asdict(value) for key, value in sorted(attacks.items())},
+    }
+    raw = json.dumps(payload, sort_keys=True, separators=(",", ":")).encode("utf-8")
+    return hashlib.blake2b(raw, digest_size=16).hexdigest()
+
+
 class DictCardStatProvider:
     """In-memory provider for tests and precomputed caches."""
 
@@ -164,6 +173,10 @@ class DictCardStatProvider:
 
     def warm(self) -> None:
         """Interface parity with the engine adapter's build hook — nothing to build."""
+
+    @property
+    def identity(self) -> str:
+        return _stat_identity(self._stats, self._attacks)
 
     def ids_for_name(self, name: str) -> frozenset[int]:
         """Card ids printed under ``name`` (names aren't unique); empty for an unknown name. The
@@ -412,6 +425,11 @@ class EngineCardStatProvider:
     def warm(self) -> None:
         """Explicit pregame-window build — the lazy build, forced now. Idempotent."""
         self._ensure_cache()
+
+    @property
+    def identity(self) -> str:
+        self._ensure_cache()
+        return _stat_identity(self._cache, self._attack_stats)
 
     def get(self, card_id: int) -> CardStat | None:
         self._ensure_cache()

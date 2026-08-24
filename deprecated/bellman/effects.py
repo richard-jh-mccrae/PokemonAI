@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import json
+import hashlib
 from pathlib import Path
 
 from deprecated.bellman.tags import is_card_key
@@ -30,6 +31,12 @@ class CardEffects:
 
     def fully_covers(self, card_id: int) -> bool:
         return int(card_id) in self._full
+
+    @property
+    def identity(self) -> str:
+        payload = {"table": self._table, "full": sorted(self._full)}
+        raw = json.dumps(payload, sort_keys=True, separators=(",", ":")).encode("utf-8")
+        return hashlib.blake2b(raw, digest_size=16).hexdigest()
 
     @classmethod
     def load(cls, path=None) -> "CardEffects":

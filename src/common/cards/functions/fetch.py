@@ -1,4 +1,4 @@
-"""Pure card-class predicates for Bellman reveal windows, over the unified card records."""
+"""Pure card-class predicates for Ledger demand and offline transition windows."""
 from __future__ import annotations
 
 from ..card_facts import (

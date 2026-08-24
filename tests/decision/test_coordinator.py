@@ -1,15 +1,19 @@
 from dataclasses import dataclass
 
+import pytest
+
 from common.decision import (
     CandidateDisposition,
     CandidateRoster,
     DecisionCoordinator,
     DecisionDelta,
     EvaluationStatus,
+    PolicyConfiguration,
     SearchResult,
     StateValuation,
     ValueScale,
     ValuedCandidate,
+    neutral_lottery_choice,
 )
 
 
@@ -70,6 +74,13 @@ class FakeDecisionPolicy:
     def choose(self, roster, configuration):
         self.calls.append((roster, configuration))
         return self.chosen
+
+
+def test_neutral_lottery_is_seeded_without_favoring_the_first_candidate():
+    first, second = Action("first"), Action("second")
+
+    assert neutral_lottery_choice((first, second), PolicyConfiguration()) is second
+    assert neutral_lottery_choice((first, second), PolicyConfiguration()) is second
 
 
 def test_coordinator_keeps_search_evaluation_and_policy_contracts_separate():
@@ -138,3 +149,41 @@ def test_roster_rejects_duplicate_action_identity_without_dropping_candidates():
         assert "duplicate candidate action" in str(exc)
     else:
         raise AssertionError("duplicate candidate accepted")
+
+
+def test_roster_proves_exact_legal_action_membership_and_order():
+    first, second = Action("first"), Action("second")
+    candidates = tuple(ValuedCandidate(
+        action, None, CandidateDisposition.FORCED, EvaluationStatus.UNAVAILABLE)
+        for action in (first, second))
+
+    roster = CandidateRoster.from_legal_actions((first, second), candidates, forced=True)
+
+    assert roster.legal_action_identities == (first, second)
+    for legal_actions, message in (
+            ((first,), "extra"),
+            ((first, second, Action("missing")), "missing"),
+            ((second, first), "order")):
+        with pytest.raises(ValueError, match=message):
+            CandidateRoster.from_legal_actions(legal_actions, candidates, forced=True)
+
+
+def test_decision_result_exposes_the_chosen_candidate_as_the_projection_authority():
+    action = Action("chosen")
+    baseline = StateValuation("root", 0.0, SCALE, 0, "fake-evaluator")
+    candidate = ValuedCandidate(
+        action, DecisionDelta(0.0, SCALE), CandidateDisposition.FORCED,
+        EvaluationStatus.COMPLETE)
+    roster = CandidateRoster.from_legal_actions((action,), (candidate,), forced=True)
+    search = SearchResult(baseline, roster)
+    result = DecisionCoordinator(
+        evaluator=FakeEvaluator(baseline), evaluation_model="model",
+        search=FakeSearch(search), search_configuration="search",
+        policy_model=FakePolicyModel(), decision_policy=FakeDecisionPolicy(action),
+        policy_configuration="policy").decide(type("State", (), {
+            "legal_actions": (action,)})())
+
+    assert result.chosen_candidate is candidate
+
+    with pytest.raises(ValueError, match="chosen action is not in candidate roster"):
+        type(result)(Action("other"), baseline, roster, search)

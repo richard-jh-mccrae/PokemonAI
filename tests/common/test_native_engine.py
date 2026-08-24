@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from observation_builders import build_observation, advance_observation
 
+from contextlib import ExitStack
 from functools import partial
 import importlib.util
 import os
@@ -25,6 +26,8 @@ from common.engine import CgpyTransitionProvider
 from common.deck_tracker import OwnCardModel
 from common.observation import ObservationStateBuilder, reduce_knowledge
 from common.runtime import build_runtime
+from common.telemetry import (build_outcome_record, capture_records, emit,
+                              episode_context, runtime_provenance)
 from common.native_engine import _hidden_signature
 
 
@@ -218,6 +221,9 @@ def test_production_runtime_completes_a_full_native_game_without_decision_failur
         for seat in (0, 1)
     }
     own_cards = {seat: OwnCardModel(deck) for seat in (0, 1)}
+    contexts = ExitStack()
+    contexts.enter_context(episode_context("native-full-game"))
+    records = contexts.enter_context(capture_records(suppress_output=True))
     coordinator_entries = {seat: 0 for seat in (0, 1)}
     for seat, runtime in runtimes.items():
         real = runtime.ledger.coordinator
@@ -248,6 +254,15 @@ def test_production_runtime_completes_a_full_native_game_without_decision_failur
             )
             before = coordinator_entries[seat]
             decision = runtime.decide(observation)
+            emit(
+                decision, opponent=runtime.opponent_snapshot, seat=seat,
+                state=runtime.last_state, decision_seconds=0.0,
+                session=runtime.telemetry_session,
+                evaluation_model=runtime.ledger.ctx,
+                compute_configuration=runtime.ledger.compute,
+                provider_configuration=runtime.ledger.provider_configuration,
+                provenance=runtime_provenance(deck_name="mega_starmie"),
+            )
             turn = int(current.get("turn", 0))
             if turn <= 0:
                 assert decision.diagnostics["backend"] == "declarative-pregame"
@@ -266,6 +281,24 @@ def test_production_runtime_completes_a_full_native_game_without_decision_failur
         assert (observation.get("current") or {}).get("result") in (0, 1, 2)
     finally:
         battle_finish()
+        contexts.close()
+
+    decisions = [record for record in records if record["record_type"] == "decision"]
+    receipt = records.receipt("native-full-game")
+    current = observation["current"]
+    result = current["result"]
+    winner = result if result in (0, 1) else None
+    outcome = build_outcome_record(
+        episode_key="native-full-game", decision_records=decisions,
+        telemetry_receipt=receipt, winner=winner, terminal_reason="engine_win",
+        public_prizes={seat: len(current["players"][seat]["prize"]) for seat in (0, 1)},
+        rewards={seat: 0.0 if winner is None else 1.0 if winner == seat else -1.0
+                 for seat in (0, 1)},
+        duration_seconds=0.0,
+    )
+    assert receipt["certified"]
+    assert receipt["decision_ids"] == [record["record_id"] for record in decisions]
+    assert outcome["decision_ids"] == receipt["decision_ids"]
 
 
 def test_preview_seam_prices_match_the_decisionstate_path_on_native():

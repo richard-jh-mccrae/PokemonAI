@@ -270,6 +270,18 @@ class AgentServer:
         finally:
             self.last_seconds = monotonic() - started
 
+    def telemetry_receipt(self, episode_key: str) -> dict | None:
+        if not self.alive():
+            return None
+        try:
+            self.proc.stdin.write(json.dumps({
+                "telemetry_control": "receipt", "episode_key": str(episode_key)}) + "\n")
+            self.proc.stdin.flush()
+            line = self._responses.get(timeout=5)
+            return None if not line else json.loads(line).get("receipt")
+        except (BrokenPipeError, OSError, ValueError, queue.Empty):
+            return None
+
     def close(self) -> None:
         flushed = False
         if self.alive():
@@ -325,14 +337,18 @@ def play_match(server_a: AgentServer, server_b: AgentServer,
         battle_finish()
         winner = 1 - start.errorPlayer
         if telemetry is not None:
-            from common.telemetry import build_outcome_record
+            from common.telemetry import (build_episode_receipt,
+                                          build_outcome_record)
             current = obs.get("current") or {}
             players = current.get("players") or ()
             prizes = {seat: len((players[seat] or {}).get("prize") or ())
                       if seat < len(players) else 0 for seat in (0, 1)}
+            receipt = build_episode_receipt(episode_key=episode_key, reservations=[])
+            telemetry.append(receipt)
             telemetry.append(build_outcome_record(
                 episode_key=episode_key,
                 decision_records=[],
+                telemetry_receipt=receipt,
                 winner=winner,
                 terminal_reason="illegal_deck",
                 public_prizes=prizes,
@@ -405,7 +421,8 @@ def play_match(server_a: AgentServer, server_b: AgentServer,
     if recorder is not None:
         recorder.finish(obs, winner)               # terminal obs + engine-seat winner
     if telemetry is not None:
-        from common.telemetry import build_outcome_record
+        from common.telemetry import (build_episode_receipt, build_outcome_record,
+                                      validate_record)
 
         current = obs.get("current") or {}
         players = current.get("players") or ()
@@ -415,18 +432,65 @@ def play_match(server_a: AgentServer, server_b: AgentServer,
         reason = ("agent_crash" if crashed else "decision_timeout" if timed_out else
                   "match_deadline" if match_deadline_hit else
                   "engine_win" if winner is not None else "draw")
-        telemetry.append(build_outcome_record(
-            episode_key=episode_key,
-            decision_records=[record for record in telemetry
-                              if record.get("record_type") == "decision"],
-            winner=winner,
-            terminal_reason=reason,
-            public_prizes=prizes,
-            rewards={0: 0.0 if winner is None else 1.0 if winner == 0 else -1.0,
-                     1: 0.0 if winner is None else 1.0 if winner == 1 else -1.0},
-            duration_seconds=perf_counter() - match_started,
-            external_episode_id=external_episode_id,
-        ))
+        decisions = [record for record in telemetry
+                     if record.get("record_type") == "decision"]
+        journal = {}
+        receipt_failures = []
+        for seat, server in enumerate(servers):
+            query = getattr(server, "telemetry_receipt", None)
+            if query is None:
+                receipt_failures.append({
+                    "record_id": f"missing-agent-receipt-{seat}-{episode_key}",
+                    "seat": seat,
+                    "index": 0,
+                    "status": "delivery_failed",
+                    "error_type": "TelemetryReceiptUnavailable",
+                })
+                continue
+            server_receipt = query(episode_key)
+            try:
+                server_receipt = validate_record(server_receipt)
+                if server_receipt["record_type"] != "telemetry_receipt" \
+                        or server_receipt["episode"]["key"] != episode_key:
+                    raise ValueError("agent telemetry receipt belongs to another episode")
+            except (KeyError, TypeError, ValueError):
+                receipt_failures.append({
+                    "record_id": f"missing-agent-receipt-{seat}-{episode_key}",
+                    "seat": seat,
+                    "index": 0,
+                    "status": "delivery_failed",
+                    "error_type": "TelemetryReceiptUnavailable",
+                })
+                continue
+            for row in server_receipt["reservations"]:
+                journal[row["record_id"]] = dict(row)
+        reservations = []
+        for decision in decisions:
+            reservations.append(journal.pop(decision["record_id"], {
+                "record_id": decision["record_id"],
+                "seat": decision["decision"]["seat"],
+                "index": decision["decision"]["index"],
+                "status": "delivery_failed",
+                "error_type": "TelemetryReservationUnavailable",
+            }))
+        reservations.extend(journal.values())
+        reservations.extend(receipt_failures)
+        receipt = build_episode_receipt(
+            episode_key=episode_key, reservations=reservations)
+        telemetry.append(receipt)
+        if receipt["certified"]:
+            telemetry.append(build_outcome_record(
+                episode_key=episode_key,
+                decision_records=decisions,
+                telemetry_receipt=receipt,
+                winner=winner,
+                terminal_reason=reason,
+                public_prizes=prizes,
+                rewards={0: 0.0 if winner is None else 1.0 if winner == 0 else -1.0,
+                         1: 0.0 if winner is None else 1.0 if winner == 1 else -1.0},
+                duration_seconds=perf_counter() - match_started,
+                external_episode_id=external_episode_id,
+            ))
     return MatchResult(winner=winner, crashed=crashed, timed_out=timed_out,
                        match_deadline_hit=match_deadline_hit, failure=failure)
 

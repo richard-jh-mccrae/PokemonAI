@@ -50,8 +50,8 @@ reason. It does not weaken corpus integrity.
 _Avoid_: Rejection, Invalid Row
 
 **Corpus Rejection**:
-Source evidence that cannot safely enter the corpus because its structure, identity, or legal-view
-boundary is invalid. Any rejection blocks publication.
+Source evidence that cannot safely enter the corpus because structure, identity, legal-view, or
+mandatory replay certification is unresolved or invalid. Any rejection blocks publication.
 _Avoid_: Exclusion, Skipped Row
 
 **Corpus Migration**:
