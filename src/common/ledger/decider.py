@@ -264,7 +264,9 @@ class LedgerDecider:
                                                    else candidate.delta.components)),
                                  })}
                                 for candidate in ranked),
-            })
+            },
+            decision_result=result,
+        )
 
     @staticmethod
     def _configurations(compute):

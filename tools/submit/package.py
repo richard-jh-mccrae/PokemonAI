@@ -13,6 +13,8 @@ Usage:
 from __future__ import annotations
 
 import argparse
+import hashlib
+import json
 import shutil
 import subprocess
 from datetime import datetime
@@ -22,6 +24,16 @@ REPO = Path(__file__).resolve().parents[2]
 MS = REPO / "src"
 _IGNORE = shutil.ignore_patterns("__pycache__", "*.pyc", "*.md", "docs", "engine.py")
 FORBIDDEN_KAGGLE_TOKEN = b"cgpy"
+
+
+def _tree_hash(root: Path) -> str:
+    digest = hashlib.sha256()
+    for path in sorted(candidate for candidate in root.rglob("*") if candidate.is_file()):
+        digest.update(path.relative_to(root).as_posix().encode("utf-8"))
+        digest.update(b"\0")
+        digest.update(path.read_bytes())
+        digest.update(b"\0")
+    return digest.hexdigest()
 
 
 def _assert_kaggle_runtime_boundary(stage: Path) -> None:
@@ -82,6 +94,21 @@ def package(name: str, dist: Path, *, agents_root: Path | None = None, stamp: bo
     when, git_hash = datetime.now(), _git_hash(REPO)  # one stamp for brief and zip name
     from submit.brief import build_manifest, render_brief, render_brief_csv  # lazy: avoid import cycle
     manifest = build_manifest(stage, when=when, git_hash=git_hash, agent_name=name)
+    runtime_provenance = {
+        "agent": name,
+        "artifact": manifest["provenance"]["artifact"],
+        "code": git_hash,
+        "data": {
+            "cards": _tree_hash(stage / "common" / "cards"),
+            "scouting": _tree_hash(stage / "common" / "scouting"),
+            "valuation": manifest["valuation_configuration"]["identity"],
+            "compute": manifest["compute_configuration"]["identity"],
+        },
+    }
+    (stage / "common" / "telemetry" / "build_provenance.json").write_text(
+        json.dumps(runtime_provenance, sort_keys=True, separators=(",", ":")),
+        encoding="utf-8",
+    )
     brief = render_brief(manifest, prev_deck=prev_deck, prev_build_id=prev_build_id)
     (stage / "brief.html").write_text(brief, encoding="utf-8")
     (stage / "brief.csv").write_text(render_brief_csv(manifest), encoding="utf-8", newline="")

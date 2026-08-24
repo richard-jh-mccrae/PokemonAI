@@ -77,6 +77,9 @@ def test_package_contains_the_ledger_and_no_bellman_search(tmp_path):
         assert "common/ledger/seam.py" in names
         assert "common/observation/state.py" in names
         assert "common/observation/record.py" in names
+        assert "common/telemetry/__init__.py" in names
+        assert "common/telemetry/core.py" in names
+        assert "common/telemetry/build_provenance.json" in names
         # The Bellman search stack lives in deprecated/ and must never ship again.
         for retired in ("common/planner.py", "common/solver.py", "common/demand.py",
                         "common/potential.py", "common/value.py", "common/value_equations.py",
@@ -89,6 +92,13 @@ def test_package_contains_the_ledger_and_no_bellman_search(tmp_path):
         assert "common/card_effects.json" not in names   # authoring source; nothing shipped reads it
         manifest_text = bundle.read("brief.html").decode("utf-8")
         assert '"system": "ledger"' in manifest_text
+        provenance = __import__("json").loads(
+            bundle.read("common/telemetry/build_provenance.json"))
+        assert provenance["agent"] == "mega_starmie"
+        assert provenance["code"]
+        assert provenance["artifact"]
+        assert provenance["data"]["valuation"]
+        assert provenance["data"]["compute"]
 
 
 @pytest.mark.parametrize("agent_name", SHIPPABLE_AGENTS)

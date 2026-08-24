@@ -9,7 +9,7 @@ from common.option_equivalence import (
     option_source_card, semantic_option_fingerprint,
 )
 from common.strategy import Roles
-from common.telemetry import to_record
+from deprecated.bellman.telemetry import to_record
 from common.observation import ObservationStateBuilder
 from observation_helpers import engine_opt
 

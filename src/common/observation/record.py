@@ -11,15 +11,16 @@ from .state import (AttackEvent, DrawEvent, KnownObservationEvent, MoveCardEvent
                     ObservationDelta, ObservationEvent, ObservationState, SCHEMA_VERSION,
                     ShuffleEvent, UnknownObservationEvent)
 from .knowledge import (KnownAttackLocks, KnownDeckTop, KnownOwnPrizes, LegalKnowledge,
-                        OpponentBelief, TransitionTrace, UnknownAttackLocks, UnknownDeckTop,
-                        UnknownOwnPrizes)
+                        OpponentBelief, OpponentCandidatePosterior, OpponentDecisionEvidence,
+                        TransitionTrace, UnknownAttackLocks, UnknownDeckTop, UnknownOwnPrizes)
 
 
 _TYPES = {item.__name__: item for item in (
     ActionIdentity, LegalAction, LegalKnowledge, ObservationDelta, ObservationEvent,
     AttackEvent, DrawEvent, KnownObservationEvent, MoveCardEvent, ShuffleEvent,
     UnknownObservationEvent,
-    ObservationState, OpponentBelief, TransitionTrace, KnownAttackLocks, KnownDeckTop,
+    ObservationState, OpponentBelief, OpponentCandidatePosterior, OpponentDecisionEvidence,
+    TransitionTrace, KnownAttackLocks, KnownDeckTop,
     KnownOwnPrizes, UnknownAttackLocks, UnknownDeckTop, UnknownOwnPrizes,
     nodes.Body, nodes.Card, nodes.CardBag, nodes.HiddenHand, nodes.Looking, nodes.Option,
     nodes.SelectPrompt, nodes.Side, nodes.Turn, nodes.VisibleHand,
@@ -69,6 +70,10 @@ class ObservationRecord:
 
     @classmethod
     def from_state(cls, state: ObservationState) -> "ObservationRecord":
+        if not isinstance(state.me.hand, nodes.VisibleHand):
+            raise ValueError("record root hand must be visible")
+        if not isinstance(state.them.hand, nodes.HiddenHand):
+            raise ValueError("record opponent hand must be hidden")
         return cls(SCHEMA_VERSION, _encode(state))
 
     def to_state(self) -> ObservationState:

@@ -26,7 +26,7 @@ from deprecated.bellman import (
 )
 from deprecated.bellman.providers import BellmanCgpyProvider as CgpyTransitionProvider
 from common.strategy.context import _DRAW_COUNT
-from common.telemetry import to_record
+from deprecated.bellman.telemetry import to_record
 from deprecated.bellman.value_equations import SCORERS
 from train.blunder.store import load_corrections
 

@@ -22,7 +22,8 @@ import subprocess
 import sys
 from collections import deque
 from threading import Thread
-from time import monotonic
+from time import monotonic, perf_counter
+from uuid import uuid4
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -182,8 +183,9 @@ class AgentServer:
     whole point: two DIFFERENT Bundles can play one Match, which an in-process load cannot do."""
 
     def __init__(self, bundle: Path | str, extra_syspath=(), *, overlay=None,
-                 capture_telemetry=False, decision_seconds=None):
-        env = dict(os.environ, AGENT_NO_TELEMETRY="0" if capture_telemetry else "1",
+                 capture_telemetry=False, emit_telemetry=None, decision_seconds=None):
+        emit_telemetry = capture_telemetry if emit_telemetry is None else bool(emit_telemetry)
+        env = dict(os.environ, AGENT_NO_TELEMETRY="0" if emit_telemetry else "1",
                    AGENT_CAPTURE_TELEMETRY="1" if capture_telemetry else "0",
                    PYTHONIOENCODING="utf-8")
         if decision_seconds is not None:
@@ -205,9 +207,14 @@ class AgentServer:
         self._reader.start()
         self._stderr_reader.start()
         self.last_telemetry = []
+        self.last_telemetry_seconds = 0.0
         self.last_timeout = False
         self.last_error = None
         self.last_seconds: float | None = None
+        self.episode_key: str | None = None
+
+    def begin_episode(self, episode_key: str) -> None:
+        self.episode_key = str(episode_key)
 
     def _read_responses(self) -> None:
         for line in self.proc.stdout:
@@ -216,7 +223,8 @@ class AgentServer:
 
     def _read_stderr(self) -> None:
         for line in self.proc.stderr:
-            self._stderr_lines.append(line.rstrip())
+            if not line.startswith("@T "):
+                self._stderr_lines.append(line.rstrip())
 
     def _process_error(self) -> str:
         self._stderr_reader.join(timeout=0.2)
@@ -236,10 +244,13 @@ class AgentServer:
         it survives `AGENT_NO_TELEMETRY=1`, so it is the one clock that compares the two."""
         self.last_timeout = False
         self.last_telemetry = []
+        self.last_telemetry_seconds = 0.0
         self.last_error = None
         started = monotonic()
         try:
-            self.proc.stdin.write(json.dumps(obs) + "\n")
+            request = ({"observation": obs, "telemetry_episode_key": self.episode_key}
+                       if self.episode_key is not None else obs)
+            self.proc.stdin.write(json.dumps(request) + "\n")
             self.proc.stdin.flush()
             line = self._responses.get(timeout=timeout)
             if not line:
@@ -248,6 +259,7 @@ class AgentServer:
             payload = json.loads(line)
             if isinstance(payload, dict):
                 self.last_telemetry = list(payload.get("telemetry") or ())
+                self.last_telemetry_seconds = float(payload.get("telemetry_seconds") or 0.0)
                 return list(payload.get("choice") or ())
             self.last_telemetry = []
             return payload
@@ -263,11 +275,26 @@ class AgentServer:
             self.last_seconds = monotonic() - started
 
     def close(self) -> None:
+        flushed = False
+        if self.alive():
+            try:
+                self.proc.stdin.write('{"telemetry_control":"flush"}\n')
+                self.proc.stdin.flush()
+                response = self._responses.get(timeout=5)
+                flushed = bool(response) and json.loads(response) == {"flushed": True}
+            except (BrokenPipeError, OSError, ValueError, queue.Empty):
+                pass
         try:
             self.proc.stdin and self.proc.stdin.close()
         except OSError:
             pass
-        self.proc.terminate()
+        if flushed:
+            try:
+                self.proc.wait(timeout=1)
+            except subprocess.TimeoutExpired:
+                self.proc.terminate()
+        elif self.alive():
+            self.proc.terminate()
         try:
             self.proc.wait(timeout=5)
         except subprocess.TimeoutExpired:
@@ -286,14 +313,38 @@ class AgentServer:
 
 def play_match(server_a: AgentServer, server_b: AgentServer,
                deck_a: list[int], deck_b: list[int], *, recorder=None,
-               decision_timeout=None, match_timeout=None, metrics=None) -> MatchResult:
+               decision_timeout=None, match_timeout=None, metrics=None,
+               telemetry=None, episode_key=None, external_episode_id=None) -> MatchResult:
     """Drive one native Match, optionally capturing decisions and enforcing two deadlines."""
     from cg.game import battle_finish, battle_start, battle_select
 
+    match_started = perf_counter()
+    episode_key = str(episode_key or uuid4().hex)
+    for server in (server_a, server_b):
+        begin_episode = getattr(server, "begin_episode", None)
+        if begin_episode is not None:
+            begin_episode(episode_key)
     obs, start = battle_start(deck_a, deck_b)
     if start.errorPlayer >= 0:                     # illegal deck never gets to play -> loses
         battle_finish()
-        return MatchResult(winner=1 - start.errorPlayer, crashed=(start.errorPlayer,))
+        winner = 1 - start.errorPlayer
+        if telemetry is not None:
+            from common.telemetry import build_outcome_record
+            current = obs.get("current") or {}
+            players = current.get("players") or ()
+            prizes = {seat: len((players[seat] or {}).get("prize") or ())
+                      if seat < len(players) else 0 for seat in (0, 1)}
+            telemetry.append(build_outcome_record(
+                episode_key=episode_key,
+                decision_records=[],
+                winner=winner,
+                terminal_reason="illegal_deck",
+                public_prizes=prizes,
+                rewards={winner: 1.0, start.errorPlayer: -1.0},
+                duration_seconds=perf_counter() - match_started,
+                external_episode_id=external_episode_id,
+            ))
+        return MatchResult(winner=winner, crashed=(start.errorPlayer,))
 
     servers = (server_a, server_b)
     winner: int | None = None
@@ -333,9 +384,13 @@ def play_match(server_a: AgentServer, server_b: AgentServer,
                     crashed = (seat,)
                 failure = getattr(servers[seat], "last_error", None)
                 break
+            if telemetry is not None:
+                telemetry.extend(servers[seat].last_telemetry)
             if metrics is not None:
                 measured = {"engine_seat": seat, "decision_index": decision_index,
-                            "round_trip_seconds": servers[seat].last_seconds}
+                            "round_trip_seconds": servers[seat].last_seconds,
+                            "telemetry_seconds": getattr(
+                                servers[seat], "last_telemetry_seconds", 0.0)}
                 metrics.extend({**record, **measured}
                                for record in servers[seat].last_telemetry)
                 if not servers[seat].last_telemetry:   # telemetry off: the clock is the whole row
@@ -353,6 +408,29 @@ def play_match(server_a: AgentServer, server_b: AgentServer,
         battle_finish()
     if recorder is not None:
         recorder.finish(obs, winner)               # terminal obs + engine-seat winner
+    if telemetry is not None:
+        from common.telemetry import build_outcome_record
+
+        current = obs.get("current") or {}
+        players = current.get("players") or ()
+        prizes = {seat: len((players[seat] or {}).get("prize") or ())
+                  for seat in range(min(2, len(players)))}
+        prizes.update({seat: prizes.get(seat, 0) for seat in (0, 1)})
+        reason = ("agent_crash" if crashed else "decision_timeout" if timed_out else
+                  "match_deadline" if match_deadline_hit else
+                  "engine_win" if winner is not None else "draw")
+        telemetry.append(build_outcome_record(
+            episode_key=episode_key,
+            decision_records=[record for record in telemetry
+                              if record.get("record_type") == "decision"],
+            winner=winner,
+            terminal_reason=reason,
+            public_prizes=prizes,
+            rewards={0: 0.0 if winner is None else 1.0 if winner == 0 else -1.0,
+                     1: 0.0 if winner is None else 1.0 if winner == 1 else -1.0},
+            duration_seconds=perf_counter() - match_started,
+            external_episode_id=external_episode_id,
+        ))
     return MatchResult(winner=winner, crashed=crashed, timed_out=timed_out,
                        match_deadline_hit=match_deadline_hit, failure=failure)
 

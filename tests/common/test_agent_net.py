@@ -2,6 +2,8 @@
 from __future__ import annotations
 
 import importlib.util
+from contextlib import redirect_stderr
+from io import StringIO
 from pathlib import Path
 
 import pytest
@@ -237,6 +239,67 @@ def test_post_pregame_forced_menu_is_a_complete_ledger_decision_without_preview(
         "status": "complete",
         "continuation": None,
     },)
+
+
+def test_live_runtime_captures_the_typed_ledger_record(monkeypatch):
+    from common.telemetry import capture_records
+
+    runtime = _mega_starmie_runtime(provider_factory=lambda *_a, **_kw: None)
+    monkeypatch.setattr(runtime_module, "build_runtime", lambda *a, **k: runtime)
+    monkeypatch.setattr(runtime_module, "_read_deck", lambda: list(runtime.deck))
+    monkeypatch.delenv("AGENT_NO_TELEMETRY", raising=False)
+    agent = runtime_module.make_agent(strategy=None)
+    observation = _menu([engine_opt(type=14)], context=0, turn=2)
+
+    with capture_records() as records:
+        assert agent(observation) == [0]
+
+    assert len(records) == 1
+    assert records[0]["record_type"] == "decision"
+    assert records[0]["decision"]["chosen_action_id"] == records[0]["actions"][0]["id"]
+    assert records[0]["candidates"][0]["status"] == "complete"
+    assert records[0]["configuration"]["evaluation_model"]["identity"] \
+        == runtime.ledger.ctx.identity
+
+
+def test_pregame_telemetry_is_explicit_and_has_no_invented_ledger_values(monkeypatch):
+    from common.telemetry import capture_records, episode_context
+
+    runtime = _mega_starmie_runtime(provider_factory=lambda *_a, **_kw: None)
+    monkeypatch.setattr(runtime_module, "build_runtime", lambda *a, **k: runtime)
+    monkeypatch.setattr(runtime_module, "_read_deck", lambda: list(runtime.deck))
+    monkeypatch.delenv("AGENT_NO_TELEMETRY", raising=False)
+    agent = runtime_module.make_agent(strategy=None)
+
+    with episode_context("owner-episode"), capture_records() as records:
+        assert agent(_menu([engine_opt(type=14)], context=0, turn=0)) == [0]
+
+    assert records[0]["episode"]["key"] == "owner-episode"
+    assert records[0]["decision"]["variant"] == "declarative_pregame"
+    assert records[0]["root"] is None
+    assert records[0]["candidates"] == []
+    assert records[0]["search"] is None
+    assert records[0]["completeness"] == "not_evaluated"
+
+
+def test_production_runtime_emits_a_reassemblable_record(monkeypatch):
+    from common.telemetry import episode_context, flush, parse_lines
+
+    runtime = _mega_starmie_runtime(provider_factory=lambda *_a, **_kw: None)
+    monkeypatch.setattr(runtime_module, "build_runtime", lambda *a, **k: runtime)
+    monkeypatch.setattr(runtime_module, "_read_deck", lambda: list(runtime.deck))
+    monkeypatch.delenv("AGENT_NO_TELEMETRY", raising=False)
+    agent = runtime_module.make_agent(strategy=None)
+    output = StringIO()
+
+    with redirect_stderr(output), episode_context("production-emission"):
+        agent(_menu([engine_opt(type=14)], context=0, turn=2))
+        flush()
+
+    records = parse_lines(output.getvalue().splitlines())
+    assert len(records) == 1
+    assert records[0]["record_type"] == "decision"
+    assert records[0]["episode"]["key"] == "production-emission"
 
 
 def test_one_canonical_action_with_equivalent_selections_is_still_forced():

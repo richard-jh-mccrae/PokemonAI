@@ -13,7 +13,7 @@ from datetime import datetime
 from pathlib import Path
 from statistics import median
 
-from common.telemetry import TAG
+from common.telemetry import parse_lines
 from meta_tracker.archetype import classify
 from meta_tracker.parse import extract_decks, winner_index
 from submit.package import REPO
@@ -24,14 +24,7 @@ DEFAULT_REPLAYS = REPO / "data" / "replays"
 
 def parse_telemetry(stderr: str) -> list[dict]:
     """The `@T` Decision Telemetry records embedded in a stderr blob (bad lines skipped)."""
-    out = []
-    for line in (stderr or "").splitlines():
-        if line.startswith(TAG):
-            try:
-                out.append(json.loads(line[len(TAG):].strip()))
-            except json.JSONDecodeError:
-                pass
-    return out
+    return parse_lines((stderr or "").splitlines())
 
 
 def _log_entries(log) -> list[dict]:
@@ -191,13 +184,15 @@ def parse_match(replay: dict, log, *, seat: int = 0, cards: dict | None = None) 
     entries = _log_entries(log)
     durations = [e.get("duration") for e in entries]
     records = parse_telemetry("\n".join(e.get("stderr", "") for e in entries))
+    decisions = [record for record in records
+                 if record.get("record_type") in (None, "decision")]
     return {
         "result": result,
         "opponent_archetype": opponent,
         "decision_ms": _timing(durations),
         "telemetry": {
-            "decisions": len(records),
-            "tier_mix": dict(Counter(str(r.get("tier")) for r in records)),
+            "decisions": len(decisions),
+            "tier_mix": dict(Counter(str(r.get("tier")) for r in decisions)),
             # Preserve the actual per-decision evidence. Raw episode logs remain canonical, but
             # performance.jsonl must not collapse Bellman ledgers/branches into a count.
             "diagnostics": records,

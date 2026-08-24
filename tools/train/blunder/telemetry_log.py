@@ -11,25 +11,20 @@ import math
 import re
 from pathlib import Path
 
-from common.telemetry import TAG, lethal_proof_seconds
+from common.telemetry import lethal_proof_seconds, parse_lines
 
 from .decisions import iter_decisions
 
 
 def parse_records(log: list) -> list[dict]:
     """Flattens both shapes (downloaded single-agent ``[[{...}], ...]`` and local env logs)."""
-    records: list[dict] = []
+    lines = []
     for step in log or []:
         for entry in step or []:
             if not entry:
                 continue
-            for line in (entry.get("stderr") or "").splitlines():
-                if line.startswith(TAG):
-                    try:
-                        records.append(json.loads(line[len(TAG):].strip()))
-                    except json.JSONDecodeError:
-                        pass
-    return records
+            lines.extend((entry.get("stderr") or "").splitlines())
+    return parse_lines(lines)
 
 
 def load_log(path: Path | str) -> list[dict]:
@@ -82,7 +77,9 @@ def find_logs(replay_path: Path | str) -> dict[int, Path]:
 def decision_seconds(record: dict | None) -> float | None:
     if not isinstance(record, dict):
         return None
-    value = record.get("decision_seconds")
+    value = ((record.get("timing") or {}).get("decision_seconds")
+             if record.get("schema") == "ledger.telemetry"
+             else record.get("decision_seconds"))
     if isinstance(value, bool) or not isinstance(value, (int, float)):
         return None
     value = float(value)
@@ -119,6 +116,10 @@ def record_for(replay: dict, records: list[dict], *, seat: int, frame: int) -> d
 
 
 def records_for(decisions, records_by_seat: dict[int, list[dict]]) -> dict[tuple[int, int], dict]:
+    records_by_seat = {
+        seat: [record for record in records if record.get("record_type") in (None, "decision")]
+        for seat, records in records_by_seat.items()
+    }
     positions: dict[int, int] = {}
     joined = {}
     for decision in decisions:
@@ -136,6 +137,9 @@ def records_for(decisions, records_by_seat: dict[int, list[dict]]) -> dict[tuple
 
 
 def _record_matches(record: dict, decision) -> bool:
+    if record.get("schema") == "ledger.telemetry":
+        return (record.get("record_type") == "decision"
+                and (record.get("decision") or {}).get("selection") == decision.chosen)
     if record.get("chosen") != decision.chosen:
         return False
     if not record.get("bellman") and record.get("schema") not in {"bellman", "setup"} \

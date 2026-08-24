@@ -30,7 +30,7 @@ from common.option_equivalence import option_equivalence  # noqa: E402
 from common.engine import CgpyTransitionProvider  # noqa: E402 - offline diagnostic only
 from deprecated.bellman.planner import DEFAULT_PRODUCTION_LIMITS  # noqa: E402
 from deprecated.bellman import build_teacher_runtime  # noqa: E402
-from common.telemetry import to_record  # noqa: E402
+from deprecated.bellman.telemetry import to_record  # noqa: E402
 from train.blunder.store import load_corrections  # noqa: E402
 from train.blunder.decode import option_label  # noqa: E402
 

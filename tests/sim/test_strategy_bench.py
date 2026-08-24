@@ -1,9 +1,11 @@
 import os
+import pytest
 
 from sim.record import MatchRecorder
 from sim.strategy_bench import (
     _agent_decision_seconds, _run_jobs, decision_metrics, default_jobs, format_report,
-    save_match_artifacts, summarize_decisions, summarize_matches, write_decisions_csv,
+    paired_telemetry_overhead, save_match_artifacts, summarize_decisions, summarize_matches,
+    write_decisions_csv,
 )
 from train.blunder.batch import discover_replays, load_game
 
@@ -86,6 +88,12 @@ def test_match_summary_reports_min_max_and_average():
     assert summarize_matches([{"seconds": 1.0}, {"seconds": 2.0}, {"seconds": 3.0}]) == {
         "samples": 3, "avg": 2.0, "min": 1.0, "max": 3.0,
     }
+
+
+def test_paired_match_overhead_reports_the_measured_ratio():
+    measured = paired_telemetry_overhead([11.3, 22.6], [10.0, 20.0])
+
+    assert measured == {"overhead": pytest.approx(0.13)}
 
 
 def test_decision_csv_contains_both_seats_and_timing_metrics(tmp_path):

@@ -11,6 +11,6 @@ Shared live agent runtime.
 | `strategy/` | Declarative deck profile types only |
 | `scouting/` | Opponent recognition and matchup facts |
 | `deck_tracker.py` | Sound own-prize/deck tracking |
-| `telemetry.py` | Decision and observation records |
+| `telemetry/` | Versioned Decision and Outcome records plus bounded framing |
 
 Deck-specific code belongs in `src/agents/<deck>/strategy.py`; tactical selectors do not.

@@ -142,7 +142,7 @@ fires, the first-merged-keeps-it convention established above still applies: ref
 recompute, rename again. See `.claude/skills/grill-with-docs/SKILL.md` and
 `.claude/skills/open-pr/SKILL.md` for the full mechanics.
 
-**Next free number: 0183.**
+**Next free number: 0185.**
 
 ## Index
 
@@ -331,3 +331,5 @@ recompute, rename again. See `.claude/skills/grill-with-docs/SKILL.md` and
 | [0180](0180-opponent-evidence-stays-in-observation.md) | Opponent evidence stays in the observation | Accepted; built for Issue #583. |
 | [0181](0181-ledger-contract-cutover-is-atomic.md) | The Ledger contract cutover is atomic | Accepted; built for Issue #583. |
 | [0182](0182-post-pregame-decisions-have-one-coordinator-entry.md) | Post-pregame decisions have one coordinator entry | Accepted; built for Issue #584. |
+| [0183](0183-ledger-telemetry-is-strict-self-contained-and-framed.md) | Ledger telemetry is strict, self-contained, and framed | Accepted; built for Issue #585. |
+| [0184](0184-episode-owner-finalizes-outcomes.md) | The Episode owner finalizes Ledger outcomes | Accepted; built for Issue #585. |

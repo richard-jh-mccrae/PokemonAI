@@ -109,6 +109,7 @@ class AgentRuntime:
         self.last_state: ObservationState | None = None
         self._in_pregame = False
         self.provider_factory = provider_factory
+        self.telemetry_session = telemetry.TelemetrySession()
         self.knowledge = LegalKnowledge()
         profiles = getattr(self.opponent_knowledge, "profiles", {})
         inclusion = getattr(self.opponent_knowledge, "card_inclusion", {})
@@ -215,6 +216,7 @@ class AgentRuntime:
 
     def _reset_for_pregame(self) -> None:
         """Clear match-scoped runtime state."""
+        self.telemetry_session.begin_episode()
         self.opponent_model = self._new_opponent_model()
         self.opponent_snapshot = None
         self.knowledge = LegalKnowledge()
@@ -313,7 +315,14 @@ def make_agent(strategy):
                 telemetry.emit(decision, opponent=runtime.opponent_snapshot,
                                seat=provisional.seat,
                                state=getattr(runtime, "last_state", provisional),
-                               decision_seconds=perf_counter() - started)
+                               decision_seconds=perf_counter() - started,
+                               session=runtime.telemetry_session,
+                               evaluation_model=runtime.ledger.ctx,
+                               compute_configuration=runtime.ledger.compute,
+                               provenance=telemetry.runtime_provenance(
+                                   deck_name=runtime.ledger.deck_name,
+                                   opponent_knowledge_identity=getattr(
+                                       runtime.opponent_knowledge, "identity", "")))
             except Exception:                        # telemetry must never lose the match
                 print("telemetry emit failed; decision preserved", file=sys.stderr, flush=True)
                 traceback.print_exc(file=sys.stderr)
