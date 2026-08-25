@@ -37,13 +37,13 @@ from common.telemetry import (
     build_decision_record,
     build_episode_receipt,
     build_outcome_record,
+    build_pregame_record,
     frame_record,
     episode_context,
     emit,
     migrate_record,
     runtime_provenance,
     validate_record,
-    runtime_provenance,
 )
 
 
@@ -67,6 +67,23 @@ def test_runtime_provenance_accepts_manifested_source_identity(monkeypatch):
     }
     monkeypatch.setenv("AGENT_RUNTIME_PROVENANCE", json.dumps(expected))
     assert runtime_provenance(deck_name="ignored") == expected
+
+
+def test_pregame_record_keeps_the_committed_equivalent_selection():
+    state = ObservationStateBuilder().root(printout(turn=0))
+    action = LegalAction(
+        ActionIdentity("setup_active"), (0,), ((0,), (1,)), ())
+    state = replace(state, legal_actions=(action,))
+
+    record = build_pregame_record(
+        RootDecision((1,), ActionIdentity("setup_active"), 0.0, True, {}), state,
+        episode_key="pregame", decision_index=0, parent_decision_id=None,
+        provenance={"agent": "test", "artifact": "fixture", "code": "abc", "data": {}},
+        decision_seconds=0.0,
+    )
+
+    assert record["decision"]["selection"] == [1]
+    assert record["actions"][0]["selection"] == [1]
 
 
 def test_decision_record_keeps_the_complete_typed_candidate_roster():

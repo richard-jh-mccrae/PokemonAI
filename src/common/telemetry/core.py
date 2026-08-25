@@ -868,10 +868,12 @@ def build_pregame_record(decision, state, *, episode_key: str, decision_index: i
                          decision_limit_seconds: float | None = None,
                          deadline_hit: bool | None = None) -> dict:
     actions = [_action(action) for action in state.legal_actions]
-    chosen = next((action for legal, action in zip(state.legal_actions, actions)
-                   if tuple(decision.chosen) in legal.equivalent_selections), None)
-    if chosen is None:
+    chosen_index = next((index for index, legal in enumerate(state.legal_actions)
+                         if tuple(decision.chosen) in legal.equivalent_selections), None)
+    if chosen_index is None:
         raise ValueError("pregame selection is not in the legal action table")
+    chosen = actions[chosen_index]
+    chosen["selection"] = list(decision.chosen)
     policy_action = _action(decision.action)
     record = {
         "schema": SCHEMA,
