@@ -12,7 +12,7 @@ the live shell's `own_prizes` anchor get one stamped before replay, and rulings 
 in `reviewed.json` are RETIRED — listed in their own section, never graded.
 
     python tools/train/ledger_corpus.py [--decks mega_starmie ...] [--workers N]
-        [--baseline docs/plans/ledger-corpus-dashboard.json] [--limit N]
+        [--baseline data/ledger-corpus-dashboard.json] [--limit N]
 """
 from __future__ import annotations
 
@@ -51,7 +51,7 @@ from train.ledger_parity import assert_runtime_parity  # noqa: E402
 
 
 DECKS = ("mega_starmie", "mega_lucario", "dragapult_ex")
-DEFAULT_OUTPUT = REPO / "docs" / "plans" / "ledger-corpus-dashboard.json"
+DEFAULT_OUTPUT = REPO / "data" / "ledger-corpus-dashboard.json"
 SEMANTIC_DECISIONS = frozenset({
     "additive_marginal_valuation", "continuation_persistence",
     "legal_development_reach", "neutral_tie_lottery",

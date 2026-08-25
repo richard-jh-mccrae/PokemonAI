@@ -251,7 +251,7 @@ root probes, and ranked successive halving. The live Ledger does not run this tr
 
 **Choice:** integrate hidden redraw identities out as exact hypergeometric need-coverage classes.
 Do not construct a hypothetical hand or search actions using cards that have not actually been
-drawn. Current planning language lives in `docs/plans/PokemonAI_Supporter_Decision_Handoff.md`.
+drawn. Current planning language lives in `docs/plans/PokemonAI_Ledger_Plan.md`.
 
 - **Multivariate hypergeometric distribution** — sampling identities without replacement; supplies
   the exact probability mass over semantic need-coverage classes. [S]
