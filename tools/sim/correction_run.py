@@ -15,6 +15,7 @@ import runpy
 import shutil
 import subprocess
 import sys
+from time import monotonic
 from uuid import uuid4
 
 
@@ -238,7 +239,8 @@ def _reconcile(manifest: dict, run_dir: Path, *, validate_artifacts: bool = True
 
 def execute_correction_run(*, run_dir: Path, agents_root: Path, extra_syspath,
                            decision_timeout: float | None, episode_timeout: float | None,
-                           max_bytes: int, slot_worker=None, verify_inputs: bool = True) -> dict:
+                           max_bytes: int, slot_worker=None, verify_inputs: bool = True,
+                           log=None, progress_interval: float = 5.0) -> dict:
     """Execute unfinished slots and reconcile the manifest from per-slot result files."""
     run_dir = Path(run_dir)
     manifest_path = run_dir / "manifest.json"
@@ -287,6 +289,8 @@ def execute_correction_run(*, run_dir: Path, agents_root: Path, extra_syspath,
             "contestants": manifest["contestants"],
         }
         jobs = min(int(manifest["jobs"]), len(pending))
+        started = monotonic()
+        next_progress = 0.0
         with ProcessPoolExecutor(
                 max_workers=jobs, initializer=_initialize_worker,
                 initargs=(worker_config,)) as pool:
@@ -296,9 +300,19 @@ def execute_correction_run(*, run_dir: Path, agents_root: Path, extra_syspath,
                 slot = next(remaining, None)
                 if slot is not None:
                     active[pool.submit(_run_episode_slot, slot)] = slot
+            _log_progress(log, started, len(active), manifest["totals"]["complete"],
+                          len(manifest["slots"]))
+            next_progress = float(progress_interval)
             capped = False
             while active:
-                done, _ = wait(active, return_when=FIRST_COMPLETED)
+                done, _ = wait(active, timeout=1.0, return_when=FIRST_COMPLETED)
+                elapsed = monotonic() - started
+                if not done:
+                    if elapsed >= next_progress:
+                        _log_progress(log, started, len(active), manifest["totals"]["complete"],
+                                      len(manifest["slots"]))
+                        next_progress = elapsed + float(progress_interval)
+                    continue
                 for future in done:
                     slot = active.pop(future)
                     try:
@@ -316,6 +330,8 @@ def execute_correction_run(*, run_dir: Path, agents_root: Path, extra_syspath,
                     next_slot = next(remaining, None)
                     if next_slot is not None:
                         active[pool.submit(_run_episode_slot, next_slot)] = next_slot
+                    _log_completion(log, started, slot, result, len(active),
+                                    manifest["totals"]["complete"], len(manifest["slots"]))
             if capped:
                 manifest["status"] = "capped"
                 manifest["cap"] = _cap_summary(manifest, execution.max_bytes, jobs)
@@ -334,6 +350,35 @@ def _cap_summary(manifest: dict, limit: int, max_in_flight: int) -> dict:
         "overrun_bytes": max(0, observed - int(limit)),
         "max_in_flight_episodes": int(max_in_flight),
     }
+
+
+def _clock(seconds: float) -> str:
+    total = int(seconds)
+    return f"{total // 60:02d}:{total % 60:02d}"
+
+
+def _log_progress(log, started: float, running: int, finished: int, planned: int) -> None:
+    if log is not None:
+        log(f"[{_clock(monotonic() - started)}] running {running} | finished {finished}/{planned}")
+
+
+def _log_completion(log, started: float, slot: dict, result: dict, running: int,
+                    finished: int, planned: int) -> None:
+    if log is None:
+        return
+    match = f"match {int(slot['index']) + 1} vs {slot['opponent']}"
+    if result["status"] != "complete":
+        detail = f"{match}: failed ({result['error']['type']})"
+    else:
+        timing = result["focal_decision_seconds"]
+        decision_text = "decision n=0" if not timing["count"] else (
+            f"decision avg/min/max {timing['avg']:.3f}/{timing['min']:.3f}/{timing['max']:.3f}s "
+            f"(n={timing['count']})")
+        detail = (
+            f"{match}: focal {result['focal_result']}, {result['match_seconds']:.2f}s; "
+            f"{decision_text}")
+    log(f"[{_clock(monotonic() - started)}] running {running} | finished {finished}/{planned} | "
+        f"{detail}")
 
 
 def _safe_slot_result(worker, slot: dict) -> dict:
@@ -427,6 +472,20 @@ def _tree_bytes(path: Path) -> int:
     return sum(item.stat().st_size for item in path.rglob("*") if item.is_file())
 
 
+def _focal_decision_timing(metrics: list[dict], focal_seat: int) -> dict:
+    values = [float(record["round_trip_seconds"])
+              for record in metrics
+              if record.get("record_type") == "decision"
+              and record.get("engine_seat") == focal_seat
+              and record.get("round_trip_seconds") is not None]
+    return {
+        "count": len(values),
+        "avg": None if not values else sum(values) / len(values),
+        "min": None if not values else min(values),
+        "max": None if not values else max(values),
+    }
+
+
 def _run_episode_slot(slot: dict) -> dict:
     from sim.battle import play_match
     from sim.record import MatchRecorder
@@ -436,12 +495,13 @@ def _run_episode_slot(slot: dict) -> dict:
     config = state["config"]
     run_dir = Path(config["run_dir"])
     staging = run_dir / ".staging" / f"{os.getpid()}-{int(slot['index']):06d}"
+    started = monotonic()
     try:
         if config["engine"] == "cgpy":
             os.environ["CGPY_SEED"] = str(slot["engine_seed"])
         focal, focal_deck = _worker_agent("focal", slot["focal"])
         opponent, opponent_deck = _worker_agent("opponent", slot["opponent"])
-        recorder, telemetry = MatchRecorder(), []
+        recorder, telemetry, metrics = MatchRecorder(), [], []
         if int(slot["focal_seat"]) == 0:
             servers, decks = (focal, opponent), (focal_deck, opponent_deck)
             team_names = [slot["focal"], slot["opponent"]]
@@ -452,7 +512,7 @@ def _run_episode_slot(slot: dict) -> dict:
             *servers, *decks, recorder=recorder,
             decision_timeout=config["decision_timeout"], match_timeout=config["episode_timeout"],
             telemetry=telemetry, episode_key=str(slot["episode_id"]),
-            external_episode_id=str(slot["episode_id"]))
+            external_episode_id=str(slot["episode_id"]), metrics=metrics)
         replay = recorder.replay(episode_id=slot["episode_id"], team_names=team_names)
         replay_path, telemetry_path = _write_staging(staging, replay, telemetry)
         if result.crashed or result.timed_out or result.match_deadline_hit or result.failure:
@@ -467,6 +527,9 @@ def _run_episode_slot(slot: dict) -> dict:
             "index": slot["index"], "status": "complete", "bytes": size,
             "bundle_id": bundle.name, "bundle_path": bundle.relative_to(run_dir).as_posix(),
             "winner": result.winner,
+            "match_seconds": monotonic() - started,
+            "focal_decision_seconds": _focal_decision_timing(
+                metrics, int(slot["focal_seat"])),
             "focal_result": ("draw" if result.winner is None else
                              "win" if result.winner == slot["focal_seat"] else "loss"),
             "audit": audit,
@@ -475,6 +538,7 @@ def _run_episode_slot(slot: dict) -> dict:
         quarantine = _quarantine(staging, run_dir, int(slot["index"]))
         return _failed_result(
             slot, error,
+            match_seconds=monotonic() - started,
             bytes=0 if quarantine is None else _tree_bytes(quarantine),
             quarantine_path=(None if quarantine is None
                              else quarantine.relative_to(run_dir).as_posix()))
@@ -644,7 +708,7 @@ def main(argv=None) -> int:
     manifest = execute_correction_run(
         run_dir=run_dir, agents_root=args.agents_root, extra_syspath=(REPO / "src",),
         decision_timeout=args.decision_timeout, episode_timeout=args.episode_timeout,
-        max_bytes=int(args.max_gb * 1024 ** 3))
+        max_bytes=int(args.max_gb * 1024 ** 3), log=print)
     totals = manifest["totals"]
     print(f"{manifest['status']}: {totals['complete']}/{totals['planned']} complete, "
           f"{totals['failed']} failed -> {run_dir}")
