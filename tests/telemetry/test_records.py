@@ -37,12 +37,13 @@ from common.telemetry import (
     build_decision_record,
     build_episode_receipt,
     build_outcome_record,
+    build_pregame_record,
     frame_record,
     episode_context,
     emit,
     migrate_record,
-    validate_record,
     runtime_provenance,
+    validate_record,
 )
 
 
@@ -55,6 +56,34 @@ def _provider_configuration(identity="fixture-provider"):
         "identity": identity, "backend": "fixture", "factory": "tests.FixtureProvider",
         "version": 2, "kwargs": {}, "factory_kwargs": {},
     }
+
+
+def test_runtime_provenance_accepts_manifested_source_identity(monkeypatch):
+    expected = {
+        "agent": "mega_starmie",
+        "artifact": "correction-run/run-1",
+        "code": "abc123",
+        "data": {"deck_sha256": "deck", "strategy_sha256": "strategy"},
+    }
+    monkeypatch.setenv("AGENT_RUNTIME_PROVENANCE", json.dumps(expected))
+    assert runtime_provenance(deck_name="ignored") == expected
+
+
+def test_pregame_record_keeps_the_committed_equivalent_selection():
+    state = ObservationStateBuilder().root(printout(turn=0))
+    action = LegalAction(
+        ActionIdentity("setup_active"), (0,), ((0,), (1,)), ())
+    state = replace(state, legal_actions=(action,))
+
+    record = build_pregame_record(
+        RootDecision((1,), ActionIdentity("setup_active"), 0.0, True, {}), state,
+        episode_key="pregame", decision_index=0, parent_decision_id=None,
+        provenance={"agent": "test", "artifact": "fixture", "code": "abc", "data": {}},
+        decision_seconds=0.0,
+    )
+
+    assert record["decision"]["selection"] == [1]
+    assert record["actions"][0]["selection"] == [1]
 
 
 def test_decision_record_keeps_the_complete_typed_candidate_roster():
@@ -318,6 +347,19 @@ def test_session_uses_owner_episode_key_and_tracks_parent_per_seat():
                      "parent_decision_id": None}
     assert second == {"episode_key": "shared-episode", "decision_index": 1,
                       "parent_decision_id": "seat-zero-first"}
+
+
+def test_repeated_owner_episode_begin_preserves_earlier_reservations():
+    session = TelemetrySession()
+    with episode_context("shared-episode"):
+        session.begin_episode()
+        reservation = session.reserve_decision(
+            seat=0, position_key="position", decision_key="decision")
+        session.commit_decision(seat=0, record_id=reservation["record_id"])
+        session.deliver_decision(record_id=reservation["record_id"])
+        session.begin_episode()
+
+    assert session.close_episode()["decision_ids"] == [reservation["record_id"]]
 
 
 def test_episode_receipt_accounts_for_every_reservation_before_outcome_certification():

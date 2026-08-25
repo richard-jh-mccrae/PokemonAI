@@ -183,15 +183,22 @@ class AgentServer:
     whole point: two DIFFERENT Bundles can play one Match, which an in-process load cannot do."""
 
     def __init__(self, bundle: Path | str, extra_syspath=(), *, overlay=None,
-                 capture_telemetry=False, emit_telemetry=None, decision_seconds=None):
+                 capture_telemetry=False, emit_telemetry=None, decision_seconds=None,
+                 strict=False, provenance=None):
         emit_telemetry = capture_telemetry if emit_telemetry is None else bool(emit_telemetry)
         env = dict(os.environ, AGENT_NO_TELEMETRY="0" if emit_telemetry else "1",
                    AGENT_CAPTURE_TELEMETRY="1" if capture_telemetry else "0",
+                   AGENT_BRAIN_STRICT="1" if strict else "0",
                    PYTHONIOENCODING="utf-8")
         if decision_seconds is not None:
             env["AGENT_DECISION_SECONDS"] = str(float(decision_seconds))
         else:
             env.pop("AGENT_DECISION_SECONDS", None)
+        if provenance is not None:
+            env["AGENT_RUNTIME_PROVENANCE"] = json.dumps(
+                provenance, sort_keys=True, separators=(",", ":"))
+        else:
+            env.pop("AGENT_RUNTIME_PROVENANCE", None)
         if overlay:                                   # config under test, as absolute path (cwd=bundle)
             env["AGENT_OVERLAY"] = str(Path(overlay).resolve())
         else:

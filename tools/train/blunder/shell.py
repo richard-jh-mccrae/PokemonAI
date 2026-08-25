@@ -634,6 +634,37 @@ async function switchGame(d){
   await fetch('/game',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({i:j})});
   loadGame();
 }
+function ledgerDetails(title,value){
+  if(value==null)return '';
+  return `<details><summary>${title}</summary><pre>${esc(JSON.stringify(value,null,2))}</pre></details>`;
+}
+function ledgerDecision(L,f){
+  const D=L.decision||{}, actions=Object.fromEntries((L.actions||[]).map(a=>[a.id,a]));
+  const fmt=n=>n==null?'unavailable':Number(n).toFixed(3);
+  const actionLabel=a=>{
+    const picks=(a&&a.selection)||[];
+    const labels=picks.map(pos=>{const row=(f.options||[]).find(o=>o.pos===pos);return row&&row.label;}).filter(Boolean);
+    return labels.join(', ')||esc(JSON.stringify((a&&a.identity)||a||'?'));
+  };
+  const candidates=(L.candidates||[]).map(c=>{
+    const action=actions[c.action_id]||{}, chosen=c.action_id===D.chosen_action_id;
+    const gaps=(c.gaps||[]).map(esc).join('; ');
+    const components=((c.delta||{}).components||[]);
+    return `<div class="${chosen?'verd':'alt'}"><b>${chosen?'SELECTED · ':''}${actionLabel(action)}</b>`+
+      ` · Δ ${fmt((c.delta||{}).total)} · ${esc(c.disposition||'?')} · ${esc(c.status||'?')}`+
+      (gaps?`<div class="warn">${gaps}</div>`:'')+
+      `<div>successors ${(c.successors||[]).length} · tie ${esc(JSON.stringify(c.policy_tie_break||[]))}</div>`+
+      ledgerDetails('components',components)+ledgerDetails('policy evidence',c.policy_evidence)+`</div>`;
+  }).join('');
+  return `<div class="live"><b>Ledger decision</b>`+
+    `<div>chose <b>${actionLabel(actions[D.chosen_action_id])}</b></div>`+
+    `<div>policy reason <b>${esc(D.policy_reason||'?')}</b> · completeness <b>${esc(L.completeness||'?')}</b></div>`+
+    `<div>root ${fmt((L.root||{}).total)} · nodes ${(L.search||{}).nodes_visited??'?'} · stop ${esc((L.search||{}).stop_reason||'?')}</div>`+
+    ledgerDetails('root components',(L.root||{}).components)+
+    `<details open><summary>candidate roster (${(L.candidates||[]).length})</summary>${candidates}</details>`+
+    ledgerDetails('behavior identity',L.behavior_identity)+ledgerDetails('configuration',L.configuration)+
+    ledgerDetails('opponent snapshot',L.opponent_snapshot)+ledgerDetails('legal observation',L.observation)+`</div>`;
+}
 function show(n){
   if(FR.length) resetCF();
   i=Math.max(0,Math.min(FR.length-1,n)); const f=FR[i], own=isOwn(f.seat);
@@ -655,6 +686,7 @@ function show(n){
       `<div>Remaining search after answer: <b>${sec(S.remaining_seconds)}</b></div></div>`;
   }
   if(f.selected_label) h+=`<div>engine selected: <b>${f.selected_label}</b></div>`;
+  if(f.ledger) h+=ledgerDecision(f.ledger,f);
   if(f.live){
     // The shipped agent's @T record for this decision (ADR-0019): how it ACTUALLY decided. A
     // non-null lethal/planned verdict means that layer short-circuited scoring (ADR-0030/0031) —

@@ -19,7 +19,9 @@ from common.options import LegalAction
 from common.telemetry import (build_decision_record, build_episode_receipt, build_pregame_record,
                               build_outcome_record, frame_record, runtime_provenance)
 from train.corpus import (CorpusIntegrityError, CorpusRejection, build_snapshot, build_training_view,
-                          certify_replay, load_snapshot, stage_episode_bundle)
+                          certify_replay, load_episode_bundle, load_snapshot,
+                          stage_episode_bundle)
+from train.blunder.batch import discover_replays, load_game
 
 
 def _Action(identity, selection):
@@ -189,6 +191,84 @@ def test_publication_is_deterministic_and_reuses_content_addressed_artifacts(tmp
     assert json.loads((tmp_path / "corpus" / "latest.json").read_text())["snapshot_id"] == first.name
 
 
+def test_episode_bundle_v3_compresses_replay_and_telemetry_without_losing_records(tmp_path):
+    replay, telemetry = _episode(tmp_path)
+
+    bundle = stage_episode_bundle(replay_path=replay, telemetry_path=telemetry,
+                                  output_root=tmp_path / "bundles")
+    manifest = json.loads((bundle / "manifest.json").read_text(encoding="utf-8"))
+    loaded_manifest, decisions, receipt, outcome, loaded_replay = load_episode_bundle(bundle)
+
+    assert manifest["schema_version"] == 3
+    assert set(manifest["files"]) == {"replay.json.gz", "telemetry.jsonl.gz"}
+    assert loaded_manifest == manifest
+    assert len(decisions) == 1 and receipt["certified"] and outcome["record_type"] == "outcome"
+    assert loaded_replay["info"]["EpisodeId"] == 42
+
+
+def test_episode_bundle_reader_keeps_v2_compatibility(tmp_path):
+    from train.corpus.io import digest_file
+
+    replay, telemetry = _episode(tmp_path)
+    bundle = stage_episode_bundle(replay_path=replay, telemetry_path=telemetry,
+                                  output_root=tmp_path / "bundles")
+    manifest = json.loads((bundle / "manifest.json").read_text(encoding="utf-8"))
+    if manifest["schema_version"] == 3:
+        import gzip
+
+        (bundle / "replay.json").write_bytes(gzip.decompress((bundle / "replay.json.gz").read_bytes()))
+        (bundle / "telemetry.jsonl").write_bytes(
+            gzip.decompress((bundle / "telemetry.jsonl.gz").read_bytes()))
+        (bundle / "replay.json.gz").unlink()
+        (bundle / "telemetry.jsonl.gz").unlink()
+    manifest["schema_version"] = 2
+    manifest["files"] = {
+        "replay.json": digest_file(bundle / "replay.json"),
+        "telemetry.jsonl": digest_file(bundle / "telemetry.jsonl"),
+    }
+    (bundle / "manifest.json").write_text(json.dumps(manifest), encoding="utf-8")
+
+    loaded_manifest, decisions, receipt, outcome, loaded_replay = load_episode_bundle(bundle)
+
+    assert loaded_manifest["schema_version"] == 2
+    assert len(decisions) == 1 and receipt["certified"] and outcome["record_type"] == "outcome"
+    assert loaded_replay["info"]["EpisodeId"] == 42
+
+
+def test_correction_loader_reads_tuning_bundles_and_hides_heldout(tmp_path):
+    replay, telemetry = _episode(tmp_path)
+    run_dir = tmp_path / "run"
+    tuning = stage_episode_bundle(
+        replay_path=replay, telemetry_path=telemetry,
+        output_root=run_dir / "bundles" / "tuning")
+    heldout = stage_episode_bundle(
+        replay_path=replay, telemetry_path=telemetry,
+        output_root=run_dir / "bundles" / "heldout")
+    (run_dir / "manifest.json").write_text(json.dumps({
+        "schema": "ledger.correction-run", "run_id": "run-1", "focal": "mega_starmie",
+        "source_identity": {"commit": "abc123"},
+        "slots": [
+            {"bundle_id": tuning.name, "partition": "tuning", "focal_seat": 0},
+            {"bundle_id": heldout.name, "partition": "heldout", "focal_seat": 1},
+        ],
+    }), encoding="utf-8")
+
+    games = discover_replays(run_dir)
+    game = load_game(games[0])
+
+    assert games == [tuning]
+    assert game["replay"]["info"]["EpisodeId"] == 42
+    assert game["live_seat"] == 0
+    assert len(game["live_records_by_seat"][0]) == 1
+    assert game["agent"] == "mega_starmie"
+    assert game["agent_build"] == "run-1"
+    assert game["agent_version"] == "abc123"
+    with pytest.raises(ValueError, match="held-out"):
+        discover_replays(heldout)
+    with pytest.raises(ValueError, match="held-out"):
+        load_game(heldout)
+
+
 def test_partial_corrupt_unknown_and_legacy_evidence_never_publish(tmp_path):
     replay, telemetry = _episode(tmp_path)
     lines = telemetry.read_text(encoding="utf-8").splitlines()
@@ -208,7 +288,9 @@ def test_bundle_hash_tampering_blocks_snapshot_publication(tmp_path):
     replay, telemetry = _episode(tmp_path)
     bundle = stage_episode_bundle(replay_path=replay, telemetry_path=telemetry,
                                   output_root=tmp_path / "bundles")
-    (bundle / "replay.json").write_text("{}", encoding="utf-8")
+    manifest = json.loads((bundle / "manifest.json").read_text(encoding="utf-8"))
+    replay_name = next(name for name in manifest["files"] if name.startswith("replay."))
+    (bundle / replay_name).write_text("{}", encoding="utf-8")
     with pytest.raises(ValueError, match="hash mismatch"):
         build_snapshot(bundles_root=bundle, output_root=tmp_path / "corpus",
                        replay_certifier=_fixture_certificate)

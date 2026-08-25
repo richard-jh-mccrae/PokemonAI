@@ -17,7 +17,7 @@ _TOOLS = Path(__file__).resolve().parents[1]
 if str(_TOOLS) not in sys.path:
     sys.path.insert(0, str(_TOOLS))
 
-from sim.selfplay import episode_id, tag_replay  # noqa: E402
+from sim.artifacts import episode_id, tag_replay  # noqa: E402
 
 REPLAY_DIR = _TOOLS.parent / "data" / "replays" / "PvC"
 

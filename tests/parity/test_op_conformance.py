@@ -15,7 +15,7 @@ REPO = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(REPO / "tools" / "parity"))
 
 from cgpy.chain import OPS  # noqa: E402
-from report import build_ledger  # noqa: E402
+from report import build_ledger, trace_evidence  # noqa: E402
 
 # Ops with no committed god micro-trace yet — each entry says what a pin needs.
 UNPINNED: set[str] = {
@@ -57,3 +57,12 @@ def test_conformance_counts_match_ledger():
     ops = ledger["summary"]["ops"]
     assert ops["total"] == len(OPS)
     assert ops["covered"] == len(set(ops["coveredOps"]))
+
+
+def test_cinderace_setup_active_has_committed_native_evidence():
+    trace = REPO / "tests" / "fixtures" / "parity" / "v2_ms_mirror_5000.trace.json.gz"
+    evidence, _ = trace_evidence([trace])
+    assert evidence["666"] == {"v2_ms_mirror_5000"}
+    card = build_ledger()["cards"]["666"]
+    assert card["chains"]["666"] == "verified"
+    assert "v2_ms_mirror_5000" in card["evidence"]

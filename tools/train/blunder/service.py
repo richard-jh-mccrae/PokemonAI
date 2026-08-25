@@ -115,6 +115,8 @@ def frames_payload(replay: dict, our_team: str | None = None,
         else:
             options, chosen, selected_label = [], (raw.get("selected") or []), ""
         live = live_by_frame.get((decision.seat, idx)) if decision is not None else None
+        wire = _live_on_the_wire(live)
+        ledger = wire if (wire or {}).get("schema") == "ledger.telemetry" else None
         seconds = telemetry_decision_seconds(live)
         if seconds is None and decision is not None and decision.decision_seconds != 0.0:
             seconds = decision.decision_seconds
@@ -130,7 +132,8 @@ def frames_payload(replay: dict, our_team: str | None = None,
             # Read through the SAME derivation `build_correction` validates with, so the pane and
             # the validator cannot disagree; `None` keeps the pane refusing where the validator would.
             "min_count": select_min_count(decision.obs) if decision is not None else None,
-            "live": _live_on_the_wire(live),
+            "live": None if ledger is not None else wire,
+            "ledger": ledger,
         })
 
     return {

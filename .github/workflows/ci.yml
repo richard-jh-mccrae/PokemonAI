@@ -134,7 +134,7 @@ jobs:
             workers: 2
             targets: >-
               tests/sim/test_audit_attacks_engine.py tests/sim/test_battle.py
-              tests/sim/test_check_agent.py tests/sim/test_corpus.py
+              tests/sim/test_check_agent.py tests/sim/test_correction_run.py
               tests/sim/test_retreat_lock_engine.py tests/sim/test_transients_engine.py
           - shard: analysis
             workers: auto
@@ -143,7 +143,7 @@ jobs:
               tests/sim/test_battle_result.py tests/sim/test_eval_aivat.py
               tests/sim/test_eval_report.py tests/sim/test_eval_stats.py
               tests/sim/test_generate_attack_overrides.py tests/sim/test_mirror_gate.py
-              tests/sim/test_paired_ab.py tests/sim/test_record.py tests/sim/test_selfplay.py
+              tests/sim/test_paired_ab.py tests/sim/test_record.py tests/sim/test_artifacts.py
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5

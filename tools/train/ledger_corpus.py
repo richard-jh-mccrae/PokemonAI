@@ -44,7 +44,7 @@ from common.ledger import (EvaluationModel, LedgerDecider, OpponentProfile,
                            ValuationConfiguration)  # noqa: E402
 from common.opponent import OpponentMechanic, OpponentTrait  # noqa: E402
 from common.strategy import PrizePlan  # noqa: E402
-from train.blunder.store import load_corrections  # noqa: E402
+from train.blunder.store import dedup_corrections, jsonl_files, load_corrections  # noqa: E402
 from train.blunder.decode import option_label  # noqa: E402
 from train.blunder.reviewed import load_reviewed, partition_reviewed  # noqa: E402
 from train.ledger_parity import assert_runtime_parity  # noqa: E402
@@ -354,7 +354,14 @@ def sweep(*, store, decks=DECKS, limit=None, workers: int = 1,
           baseline: dict | None = None, reviewed: dict | None = None,
           weight_overrides: dict | None = None,
           semantic_flips: dict | None = None) -> dict:
-    swept = [correction for correction in load_corrections(store)
+    sources = (store,) if isinstance(store, (str, Path)) else tuple(store)
+    files = sorted({path for source in sources for path in jsonl_files(source)},
+                   key=lambda value: str(value))
+    loaded = ([correction for path in files
+               for correction in load_corrections(path, dedup=False)] if files else
+              [correction for source in sources for correction in load_corrections(source)])
+    corpus = dedup_corrections(loaded) if files else loaded
+    swept = [correction for correction in corpus
              if correction.agent in decks and correction.obs is not None]
     # A ruling the owner already dispositioned (refuted, fixed, covered…) is retired: grading
     # it would score the brain against a verdict that no longer stands (the ADR-0082 drift).
@@ -385,7 +392,7 @@ def main(argv=None) -> int:
     if argv and argv[0] in {"stage", "build", "view"}:
         return _corpus_main(argv)
     parser = argparse.ArgumentParser()
-    parser.add_argument("--store", default=str(REPO / "data" / "corrections"))
+    parser.add_argument("--store", action="append")
     parser.add_argument("--decks", nargs="+", default=list(DECKS))
     parser.add_argument("--output", type=Path, default=DEFAULT_OUTPUT)
     parser.add_argument("--baseline", type=Path)
@@ -400,7 +407,8 @@ def main(argv=None) -> int:
     if (semantic_flips and baseline
             and semantic_flips.get("baseline_git_rev") != baseline.get("git_rev")):
         raise ValueError("semantic-flip allowlist names a different frozen baseline")
-    result = sweep(store=args.store, decks=tuple(args.decks), limit=args.limit,
+    result = sweep(store=args.store or [REPO / "data" / "corrections"],
+                   decks=tuple(args.decks), limit=args.limit,
                    workers=max(1, args.workers), baseline=baseline,
                    semantic_flips=semantic_flips)
     args.output.write_text(json.dumps(result, indent=2, ensure_ascii=False) + "\n",

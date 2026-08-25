@@ -11,6 +11,7 @@ CARD = PokemonCard(
     weakness=WATER,
     retreat_cost=0,
     default_roles=('accel_source', 'backup_attacker'),
+    covers='full',
     abilities=(
         Ability(
             name='Explosiveness',

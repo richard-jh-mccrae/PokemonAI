@@ -10,7 +10,7 @@ from pathlib import Path
 import pytest
 from cards_helpers import engine_attacks, engine_cards, engine_stage  # noqa: F401  fixtures
 
-from common.cards import attack_index, pokemon_card_store, pokemon_default_roles
+from common.cards import attack_index, card_store, pokemon_card_store, pokemon_default_roles
 from common.cards.card_facts import Clause
 from common.cards.pokemon_roles import resolve_pokemon_roles
 
@@ -78,6 +78,13 @@ def test_cinderace_setup_active_ability_pins_to_its_printed_text():
     explosiveness = pokemon_card_store()[666].abilities[0]
     assert explosiveness.name == "Explosiveness"             # "...put it face down in the Active Spot."
     assert explosiveness.clauses == (Clause("setup_active", trigger="setup"),)
+
+
+def test_mega_starmie_deck_coverage_verdicts_are_authoritative():
+    store = card_store()
+    assert {card_id: store[card_id].covers for card_id in (3, 666, 1030, 1031, 1159)} == {
+        3: "full", 666: "full", 1030: "full", 1031: "full", 1159: "full",
+    }
 
 
 def test_every_core_effect_text_carries_a_clause_encoding():

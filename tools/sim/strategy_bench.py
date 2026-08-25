@@ -19,16 +19,44 @@ from statistics import mean
 from time import monotonic
 
 REPO = Path(__file__).resolve().parents[2]
-sys.path[:0] = [str(REPO), str(REPO / "src")]
-from deprecated.bellman import DecisionClock
+sys.path[:0] = [str(REPO / "tools"), str(REPO / "src")]
+from sim.artifacts import lethal_proof_seconds  # noqa: E402
+from common.ledger.baseline import require_baseline  # noqa: E402
 
 
 def default_jobs() -> int:
     return max(1, (os.cpu_count() or 2) - 2)
 
 
+def pin_ledger_baseline(config: dict) -> dict:
+    from sim.correction_run import _agent_identity, _ledger_identity
+
+    path = config.get("ledger_baseline_path")
+    expected = config.get("ledger_baseline_id")
+    if not path or not expected:
+        raise ValueError("benchmark requires a Ledger Baseline path and identity")
+    baseline = require_baseline(str(expected), Path(path))
+    if _ledger_identity() != baseline["ledger"]:
+        raise ValueError("benchmark Ledger runtime differs from the frozen baseline")
+    agents_root = Path(config["agents_root"])
+    for name in set(config["agents"]):
+        frozen = baseline["contestants"].get(name)
+        if frozen is None:
+            raise ValueError(f"benchmark agent {name!r} is absent from the frozen baseline")
+        current = _agent_identity(agents_root, name)
+        for field in ("deck_sha256", "ledger_overlay_sha256"):
+            if current.get(field) != frozen.get(field):
+                raise ValueError(
+                    f"benchmark agent {name!r} {field} differs from the frozen baseline")
+    return {**config, "ledger_baseline": {
+        "path": str(Path(path)), "baseline_id": baseline["baseline_id"],
+    }}
+
+
 def _agent_decision_seconds(decision_timeout: float) -> float:
-    return DecisionClock(float(decision_timeout)).bellman_seconds
+    seconds = float(decision_timeout)
+    fallback_tail = min(5.0, max(1.0, seconds * 0.05))
+    return max(0.1, seconds - fallback_tail)
 
 
 def _percentile(values, fraction):
@@ -121,8 +149,6 @@ def paired_telemetry_overhead(emitting, baseline) -> dict:
 
 
 def decision_metrics(records, *, match_index, contestants) -> list[dict]:
-    from deprecated.bellman.telemetry import lethal_proof_seconds
-
     rows = []
     for record in records:
         if record.get("record_type") == "outcome":
@@ -293,11 +319,11 @@ def _pairings(mode, agents, matches, seed):
 
 
 def save_match_artifacts(run_dir, episode_id, replay, records) -> Path:
-    from sim.selfplay import _save_telemetry
+    from sim.artifacts import save_legacy_telemetry
 
     path = Path(run_dir) / f"episode-{episode_id}-replay.json"
     path.write_text(json.dumps(replay, ensure_ascii=False), encoding="utf-8")
-    _save_telemetry(Path(run_dir), episode_id, records)
+    save_legacy_telemetry(Path(run_dir), episode_id, records)
     return path
 
 
@@ -355,6 +381,7 @@ def _run_jobs(tasks, *, jobs, worker=None) -> list[dict]:
 
 
 def run(config: dict) -> dict:
+    config = pin_ledger_baseline(config)
     pairings = _pairings(config["mode"], config["agents"], config["matches"], config["seed"])
     run_dir = Path(config["output"])
     run_dir.mkdir(parents=True, exist_ok=True)
@@ -395,6 +422,8 @@ def main(argv=None) -> int:
         command.add_argument("--jobs", type=int, default=default_jobs(),
                              help="parallel matches (default: logical CPUs minus two)")
         command.add_argument("--agents-root", default=str(REPO / "src" / "agents"))
+        command.add_argument("--ledger-baseline", type=Path, required=True)
+        command.add_argument("--ledger-baseline-id", required=True)
         command.add_argument("--output")
         command.add_argument("--no-emit", action="store_true",
                              help="run the contestants with AGENT_NO_TELEMETRY=1: no record is "
@@ -419,7 +448,8 @@ def main(argv=None) -> int:
         "mode": args.mode, "agents": agents, "matches": args.matches,
         "decision_timeout": args.decision_timeout, "match_timeout": args.match_timeout,
         "seed": args.seed, "jobs": args.jobs, "agents_root": args.agents_root, "output": output,
-        "emit": not args.no_emit,
+        "emit": not args.no_emit, "ledger_baseline_path": str(args.ledger_baseline),
+        "ledger_baseline_id": args.ledger_baseline_id,
     }
     payload = run(config)
     print(format_report(payload))

@@ -1,11 +1,17 @@
 import gzip
 import json
+from pathlib import Path
+import subprocess
+import sys
 import pytest
 
 from sim.record import MatchRecorder
-from sim.selfplay import _save_telemetry
+from sim.artifacts import save_legacy_telemetry
 from train import replay_timing
 from train.replay_timing import analyze_directory, format_report
+
+
+REPO = Path(__file__).resolve().parents[2]
 
 
 def _obs(seat, value):
@@ -23,7 +29,7 @@ def test_replay_timing_aggregates_explicit_samples_and_attributes_limit_hits(tmp
     replay = recorder.replay(episode_id=42, team_names=["a", "b"])
     replay["info"]["MatchWallSeconds"] = 3.0
     (tmp_path / "42.json").write_text(json.dumps(replay), encoding="utf-8")
-    _save_telemetry(tmp_path, 42, [
+    save_legacy_telemetry(tmp_path, 42, [
         {"bellman": True, "chosen": [0], "seat": 0, "decision_seconds": 0.2,
          "decision_limit_seconds": 0.15, "deadline_hit": True},
         {"bellman": True, "chosen": [0], "seat": 1, "decision_seconds": 0.1,
@@ -92,3 +98,12 @@ def test_replay_timing_builds_each_replays_decision_index_once(tmp_path, monkeyp
 
     assert analyze_directory(tmp_path)["decision_count"] == 8
     assert calls == 1
+
+
+def test_blunder_correction_direct_cli_has_no_deprecated_runtime_dependency():
+    completed = subprocess.run(
+        [sys.executable, str(REPO / "tools" / "train" / "blunder_correction.py"), "--help"],
+        cwd=REPO, text=True, capture_output=True, check=False)
+
+    assert completed.returncode == 0, completed.stderr
+    assert "replay" in completed.stdout

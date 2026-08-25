@@ -14,6 +14,7 @@ REPO = Path(__file__).resolve().parents[2]
 FIXTURE_AGENTS = REPO / "tests" / "fixtures" / "agents"
 MEGA = FIXTURE_AGENTS / "mega_starmie"          # complete, legal, self-playing source agent
 SRC = [REPO / "src"]                            # source fixture isn't self-contained; cg/common live in src
+AGENTS = REPO / "src" / "agents"
 
 ROWS = [
     {"submission_id": 1, "agent": "mega_starmie", "artifact": "ms_a", "label": "base", "git_hash": "aaaaaaa"},
@@ -162,10 +163,14 @@ def test_report_surfaces_crashes_when_present():
 
 
 @pytest.mark.req("REQ-SIM-0007")
-def test_play_match_runs_a_full_game_and_names_a_winner():
-    deck = read_deck(MEGA)
-    a = AgentServer(MEGA, SRC, capture_telemetry=True)
-    b = AgentServer(MEGA, SRC, capture_telemetry=True)
+@pytest.mark.parametrize("agent", ("dragapult_ex", "mega_lucario", "mega_starmie"))
+def test_play_match_runs_a_full_game_and_names_a_winner(agent):
+    from train.corpus.evidence import audit_correction_records
+
+    directory = AGENTS / agent
+    deck = read_deck(directory)
+    a = AgentServer(directory, SRC, capture_telemetry=True, emit_telemetry=True, strict=True)
+    b = AgentServer(directory, SRC, capture_telemetry=True, emit_telemetry=True, strict=True)
     telemetry = []
     try:
         result = play_match(a, b, deck, deck, telemetry=telemetry,
@@ -176,9 +181,18 @@ def test_play_match_runs_a_full_game_and_names_a_winner():
     assert result.winner in (0, 1, None)        # engine resolved the game to a verdict
     assert result.crashed == ()                 # clean mirror crashes neither seat
     decisions = [record for record in telemetry if record["record_type"] == "decision"]
+    receipts = [record for record in telemetry
+                if record["record_type"] == "telemetry_receipt"]
     outcomes = [record for record in telemetry if record["record_type"] == "outcome"]
+    assert len(receipts) == 1
+    failed_reservations = [row for row in receipts[0]["reservations"]
+                           if row["status"] != "delivered"]
+    assert not failed_reservations, failed_reservations
+    assert receipts[0]["certified"]
     assert len(outcomes) == 1
     assert outcomes[0]["decision_ids"] == [record["record_id"] for record in decisions]
+    audit = audit_correction_records(telemetry)
+    assert audit["ledger_decisions"] == len(decisions) - audit["pregame_decisions"]
 
 
 @pytest.mark.req("REQ-SIM-0007")
