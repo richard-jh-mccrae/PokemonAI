@@ -4,6 +4,8 @@ from .decision import LEDGER_VALUE_SCALE, LedgerValueEvaluator
 from .configuration import (BehaviorIdentity, ComputeConfiguration, DeckOverlay,
                             ValuationConfiguration)
 from .activation import ActivationCompiler, ActivationEnvironment
+from .baseline import (AUTHORITATIVE_DECKS, BLUNDER_POLICY, load_baseline,
+                       require_baseline, validate_baseline, validate_certification)
 from .evaluate import FeatureActivation, FeatureContribution, Valuation, evaluate
 from .features import ActivationRule, FEATURE_CATALOG, FeatureCatalog, FeatureSpec
 from .preview import ContinuationFootprint
@@ -13,7 +15,8 @@ from .seam import (LedgerNativeProvider, PreviewState, preview_provider_factory,
 from .search import GreedyDecisionPolicy, LedgerOnePlySearch, UniformPolicyModel
 from .worth import EvaluationModel, OpponentProfile
 
-__all__ = ("ActivationCompiler", "ActivationEnvironment", "ActivationRule",
+__all__ = ("AUTHORITATIVE_DECKS", "ActivationCompiler", "ActivationEnvironment", "ActivationRule",
+           "BLUNDER_POLICY",
            "BehaviorIdentity", "ComputeConfiguration",
            "ContinuationFootprint", "DeckOverlay",
            "FEATURE_CATALOG",
@@ -23,5 +26,6 @@ __all__ = ("ActivationCompiler", "ActivationEnvironment", "ActivationRule",
            "GreedyDecisionPolicy", "LedgerOnePlySearch", "UniformPolicyModel",
            "PreviewState", "PrizeMap", "Valuation",
            "OpponentProfile", "ValuationConfiguration", "derive_prize_map", "evaluate",
-           "preview_provider_factory",
+           "load_baseline", "preview_provider_factory", "require_baseline",
+           "validate_baseline", "validate_certification",
            "register_preview_variant")

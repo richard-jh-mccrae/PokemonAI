@@ -15,10 +15,12 @@ from observation_builders import build_observation, advance_observation
 import importlib.util
 from collections import Counter
 from pathlib import Path
+import pytest
 
 from cgpy.engine import Engine
 from cgpy.render import observation
 from cgpy.rng import SeededRng
+from cgpy.search import export_token
 
 from common.observation import HiddenHand, ObservationState, ObservationStateBuilder
 from common.deck_tracker import OwnCardModel
@@ -30,21 +32,25 @@ REPO = Path(__file__).resolve().parents[2]
 MAX_STEPS = 2000
 
 
-def _runtime(deck):
-    path = REPO / "src" / "agents" / "mega_starmie" / "strategy.py"
+def _runtime(deck, agent):
+    path = REPO / "src" / "agents" / agent / "strategy.py"
     spec = importlib.util.spec_from_file_location("_smoke_strategy", path)
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
     return build_runtime(module.STRATEGY, deck, provider_factory=CgpyTransitionProvider)
 
 
-def _deck():
-    path = REPO / "src" / "agents" / "mega_starmie" / "deck.csv"
+def _deck(agent):
+    path = REPO / "src" / "agents" / agent / "deck.csv"
     return [int(value) for value in path.read_text(encoding="utf-8").split()[:60]]
 
 
 def _ids(gs, serials):
     return Counter(gs.cards[serial].card_id for serial in serials)
+
+
+def _observation(engine, seat):
+    return observation(engine.gs, seat, sbi_token=export_token(engine.gs))
 
 
 def _assert_board_matches_engine(board, gs, seat, step):
@@ -76,13 +82,14 @@ def _assert_board_matches_engine(board, gs, seat, step):
     assert board.turn.number == gs.turn, f"step {step} turn"
 
 
-def test_a_full_cgpy_mirror_game_runs_on_the_ledger_start_to_finish(monkeypatch):
+@pytest.mark.parametrize("agent", ("dragapult_ex", "mega_lucario", "mega_starmie"))
+def test_a_full_cgpy_mirror_game_runs_on_the_ledger_start_to_finish(monkeypatch, agent):
     monkeypatch.setenv("AGENT_BRAIN_STRICT", "1")
-    deck = _deck()
+    deck = _deck(agent)
     # Seed chosen by scan: 16 turns, every prize taken — knockouts, promotions, prize flips.
     engine, err_player, err_type = Engine.start(deck, deck, rng=SeededRng(424242))
     assert engine is not None, f"deck rejected: seat {err_player} errorType {err_type}"
-    runtimes = {seat: _runtime(deck) for seat in (0, 1)}
+    runtimes = {seat: _runtime(deck, agent) for seat in (0, 1)}
     coordinator_entries: Counter = Counter()
     for seat, runtime in runtimes.items():
         real = runtime.ledger.coordinator
@@ -95,13 +102,13 @@ def test_a_full_cgpy_mirror_game_runs_on_the_ledger_start_to_finish(monkeypatch)
         runtime.ledger.coordinator = RecordingCoordinator()
     own_cards = {seat: OwnCardModel(runtimes[seat].deck)
                  for seat in (0, 1)}
-    chains = {seat: build_observation(observation(engine.gs, seat), decklist=deck)
+    chains = {seat: build_observation(_observation(engine, seat), decklist=deck)
               for seat in (0, 1)}
     backends: Counter = Counter()
     steps = 0
     while engine.gs.result == -1 and steps < MAX_STEPS:
         seat = engine.gs.pending.seat
-        obs = observation(engine.gs, seat)
+        obs = _observation(engine, seat)
         own_cards[seat].observe(ObservationStateBuilder(deck).root(obs))
         obs["own_prizes"] = own_cards[seat].prize_export()
         obs["known_top"] = own_cards[seat].known_top_export()
@@ -119,7 +126,7 @@ def test_a_full_cgpy_mirror_game_runs_on_the_ledger_start_to_finish(monkeypatch)
         engine.step(list(decision.chosen))
         steps += 1
         for view in (0, 1):
-            chains[view] = advance_observation(chains[view], observation(engine.gs, view))
+            chains[view] = advance_observation(chains[view], _observation(engine, view))
             if engine.gs.turn >= 1:        # setup facedowns are legitimately masked
                 _assert_board_matches_engine(chains[view], engine.gs, view, steps)
 
@@ -129,7 +136,7 @@ def test_a_full_cgpy_mirror_game_runs_on_the_ledger_start_to_finish(monkeypatch)
 
     # The terminal frame digests, and the evaluator reads the outcome straight off the board.
     ctx = EvaluationModel.build()
-    finals = {view: evaluate(advance_observation(chains[view], observation(engine.gs, view)), ctx)
+    finals = {view: evaluate(advance_observation(chains[view], _observation(engine, view)), ctx)
               for view in (0, 1)}
     for view in (0, 1):
         assert chains[view].turn.result == engine.gs.result

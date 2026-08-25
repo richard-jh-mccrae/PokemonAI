@@ -8,4 +8,5 @@ CARD = TrainerCard(
     text='The Pokémon this card is attached to gets +100 HP.',
     ace_spec=True,
     clauses=(Clause('hp_bonus', amount=100),),
+    covers='full',
 )

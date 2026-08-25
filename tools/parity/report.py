@@ -28,7 +28,7 @@ sys.path.insert(0, str(REPO / "src"))
 
 from cgpy.cards import CardDB  # noqa: E402
 from cgpy.chain import load_chain_defs  # noqa: E402
-from cgpy.schema import CardType, LogType  # noqa: E402
+from cgpy.schema import AreaType, CardType, LogType, SelectContext  # noqa: E402
 
 FIXTURES = REPO / "tests" / "fixtures" / "parity"
 LEDGER = REPO / "data" / "engine" / "coverage.json"
@@ -76,6 +76,21 @@ def trace_evidence(paths: list[Path]) -> tuple[dict[str, set[str]], dict[str, in
                         and log.get("cardId") is not None:
                     mark(str(log["cardId"]))
             sel = obs.get("select") or {}
+            if int(sel.get("context", -1)) == int(SelectContext.SETUP_ACTIVE_POKEMON):
+                current = obs.get("current") or {}
+                seat = int(current.get("yourIndex", -1))
+                players = current.get("players") or []
+                hand = players[seat].get("hand") or [] if 0 <= seat < len(players) else []
+                options = sel.get("option") or []
+                for picked in fr.get("choice") or []:
+                    if not 0 <= int(picked) < len(options):
+                        continue
+                    option = options[int(picked)]
+                    if int(option.get("area", -1)) != int(AreaType.HAND):
+                        continue
+                    index = int(option.get("index", -1))
+                    if 0 <= index < len(hand) and isinstance(hand[index], dict):
+                        mark(str(hand[index].get("id")))
             eff = sel.get("effect")
             if isinstance(eff, dict):              # card ref: {"id": …, "serial": …}
                 cid = eff.get("id") or cid_of(eff.get("serial") or -1)
@@ -111,8 +126,9 @@ def ops_in(entry: dict) -> set[str]:
 
 
 def chain_status(chain_id: str, defs: dict, overrides: dict,
-                 evidence: dict[str, set[str]]) -> str:
-    if chain_id in evidence and chain_id in defs and "deferred" not in defs[chain_id]:
+                 evidence: dict[str, set[str]], native_setup: set[str] | None = None) -> str:
+    if (chain_id in evidence and chain_id in defs
+            and ("deferred" not in defs[chain_id] or chain_id in (native_setup or set()))):
         return "verified"
     d = defs.get(chain_id)
     if d is None or "deferred" in d:
@@ -131,22 +147,32 @@ def build_ledger() -> dict:
     # load_chain_defs strips _seed? No — it keeps entries verbatim (only top-level "_"
     # KEYS are dropped), so _seed provenance is readable here.
     overrides = _overrides()
+    native_setup = {
+        str(card_id) for card_id, card in db.cards.items()
+        if not card.basic and db.is_setup_starter(card_id)
+    }
     paths = sorted(FIXTURES.glob("*.trace.json.gz"))
     evidence, frames = trace_evidence(paths)
+    previous = {}
+    if LEDGER.exists():
+        previous = json.loads(LEDGER.read_text(encoding="utf-8")).get("cards") or {}
 
     today = _dt.date.today().isoformat()
     cards: dict[str, dict] = {}
     for cid, card in sorted(db.cards.items()):
-        chains: dict[str, str] = {str(cid): chain_status(str(cid), defs, overrides,
-                                                         evidence)}
+        chains: dict[str, str] = {str(cid): chain_status(
+            str(cid), defs, overrides, evidence, native_setup)}
         for aid in card.attacks:
             k = f"attack:{aid}"
-            chains[k] = chain_status(k, defs, overrides, evidence)
+            chains[k] = chain_status(k, defs, overrides, evidence, native_setup)
         status = min(chains.values(), key=lambda s: _ORDER[s])
         ev = sorted(set().union(*(evidence.get(k, set()) for k in chains)))
-        cards[str(cid)] = {"name": card.name, "cardType": _TYPE_NAME[card.cardType],
-                           "status": status, "chains": chains,
-                           "evidence": ev, "updated": today}
+        row = {"name": card.name, "cardType": _TYPE_NAME[card.cardType],
+               "status": status, "chains": chains, "evidence": ev}
+        old = previous.get(str(cid)) or {}
+        row["updated"] = old.get("updated", today) if {
+            key: old.get(key) for key in row} == row else today
+        cards[str(cid)] = row
 
     # Interpreter-op conformance: which ops appear in a def exercised by a clean trace.
     from cgpy.chain import OPS
@@ -205,8 +231,7 @@ def main(argv=None) -> int:
     print(rollup(ledger))
     if not args.print:
         LEDGER.parent.mkdir(parents=True, exist_ok=True)
-        LEDGER.write_text(json.dumps(ledger, ensure_ascii=False, indent=1) + "\n",
-                          encoding="utf-8")
+        LEDGER.write_bytes((json.dumps(ledger, ensure_ascii=False, indent=1) + "\n").encode())
         print(f"\nwrote {LEDGER}")
     return 0
 

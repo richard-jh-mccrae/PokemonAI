@@ -12,6 +12,7 @@ as its frozen acceptance evidence (ADR-0149).
   runtime; per-deck agreement, the generality floor, misses with their rationales, gap census,
   regressions vs a prior baseline (ADR-0145); prize-anchor stamping + retired rulings (ADR-0147).
 - `corpus/`: hashed Episode Bundles, immutable Canonical Corpus publication, and Training Views.
+- `ledger_certify.py`, `ledger_baseline.py`: certify and freeze one three-Deck Ledger Baseline.
 - `ledger_tune.py`: the §7 nudge / keep-best / adoption-gate loop over the Ledger's general
   Valuation Configuration; every trial lands in `docs/tuning/runs/`.
 
@@ -36,8 +37,22 @@ _Avoid_: Corpus Run, Mutable Dataset, Latest Corpus
 
 **Episode Bundle**:
 A closed, hashed staging unit containing one Episode's replay and authoritative telemetry. Corpus
-publication consumes complete Episode Bundles and never mutates them during a match.
+publication consumes complete Episode Bundles and never mutates them during an Episode.
 _Avoid_: Corpus Decision, Replay File, Live Corpus Row
+
+**Correction Run**:
+A bounded, manifested batch of Episodes with one focal Deck in every Episode and a reproducible
+randomized opponent plan, produced for human Ledger review. It stages Episode Bundles but is
+neither a Benchmark nor a Corpus Snapshot.
+_Avoid_: Self-play Corpus, Strategy Benchmark, Corpus Run
+
+**Ledger Baseline**:
+One immutable identity joining one-ply Ledger behavior, source and Deck definitions, Corrections
+evidence, a held-out manifest, and the tests that certified them. Later experiments name this
+identity; a newly found blunder never silently changes it. Freeze requires the current clean source
+and all three authoritative Decks. During search experiments, new blunders are record-only; any
+retune creates a new Baseline version.
+_Avoid_: Commit Hash, Latest Ledger, Mutable Baseline
 
 **Corpus Origin**:
 The provenance boundary distinguishing evidence recorded during play from evidence reconstructed by

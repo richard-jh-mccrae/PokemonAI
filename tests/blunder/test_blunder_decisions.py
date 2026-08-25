@@ -165,6 +165,42 @@ def test_frames_distil_search_trace_instead_of_shipping_it_to_the_browser():
     assert frames[0]["lethal_proof_seconds"] == pytest.approx(0.125)
 
 
+def test_frames_and_shell_present_the_complete_ledger_decision_contract():
+    replay = _timed_replay()
+    ledger = {
+        "schema": "ledger.telemetry", "record_type": "decision", "record_id": "d1",
+        "decision": {
+            "variant": "ledger", "selection": [0], "chosen_action_id": "a",
+            "policy_reason": "positive_continuation", "seat": 0, "index": 0,
+        },
+        "observation": {"select": {"context": 0}},
+        "opponent_snapshot": {"identity": "opp-1"},
+        "actions": [{"id": "a", "selection": [0], "identity": "play"}],
+        "root": {"total": 10.0, "components": [{"feature": "board", "value": 10.0}]},
+        "candidates": [{
+            "action_id": "a", "disposition": "continues_turn", "status": "estimated",
+            "delta": {"total": 3.0, "components": [{"feature": "tempo", "value": 3.0}]},
+            "gaps": ["chain capped; scored mid-effect board"], "successors": [{}],
+            "policy_tie_break": [1], "policy_evidence": {"reason": "develop"},
+        }],
+        "search": {"nodes_visited": 1, "stop_reason": "complete", "failure": None},
+        "behavior_identity": {"evaluator": "ledger-linear-v1"},
+        "configuration": {"compute": {"identity": "default"}},
+        "timing": {"decision_seconds": 0.25}, "completeness": "estimated",
+    }
+
+    frame = frames_payload(replay, live_records_by_seat={0: [ledger]})["frames"][0]
+
+    assert frame["live"] is None
+    assert frame["ledger"] == ledger
+    assert frame["ledger"]["decision"]["policy_reason"] == "positive_continuation"
+    assert frame["ledger"]["candidates"][0]["delta"]["total"] == 3.0
+    assert "Ledger decision" in _SHELL_HTML
+    assert "candidate roster" in _SHELL_HTML
+    assert "legal observation" in _SHELL_HTML
+    assert "opponent snapshot" in _SHELL_HTML
+
+
 def test_frames_open_on_a_board_that_has_cards_on_it():
     """A real film opens on the coin flip, whose board is empty — nothing is dealt yet — so landing
     the viewer on frame 0 shows a blank board."""

@@ -4,7 +4,8 @@ import pytest
 from sim.record import MatchRecorder
 from sim.strategy_bench import (
     _agent_decision_seconds, _run_jobs, decision_metrics, default_jobs, format_report,
-    paired_telemetry_overhead, save_match_artifacts, summarize_decisions, summarize_matches,
+    paired_telemetry_overhead, pin_ledger_baseline, save_match_artifacts,
+    summarize_decisions, summarize_matches,
     write_decisions_csv,
 )
 from train.blunder.batch import discover_replays, load_game
@@ -137,6 +138,67 @@ def test_no_emit_run_still_prices_every_decision_off_the_harness_clock():
 def test_default_jobs_leaves_two_logical_processors_for_the_host(monkeypatch):
     monkeypatch.setattr(os, "cpu_count", lambda: 12)
     assert default_jobs() == 10
+
+
+def test_benchmark_pins_and_emits_the_frozen_ledger_baseline(monkeypatch, tmp_path):
+    path = tmp_path / "baseline.json"
+    path.write_text("{}", encoding="utf-8")
+    frozen_agent = {"deck_sha256": "deck", "ledger_overlay_sha256": "overlay"}
+    monkeypatch.setattr("sim.strategy_bench.require_baseline", lambda expected, actual: {
+        "baseline_id": expected, "ledger": {"id": "ledger"},
+        "contestants": {"mega_starmie": frozen_agent},
+    })
+    monkeypatch.setattr("sim.correction_run._ledger_identity", lambda: {"id": "ledger"})
+    monkeypatch.setattr("sim.correction_run._agent_identity",
+                        lambda root, name: frozen_agent)
+
+    config = pin_ledger_baseline({
+        "ledger_baseline_path": str(path), "ledger_baseline_id": "frozen-v1",
+        "agents_root": str(tmp_path), "agents": ["mega_starmie"],
+    })
+
+    assert config["ledger_baseline"] == {
+        "path": str(path), "baseline_id": "frozen-v1",
+    }
+
+
+def test_benchmark_rejects_an_unpinned_ledger_baseline():
+    with pytest.raises(ValueError, match="requires a Ledger Baseline"):
+        pin_ledger_baseline({})
+
+
+def test_benchmark_rejects_runtime_ledger_drift(monkeypatch, tmp_path):
+    path = tmp_path / "baseline.json"
+    path.write_text("{}", encoding="utf-8")
+    monkeypatch.setattr("sim.strategy_bench.require_baseline", lambda expected, actual: {
+        "baseline_id": expected, "ledger": {"id": "frozen"}, "contestants": {},
+    })
+    monkeypatch.setattr("sim.correction_run._ledger_identity", lambda: {"id": "changed"})
+    with pytest.raises(ValueError, match="Ledger runtime differs"):
+        pin_ledger_baseline({
+            "ledger_baseline_path": str(path), "ledger_baseline_id": "frozen-v1",
+            "agents_root": str(tmp_path), "agents": ["mega_starmie"],
+        })
+
+
+def test_benchmark_rejects_deck_overlay_drift(monkeypatch, tmp_path):
+    path = tmp_path / "baseline.json"
+    path.write_text("{}", encoding="utf-8")
+    monkeypatch.setattr("sim.strategy_bench.require_baseline", lambda expected, actual: {
+        "baseline_id": expected, "ledger": {"id": "ledger"},
+        "contestants": {"mega_starmie": {
+            "deck_sha256": "deck", "ledger_overlay_sha256": "frozen",
+        }},
+    })
+    monkeypatch.setattr("sim.correction_run._ledger_identity", lambda: {"id": "ledger"})
+    monkeypatch.setattr("sim.correction_run._agent_identity", lambda root, name: {
+        "deck_sha256": "deck", "ledger_overlay_sha256": "changed",
+    })
+    with pytest.raises(ValueError, match="ledger_overlay_sha256 differs"):
+        pin_ledger_baseline({
+            "ledger_baseline_path": str(path), "ledger_baseline_id": "frozen-v1",
+            "agents_root": str(tmp_path), "agents": ["mega_starmie"],
+        })
 
 
 def test_agent_budget_finishes_before_the_parent_process_timeout():

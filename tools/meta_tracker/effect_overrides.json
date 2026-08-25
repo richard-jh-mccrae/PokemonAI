@@ -4,6 +4,10 @@
  "_note_fetch": "FETCH clauses (ADR-0032 parametric tier; hypergeometric-fetch-closure WP3) — the tutor/recycle PREDICATE a boolean Function Tag can't carry, so the gamble closure never parses card text at runtime OR build time. Verified against engine card text (all_card_data / EN_Card_Data.csv), never memory; probe-unreachable (a search select's target constraints aren't measured) -> override-only, like the heal gates. Fields: target = basic_energy | basic_pokemon | pokemon | mega | energy(incl Special) | evolution; zone = deck (whole-deck search) | discard (recycle, visible pool); energy_type = EnergyType code the fetch is type-LOCKED to (Fighting {F}=6), absent = any; no_rule_box = true for a fetch that excludes ex/Mega/V (Poke Pad); hp_max = an HP ceiling on the target (Poffin <=70); no_ability = true for an ability-less-only target (Salvatore); dest = hand (DEFAULT — absent) | bench (Poffin) | in_play (Salvatore rush-evolve). Issue #301 widened the target list and added amount / choice / dig_from / name_family / the discard_remainder rider and the on_attach trigger — see `_note_fetch_family`, which is the full field spec. This is the tier `doctrine_fetch._FETCH_FILTERS` MIGRATED onto (bench_fill/tutor_mega/tutor_pokemon/rush_evolve). 1119 Energy Search: a Basic Energy -> deck. 1100 Energy Search Pro (ACE SPEC): any number of different-type Basic Energy -> deck. 1142 Fighting Gong: a Basic {F} Energy OR a Basic {F} Pokemon -> deck (TWO clauses; the {F}-lock the tutor_energy tag can't see). 1097 Night Stretcher: a Pokemon OR a Basic Energy -> discard. 1118 Energy Retrieval: up to 2 Basic Energy -> discard. 1110 Max Rod: up to 5 Pokemon and/or Basic Energy -> discard. 1121 Ultra Ball: a Pokemon -> deck (cost = discard 2). 1152 Poke Pad: a Pokemon WITHOUT a Rule Box -> deck. 1145 Mega Signal: a Mega Evolution Pokemon {ex} -> deck. 1086 Buddy-Buddy Poffin: up to 2 Basic Pokemon with <=70 HP -> bench. 1189 Salvatore: a card with NO Abilities that evolves from one of your Pokemon -> put onto it (in_play). 1225 Hilda: an Evolution Pokemon AND an Energy card (incl Special) -> deck.",
  "_covers": {
   "_note": "Per-CARD clause-set COMPLETENESS verdicts (Issue #300): does this card's clause set cover its WHOLE printed effect? `full` | `partial`, each quoting the leg the clauses carry or miss. AUTHORED HERE, in tools/meta_tracker/effect_overrides.json, and re-stamped verbatim into common/card_effects.json under the same key by build_card_effects.py — edit it here, never in the shipped artifact. Ported from the Issue #269 census's hand-ruled table (tools/apply_seam_coverage.py), which read every verdict off the engine's own card text beside the committed clauses; the cards outside that census's pool were ruled the same way. This is a per-card fact, not a per-clause one, so it lives beside the clause lists rather than inside them — a card whose clauses are purely probe-MEASURED needs a verdict too, and giving it a numeric override entry to carry one would REPLACE the measurement. Read by common.snapshot_coverage.partial_clause_cards() and fed to apply_option.fate's `clauses_cover` so a PARTIAL set REFUSES instead of pricing its uncovered leg at 0.",
+  "3": {
+   "covers": "full",
+   "reason": "Basic Water Energy's one {W} provision is structural and is the whole card"
+  },
   "17": {
    "covers": "full",
    "reason": "provision + evolution provision + the end-of-turn discard rider all carried"
@@ -36,6 +40,10 @@
    "covers": "full",
    "reason": "accel 5 x Basic {D} from deck on evolve — the whole Ability"
   },
+  "666": {
+   "covers": "full",
+   "reason": "setup-active Explosiveness and Turbo Flare's three-Energy bench acceleration are carried"
+  },
   "674": {
    "covers": "full",
    "reason": "the on-evolve gust is the whole Ability; the once-per-turn cap is a condition, not a leg (the 140 precedent), and it is vacuous on an on-evolve trigger anyway"
@@ -47,6 +55,14 @@
   "678": {
    "covers": "full",
    "reason": "attack rider (`on_attack`); not an apply-seam site at all — attacks are TERMINAL"
+  },
+  "1030": {
+   "covers": "full",
+   "reason": "Water Gun is a vanilla 20-damage attack with no unmodeled effect"
+  },
+  "1031": {
+   "covers": "full",
+   "reason": "Jetting Blow's bench damage and Nebula Beam's combat-effect ignores are carried"
   },
   "1071": {
    "covers": "full",
@@ -579,6 +595,10 @@
   "1158": {
    "covers": "full",
    "reason": "+50, attached body's attacks only, and only \"to your opponent's Active Pokemon {ex}\" — the target class carried as `target_class: ex` (structural), timing before Weakness/Resistance as printed; TOOL_CLAUSES passive-modifier shape"
+  },
+  "1159": {
+   "covers": "full",
+   "reason": "the unconditional +100 HP bonus on the attached Pokemon is the whole effect"
   },
   "1171": {
    "covers": "full",

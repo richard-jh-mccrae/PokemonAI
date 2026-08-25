@@ -12,7 +12,7 @@ import re
 from pathlib import Path
 
 from common.telemetry import parse_lines
-from deprecated.bellman.telemetry import lethal_proof_seconds
+from sim.artifacts import lethal_proof_seconds
 
 from .decisions import iter_decisions
 

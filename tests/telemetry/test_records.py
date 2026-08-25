@@ -41,6 +41,7 @@ from common.telemetry import (
     episode_context,
     emit,
     migrate_record,
+    runtime_provenance,
     validate_record,
     runtime_provenance,
 )
@@ -55,6 +56,17 @@ def _provider_configuration(identity="fixture-provider"):
         "identity": identity, "backend": "fixture", "factory": "tests.FixtureProvider",
         "version": 2, "kwargs": {}, "factory_kwargs": {},
     }
+
+
+def test_runtime_provenance_accepts_manifested_source_identity(monkeypatch):
+    expected = {
+        "agent": "mega_starmie",
+        "artifact": "correction-run/run-1",
+        "code": "abc123",
+        "data": {"deck_sha256": "deck", "strategy_sha256": "strategy"},
+    }
+    monkeypatch.setenv("AGENT_RUNTIME_PROVENANCE", json.dumps(expected))
+    assert runtime_provenance(deck_name="ignored") == expected
 
 
 def test_decision_record_keeps_the_complete_typed_candidate_roster():
@@ -318,6 +330,19 @@ def test_session_uses_owner_episode_key_and_tracks_parent_per_seat():
                      "parent_decision_id": None}
     assert second == {"episode_key": "shared-episode", "decision_index": 1,
                       "parent_decision_id": "seat-zero-first"}
+
+
+def test_repeated_owner_episode_begin_preserves_earlier_reservations():
+    session = TelemetrySession()
+    with episode_context("shared-episode"):
+        session.begin_episode()
+        reservation = session.reserve_decision(
+            seat=0, position_key="position", decision_key="decision")
+        session.commit_decision(seat=0, record_id=reservation["record_id"])
+        session.deliver_decision(record_id=reservation["record_id"])
+        session.begin_episode()
+
+    assert session.close_episode()["decision_ids"] == [reservation["record_id"]]
 
 
 def test_episode_receipt_accounts_for_every_reservation_before_outcome_certification():

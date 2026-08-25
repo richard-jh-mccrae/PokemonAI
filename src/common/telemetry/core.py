@@ -6,6 +6,7 @@ import base64
 import hashlib
 import json
 import math
+import os
 import subprocess
 import sys
 import zlib
@@ -460,7 +461,10 @@ class TelemetrySession:
         self._reservations: dict[str, dict] = {}
 
     def begin_episode(self, episode_key: str | None = None) -> str:
-        self.episode_key = str(episode_key or _EPISODE_CONTEXT.get() or uuid4().hex)
+        target = str(episode_key or _EPISODE_CONTEXT.get() or uuid4().hex)
+        if self.episode_key == target:
+            return target
+        self.episode_key = target
         self._indices.clear()
         self._parents.clear()
         self._reservations.clear()
@@ -909,6 +913,11 @@ def build_pregame_record(decision, state, *, episode_key: str, decision_index: i
 
 
 def runtime_provenance(*, deck_name: str, opponent_knowledge_identity: str = "") -> dict:
+    manifested = os.environ.get("AGENT_RUNTIME_PROVENANCE")
+    if manifested:
+        loaded = json.loads(manifested)
+        _exact_fields(loaded, {"agent", "artifact", "code", "data"}, "runtime provenance")
+        return _allowed(loaded)
     path = Path(__file__).with_name("build_provenance.json")
     if path.exists():
         loaded = json.loads(path.read_text(encoding="utf-8"))

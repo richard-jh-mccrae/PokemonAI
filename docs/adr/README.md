@@ -204,7 +204,7 @@ recompute, rename again. See `.claude/skills/grill-with-docs/SKILL.md` and
 | 0054 | The stat provider splits into parser battery, indexes, and records | Accepted (2026-07-13) and **BUILT** — `scouting/card_text.py` (parser battery) and |
 | 0055 | One agent runtime owns the deployment profile | Accepted (2026-07-13) and **BUILT** — `src/common/runtime.py` is merged to main: `PROFILE` |
 | 0056 | The Stat Provider is the one card-knowledge seam; records answer single-card questions | Accepted (2026-07-13) and **BUILT** — merged to main: the Stat Provider is the one |
-| 0057 | The self-play corpus uses the cabt-env path (for Tuner-usable obs), not the A/B harness | Accepted and BUILT — `tools/sim/selfplay.py` generates the own-game corpus on the cabt-env |
+| 0057 | The self-play corpus uses the cabt-env path (for Tuner-usable obs), not the A/B harness | Retired by the Correction Run replacement in Issue #601. |
 | 0058 | Arena captures PvC Matches on the cabt-env path (human bridged as an env agent) | Accepted and BUILT (2026-07-02) — `tools/arena/` hosts PvC Tables on the cabt env with the |
 | 0059 | cgpy is a trace-verified pure-Python twin of the native engine | accepted (2026-07-10) |
 | 0060 | Hand-refresh value is a closed-form card swing, not a hand-size threshold | Accepted (grilled 2026-07-14, `/grill-with-docs`) and **BUILT 2026-07-14 (`/tdd`)**, default |

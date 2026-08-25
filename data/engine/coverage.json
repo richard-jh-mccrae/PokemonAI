@@ -1,18 +1,18 @@
 {
  "_meta": {
   "tool": "tools/parity/report.py",
-  "updated": "2026-08-09",
+  "updated": "2026-08-25",
   "note": "per-chain coverage of the cgpy ChainDef pool (ADR-0050 M4); statuses: verified > derived > seeded > unprobed > deferred"
  },
  "summary": {
   "cards": {
-   "verified": 195,
+   "verified": 196,
    "total": 1267
   },
   "chains": {
-   "verified": 447,
+   "verified": 448,
    "unprobed": 20,
-   "deferred": 604,
+   "deferred": 603,
    "derived": 1169,
    "seeded": 583
   },
@@ -9220,16 +9220,17 @@
   "666": {
    "name": "Cinderace",
    "cardType": "pokemon",
-   "status": "deferred",
+   "status": "verified",
    "chains": {
-    "666": "deferred",
+    "666": "verified",
     "attack:965": "verified"
    },
    "evidence": [
     "sg965_9000",
-    "sg965_9001"
+    "sg965_9001",
+    "v2_ms_mirror_5000"
    ],
-   "updated": "2026-07-13"
+   "updated": "2026-08-25"
   },
   "667": {
    "name": "Corphish",
