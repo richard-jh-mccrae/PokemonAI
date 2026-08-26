@@ -6,6 +6,7 @@ the UI dropdowns consume, and turn one posted tag into a validated, logged Corre
 """
 from __future__ import annotations
 
+from copy import deepcopy
 from dataclasses import replace
 from pathlib import Path
 
@@ -59,6 +60,43 @@ def decisions_payload(replay: dict, our_team: str | None = None) -> dict:
 def _film(replay: dict) -> list[dict]:
     steps = replay.get("steps") or []
     return (steps[0][0].get("visualize") or []) if steps and steps[0] else []
+
+
+def _viewer_card(card) -> dict:
+    card = card if isinstance(card, dict) else {}
+    if card.get("name") is None:
+        card["name"] = "Hidden"
+    if not isinstance(card.get("energies"), list):
+        card["energies"] = []
+    return card
+
+
+def viewer_replay_payload(replay: dict) -> dict:
+    """Return a viewer-safe copy without changing the replay kept as Correction evidence."""
+    payload = deepcopy(replay)
+    film = _film(payload)
+    for raw in film:
+        current = raw.get("current") or {}
+        current["stadium"] = [_viewer_card(card) for card in (current.get("stadium") or [])
+                              if isinstance(card, dict)]
+        for player in current.get("players") or []:
+            for area in ("active", "bench", "discard"):
+                player[area] = [_viewer_card(card) for card in (player.get(area) or [])
+                                if isinstance(card, dict)]
+            hand = player.get("hand")
+            if not isinstance(hand, list):
+                hand = [None] * int(player.get("handCount") or 0)
+            player["hand"] = [_viewer_card(card) for card in hand]
+            prize = player.get("prize")
+            player["prize"] = ([_viewer_card(card) for card in prize]
+                               if isinstance(prize, list) else [])
+    steps = payload.get("steps") or []
+    if steps and len(steps) < len(film):
+        while len(steps[0]) < 2:
+            steps[0].append({})
+        steps.extend([[{}, {}] for _ in range(len(film) - len(steps))])
+    payload["viewerOpeningFrame"] = _opening_frame(film)
+    return payload
 
 
 def _opening_frame(film: list[dict]) -> int:
@@ -141,6 +179,24 @@ def frames_payload(replay: dict, our_team: str | None = None,
         "seat": detect_seat(replay, our_team) if our_team else None,
         "total": len(film), "frames": frames, "opening_frame": _opening_frame(film),
     }
+
+
+def frames_index_payload(payload: dict) -> dict:
+    """Return the initial page payload; per-Decision telemetry stays lazy."""
+    indexed = []
+    for frame in payload["frames"]:
+        row = {key: value for key, value in frame.items() if key not in {"live", "ledger"}}
+        row["has_details"] = frame.get("live") is not None or frame.get("ledger") is not None
+        indexed.append(row)
+    return {**payload, "frames": indexed}
+
+
+def frame_details_payload(payload: dict, *, frame: int) -> dict:
+    """Return the telemetry pane data for one film frame."""
+    selected = next((item for item in payload["frames"] if item["frame"] == frame), None)
+    if selected is None:
+        raise ValueError(f"unknown frame {frame}")
+    return {"frame": frame, "live": selected.get("live"), "ledger": selected.get("ledger")}
 
 
 def _turn_span(replay: dict, *, seat: int, turn: int, live_records) -> list[dict]:

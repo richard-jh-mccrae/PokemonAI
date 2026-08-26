@@ -90,6 +90,23 @@ def _write_gzip(path: Path, payload: bytes) -> None:
             target.write(payload)
 
 
+def load_episode_replay(path: Path) -> dict:
+    """Load and verify only an Episode Bundle's replay artifact."""
+    path = Path(path)
+    manifest = json.loads((path / "manifest.json").read_text(encoding="utf-8"))
+    version = manifest.get("schema_version")
+    if manifest.get("schema") != BUNDLE_SCHEMA or version not in {2, BUNDLE_VERSION}:
+        raise ValueError("unsupported Episode Bundle schema")
+    replay_name = "replay.json" if version == 2 else "replay.json.gz"
+    if digest_file(path / replay_name) != manifest["files"].get(replay_name):
+        raise ValueError(f"Episode Bundle hash mismatch: {replay_name}")
+    replay_bytes = _read_bytes(path / replay_name)
+    expected = (manifest.get("content") or {}).get("replay_sha256")
+    if expected and digest_bytes(replay_bytes) != expected:
+        raise ValueError("Episode Bundle replay content hash mismatch")
+    return json.loads(replay_bytes.decode("utf-8"))
+
+
 def stage_episode_bundle(*, replay_path: Path, telemetry_path: Path,
                          output_root: Path) -> Path:
     replay_path, telemetry_path = Path(replay_path), Path(telemetry_path)
