@@ -354,6 +354,27 @@ def test_source_identity_refuses_a_broad_tracked_exclusion(tmp_path):
         _git_source_identity(tmp_path, allow_dirty=True, exclude_paths=(source,))
 
 
+def test_correction_run_cli_warns_when_source_identity_is_refused(tmp_path, monkeypatch, capsys):
+    import sim.correction_run as correction_run
+
+    monkeypatch.setattr(correction_run, "_discover_agents", lambda _root: ("dragapult_ex",))
+    monkeypatch.setattr(
+        correction_run, "_git_source_identity",
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(
+            ValueError("working tree is dirty; commit changes or pass --allow-dirty")),
+    )
+
+    exit_code = correction_run.main([
+        "dragapult_ex", "-n", "1", "--jobs", "1", "--out", str(tmp_path),
+    ])
+
+    assert exit_code == 2
+    assert capsys.readouterr().err == (
+        "warning: correction run not started: working tree is dirty; "
+        "commit changes or pass --allow-dirty\n"
+    )
+
+
 def test_resume_refuses_changed_contestant_identity(tmp_path):
     from sim.correction_run import _agent_identity, verify_correction_run_inputs
 

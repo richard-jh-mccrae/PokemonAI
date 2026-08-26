@@ -19,7 +19,7 @@ REPO = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(REPO / "tools"))
 sys.path.insert(0, str(REPO / "src"))
 
-from train.blunder.batch import discover_replays, load_game  # noqa: E402
+from train.blunder.batch import discover_replays, load_game_summary  # noqa: E402
 from train.blunder.provenance import build_identity  # noqa: E402
 from train.blunder.shell import serve  # noqa: E402
 from train.blunder.store import DEFAULT_PATH  # noqa: E402
@@ -46,7 +46,7 @@ def main(argv=None):
     replays = discover_replays(args.replay)   # one file, or every Replay in a dir (batch)
     if not replays:
         raise SystemExit(f"no replays found at {args.replay}")
-    detected = load_game(replays[0]).get("agent") or build_identity(replays[0])["agent"]
+    detected = load_game_summary(replays[0]).get("agent") or build_identity(replays[0])["agent"]
     print(f"blunder_correction: {len(replays)} replay(s) from {args.replay}")
     print(f"  agent for own blunders: {args.agent or detected or '(unknown — pass --agent)'}"
           + ("" if args.agent else "  [auto-detected]" if detected else ""))

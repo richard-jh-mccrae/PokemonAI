@@ -23,7 +23,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import parse_qs, unquote, urlsplit
 
-from .batch import load_game, load_replay_for_viewer
+from .batch import load_game, load_game_summary
 from .categories import CATEGORIES
 from .correction import SOURCES
 from .seats import detect_seat
@@ -45,6 +45,14 @@ def _game() -> dict:
     return cache[idx]
 
 
+def _game_summary() -> dict:
+    idx = STATE["current"]
+    cache = STATE["summary_cache"]
+    if idx not in cache:
+        cache[idx] = load_game_summary(STATE["replays"][idx])
+    return cache[idx]
+
+
 def _own_seat(game: dict) -> int | None:
     """Default 'Analyze as' seat: the log-derived own-seat, else team-name detection."""
     seat = game.get("live_seat")
@@ -52,7 +60,7 @@ def _own_seat(game: dict) -> int | None:
 
 
 def _games_payload() -> dict:
-    game = _game()
+    game = _game_summary()
     info = game["replay"].get("info") or {}
     return {"count": len(STATE["replays"]), "current": STATE["current"],
             "episode_id": info.get("EpisodeId"), "own_seat": _own_seat(game)}
@@ -65,6 +73,19 @@ def _frames_payload() -> dict:
             game["replay"], STATE.get("our_team"), game.get("live_records"),
             game.get("live_seat"), game.get("live_records_by_seat"))
     return game["frames_payload"]
+
+
+def _frames_index_payload() -> dict:
+    game = _game_summary()
+    if "frames_index_payload" not in game:
+        payload = frames_payload(
+            game["replay"], STATE.get("our_team"), live_seat=game.get("live_seat"))
+        index = frames_index_payload(payload)
+        if game.get("has_telemetry"):
+            for frame in index["frames"]:
+                frame["has_details"] = frame["taggable"]
+        game["frames_index_payload"] = index
+    return game["frames_index_payload"]
 
 
 def _turn_plan_from_form(form: dict) -> dict | None:
@@ -108,6 +129,7 @@ def _json(handler: BaseHTTPRequestHandler, payload, code: int = 200) -> None:
     body = _json_body(payload)
     handler.send_response(code)
     handler.send_header("Content-Type", "application/json; charset=utf-8")
+    handler.send_header("Cache-Control", "no-store")
     handler.send_header("Content-Length", str(len(body)))
     handler.end_headers()
     handler.wfile.write(body)
@@ -151,10 +173,9 @@ class _Handler(BaseHTTPRequestHandler):
         if self.path in ("/", "/index.html"):
             return _send_html(self, _SHELL_HTML)
         if self.path.startswith("/replay.json"):
-            path = STATE["replays"][STATE["current"]]
-            return _json(self, viewer_replay_payload(load_replay_for_viewer(path)))
+            return _json(self, viewer_replay_payload(_game_summary()["replay"]))
         if self.path.startswith("/frames.json"):
-            return _json(self, frames_index_payload(_frames_payload()))
+            return _json(self, _frames_index_payload())
         if self.path.startswith("/frame.json"):
             try:
                 frame = int(parse_qs(urlsplit(self.path).query)["frame"][0])
@@ -162,7 +183,7 @@ class _Handler(BaseHTTPRequestHandler):
             except (KeyError, ValueError) as exc:
                 return _json(self, {"error": str(exc)}, 400)
         if self.path.startswith("/corrections.json"):
-            return _json(self, list_corrections(_game()["replay"], STATE["store_path"]))
+            return _json(self, list_corrections(_game_summary()["replay"], STATE["store_path"]))
         if self.path.startswith("/games.json"):
             return _json(self, _games_payload())
         if self.path.startswith("/meta.json"):
@@ -198,7 +219,7 @@ class _Handler(BaseHTTPRequestHandler):
             try:
                 from .counterfactual import CounterfactualRecorder
                 recorder = CounterfactualRecorder.from_replay(
-                    _game()["replay"], frame=int(form["frame"]), rng_seed=0)
+                    _game_summary()["replay"], frame=int(form["frame"]), rng_seed=0)
                 recorder.choose([int(i) for i in form["correct"]])
                 session_id = uuid.uuid4().hex
                 STATE["counterfactuals"][session_id] = recorder
@@ -263,7 +284,7 @@ def init_state(replays, *, store_path, agent="", source="own", our_team=None,
                submission_id=None, agent_version=None, viewer_dir=""):
     """Populate the server STATE for a batch of Replay paths (testable without starting HTTP)."""
     STATE.clear()
-    STATE.update(replays=[str(p) for p in replays], current=0, cache={},
+    STATE.update(replays=[str(p) for p in replays], current=0, cache={}, summary_cache={},
                  counterfactuals={},
                  store_path=str(store_path), agent=agent, source=source, our_team=our_team,
                  submission_id=submission_id, agent_version=agent_version, viewer_dir=str(viewer_dir))
@@ -406,6 +427,7 @@ let FR=[],META={},i=0,replayObj=null,viewerReplayObj=null,saved=0,total=0,teamNa
 let CFSESSION=null,CFPAYLOAD=null;
 let plainReady=false,plainLoaded=false,boardStep=0;
 let playbackTimer=null,playbackSpeed=1,playbackPlaying=false,playbackRun=0;
+let gameLoadRun=0;
 const PLAYBACK_MS=1000;
 const $=id=>document.getElementById(id);
 const FORM=['scope','category','correct','source','attribution','critical','posture_wrong','rationale','save'];
@@ -716,17 +738,25 @@ async function boot(){
   $('gprev').onclick=()=>switchGame(-1); $('gnext').onclick=()=>switchGame(1);
   loadGame();
 }
-async function loadGame(){
+async function loadGame(forceViewer=false){
+  const run=++gameLoadRun;
   pausePlayback();
+  FR=[]; total=0;
   $('ids').textContent='loading match…';
-  replayObj=await (await fetch('/replay.json')).json();
+  $('gprev').disabled=true; $('gnext').disabled=true;
+  replayObj=await (await fetch('/replay.json',{cache:'no-store'})).json();
+  if(run!==gameLoadRun) return;
   viewerReplayObj=normalizeViewerReplay(replayObj);
+  teamNames=(viewerReplayObj.info&&viewerReplayObj.info.TeamNames)||[];
   i=Number(viewerReplayObj.viewerOpeningFrame)||0; boardStep=i;
-  openPlain();
-  const g=await (await fetch('/games.json')).json();
+  openPlain(forceViewer);
+  const [g,p]=await Promise.all([
+    fetch('/games.json',{cache:'no-store'}).then(r=>r.json()),
+    fetch('/frames.json',{cache:'no-store'}).then(r=>r.json()),
+  ]);
+  if(run!==gameLoadRun) return;
   $('gpos').textContent=(g.current+1)+'/'+g.count; $('gep').textContent=g.episode_id??'?';
   $('gprev').disabled=g.current<=0; $('gnext').disabled=g.current>=g.count-1;
-  const p=await (await fetch('/frames.json')).json();
   FR=p.frames; total=p.total; teamNames=p.team_names||[];
   const seat=(g.own_seat!=null?g.own_seat:(p.seat!=null?p.seat:0));
   $('ids').innerHTML=`ep <b>${p.episode_id??'?'}</b> · sub <b>${META.submission_id??'—'}</b> · own seat <b>${g.own_seat??p.seat??'(none)'}</b>`;
@@ -740,14 +770,16 @@ async function loadGame(){
   editingId=null;
   // Not frame 0: the film opens on the coin flip, whose board is empty (nothing dealt yet), so
   // landing there shows a blank board.
-  await show(p.opening_frame||0); startPlayback(); refreshList();
+  await show(p.opening_frame||0,false);
+  if(run!==gameLoadRun) return;
+  startPlayback(); refreshList();
 }
 async function switchGame(d){
   pausePlayback();
-  const g=await (await fetch('/games.json')).json();
+  const g=await (await fetch('/games.json',{cache:'no-store'})).json();
   const j=g.current+d; if(j<0||j>=g.count) return;
   await fetch('/game',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({i:j})});
-  loadGame();
+  await loadGame(true);
 }
 function ledgerDetails(title,value){
   if(value==null)return '';
@@ -780,10 +812,10 @@ function ledgerDecision(L,f){
     ledgerDetails('behavior identity',L.behavior_identity)+ledgerDetails('configuration',L.configuration)+
     ledgerDetails('opponent snapshot',L.opponent_snapshot)+ledgerDetails('legal observation',L.observation)+`</div>`;
 }
-async function show(n){
+async function show(n,withDetails=true){
   if(FR.length) resetCF();
   i=Math.max(0,Math.min(FR.length-1,n)); const f=FR[i];
-  if(f.has_details&&!f.details_loaded){
+  if(withDetails&&f.has_details&&!f.details_loaded){
     if(!f.details_promise) f.details_promise=(async()=>{
       const response=await fetch('/frame.json?frame='+f.frame), details=await response.json();
       if(!response.ok) throw new Error(details.error||'decision details failed');

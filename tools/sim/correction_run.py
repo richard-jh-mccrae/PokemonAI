@@ -691,8 +691,12 @@ def main(argv=None) -> int:
         unknown = {args.focal, *opponents} - known
         if unknown:
             parser.error(f"unknown local agents: {', '.join(sorted(unknown))}")
-        source = _git_source_identity(
-            REPO, allow_dirty=args.allow_dirty, exclude_paths=(args.out,))
+        try:
+            source = _git_source_identity(
+                REPO, allow_dirty=args.allow_dirty, exclude_paths=(args.out,))
+        except ValueError as exc:
+            print(f"warning: correction run not started: {exc}", file=sys.stderr)
+            return 2
         contestants = {
             name: _agent_identity(args.agents_root, name)
             for name in sorted({args.focal, *opponents})

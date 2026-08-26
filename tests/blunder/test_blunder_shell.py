@@ -7,9 +7,11 @@ from urllib.request import Request, urlopen
 
 import pytest
 
+import train.blunder.shell as blunder_shell
 from train.blunder.service import viewer_replay_payload
 from train.blunder.shell import (
-    _Handler, _SHELL_HTML, _json_body, _viewer_asset, init_state, port_is_taken, serve,
+    _Handler, _SHELL_HTML, _frames_index_payload, _games_payload, _json_body, _viewer_asset,
+    init_state, port_is_taken, serve,
 )
 
 
@@ -54,7 +56,8 @@ def test_shell_plays_only_the_board_at_one_decision_per_second():
     assert "step:boardStep,playing:false,speed:playbackSpeed" in _SHELL_HTML
     assert "boardStep+=1; postPlain();" in _SHELL_HTML
     assert "await show(i+1)" not in _SHELL_HTML
-    assert "await show(p.opening_frame||0); startPlayback();" in _SHELL_HTML
+    assert "await show(p.opening_frame||0,false);" in _SHELL_HTML
+    assert "startPlayback(); refreshList();" in _SHELL_HTML
 
 
 def test_viewer_replay_removes_null_board_slots_from_tool_generated_films():
@@ -193,12 +196,33 @@ def test_viewer_replay_infers_each_seats_known_prizes_from_full_deck_reveals():
 
 
 def test_shell_requests_the_board_before_full_ledger_decision_data():
-    replay = _SHELL_HTML.index("fetch('/replay.json')")
-    games = _SHELL_HTML.index("fetch('/games.json')")
-    frames = _SHELL_HTML.index("fetch('/frames.json')")
+    replay = _SHELL_HTML.index("fetch('/replay.json'")
+    games = _SHELL_HTML.index("fetch('/games.json'")
+    frames = _SHELL_HTML.index("fetch('/frames.json'")
 
     assert replay < games < frames
     assert "fetch('/frame.json?frame='+f.frame)" in _SHELL_HTML
+    assert "await loadGame(true);" in _SHELL_HTML
+    assert "openPlain(forceViewer);" in _SHELL_HTML
+    assert "if(run!==gameLoadRun) return;" in _SHELL_HTML
+
+
+def test_initial_match_index_does_not_load_decision_telemetry(tmp_path, monkeypatch):
+    player = {"active": [], "bench": [], "discard": [], "prize": [], "hand": []}
+    replay = {
+        "info": {"EpisodeId": 123, "TeamNames": ["a", "b"]},
+        "steps": [[{"visualize": [{
+            "current": {"players": [player, player], "yourIndex": 0, "turn": 0},
+        }]}]],
+    }
+    path = tmp_path / "123.json"
+    path.write_text(json.dumps(replay), encoding="utf-8")
+    init_state([path], store_path=tmp_path / "corrections.jsonl")
+
+    monkeypatch.setattr(blunder_shell, "load_game", lambda _path: pytest.fail("loaded telemetry"))
+
+    assert _games_payload()["episode_id"] == 123
+    assert _frames_index_payload()["total"] == 1
 
 
 def test_switching_matches_does_not_parse_the_next_ledger_before_board_load(tmp_path):
