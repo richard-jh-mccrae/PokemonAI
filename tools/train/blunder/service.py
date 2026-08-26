@@ -258,12 +258,30 @@ def _repair_prizes(film: list[dict], decks: list[list[int] | None]) -> None:
             player["prize"] = cards + [None] * (count - len(cards))
 
 
+def _repair_transition_metadata(film: list[dict], decks: list[list[int] | None]) -> None:
+    for frame, raw in enumerate(film):
+        if not isinstance(raw.get("logs"), list):
+            logs = (raw.get("obs") or {}).get("logs")
+            raw["logs"] = logs if isinstance(logs, list) else []
+        if not isinstance(raw.get("action"), list):
+            if frame == 0:
+                raw["action"] = [list(deck) if deck is not None else None for deck in decks[:2]]
+                continue
+            actor = ((film[frame - 1].get("current") or {}).get("yourIndex"))
+            action = [None, None]
+            if actor in (0, 1):
+                action[actor] = raw.get("selected")
+            raw["action"] = action
+
+
 def viewer_replay_payload(replay: dict, *, decklists=None) -> dict:
     """Return a viewer-safe copy without changing the replay kept as Correction evidence."""
     payload = deepcopy(replay)
     film = _film(payload)
+    decks = _viewer_decklists(payload, decklists)
+    _repair_transition_metadata(film, decks)
     _repair_hands(film)
-    _repair_prizes(film, _viewer_decklists(payload, decklists))
+    _repair_prizes(film, decks)
     preload_cards: list[dict[int, dict]] = []
     for raw in film:
         raw["logs"] = raw.get("logs") if isinstance(raw.get("logs"), list) else []
@@ -281,11 +299,12 @@ def viewer_replay_payload(replay: dict, *, decklists=None) -> dict:
                 hand = [None] * int(player.get("handCount") or 0)
             player["hand"] = [_viewer_card(card) for card in hand]
             prize = player.get("prize")
-            player["prize"] = ([_viewer_card(card) for card in prize]
+            player["prize"] = ([_viewer_card(card) if isinstance(card, dict) else None
+                                for card in prize]
                                if isinstance(prize, list) else [])
             for area in ("active", "bench", "hand", "discard", "prize", "deck"):
                 for card in player[area]:
-                    if isinstance(card.get("id"), int):
+                    if isinstance(card, dict) and isinstance(card.get("id"), int):
                         preload_cards[seat].setdefault(card["id"], card)
         if preload_cards:
             for card in current["stadium"]:
@@ -297,10 +316,13 @@ def viewer_replay_payload(replay: dict, *, decklists=None) -> dict:
             player["deck"].extend(card for card_id, card in preload_cards[seat].items()
                                   if card_id not in present)
     steps = payload.get("steps") or []
-    if steps and len(steps) < len(film):
+    if steps:
         while len(steps[0]) < 2:
             steps[0].append({})
-        steps.extend([[{}, {}] for _ in range(len(film) - len(steps))])
+        if len(steps) < len(film):
+            steps.extend([[{}, {}] for _ in range(len(film) - len(steps))])
+        elif len(steps) > len(film):
+            del steps[len(film):]
     payload["viewerOpeningFrame"] = _opening_frame(film)
     return payload
 

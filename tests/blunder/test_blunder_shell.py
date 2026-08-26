@@ -90,10 +90,34 @@ def test_viewer_replay_removes_null_board_slots_from_tool_generated_films():
     assert player["bench"] == []
     assert player["discard"] == []
     assert len(player["prize"]) == 6
+    assert player["prize"] == [None] * 6
     assert player["hand"] == [
         {"name": "Hidden", "energies": []},
         {"name": "Hidden", "energies": []},
     ]
+
+
+def test_viewer_replay_recovers_legacy_transition_metadata_for_colorful_playback():
+    def player():
+        return {"active": [], "bench": [], "discard": [], "prize": [], "hand": []}
+
+    frames = [
+        {"obs": {"logs": [{"type": "Draw", "cardId": 7}]},
+         "current": {"yourIndex": 1, "players": [player(), player()]},
+         "selected": None},
+        {"obs": {"logs": [{"type": "MoveCard", "cardId": 7}]},
+         "current": {"yourIndex": 0, "players": [player(), player()]},
+         "selected": [2]},
+    ]
+    replay = {"steps": [[{"visualize": frames}]], "info": {"TeamNames": []}}
+
+    payload = viewer_replay_payload(replay, decklists=[[1] * 60, [2] * 60])
+    film = payload["steps"][0][0]["visualize"]
+
+    assert film[0]["logs"] == [{"type": "Draw", "cardId": 7}]
+    assert film[1]["logs"] == [{"type": "MoveCard", "cardId": 7}]
+    assert film[0]["action"] == [[1] * 60, [2] * 60]
+    assert film[1]["action"] == [None, [2]]
 
 
 def test_viewer_replay_supplies_the_colorful_viewers_preload_contract():

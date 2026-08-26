@@ -78,20 +78,49 @@ def test_recorder_keeps_legal_observations_but_uses_god_state_for_the_visual_boa
         {"hand": [{"id": 3}], "prize": [{"id": 4}]},
     ]
     visualizer = [
-        {"current": {"yourIndex": 0, "players": god_players}, "logs": [{"type": "Draw"}]},
-        {"current": {"yourIndex": 0, "players": god_players}, "logs": []},
+        {"current": {"yourIndex": 0, "players": god_players}, "logs": [{"type": "Draw"}],
+         "select": {"context": 0}, "ver": 7},
+        {"current": {"yourIndex": 0, "players": god_players}, "logs": [], "ver": 7},
     ]
     recorder = MatchRecorder()
     recorder.step(obs, [0])
     recorder.finish(terminal, winner=0, visualizer=visualizer)
 
-    film = recorder.replay(episode_id=1, team_names=["a", "b"])["steps"][0][0]["visualize"]
+    replay = recorder.replay(
+        episode_id=1, team_names=["a", "b"], decklists=[[1] * 60, [2] * 60])
+    film = replay["steps"][0][0]["visualize"]
 
     assert film[0]["obs"] is obs
     assert film[0]["obs"]["current"]["players"][0]["prize"] == [None] * 6
     assert film[0]["current"]["players"] == god_players
     assert film[0]["current"]["yourIndex"] == 1
     assert film[0]["logs"] == [{"type": "Draw"}]
+    assert film[0]["select"] == {"context": 0}
+    assert film[0]["ver"] == 7
+    assert film[0]["action"] == [[1] * 60, [2] * 60]
+    assert film[1]["action"] == [None, [0]]
+    assert len(replay["steps"]) == len(film) + 1
+    assert replay["steps"][1][1]["status"] == "ACTIVE"
+
+
+def test_recorder_can_require_a_complete_visualizer_for_correction_runs():
+    from sim.record import MatchRecorder
+
+    recorder = MatchRecorder()
+    recorder.step(_board_obs(0), [0])
+    recorder.finish(_board_obs(1, result=0), winner=0, visualizer=[
+        {"current": {"players": [
+            {"hand": [], "prize": [None]}, {"hand": [], "prize": [{"id": 2}]},
+        ]}},
+        {"current": {"players": [
+            {"hand": [], "prize": [{"id": 1}]}, {"hand": [], "prize": [{"id": 2}]},
+        ]}},
+    ])
+
+    with pytest.raises(ValueError, match="full-information"):
+        recorder.replay(
+            episode_id=1, team_names=["a", "b"], decklists=[[1] * 60, [2] * 60],
+            require_visualizer=True)
 
 
 @pytest.mark.req("REQ-SIM-0013")
