@@ -231,6 +231,28 @@ def test_correction_run_direct_cli_exposes_the_focal_parallel_contract():
     assert "--episodes" in completed.stdout
 
 
+def test_correction_run_completion_reports_focal_decision_timing():
+    from sim.correction_run import _focal_decision_timing, _log_completion
+
+    timing = _focal_decision_timing([
+        {"record_type": "decision", "engine_seat": 1, "round_trip_seconds": 0.4},
+        {"record_type": "decision", "engine_seat": 0, "round_trip_seconds": 9.9},
+        {"record_type": "decision", "engine_seat": 1, "round_trip_seconds": 0.2},
+    ], 1)
+    assert timing == {"count": 2, "avg": pytest.approx(0.3), "min": 0.2, "max": 0.4}
+
+    lines = []
+    _log_completion(
+        lines.append, 0.0,
+        {"index": 1, "opponent": "mega_lucario"},
+        {"status": "complete", "focal_result": "win", "match_seconds": 12.34,
+         "focal_decision_seconds": timing},
+        running=3, finished=2, planned=5)
+    assert "running 3 | finished 2/5" in lines[0]
+    assert "match 2 vs mega_lucario: focal win, 12.34s" in lines[0]
+    assert "decision avg/min/max 0.300/0.200/0.400s (n=2)" in lines[0]
+
+
 def test_agent_identity_hashes_exact_deck_strategy_and_agent_tree(tmp_path):
     from sim.correction_run import _agent_identity
 
