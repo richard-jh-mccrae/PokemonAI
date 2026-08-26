@@ -221,6 +221,22 @@ def test_frames_index_keeps_full_ledger_details_off_the_initial_page_load():
     assert details == {"frame": 0, "live": None, "ledger": ledger}
 
 
+def test_frame_details_collapse_repeated_ledger_gaps_without_mutating_evidence():
+    gaps = ["me.deck: incomplete 7", "me.deck: incomplete 7", "other", "other"]
+    payload = {"frames": [{
+        "frame": 4,
+        "live": None,
+        "ledger": {"candidates": [{"gaps": gaps.copy()}]},
+    }]}
+
+    details = frame_details_payload(payload, frame=4)
+
+    assert details["ledger"]["candidates"][0]["gaps"] == [
+        "me.deck: incomplete 7", "other",
+    ]
+    assert payload["frames"][0]["ledger"]["candidates"][0]["gaps"] == gaps
+
+
 def test_frames_open_on_a_board_that_has_cards_on_it():
     """A real film opens on the coin flip, whose board is empty — nothing is dealt yet — so landing
     the viewer on frame 0 shows a blank board."""

@@ -75,12 +75,16 @@ def viewer_replay_payload(replay: dict) -> dict:
     """Return a viewer-safe copy without changing the replay kept as Correction evidence."""
     payload = deepcopy(replay)
     film = _film(payload)
+    preload_cards: list[dict[int, dict]] = []
     for raw in film:
+        raw["logs"] = raw.get("logs") if isinstance(raw.get("logs"), list) else []
         current = raw.get("current") or {}
         current["stadium"] = [_viewer_card(card) for card in (current.get("stadium") or [])
                               if isinstance(card, dict)]
-        for player in current.get("players") or []:
-            for area in ("active", "bench", "discard"):
+        for seat, player in enumerate(current.get("players") or []):
+            while len(preload_cards) <= seat:
+                preload_cards.append({})
+            for area in ("active", "bench", "discard", "deck"):
                 player[area] = [_viewer_card(card) for card in (player.get(area) or [])
                                 if isinstance(card, dict)]
             hand = player.get("hand")
@@ -90,6 +94,19 @@ def viewer_replay_payload(replay: dict) -> dict:
             prize = player.get("prize")
             player["prize"] = ([_viewer_card(card) for card in prize]
                                if isinstance(prize, list) else [])
+            for area in ("active", "bench", "hand", "discard", "prize", "deck"):
+                for card in player[area]:
+                    if isinstance(card.get("id"), int):
+                        preload_cards[seat].setdefault(card["id"], card)
+        if preload_cards:
+            for card in current["stadium"]:
+                if isinstance(card.get("id"), int):
+                    preload_cards[0].setdefault(card["id"], card)
+    if film:
+        for seat, player in enumerate((film[0].get("current") or {}).get("players") or []):
+            present = {card.get("id") for card in player["deck"]}
+            player["deck"].extend(card for card_id, card in preload_cards[seat].items()
+                                  if card_id not in present)
     steps = payload.get("steps") or []
     if steps and len(steps) < len(film):
         while len(steps[0]) < 2:
@@ -196,7 +213,11 @@ def frame_details_payload(payload: dict, *, frame: int) -> dict:
     selected = next((item for item in payload["frames"] if item["frame"] == frame), None)
     if selected is None:
         raise ValueError(f"unknown frame {frame}")
-    return {"frame": frame, "live": selected.get("live"), "ledger": selected.get("ledger")}
+    ledger = deepcopy(selected.get("ledger"))
+    if ledger:
+        for candidate in ledger.get("candidates") or []:
+            candidate["gaps"] = list(dict.fromkeys(candidate.get("gaps") or []))
+    return {"frame": frame, "live": selected.get("live"), "ledger": ledger}
 
 
 def _turn_span(replay: dict, *, seat: int, turn: int, live_records) -> list[dict]:
