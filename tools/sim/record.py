@@ -127,7 +127,7 @@ class MatchRecorder:
                     merged["current"]["yourIndex"] = actor
                 else:
                     merged["current"] = frame["current"]
-                merged.setdefault("select", frame["select"])
+                merged["select"] = frame["select"]
                 merged.setdefault("selected", frame["selected"])
                 frames[index] = merged
         for index, frame in enumerate(frames):

@@ -159,6 +159,32 @@ def test_correction_run_audit_couples_each_replay_choice_exactly():
         audit_correction_records([record], replay=replay)
 
 
+def test_correction_run_audit_keeps_numeric_context_from_the_legal_observation():
+    from sim.correction_run import audit_correction_records
+    from sim.record import MatchRecorder
+
+    obs = {"current": {"yourIndex": 0, "turn": 1},
+           "select": {"context": 0, "option": [{"type": 14}, {"type": 14}]}}
+    recorder = MatchRecorder()
+    recorder.step(obs, [1])
+    recorder.finish({"current": {"result": 0}, "select": None}, 0, visualizer=[
+        {"current": {"turn": 1},
+         "select": {"context": "Main", "option": [{"type": 14}, {"type": 14}]}},
+        {"current": {"result": 0}},
+    ])
+    replay = recorder.replay(episode_id=1, team_names=["a", "b"])
+    record = {"record_type": "decision", "record_id": "ledger", "decision": {
+        "variant": "ledger", "seat": 0, "turn": 1, "selection": [1],
+        "policy_reason": "best_delta", "chosen_action_id": "a"},
+        "observation": {"select_context": 0}, "completeness": "complete",
+        "candidates": [{"action_id": "a", "gaps": []}],
+        "behavior_identity": {"evaluator": "ledger-v1"}, "search": {"failure": None}}
+
+    summary = audit_correction_records([record], replay=replay)
+
+    assert summary["ledger_decisions"] == 1
+
+
 @pytest.mark.parametrize("record, message", [
     ({"record_type": "decision", "decision": {"variant": "legacy"}},
      "unknown decision variant"),

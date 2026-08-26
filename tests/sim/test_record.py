@@ -79,7 +79,7 @@ def test_recorder_keeps_legal_observations_but_uses_god_state_for_the_visual_boa
     ]
     visualizer = [
         {"current": {"yourIndex": 0, "players": god_players}, "logs": [{"type": "Draw"}],
-         "select": {"context": 0}, "ver": 7},
+         "select": {"context": "Main"}, "ver": 7},
         {"current": {"yourIndex": 0, "players": god_players}, "logs": [], "ver": 7},
     ]
     recorder = MatchRecorder()
@@ -95,7 +95,7 @@ def test_recorder_keeps_legal_observations_but_uses_god_state_for_the_visual_boa
     assert film[0]["current"]["players"] == god_players
     assert film[0]["current"]["yourIndex"] == 1
     assert film[0]["logs"] == [{"type": "Draw"}]
-    assert film[0]["select"] == {"context": 0}
+    assert film[0]["select"] == obs["select"]
     assert film[0]["ver"] == 7
     assert film[0]["action"] == [[1] * 60, [2] * 60]
     assert film[1]["action"] == [None, [0]]
