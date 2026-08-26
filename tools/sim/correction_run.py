@@ -513,7 +513,9 @@ def _run_episode_slot(slot: dict) -> dict:
             decision_timeout=config["decision_timeout"], match_timeout=config["episode_timeout"],
             telemetry=telemetry, episode_key=str(slot["episode_id"]),
             external_episode_id=str(slot["episode_id"]), metrics=metrics)
-        replay = recorder.replay(episode_id=slot["episode_id"], team_names=team_names)
+        replay = recorder.replay(
+            episode_id=slot["episode_id"], team_names=team_names, decklists=decks,
+            require_visualizer=True)
         replay_path, telemetry_path = _write_staging(staging, replay, telemetry)
         if result.crashed or result.timed_out or result.match_deadline_hit or result.failure:
             raise RuntimeError(result.failure or "Episode did not complete safely")

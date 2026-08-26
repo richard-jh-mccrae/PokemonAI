@@ -331,7 +331,7 @@ def play_match(server_a: AgentServer, server_b: AgentServer,
                decision_timeout=None, match_timeout=None, metrics=None,
                telemetry=None, episode_key=None, external_episode_id=None) -> MatchResult:
     """Drive one native Match, optionally capturing decisions and enforcing two deadlines."""
-    from cg.game import battle_finish, battle_start, battle_select
+    from cg.game import battle_finish, battle_start, battle_select, visualize_data
 
     match_started = perf_counter()
     episode_key = str(episode_key or uuid4().hex)
@@ -373,6 +373,7 @@ def play_match(server_a: AgentServer, server_b: AgentServer,
     failure = None
     deadline = monotonic() + float(match_timeout) if match_timeout is not None else None
     decision_index = 0
+    visualizer = None
     try:
         for _ in range(_MAX_STEPS):
             cur = obs.get("current") or {}
@@ -424,9 +425,14 @@ def play_match(server_a: AgentServer, server_b: AgentServer,
                 failure = f"engine rejected selection: {type(exc).__name__}: {exc}"
                 break
     finally:
+        if recorder is not None:
+            try:
+                visualizer = json.loads(visualize_data())
+            except Exception:
+                visualizer = None
         battle_finish()
     if recorder is not None:
-        recorder.finish(obs, winner)               # terminal obs + engine-seat winner
+        recorder.finish(obs, winner, visualizer)   # legal obs for training; god film for viewing
     if telemetry is not None:
         from common.telemetry import (build_episode_receipt, build_outcome_record,
                                       validate_record)

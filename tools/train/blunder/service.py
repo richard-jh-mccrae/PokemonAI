@@ -6,6 +6,7 @@ the UI dropdowns consume, and turn one posted tag into a validated, logged Corre
 """
 from __future__ import annotations
 
+from collections import Counter
 from copy import deepcopy
 from dataclasses import replace
 from pathlib import Path
@@ -14,7 +15,7 @@ from .correction import (
     Correction, build_correction, identity_key, select_min_count, subject_of,
 )
 from .decisions import Decision, iter_decisions
-from .decode import option_label
+from .decode import _known_card_name, option_label
 from .seats import detect_seat
 from .store import DEFAULT_PATH, append_correction, load_corrections
 from .telemetry_log import (
@@ -65,16 +66,222 @@ def _film(replay: dict) -> list[dict]:
 def _viewer_card(card) -> dict:
     card = card if isinstance(card, dict) else {}
     if card.get("name") is None:
-        card["name"] = "Hidden"
+        card["name"] = _known_card_name(card.get("id")) or "Hidden"
     if not isinstance(card.get("energies"), list):
         card["energies"] = []
     return card
 
 
-def viewer_replay_payload(replay: dict) -> dict:
+def _player_at(raw: dict, seat: int) -> dict | None:
+    players = ((raw.get("current") or {}).get("players") or [])
+    return players[seat] if seat < len(players) and isinstance(players[seat], dict) else None
+
+
+def _card_key(card: dict) -> tuple[str, int] | None:
+    if isinstance(card.get("serial"), int):
+        return "serial", card["serial"]
+    if isinstance(card.get("id"), int):
+        return "id", card["id"]
+    return None
+
+
+def _zone_card_keys(value) -> set[tuple[str, int]]:
+    found = set()
+    if isinstance(value, list):
+        for item in value:
+            found.update(_zone_card_keys(item))
+    elif isinstance(value, dict):
+        key = _card_key(value)
+        if key is not None:
+            found.add(key)
+        for nested in value.values():
+            if isinstance(nested, (dict, list)):
+                found.update(_zone_card_keys(nested))
+    return found
+
+
+def _repair_hands(film: list[dict]) -> None:
+    seats = max((len(((raw.get("current") or {}).get("players") or [])) for raw in film), default=0)
+    exact: list[list[list[dict] | None]] = [[None] * len(film) for _ in range(seats)]
+    for frame, raw in enumerate(film):
+        for seat in range(seats):
+            player = _player_at(raw, seat)
+            if player is None:
+                continue
+            hand = player.get("hand")
+            count = int(player.get("handCount") or (len(hand) if isinstance(hand, list) else 0))
+            cards = [card for card in (hand or []) if isinstance(card, dict)]
+            if isinstance(hand, list) and len(cards) == count:
+                exact[seat][frame] = cards
+
+    for seat in range(seats):
+        next_exact: list[list[dict] | None] = [None] * len(film)
+        upcoming = None
+        for frame in range(len(film) - 1, -1, -1):
+            if exact[seat][frame] is not None:
+                upcoming = exact[seat][frame]
+            next_exact[frame] = upcoming
+        known: list[dict] = []
+        for frame, raw in enumerate(film):
+            player = _player_at(raw, seat)
+            if player is None:
+                continue
+            hand = player.get("hand")
+            count = int(player.get("handCount") or (len(hand) if isinstance(hand, list) else 0))
+            if exact[seat][frame] is not None:
+                known = exact[seat][frame] or []
+            else:
+                outside = set()
+                for area, value in player.items():
+                    if area not in {"hand", "handCount"}:
+                        outside.update(_zone_card_keys(value))
+                current = raw.get("current") or {}
+                outside.update(_zone_card_keys([
+                    card for card in (current.get("stadium") or [])
+                    if isinstance(card, dict) and card.get("playerIndex") == seat
+                ]))
+                select = raw.get("select") or {}
+                outside.update(_zone_card_keys([select.get("effect"), select.get("contextCard")]))
+                known = [card for card in known if _card_key(card) not in outside]
+                if len(known) > count:
+                    future = {_card_key(card) for card in (next_exact[frame] or [])}
+                    known = [card for card in known if _card_key(card) in future]
+                partial = [card for card in (hand or []) if isinstance(card, dict)]
+                if partial:
+                    by_key = {_card_key(card): card for card in known}
+                    by_key.update({_card_key(card): card for card in partial})
+                    known = list(by_key.values())
+            visible = known[:count]
+            player["hand"] = visible + [None] * (count - len(visible))
+
+
+def _read_agent_deck(team_name: str) -> list[int] | None:
+    root = Path(__file__).resolve().parents[3] / "src" / "agents"
+    name = team_name.partition("#")[0]
+    path = (root / name / "deck.csv").resolve()
+    try:
+        path.relative_to(root.resolve())
+        deck = [int(card_id) for card_id in path.read_text(encoding="utf-8").split()]
+    except (OSError, ValueError):
+        return None
+    return deck if len(deck) == 60 else None
+
+
+def _viewer_decklists(replay: dict, supplied) -> list[list[int] | None]:
+    names = (replay.get("info") or {}).get("TeamNames") or []
+    seats = max(len(names), len(supplied or []), 2)
+    decks: list[list[int] | None] = []
+    for seat in range(seats):
+        given = supplied[seat] if supplied is not None and seat < len(supplied) else None
+        decks.append([int(card_id) for card_id in given] if given is not None else
+                     _read_agent_deck(str(names[seat])) if seat < len(names) else None)
+    return decks
+
+
+def _visible_cards(raw: dict, seat: int) -> Counter:
+    current = raw.get("current") or {}
+    player = _player_at(raw, seat) or {}
+    cards = Counter()
+    seen = set()
+
+    def add(card) -> None:
+        if not isinstance(card, dict) or not isinstance(card.get("id"), int):
+            return
+        serial = card.get("serial")
+        if serial is not None and serial in seen:
+            return
+        if serial is not None:
+            seen.add(serial)
+        cards[card["id"]] += 1
+
+    for card in (player.get("hand") or []) + (player.get("discard") or []):
+        add(card)
+    for area in ("active", "bench"):
+        for body in player.get(area) or []:
+            add(body)
+            if isinstance(body, dict):
+                for nested in ("energyCards", "tools", "preEvolution"):
+                    for card in body.get(nested) or []:
+                        add(card)
+    for card in current.get("stadium") or []:
+        if isinstance(card, dict) and card.get("playerIndex") == seat:
+            add(card)
+    select = raw.get("select") or {}
+    add(select.get("effect"))
+    add(select.get("contextCard"))
+    return cards
+
+
+def _prize_anchors(film: list[dict], decks: list[list[int] | None]) -> list[list[tuple[int, Counter]]]:
+    anchors: list[list[tuple[int, Counter]]] = [[] for _ in decks]
+    for frame, raw in enumerate(film):
+        current = raw.get("current") or {}
+        seat = current.get("yourIndex")
+        if not isinstance(seat, int) or seat >= len(decks) or decks[seat] is None:
+            continue
+        player = _player_at(raw, seat) or {}
+        revealed = (raw.get("select") or {}).get("deck")
+        if not isinstance(revealed, list) or not revealed or len(revealed) != player.get("deckCount"):
+            continue
+        prizes = Counter(decks[seat])
+        prizes.subtract(card["id"] for card in revealed
+                        if isinstance(card, dict) and isinstance(card.get("id"), int))
+        prizes.subtract(_visible_cards(raw, seat))
+        remaining = len(player.get("prize") or [])
+        if sum(prizes.values()) == remaining and all(count >= 0 for count in prizes.values()):
+            anchors[seat].append((frame, prizes))
+    return anchors
+
+
+def _repair_prizes(film: list[dict], decks: list[list[int] | None]) -> None:
+    anchors = _prize_anchors(film, decks)
+    for frame, raw in enumerate(film):
+        players = ((raw.get("current") or {}).get("players") or [])
+        for seat, player in enumerate(players):
+            prize = player.get("prize")
+            if not isinstance(prize, list):
+                player["prize"] = []
+                continue
+            actual = [card for card in prize if isinstance(card, dict)]
+            if len(actual) == len(prize):
+                continue
+            count = len(prize)
+            same = [(at, cards) for at, cards in anchors[seat] if sum(cards.values()) == count]
+            if same:
+                known = min(same, key=lambda item: abs(item[0] - frame))[1]
+            else:
+                future = [(at, cards) for at, cards in anchors[seat]
+                          if at >= frame and sum(cards.values()) < count]
+                known = max(future, key=lambda item: sum(item[1].values()))[1] if future else Counter()
+            cards = [{"id": card_id, "playerIndex": seat}
+                     for card_id, copies in sorted(known.items()) for _ in range(copies)]
+            player["prize"] = cards + [None] * (count - len(cards))
+
+
+def _repair_transition_metadata(film: list[dict], decks: list[list[int] | None]) -> None:
+    for frame, raw in enumerate(film):
+        if not isinstance(raw.get("logs"), list):
+            logs = (raw.get("obs") or {}).get("logs")
+            raw["logs"] = logs if isinstance(logs, list) else []
+        if not isinstance(raw.get("action"), list):
+            if frame == 0:
+                raw["action"] = [list(deck) if deck is not None else None for deck in decks[:2]]
+                continue
+            actor = ((film[frame - 1].get("current") or {}).get("yourIndex"))
+            action = [None, None]
+            if actor in (0, 1):
+                action[actor] = raw.get("selected")
+            raw["action"] = action
+
+
+def viewer_replay_payload(replay: dict, *, decklists=None) -> dict:
     """Return a viewer-safe copy without changing the replay kept as Correction evidence."""
     payload = deepcopy(replay)
     film = _film(payload)
+    decks = _viewer_decklists(payload, decklists)
+    _repair_transition_metadata(film, decks)
+    _repair_hands(film)
+    _repair_prizes(film, decks)
     preload_cards: list[dict[int, dict]] = []
     for raw in film:
         raw["logs"] = raw.get("logs") if isinstance(raw.get("logs"), list) else []
@@ -92,11 +299,12 @@ def viewer_replay_payload(replay: dict) -> dict:
                 hand = [None] * int(player.get("handCount") or 0)
             player["hand"] = [_viewer_card(card) for card in hand]
             prize = player.get("prize")
-            player["prize"] = ([_viewer_card(card) for card in prize]
+            player["prize"] = ([_viewer_card(card) if isinstance(card, dict) else None
+                                for card in prize]
                                if isinstance(prize, list) else [])
             for area in ("active", "bench", "hand", "discard", "prize", "deck"):
                 for card in player[area]:
-                    if isinstance(card.get("id"), int):
+                    if isinstance(card, dict) and isinstance(card.get("id"), int):
                         preload_cards[seat].setdefault(card["id"], card)
         if preload_cards:
             for card in current["stadium"]:
@@ -108,10 +316,13 @@ def viewer_replay_payload(replay: dict) -> dict:
             player["deck"].extend(card for card_id, card in preload_cards[seat].items()
                                   if card_id not in present)
     steps = payload.get("steps") or []
-    if steps and len(steps) < len(film):
+    if steps:
         while len(steps[0]) < 2:
             steps[0].append({})
-        steps.extend([[{}, {}] for _ in range(len(film) - len(steps))])
+        if len(steps) < len(film):
+            steps.extend([[{}, {}] for _ in range(len(film) - len(steps))])
+        elif len(steps) > len(film):
+            del steps[len(film):]
     payload["viewerOpeningFrame"] = _opening_frame(film)
     return payload
 

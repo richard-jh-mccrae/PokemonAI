@@ -68,6 +68,61 @@ def test_recorder_maps_winner_to_seat_indexed_rewards():
     assert winner_index(draw.replay(episode_id=2, team_names=["a", "b"])) is None   # no label on a draw
 
 
+def test_recorder_keeps_legal_observations_but_uses_god_state_for_the_visual_board():
+    from sim.record import MatchRecorder
+
+    obs = _board_obs(1)
+    terminal = _board_obs(0, result=0)
+    god_players = [
+        {"hand": [{"id": 1}], "prize": [{"id": 2}]},
+        {"hand": [{"id": 3}], "prize": [{"id": 4}]},
+    ]
+    visualizer = [
+        {"current": {"yourIndex": 0, "players": god_players}, "logs": [{"type": "Draw"}],
+         "select": {"context": "Main"}, "ver": 7},
+        {"current": {"yourIndex": 0, "players": god_players}, "logs": [], "ver": 7},
+    ]
+    recorder = MatchRecorder()
+    recorder.step(obs, [0])
+    recorder.finish(terminal, winner=0, visualizer=visualizer)
+
+    replay = recorder.replay(
+        episode_id=1, team_names=["a", "b"], decklists=[[1] * 60, [2] * 60])
+    film = replay["steps"][0][0]["visualize"]
+
+    assert film[0]["obs"] is obs
+    assert film[0]["obs"]["current"]["players"][0]["prize"] == [None] * 6
+    assert film[0]["current"]["players"] == god_players
+    assert film[0]["current"]["yourIndex"] == 1
+    assert film[0]["logs"] == [{"type": "Draw"}]
+    assert film[0]["select"] == obs["select"]
+    assert film[0]["ver"] == 7
+    assert film[0]["action"] == [[1] * 60, [2] * 60]
+    assert film[1]["action"] == [None, [0]]
+    assert len(replay["steps"]) == len(film) + 1
+    assert replay["steps"][1][1]["status"] == "ACTIVE"
+
+
+def test_recorder_can_require_a_complete_visualizer_for_correction_runs():
+    from sim.record import MatchRecorder
+
+    recorder = MatchRecorder()
+    recorder.step(_board_obs(0), [0])
+    recorder.finish(_board_obs(1, result=0), winner=0, visualizer=[
+        {"current": {"players": [
+            {"hand": [], "prize": [None]}, {"hand": [], "prize": [{"id": 2}]},
+        ]}},
+        {"current": {"players": [
+            {"hand": [], "prize": [{"id": 1}]}, {"hand": [], "prize": [{"id": 2}]},
+        ]}},
+    ])
+
+    with pytest.raises(ValueError, match="full-information"):
+        recorder.replay(
+            episode_id=1, team_names=["a", "b"], decklists=[[1] * 60, [2] * 60],
+            require_visualizer=True)
+
+
 @pytest.mark.req("REQ-SIM-0013")
 def test_play_match_with_a_recorder_yields_a_mineable_film():
     """The corpus comes off the SAME loop the A/B runs — process isolation, no two-deck collision."""
@@ -87,3 +142,8 @@ def test_play_match_with_a_recorder_yields_a_mineable_film():
     replay = rec.replay(episode_id=1, team_names=["mega_starmie#0", "mega_starmie#1"])
     decisions = iter_decisions(replay)
     assert len(decisions) > 10 and all(decision.obs is not None for decision in decisions)
+    film = replay["steps"][0][0]["visualize"]
+    assert all(isinstance(player.get("hand"), list)
+               for frame in film for player in frame["current"]["players"])
+    assert all(all(isinstance(card, dict) for card in player.get("prize") or [])
+               for frame in film for player in frame["current"]["players"])
