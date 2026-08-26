@@ -90,6 +90,37 @@ def load_replay_for_viewer(path: Path | str) -> dict:
     return load_replay(path)
 
 
+def load_game_summary(path: Path | str) -> dict:
+    """Replay and provenance needed by the shell before Decision Telemetry is requested."""
+    path = Path(path)
+    replay = load_replay_for_viewer(path)
+    if path.is_dir() and (path / "manifest.json").is_file():
+        manifest = json.loads((path / "manifest.json").read_text(encoding="utf-8"))
+        if manifest.get("schema") == "ledger.episode-bundle":
+            run, slot = _correction_run(path, manifest["bundle_id"])
+            source = (run or {}).get("source_identity") or {}
+            return {
+                "replay": replay,
+                "live_seat": None if slot is None else int(slot["focal_seat"]),
+                "has_telemetry": (path / "telemetry.jsonl.gz").is_file(),
+                "agent": (run or {}).get("focal"),
+                "agent_build": (run or {}).get("run_id"),
+                "agent_version": source.get("commit"),
+                "built_at": (run or {}).get("created_at"),
+            }
+    _log_path, live_seat = find_log_any(path)
+    bid = build_identity(path)
+    return {
+        "replay": replay,
+        "live_seat": live_seat,
+        "has_telemetry": bool(find_logs(path)),
+        "agent": bid["agent"],
+        "agent_build": bid["agent_build"],
+        "agent_version": bid["agent_version"],
+        "built_at": bid["built_at"],
+    }
+
+
 def load_game(path: Path | str) -> dict:
     """One Replay as a self-contained tagging context: the replay, its live Decision Telemetry and
     own-seat (ADR-0019), and the build identity read off the directory stem."""
