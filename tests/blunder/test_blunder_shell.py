@@ -75,6 +75,29 @@ def test_viewer_replay_removes_null_board_slots_from_tool_generated_films():
     ]
 
 
+def test_viewer_replay_supplies_the_colorful_viewers_preload_contract():
+    def player():
+        return {"active": [], "bench": [], "discard": [], "prize": [], "hand": []}
+
+    later_player = {
+        **player(),
+        "active": [{"id": 7, "name": "Staryu", "energies": []}],
+    }
+    replay = {"steps": [[{"visualize": [
+        {"current": {"players": [player(), player()]}},
+        {"current": {"players": [later_player, player()]}},
+    ]}]]}
+
+    payload = viewer_replay_payload(replay)
+    film = payload["steps"][0][0]["visualize"]
+
+    assert film[0]["logs"] == []
+    assert [card["id"] for card in film[0]["current"]["players"][0]["deck"]] == [7]
+    assert all(isinstance(frame["logs"], list) for frame in film)
+    assert all(isinstance(p["deck"], list)
+               for frame in film for p in frame["current"]["players"])
+
+
 def test_shell_requests_the_board_before_full_ledger_decision_data():
     replay = _SHELL_HTML.index("fetch('/replay.json')")
     games = _SHELL_HTML.index("fetch('/games.json')")
