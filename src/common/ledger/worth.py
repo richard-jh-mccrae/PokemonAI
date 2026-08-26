@@ -82,7 +82,6 @@ class EvaluationModel:
         payload = {
             "configuration": self.configuration.identity,
             "prize_plan": self.prize_plan.identity,
-            "roles": tuple(sorted(self.roles.items())),
             "store": self.store_identity,
             "opponent_profiles": {
                 name: profile.canonical_data()
@@ -498,7 +497,10 @@ def _liveness(card_id, facts, demand: Demand, ctx: EvaluationModel, deck_counts)
         clauses = tuple(getattr(facts, "clauses", ()) or ())
         fetches = tuple(c for c in clauses if c.kind == "fetch" and c.zone == "deck")
         if fetches and len(fetches) == len(clauses):
-            return _fetch_liveness(fetches, demand, ctx, deck_counts), None
+            return _fetch_liveness(fetches, demand, ctx, deck_counts), (
+                1 if facts.kind == SUPPORTER else None)
+        if facts.kind == SUPPORTER:
+            return DemandState.LIVE, 1
     return DemandState.LIVE, None
 
 

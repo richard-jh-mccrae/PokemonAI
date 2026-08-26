@@ -14,7 +14,8 @@ import pytest
 
 from common.algebra import Deterministic, Refresh, Terminal, Unknown
 from common.decision import (CandidateDisposition, CandidateRoster, DecisionDelta,
-                             EvaluationStatus, ValuedCandidate)
+                             ComputeConfiguration, EvaluationStatus, SearchConfiguration,
+                             ValuedCandidate)
 from common.ledger import EvaluationModel, LedgerDecider, PrizeMap
 from common.ledger.decider import LedgerUnavailable
 from common.ledger.decision import LEDGER_VALUE_SCALE
@@ -73,6 +74,72 @@ def test_positive_develop_beats_a_bigger_turn_ender():
     decision = make_decider(provider).decide(root_obs)
     assert decision.action.kind == "attach"
     assert decision.decision_result.chosen is decision.decision_result.roster.candidates[0].action
+
+
+def test_main_phase_preview_prices_the_best_remaining_turn_line():
+    root_obs = printout(me=player(active=body(DRAGAPULT, 1), hand=[FIRE_E]),
+                        them=player(own=False, active=body(DRAGAPULT, 2)))
+    attached = state_of(printout(
+        me=player(active=body(DRAGAPULT, 1, energies=(FIRE,)), hand=[]),
+        them=player(own=False, active=body(DRAGAPULT, 2))), DECK)
+    weak = state_of(printout(
+        me=player(active=body(DRAGAPULT, 1), hand=[FIRE_E]),
+        them=player(own=False, active=body(DRAGAPULT, 2, hp=30))), DECK)
+    strong = state_of(printout(
+        me=player(active=body(DRAGAPULT, 1, energies=(FIRE,)), hand=[]),
+        them=player(own=False, active=body(DRAGAPULT, 2, hp=0))), DECK)
+
+    attach = action("attach", (0,))
+    weak_attack = action("attack", (1,))
+    follow_attack = action("attack", (2,))
+    end = action("end", (3,))
+    provider = ScriptedProvider(
+        menus={"root": (attach, weak_attack, end),
+               attached.semantic_key: (follow_attack, end)},
+        nodes={("root", attach.identity): Deterministic(attached),
+               ("root", weak_attack.identity): Terminal(weak, "attack resolved"),
+               (attached.semantic_key, follow_attack.identity):
+                   Terminal(strong, "attack resolved")})
+
+    decision = LedgerDecider(
+        DECK, "test", EvaluationModel.build(),
+        provider_factory=lambda _state, **_kw: provider,
+        compute=ComputeConfiguration(search=SearchConfiguration(main_depth_budget=1)),
+    ).decide(root_obs)
+    prices = {row["action"]: row["swing"] for row in decision.diagnostics["prices"]}
+    assert decision.action == attach.identity
+    assert prices[str(attach.identity)] > prices[str(weak_attack.identity)]
+
+
+def test_main_phase_discount_prefers_the_same_gain_now_over_one_action_later():
+    root_obs = printout(me=player(active=body(DRAGAPULT, 1)),
+                        them=player(own=False, active=body(DRAGAPULT, 2)))
+    waiting = state_of(root_obs, DECK)
+    developed = state_of(printout(
+        me=player(active=body(DRAGAPULT, 1)),
+        them=player(own=False, active=body(DRAGAPULT, 2, hp=30))), DECK)
+
+    develop = action("play", (0,))
+    wait = action("retreat", (1,))
+    late_develop = action("play", (2,))
+    end = action("end", (3,))
+    provider = ScriptedProvider(
+        menus={"root": (develop, wait, end),
+               waiting.semantic_key: (late_develop, end),
+               developed.semantic_key: (end,)},
+        nodes={("root", develop.identity): Deterministic(developed),
+               ("root", wait.identity): Deterministic(waiting),
+               (waiting.semantic_key, late_develop.identity): Deterministic(developed)})
+
+    decision = LedgerDecider(
+        DECK, "test", EvaluationModel.build(),
+        provider_factory=lambda _state, **_kw: provider,
+        compute=ComputeConfiguration(search=SearchConfiguration(main_depth_budget=1)),
+    ).decide(root_obs)
+    prices = {row["action"]: row["swing"] for row in decision.diagnostics["prices"]}
+
+    assert decision.action == develop.identity
+    assert prices[str(develop.identity)] > prices[str(wait.identity)]
 
 
 def test_with_nothing_worth_doing_the_best_ender_wins():
@@ -146,9 +213,8 @@ def test_forced_chain_resolves_to_the_best_leaf():
     assert decision.value > 0
 
 
-def test_refresh_pricing_is_deterministic_and_reports_missing_successor_inventory():
-    """Lillie's through the sampled-hand chance model: same frame, same price, every time —
-    and an incomplete scripted successor inventory reports its coverage gap."""
+def test_refresh_pricing_is_deterministic_without_zero_weight_inventory_work():
+    """Lillie's sampled-hand price repeats without unused opportunity enumeration."""
     hand = [LILLIES, DARK_E, DARK_E]
     root_obs = printout(me=player(active=body(DRAGAPULT, 1, energies=(FIRE, PSYCHIC)),
                                   hand=hand, deck_count=40),
@@ -165,7 +231,8 @@ def test_refresh_pricing_is_deterministic_and_reports_missing_successor_inventor
     prices = {entry["action"]: entry["swing"] for entry in first.diagnostics["prices"]}
     again = {entry["action"]: entry["swing"] for entry in second.diagnostics["prices"]}
     assert prices == again
-    assert "continuation action inventory unavailable: KeyError" in first.diagnostics["gaps"]
+    assert "continuation action inventory unavailable: KeyError" \
+        not in first.diagnostics["gaps"]
 
 
 def test_lillies_prices_higher_when_the_hand_it_shuffles_away_is_dead():
@@ -482,7 +549,7 @@ def test_action_opportunity_cost_hands_a_small_positive_turn_to_the_ender():
     assert default.action.kind == "attach"
 
 
-def test_continuation_footprint_compares_successor_legal_actions():
+def test_continuation_footprint_has_no_default_ranking_bonus():
     root_obs = printout(me=player(active=body(DRAGAPULT, 1), hand=[FIRE_E]))
     successor = state_of(printout(
         me=player(active=body(DRAGAPULT, 1, energies=(FIRE,)), hand=[])), DECK)
@@ -495,9 +562,10 @@ def test_continuation_footprint_compares_successor_legal_actions():
     price = next(row for row in decision.diagnostics["prices"]
                  if row["action"] == str(attach.identity))
     footprint = price["continuation"]
-    assert "attack" in footprint["opportunities_created"]
-    assert "end" in footprint["opportunities_preserved"]
-    assert "attach" in footprint["opportunities_consumed"]
+    assert footprint["action_opportunity"] == 0.0
+    assert all(item["value"] == 0.0 for item in footprint["contributions"]
+               if item["feature"].startswith("continuation.")
+               or item["feature"] == "action.opportunity_cost")
 
 
 def test_no_card_or_mechanic_specific_ordering_branch_remains():

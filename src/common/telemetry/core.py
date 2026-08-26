@@ -238,8 +238,10 @@ def _validate_configuration(value, *, pregame: bool) -> None:
     _exact_fields(compute, {"identity", "schema_version", "search", "policy"},
                   "compute configuration")
     _exact_fields(compute["search"], {
-        "identity", "schema_version", "depth_budget", "path_node_budget", "node_budget",
-        "time_budget_ms", "chance_sample_budget", "chance_seed", "noise_tolerance", "tie_seed",
+        "identity", "schema_version", "depth_budget", "main_depth_budget",
+        "main_continuation_discount",
+        "path_node_budget", "node_budget", "time_budget_ms", "chance_sample_budget",
+        "chance_seed", "noise_tolerance", "tie_seed",
     }, "search configuration")
     _exact_fields(compute["policy"], {
         "identity", "schema_version", "noise_tolerance", "tie_seed", "accepted_statuses",

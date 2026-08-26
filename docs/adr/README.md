@@ -141,7 +141,7 @@ fires, the first-merged-keeps-it convention established above still applies: ref
 recompute, rename again. See `.claude/skills/grill-with-docs/SKILL.md` and
 `.claude/skills/open-pr/SKILL.md` for the full mechanics.
 
-**Next free number: 0193.**
+**Next free number: 0194.**
 
 ## Index
 
@@ -340,3 +340,4 @@ recompute, rename again. See `.claude/skills/grill-with-docs/SKILL.md` and
 | [0190](0190-replay-certifies-evaluation-before-decision.md) | Replay certifies evaluation before decision | Accepted; built for Issue #586. |
 | [0191](0191-schema-compatibility-is-a-lossless-migration-chain.md) | Schema compatibility is a lossless migration chain | Accepted; built for Issue #586. |
 | [0192](0192-diagnostics-separate-replay-policy-and-outcome.md) | Diagnostics separate replay, policy, and outcome | Accepted; built for Issue #586. |
+| [0193](0193-ledger-values-observable-capabilities.md) | Ledger values observable capabilities | Accepted; built. |

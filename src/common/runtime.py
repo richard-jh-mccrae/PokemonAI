@@ -11,7 +11,8 @@ from common import telemetry
 from common.api import ActionIdentity, RootDecision
 from common.decision import DecisionFailure, DecisionFailureStage
 from common.observation import (HiddenHand, LegalKnowledge, ObservationState,
-                                ObservationStateBuilder, OpponentBelief, reduce_knowledge)
+                                ObservationDelta, ObservationStateBuilder, OpponentBelief,
+                                reduce_knowledge)
 from common.cards import card_clauses, card_store
 from common.cards.card_facts import EnergyCard
 from common.cards.functions.damage import bench_reach
@@ -110,6 +111,8 @@ class AgentRuntime:
         self.opponent_model = None
         self.opponent_snapshot: OpponentSnapshot | None = None
         self.last_state: ObservationState | None = None
+        self._parent_valuation = None
+        self._observation_delta = None
         self._in_pregame = False
         self.provider_factory = provider_factory
         self.telemetry_session = telemetry.TelemetrySession()
@@ -221,9 +224,10 @@ class AgentRuntime:
         self.opponent_model = self._new_opponent_model()
         self.opponent_snapshot = None
         self.knowledge = LegalKnowledge()
+        self.last_state = None
+        self.ledger.reset_turn()
 
     def decide(self, observation: dict) -> RootDecision:
-        self.last_state = None
         try:
             return self._decide(observation)
         except Exception as exc:
@@ -237,12 +241,23 @@ class AgentRuntime:
                 knowledge=self.knowledge, state=getattr(self, "last_state", None))
 
     def _decide(self, observation: dict) -> RootDecision:
-        state = ObservationStateBuilder(self.deck).root(observation, knowledge=self.knowledge)
+        turn_number = int(observation["current"]["turn"])
+        if turn_number <= 0 and not self._in_pregame:
+            self._reset_for_pregame()
+        previous = self.last_state
+        same_turn = previous is not None and previous.turn.number == turn_number
+        builder = ObservationStateBuilder(self.deck)
+        if same_turn:
+            state, delta = builder.advance(previous, observation, knowledge=self.knowledge)
+            parent_valuation = self.ledger.last_valuation
+        else:
+            self.ledger.reset_turn()
+            state = builder.root(observation, knowledge=self.knowledge)
+            delta = None
+            parent_valuation = None
         self.last_state = state
         self.knowledge = state.knowledge
         if state.turn.number <= 0:
-            if not self._in_pregame:
-                self._reset_for_pregame()
             self._in_pregame = True
             return self._pregame(state)
         self._in_pregame = False
@@ -252,20 +267,33 @@ class AgentRuntime:
         if collector_was_enabled:
             gc.disable()
         try:
+            self._parent_valuation = parent_valuation
+            self._observation_delta = delta
             return self._decide_core(state, observation)
         finally:
             if collector_was_enabled:
                 gc.enable()
 
     def _decide_core(self, state: ObservationState, observation: dict) -> RootDecision:
+        parent_valuation = self._parent_valuation
+        delta = self._observation_delta
         snapshot = self._observe_matchup(state)
         self.knowledge = reduce_knowledge(
             self.knowledge, opponent=_belief_from_snapshot(snapshot))
-        state = ObservationStateBuilder(self.deck).root(observation, knowledge=self.knowledge)
+        builder = ObservationStateBuilder(self.deck)
+        if parent_valuation is None:
+            state = builder.root(observation, knowledge=self.knowledge)
+        else:
+            state, knowledge_delta = builder.advance(
+                state, observation, knowledge=self.knowledge)
+            parts = set(() if delta is None else delta.parts)
+            parts.update(knowledge_delta.parts)
+            delta = ObservationDelta(tuple(sorted(parts)))
         self.last_state = state
         return self.ledger.decide(
             observation, opponent=snapshot,
-            knowledge=self.knowledge, state=state)
+            knowledge=self.knowledge, state=state,
+            parent_valuation=parent_valuation, observation_delta=delta)
 
 def build_runtime(strategy, deck, **kwargs) -> AgentRuntime:
     """Construct the one shared runtime; injectable seams keep tests engine-independent."""

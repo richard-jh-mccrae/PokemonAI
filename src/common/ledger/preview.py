@@ -27,6 +27,11 @@ from .prizes import PrizeMap
 from .worth import EvaluationModel
 
 LOTTERY_DIGEST_BYTES = 8
+OPPORTUNITY_FOOTPRINT_FEATURES = (
+    "continuation.opportunity_created",
+    "continuation.opportunity_preserved",
+    "continuation.opportunity_consumed",
+)
 
 
 @dataclass(frozen=True)
@@ -96,22 +101,30 @@ def price_actions(state, board: ObservationState, baseline: float, provider,
             continue
         walk = _Walk(provider, ctx, board.decklist, compute, budget, valuation_fn)
         node = provider.transition(state, action)
+        information_value = _immediate_information_value(node)
         successor, end_probability, landings = walk.node(
             state, board, node, compute.depth_budget)
+        landings = _coalesce_landings(landings)
         ends_turn = end_probability >= 1.0
         state_delta = successor.total - baseline
         activation = -(1.0 - end_probability)
+        action_events = [("continued_action", activation)]
         action_contribution = _event_contributions(
-            "continuation", (("continued_action", activation),), ctx,
-            "continuation")
+            "continuation", action_events, ctx, "continuation")
         opportunity_cost = sum(item.value for item in action_contribution)
         state_contributions = _state_contributions(baseline_valuation, successor, ctx)
         footprint_values = _root_footprint(
-            board, provider, state, landings, walk.gaps)
+            board, provider, state, landings, walk.gaps,
+            track_opportunities=any(ctx.configuration[key]
+                                    for key in OPPORTUNITY_FOOTPRINT_FEATURES))
         footprint_contributions = _footprint_contributions(footprint_values, ctx)
+        information_contributions = _event_contributions(
+            "continuation", (("information_value", information_value),),
+            ctx, "continuation.information")
         opportunity_cost += sum(item.value for item in footprint_contributions)
+        opportunity_cost += sum(item.value for item in information_contributions)
         contributions = (*state_contributions, *action_contribution,
-                         *footprint_contributions)
+                         *footprint_contributions, *information_contributions)
         activations = tuple(FeatureActivation(
             item.feature, item.activation, item.provenance) for item in contributions)
         footprint = ContinuationFootprint(
@@ -157,7 +170,8 @@ class _Walk:
         self.nodes = 0
         self.unavailable = False
 
-    def node(self, state, board: ObservationState, node, depth: int):
+    def node(self, state, board: ObservationState, node, depth: int, main_depth=None):
+        main_depth = (self.compute.main_depth_budget if main_depth is None else main_depth)
         if self.budget is not None and not self.budget.visit(getattr(state, "semantic_key", None)):
             self.gaps.append(f"search stopped: {self.budget.stop_reason}")
             self.unavailable = True
@@ -175,12 +189,13 @@ class _Walk:
             landing_state = node.state if isinstance(node, Deterministic) else state
             return self.valuation(board), 0.0, ((1.0, landing_state, board, False, ()),)
         if isinstance(node, Deterministic):
-            return self.deterministic(node.state, self._typed(node.state, board), depth)
+            return self.deterministic(
+                node.state, self._typed(node.state, board), depth, main_depth)
         if isinstance(node, Chance):
             weighted, landings, end_probability = [], [], 0.0
             for edge in node.children:
                 child_value, child_end_probability, child_landings = self.node(
-                    state, board, edge.node, depth - 1)
+                    state, board, edge.node, depth - 1, main_depth)
                 weighted.append((edge.probability, child_value))
                 landings.extend((edge.probability * probability, landing_state,
                                  landing_board, ended, path)
@@ -202,7 +217,8 @@ class _Walk:
                              in enumerate(outcomes))
             return valuation, 0.0, landings
         if isinstance(node, RevealChoice):
-            priced = {edge.label: self.node(state, board, edge.node, depth - 1)
+            priced = {edge.label: self.node(
+                state, board, edge.node, depth - 1, main_depth)
                       for edge in node.choices}
             weighted, landings, end_probability = [], [], 0.0
             for outcome in node.outcomes:
@@ -220,7 +236,8 @@ class _Walk:
                     tuple(landings))
         if isinstance(node, Choice):
             label, result = self._choose(
-                ((edge.label, self.node(state, board, edge.node, depth - 1))
+                ((edge.label, self.node(
+                    state, board, edge.node, depth - 1, main_depth))
                  for edge in node.children), node.actor, salt=f"choice:{depth}")
             return _with_path(result, label)
         if isinstance(node, Unknown):
@@ -231,11 +248,48 @@ class _Walk:
         self.unavailable = True
         return self.valuation(board), 0.0, ((1.0, state, board, False, ()),)
 
-    def deterministic(self, state, board: ObservationState, depth: int):
+    def deterministic(self, state, board: ObservationState, depth: int, main_depth: int):
         context_value = None if board.select is None else board.select.context
         context = _MAIN if context_value is None else int(context_value)
         if context == _MAIN:
-            return self.valuation(board), 0.0, ((1.0, state, board, False, ()),)
+            if main_depth <= 0:
+                return self.valuation(board), 0.0, ((1.0, state, board, False, ()),)
+            try:
+                actions = tuple(self.provider.actions(state))
+            except (KeyError, LookupError):
+                return self.valuation(board), 0.0, ((1.0, state, board, False, ()),)
+            if not actions:
+                return self.valuation(board), 0.0, ((1.0, state, board, False, ()),)
+            actor = self.provider.actor(state)
+            entries = []
+            transitions = {}
+            for action in actions:
+                if action.identity.kind == "end":
+                    result = (self.valuation(board), 1.0,
+                              ((1.0, state, board, True, ()),))
+                else:
+                    try:
+                        successor = self.provider.transition(state, action)
+                    except (KeyError, LookupError):
+                        result = (self.valuation(board), 0.0,
+                                  ((1.0, state, board, False, ()),))
+                    else:
+                        transitions[action.identity] = successor
+                        result = self.node(state, board, successor, depth - 1, 0)
+                entries.append((action.identity, result))
+            identity, probe = self._choose(entries, actor, salt=f"main:{depth}")
+            successor = transitions.get(identity)
+            result = (probe if successor is None else self.node(
+                state, board, successor, depth - 1, main_depth - 1))
+            if successor is not None:
+                valuation, end_probability, landings = result
+                result = (_expected_valuation((
+                    (1.0 - self.compute.main_continuation_discount,
+                     self.valuation(board)),
+                    (self.compute.main_continuation_discount, valuation),
+                ), self.ctx), end_probability, landings)
+            valuation, _planned_end_probability, landings = _with_path(result, identity)
+            return valuation, 0.0, landings
         actions = self.provider.actions(state)
         if not actions:
             self.gaps.append("forced menu offered no actions; unavailable")
@@ -244,7 +298,7 @@ class _Walk:
         actor = self.provider.actor(state)
         identity, result = self._choose((
             (action.identity, self.node(
-                state, board, self.provider.transition(state, action), depth - 1))
+                state, board, self.provider.transition(state, action), depth - 1, main_depth))
             for action in actions), actor, salt=f"menu:{depth}")
         return _with_path(result, identity)
 
@@ -279,7 +333,31 @@ def _with_path(result, step):
         for probability, state, board, ended, path in landings)
 
 
-def _root_footprint(board: ObservationState, provider, state, landings, gaps) -> _RawFootprint:
+def _coalesce_landings(landings):
+    combined = {}
+    for probability, state, board, ended, path in landings:
+        key = (board.position_key, bool(ended), tuple(path))
+        if key in combined:
+            previous = combined[key]
+            combined[key] = (min(1.0, math.fsum((previous[0], probability))),
+                             *previous[1:])
+        else:
+            combined[key] = (probability, state, board, ended, path)
+    return tuple(combined.values())
+
+
+def _immediate_information_value(node) -> float:
+    if isinstance(node, RevealChoice):
+        return sum(outcome.probability * math.log2(max(1, len(outcome.choices)))
+                   for outcome in node.outcomes)
+    if isinstance(node, Chance):
+        return sum(edge.probability * _immediate_information_value(edge.node)
+                   for edge in node.children)
+    return 0.0
+
+
+def _root_footprint(board: ObservationState, provider, state, landings, gaps, *,
+                    track_opportunities: bool) -> _RawFootprint:
     if not landings:
         return _RawFootprint()
 
@@ -300,7 +378,8 @@ def _root_footprint(board: ObservationState, provider, state, landings, gaps) ->
         "zone_created", "zone_replaced", "allowance_consumed", "usable_output",
         "opportunity_created", "opportunity_preserved", "opportunity_consumed")}
     before = zones(board)
-    before_actions = _legal_inventory(provider, state, gaps)
+    before_actions = (_legal_inventory(provider, state, gaps)
+                      if track_opportunities else Counter())
     allowances = ("supporter_played", "stadium_played", "energy_attached", "retreated")
     for probability, landing_state, successor, ended, _path in landings:
         after = zones(successor)
@@ -311,10 +390,13 @@ def _root_footprint(board: ObservationState, provider, state, landings, gaps) ->
                              if not getattr(board.turn, name)
                              and getattr(successor.turn, name)}
         branch_outputs = {name for name in before if after[name] > before[name]}
-        after_actions = Counter() if ended else _legal_inventory(provider, landing_state, gaps)
-        branch_opportunities = ((Counter(), Counter(), Counter()) if ended else (
-            after_actions - before_actions, after_actions & before_actions,
-            before_actions - after_actions))
+        after_actions = (Counter() if ended or not track_opportunities
+                         else _legal_inventory(provider, landing_state, gaps))
+        branch_opportunities = ((Counter(), Counter(), Counter())
+                                if ended or not track_opportunities else (
+                                    after_actions - before_actions,
+                                    after_actions & before_actions,
+                                    before_actions - after_actions))
         branch_groups = (branch_created, branch_replaced, branch_allowances, branch_outputs,
                          *branch_opportunities)
         for label, feature, items in zip(labels, activations, branch_groups):

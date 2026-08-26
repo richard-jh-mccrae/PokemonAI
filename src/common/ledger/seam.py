@@ -50,6 +50,8 @@ class PreviewBinding:
             state.observation, observation)
         metadata = getattr(self, "_provider_metadata", {}).pop(id(observation), {})
         return PreviewState(observation, child, f"preview:{next(self._preview_tokens)}",
+                            deck=state.deck, deck_counts=child.deck_counts or (),
+                            prize_counts=(getattr(child.knowledge.own_prizes, "cards", ())),
                             actor_seat=metadata.get("actor_seat"),
                             belief_token=metadata.get("belief_token"),
                             recycled_card_ids=metadata.get("recycled_card_ids", ()))

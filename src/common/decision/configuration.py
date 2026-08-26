@@ -18,18 +18,26 @@ def _positive(name, value):
 class SearchConfiguration:
     schema_version: int = 1
     depth_budget: int = 16
+    main_depth_budget: int = 0
+    main_continuation_discount: float = 0.8
     path_node_budget: int = 128
     node_budget: int = 4096
-    time_budget_ms: int = 100_000
+    time_budget_ms: int = 10_000
     chance_sample_budget: int = 24
     chance_seed: int = 582
     noise_tolerance: float = 1e-9
     tie_seed: int = 1178
 
     def __post_init__(self):
-        for name in ("schema_version", "depth_budget", "path_node_budget", "node_budget",
-                     "time_budget_ms", "chance_sample_budget"):
+        for name in ("schema_version", "depth_budget",
+                     "path_node_budget", "node_budget", "time_budget_ms",
+                     "chance_sample_budget"):
             _positive(name, getattr(self, name))
+        if self.main_depth_budget < 0:
+            raise ValueError("main_depth_budget must be nonnegative")
+        if not math.isfinite(self.main_continuation_discount) \
+                or not 0 < self.main_continuation_discount <= 1:
+            raise ValueError("main_continuation_discount must be in (0, 1]")
         if not math.isfinite(self.noise_tolerance) or self.noise_tolerance <= 0:
             raise ValueError("noise_tolerance must be positive and finite")
 

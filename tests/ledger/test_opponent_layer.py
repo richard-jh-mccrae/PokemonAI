@@ -33,7 +33,7 @@ def _board(observation, snapshot):
     return ObservationStateBuilder().root(observation, knowledge=knowledge)
 
 
-def test_compiled_snapshot_roles_do_not_enter_belief_and_candidates_scale_by_probability():
+def test_compiled_snapshot_roles_do_not_enter_board_value():
     beliefs = _snapshot(
         observed_roles={UNKNOWN_ID: ("support_pokemon",)},
         candidates=(ArchetypeBelief(
@@ -45,28 +45,21 @@ def test_compiled_snapshot_roles_do_not_enter_belief_and_candidates_scale_by_pro
     valuation = evaluate(_board(printout(
         them=player(own=False, active=body(UNKNOWN_ID, 1))), beliefs), context)
 
-    assert not any(item.feature == "role.support_pokemon" for item in valuation.activations)
-    assert _activation(valuation, "role.primary_attacker") == -0.5
+    assert not any(item.feature.startswith("role.") for item in valuation.activations)
     assert _activation(valuation, "coverage.unknown_card") < 0
     assert any("unknown card" in gap for gap in valuation.gaps)
 
 
-def test_opponent_evidence_cannot_change_valuation_coefficients():
+def test_opponent_role_evidence_cannot_create_valuation_contributions():
     beliefs = _snapshot(
         candidates=(ArchetypeBelief(
             1.0, {UNKNOWN_ID: ("primary_attacker",)}, archetype="candidate"),),
         unknown_mass=0.0,
     )
-    context = EvaluationModel.build(
-        overlay=DeckOverlay({"role.primary_attacker": 0.4}),
-        opponent_profiles=_profiles(beliefs))
+    context = EvaluationModel.build(opponent_profiles=_profiles(beliefs))
     valuation = evaluate(_board(printout(
         them=player(own=False, active=body(UNKNOWN_ID, 1))), beliefs), context)
-    contribution = next(item for item in valuation.contributions
-                        if item.feature == "role.primary_attacker")
-
-    assert contribution.coefficient == pytest.approx(0.9)
-    assert contribution.value == pytest.approx(-0.9)
+    assert not any(item.feature.startswith("role.") for item in valuation.contributions)
 
 
 def test_our_deck_role_declarations_do_not_leak_onto_opponent_cards():

@@ -7,7 +7,6 @@ the same scripts, never recomputed by hand, so the assertions read pure arithmet
 from __future__ import annotations
 
 import math
-
 import pytest
 
 from ledger_helpers import (DRAGAPULT, FIRE_E, ScriptedProvider, action, body, player,
@@ -19,6 +18,7 @@ from common.ledger import DeckOverlay, EvaluationModel, LedgerDecider
 from deprecated.bellman.state import DecisionState
 
 DECK = (DRAGAPULT, FIRE_E) * 20
+INFORMATION_VALUE = EvaluationModel.build().configuration["continuation.information_value"]
 
 
 def state_of(observation):
@@ -129,8 +129,8 @@ def test_reveal_choice_honors_its_actor_in_both_directions():
     outcomes = (RevealOutcome(1.0, ("good", "bad")),)
     ours, _, _ = price_of(RevealChoice(Actor.OURS, choices, outcomes))
     theirs, _, _ = price_of(RevealChoice(Actor.OPPONENT, choices, outcomes))
-    assert ours == pytest.approx(good_swing, abs=1e-9)
-    assert theirs == pytest.approx(bad_swing, abs=1e-9)
+    assert ours == pytest.approx(good_swing + INFORMATION_VALUE, abs=1e-9)
+    assert theirs == pytest.approx(bad_swing + INFORMATION_VALUE, abs=1e-9)
 
 
 def test_reveal_choice_weights_outcomes_and_chooses_within_each():
@@ -140,7 +140,8 @@ def test_reveal_choice_weights_outcomes_and_chooses_within_each():
     outcomes = (RevealOutcome(0.5, ("bad",)),            # the reveal offered only the bad leg
                 RevealOutcome(0.5, ("good", "bad")))     # both on offer: we take the good one
     swing, _, _ = price_of(RevealChoice(Actor.OURS, choices, outcomes))
-    assert swing == pytest.approx(0.5 * bad_swing + 0.5 * good_swing, abs=1e-9)
+    assert swing == pytest.approx(
+        0.5 * bad_swing + 0.5 * good_swing + 0.5 * INFORMATION_VALUE, abs=1e-9)
 
 
 def test_a_reveal_whose_chosen_leg_resolves_the_turn_counts_as_an_ender():

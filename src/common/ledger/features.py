@@ -6,7 +6,6 @@ import math
 from dataclasses import dataclass
 from types import MappingProxyType
 
-from common.cards.pokemon_roles import POKEMON_ROLES
 
 
 CATALOG_ID_DIGEST_BYTES = 16
@@ -188,11 +187,13 @@ _OBSERVATION_CLAIMS = {
     "demand.dead": "dead_hand_card",
     "demand.colorless_only": "colorless_only_hand_card",
     "demand.setup": "setup_hand_card",
-    "development.ready_evolution": "ready_evolution_in_hand",
+    "development.ready_evolution": "evolution_access",
     "development.visible_reach": "visible_development_reach",
     "development.next_turn_reach": "next_turn_development_reach",
     "copy.surplus": "surplus_hand_copy",
     "copy.surplus_in_play": "surplus_in_play_copy",
+    "copy.basic_energy_surplus": "surplus_basic_energy",
+    "interaction.synergy.in_hand": "synergy_in_hand",
     "damage.floor": "body_damage_fraction",
     "body.hp_per_100": "body_hp_units",
     "bench.open_slot": "open_bench_slot",
@@ -201,6 +202,32 @@ _OBSERVATION_CLAIMS = {
     "active.doomed": "doomed_active",
     "active.premium": "active_body",
     "active.unready_fraction": "unready_active",
+    "active.retreat_ready": "retreat_ready_active",
+    "active.damage_pressure": "active_damage_pressure",
+    "combat.attack_now": "attack_now",
+    "combat.attack_progress": "attack_progress",
+    "combat.attack_future": "attack_future",
+    "combat.bench_reach": "bench_reach",
+    "combat.active_threat": "active_threat",
+    "combat.line_potential": "line_potential",
+    "combat.realized_ko": "realized_knockout",
+    "ability.draw_cards": "ability_draw_cards",
+    "ability.search_cards": "ability_search_cards",
+    "ability.damage_move": "ability_damage_move",
+    "ability.healing": "ability_healing",
+    "ability.acceleration": "ability_acceleration",
+    "ability.denial": "ability_denial",
+    "ability.resource_cost": "ability_resource_cost",
+    "ability.self_cost": "ability_self_cost",
+    "ability.future": "ability_future",
+    "mobility.retreat_progress": "retreat_progress",
+    "resource.hand_option": "hand_option_value",
+    "resource.discard_recoverable": "recoverable_discard_card",
+    "resource.stadium_option": "stadium_option_value",
+    "resource.opponent_hidden_option": "opponent_hidden_option_value",
+    "resource.deck_option": "deck_option_value",
+    "resource.opponent_hidden_deck": "opponent_hidden_deck_value",
+    "resource.prize_locked": "known_prize_option_value",
     "prize.race": "prize_advantage",
     "result.win": "terminal_win",
     "belief.unknown_card": "unknown_card_belief",
@@ -227,6 +254,7 @@ _CONTINUATION_CLAIMS = {
     "continuation.opportunity_created": "opportunity_created",
     "continuation.opportunity_preserved": "opportunity_preserved",
     "continuation.opportunity_consumed": "opportunity_consumed",
+    "continuation.information_value": "information_value",
 }
 
 _TRAIT_RULES = {
@@ -276,23 +304,6 @@ _MECHANIC_RULES = {
         "opponent_mechanic", ("spread",), "own_bench_count"),
 }
 
-_ROLE_DEFAULTS = {
-    "primary_attacker": 0.50,
-    "backup_attacker": 0.35,
-    "sniper": 0.35,
-    "draw_engine": 0.40,
-    "search_engine": 0.40,
-    "healer": 0.30,
-    "stall_pokemon": 0.25,
-    "supporter_tutor": 0.30,
-    "accel_source": 0.35,
-    "counter_mover": 0.25,
-    "item_locker": 0.30,
-    "retreat_assist": 0.20,
-    "gust": 0.30,
-    "support_pokemon": 0.25,
-}
-
 _KIND_DEFAULTS = {
     "pokemon": 0.12,
     "item": 0.10,
@@ -321,9 +332,9 @@ _HAND_PLACEMENTS = (
     "in_hand_live", "in_hand_dead", "in_hand_setup", "in_hand_colorless",
     "in_hand_surplus",
 )
-_ROLE_PLACEMENTS = ("in_play", *_HAND_PLACEMENTS, "in_deck", "in_discard", "under_body")
+_POKEMON_PLACEMENTS = ("in_play", *_HAND_PLACEMENTS, "in_deck", "in_discard", "under_body")
 _KIND_PLACEMENTS = {
-    "pokemon": _ROLE_PLACEMENTS,
+    "pokemon": _POKEMON_PLACEMENTS,
     "item": (*_HAND_PLACEMENTS, "in_deck", "in_discard"),
     "supporter": (*_HAND_PLACEMENTS, "in_deck", "in_discard"),
     "tool": (*_HAND_PLACEMENTS, "in_deck", "in_discard", "tool_attached"),
@@ -345,18 +356,46 @@ _SCALAR_DEFAULTS = {
     "demand.colorless_only": 0.0,
     "demand.setup": 0.0,
     "development.ready_evolution": 0.12,
-    "development.visible_reach": 0.08,
-    "development.next_turn_reach": 0.04,
+    "development.visible_reach": 0.0,
+    "development.next_turn_reach": 0.0,
     "copy.surplus": -0.03,
-    "copy.surplus_in_play": 0.20,
+    "copy.surplus_in_play": 0.0,
+    "copy.basic_energy_surplus": -0.04,
+    "interaction.synergy.in_hand": 0.40,
     "damage.floor": 0.30,
     "body.hp_per_100": 0.02,
-    "bench.open_slot": 0.02,
+    "bench.open_slot": 0.15,
     "body.prize_liability": 0.04,
     "energy.concentration": 0.10,
     "active.doomed": 0.40,
     "active.premium": 0.08,
-    "active.unready_fraction": 0.04,
+    "active.unready_fraction": 0.0,
+    "active.retreat_ready": 0.0,
+    "active.damage_pressure": 0.0,
+    "combat.attack_now": 0.35,
+    "combat.attack_progress": 0.20,
+    "combat.attack_future": 0.12,
+    "combat.bench_reach": 0.10,
+    "combat.active_threat": 0.12,
+    "combat.line_potential": 0.40,
+    "combat.realized_ko": 1.0,
+    "ability.draw_cards": 0.08,
+    "ability.search_cards": 0.10,
+    "ability.damage_move": 0.30,
+    "ability.healing": 0.25,
+    "ability.acceleration": 0.25,
+    "ability.denial": 0.20,
+    "ability.resource_cost": -0.08,
+    "ability.self_cost": -0.12,
+    "ability.future": 0.12,
+    "mobility.retreat_progress": 0.10,
+    "resource.hand_option": 0.15,
+    "resource.discard_recoverable": 0.08,
+    "resource.stadium_option": 0.20,
+    "resource.opponent_hidden_option": 0.08,
+    "resource.deck_option": 0.10,
+    "resource.opponent_hidden_deck": 0.015,
+    "resource.prize_locked": -0.08,
     "prize.race": 1.0,
     "result.win": 100.0,
     "belief.unknown_card": 0.0,
@@ -364,18 +403,19 @@ _SCALAR_DEFAULTS = {
     "belief.unknown_deck_card": 0.0075,
     "belief.unknown_archetype": 0.0,
     "context.opponent_unknown_card": 0.0,
-    "context.opponent_unknown_hand": 0.078,
-    "context.opponent_unknown_deck": 0.018,
+    "context.opponent_unknown_hand": 0.0,
+    "context.opponent_unknown_deck": 0.0,
     "context.damaged_attached": -1.0,
     "continuation.multi_provision_in_hand": 0.05,
     "energy.end_of_turn_rental": 0.0,
-    "continuation.zone_created": 0.001,
-    "continuation.zone_replaced": 0.0002,
-    "continuation.allowance_consumed": -0.001,
-    "continuation.usable_output": 0.001,
-    "continuation.opportunity_created": 0.001,
-    "continuation.opportunity_preserved": 0.0005,
-    "continuation.opportunity_consumed": -0.001,
+    "continuation.zone_created": 0.0,
+    "continuation.zone_replaced": 0.0,
+    "continuation.allowance_consumed": 0.0,
+    "continuation.usable_output": 0.0,
+    "continuation.opportunity_created": 0.0,
+    "continuation.opportunity_preserved": 0.0,
+    "continuation.opportunity_consumed": 0.0,
+    "continuation.information_value": 0.55,
     "function.draw.available": 0.0,
     "function.draw.hand_count": 0.0,
     "function.fetch.live_target": 0.0,
@@ -395,7 +435,7 @@ _SCALAR_DEFAULTS = {
     "function.move_damage.damage_present": 0.0,
     "function.ko.active_target": 0.0,
     "function.stadium.board_fit": 0.0,
-    "action.opportunity_cost": 0.001,
+    "action.opportunity_cost": 0.0,
     "status.asleep": 0.15,
     "status.paralyzed": 0.15,
     "status.confused": 0.08,
@@ -442,23 +482,9 @@ FEATURE_CATALOG = FeatureCatalog(
                         ((_TRAIT_RULES[key],) if key in _TRAIT_RULES
                          else (_MECHANIC_RULES[key],)))
             for key, value in _BELIEF_DEFAULTS.items())
-    + tuple(FeatureSpec(
-        f"trait.setup_dependency.{role}", 0.0, "posterior",
-        (_rule("opponent_trait", ("setup_dependency",), "candidate_role_bodies", role),))
-            for role in POKEMON_ROLES)
     + tuple(FeatureSpec(f"kind.{kind}", value, "count",
                         (_rule("card", (f"kind:{kind}",), "constant"),))
             for kind, value in _KIND_DEFAULTS.items())
-    + tuple(FeatureSpec(f"role.{role}", _ROLE_DEFAULTS[role],
-                        "count", (_rule("card", (f"role:{role}",), "constant"),))
-            for role in POKEMON_ROLES)
-    + tuple(FeatureSpec(f"interaction.role.{role}.{placement}",
-                        value * factor,
-                        "situational_count",
-                        (_rule("card", (f"role:{role}:{placement}",), "constant"),))
-            for role, value in _ROLE_DEFAULTS.items()
-            for placement in _ROLE_PLACEMENTS
-            for factor in (_PLACEMENT_FACTORS[placement],))
     + tuple(FeatureSpec(f"interaction.kind.{kind}.{placement}",
                         value * factor,
                         "situational_count",
@@ -466,7 +492,7 @@ FEATURE_CATALOG = FeatureCatalog(
             for kind, value in _KIND_DEFAULTS.items()
             for placement in _KIND_PLACEMENTS[kind]
             for factor in (_PLACEMENT_FACTORS[placement],)),
-    schema_version=2,
+    schema_version=4,
 )
 
 

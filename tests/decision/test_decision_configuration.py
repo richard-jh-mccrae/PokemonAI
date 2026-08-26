@@ -35,6 +35,16 @@ def test_search_budget_supports_deterministic_node_and_wall_time_stops():
     assert configured.time_budget_ms == 50
 
 
+def test_main_continuation_discount_is_bounded():
+    assert SearchConfiguration().main_continuation_discount == 0.8
+    with pytest.raises(ValueError, match="main_depth_budget"):
+        SearchConfiguration(main_depth_budget=-1)
+    with pytest.raises(ValueError, match="main_continuation_discount"):
+        SearchConfiguration(main_continuation_discount=0)
+    with pytest.raises(ValueError, match="main_continuation_discount"):
+        SearchConfiguration(main_continuation_discount=1.01)
+
+
 def test_budget_stops_only_at_recorded_node_boundaries():
     times = iter((0.0, 0.001, 0.002, 0.003))
     budget = BudgetController(

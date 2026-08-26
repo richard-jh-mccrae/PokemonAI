@@ -6,7 +6,7 @@ negative, overkill counters add nothing, a dead fetch waits, bench slots are sca
 from __future__ import annotations
 
 from ledger_helpers import (AIR_BALLOON, DARK_E, DARKNESS, DRAGAPULT, DRAKLOAK, DREEPY, FIRE,
-                            FIRE_E, IGNITION, LUNATONE, MAKUHITA, MEGA_STARMIE, PSYCHIC,
+                            FIRE_E, IGNITION, LILLIES, LUNATONE, MAKUHITA, MEGA_STARMIE, PSYCHIC,
                             PSYCHIC_E, STARYU, ULTRA_BALL, UNKNOWN, WATER, WATER_E, body,
                             player, printout)
 
@@ -53,7 +53,7 @@ def test_feature_extraction_is_independent_of_resolved_coefficients():
     state = board(me=player(active=body(DREEPY, 1), hand=[DARK_E, DRAGAPULT]))
     general = EvaluationModel.build()
     bent = EvaluationModel.build(overlay=DeckOverlay({
-        "role.primary_attacker": -0.75,
+        "combat.attack_now": -0.25,
         "zone.in_hand": -1.2,
     }))
 
@@ -199,6 +199,45 @@ def test_the_pair_in_hand_outprices_either_alone():
     assert marginal_beside_base > marginal_alone + 0.02
 
 
+def test_a_named_synergy_partner_in_play_makes_the_held_half_live():
+    context = ctx()
+    paired = evaluate(board(me=player(active=body(676, 1), hand=[LUNATONE])), context)
+    alone = evaluate(board(me=player(active=body(MAKUHITA, 1), hand=[LUNATONE])), context)
+
+    assert paired.part("me.hand") > alone.part("me.hand") + 0.35
+
+
+def test_duplicate_supporter_has_less_marginal_hand_value():
+    context = ctx()
+
+    def hand_value(cards):
+        return evaluate(board(me=player(active=body(DREEPY, 1), hand=cards)), context).part(
+            "me.hand")
+
+    assert hand_value([LILLIES, LILLIES]) - hand_value([LILLIES]) \
+        < hand_value([LILLIES]) - hand_value([])
+
+
+def test_the_active_with_lower_attack_pressure_is_the_better_gust_target():
+    context = ctx()
+    fez_active = board(them=player(own=False, active=body(140, 1), bench=[body(1071, 2)]))
+    meowth_active = board(them=player(own=False, active=body(1071, 2), bench=[body(140, 1)]))
+
+    assert evaluate(meowth_active, context).total > evaluate(fez_active, context).total
+
+
+def test_retreat_readiness_only_has_value_when_a_bench_target_exists():
+    context = ctx()
+    stranded = board(me=player(active=body(DREEPY, 1, energies=(PSYCHIC,))))
+    mobile = board(me=player(active=body(DREEPY, 1, energies=(PSYCHIC,)),
+                             bench=[body(MAKUHITA, 2)]))
+
+    stranded_features = {item.feature: item.value for item in evaluate(stranded, context).activations}
+    mobile_features = {item.feature: item.value for item in evaluate(mobile, context).activations}
+    assert stranded_features.get("mobility.retreat_progress", 0.0) == 0.0
+    assert mobile_features["mobility.retreat_progress"] > 0.0
+
+
 # --- the boundary and coverage honesty ---
 
 def test_unknown_card_scores_the_floor_and_logs_a_gap():
@@ -305,7 +344,10 @@ def test_the_active_premium_pays_more_when_the_active_can_attack():
     context = ctx()
     unready = evaluate(board(me=player(active=body(DREEPY, 1))), context)
     ready = evaluate(board(me=player(active=body(DREEPY, 1, energies=(PSYCHIC,)))), context)
-    assert 0.0 < unready.part("me.active") < ready.part("me.active")
+    unready_features = {item.feature: item.value for item in unready.activations}
+    ready_features = {item.feature: item.value for item in ready.activations}
+    assert unready_features.get("combat.attack_now", 0.0) == 0.0
+    assert ready_features["combat.attack_now"] > 0.0
 
 
 def test_energy_units_without_card_detail_still_price():
@@ -450,7 +492,9 @@ def test_concentration_prefers_finishing_the_started_twin():
     armed = ctx()
     assert armed.configuration["energy.concentration"] > 0
     assert evaluate(split(2, 0), armed).total > evaluate(split(1, 1), armed).total
-    flat = ctx(overrides={"energy.concentration": 0.0})
+    flat = ctx(overrides={"energy.concentration": 0.0,
+                          "combat.attack_progress": 0.0,
+                          "combat.attack_future": 0.0})
     assert evaluate(split(2, 0), flat).total == pytest.approx(
         evaluate(split(1, 1), flat).total)
 

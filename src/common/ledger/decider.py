@@ -92,31 +92,45 @@ class LedgerDecider:
         #: Fact sources the engine adapters read mid-transition; a bare provider prices
         #: fact-needing options (bench damage, energy typing) at zero (ADR-0148).
         self.provider_kwargs = dict(provider_kwargs or {})
+        descriptor = _provider_descriptor(self.provider_factory, self.provider_kwargs)
+        self._provider_configuration = {
+            "identity": _provider_identity(self.provider_factory, self.provider_kwargs),
+            **descriptor,
+        }
+        self._behavior_identity = None
         self.gap_sink = gap_sink
         self.parity_oracle = parity_oracle
         self.coordinator = self._build_coordinator()
+        self.last_valuation = None
+
+    def reset_turn(self) -> None:
+        self.last_valuation = None
+        evaluator = getattr(self.coordinator, "evaluator", None)
+        if evaluator is not None and hasattr(evaluator, "clear"):
+            evaluator.clear()
 
     @property
     def provider_configuration(self) -> dict:
-        descriptor = _provider_descriptor(self.provider_factory, self.provider_kwargs)
-        return {"identity": _provider_identity(self.provider_factory, self.provider_kwargs),
-                **descriptor}
+        return dict(self._provider_configuration)
 
     @property
     def behavior_identity(self) -> BehaviorIdentity:
-        return BehaviorIdentity(
-            LedgerValueEvaluator.identity,
-            self.ctx.identity,
-            LedgerOnePlySearch.identity,
-            UniformPolicyModel.identity,
-            GreedyDecisionPolicy.identity,
-            FailSafeDecisionPolicy.identity,
-            _provider_identity(self.provider_factory, self.provider_kwargs),
-            self.compute.identity,
-            self.ctx.prize_plan.identity,
-        )
+        if self._behavior_identity is None:
+            self._behavior_identity = BehaviorIdentity(
+                LedgerValueEvaluator.identity,
+                self.ctx.identity,
+                LedgerOnePlySearch.identity,
+                UniformPolicyModel.identity,
+                GreedyDecisionPolicy.identity,
+                FailSafeDecisionPolicy.identity,
+                self._provider_configuration["identity"],
+                self.compute.identity,
+                self.ctx.prize_plan.identity,
+            )
+        return self._behavior_identity
 
-    def decide(self, observation, *, opponent=None, knowledge=None, state=None) -> RootDecision:
+    def decide(self, observation, *, opponent=None, knowledge=None, state=None,
+               parent_valuation=None, observation_delta=None) -> RootDecision:
         ctx = self.ctx
         known = knowledge if state is None else state.knowledge
         if opponent is not None and (known is None
@@ -141,7 +155,10 @@ class LedgerDecider:
                 coordinator_entered = True
                 result = self.coordinator.decide(
                     state, provider=provider,
+                    parent_valuation=parent_valuation,
+                    observation_delta=observation_delta,
                     strict=os.environ.get("AGENT_BRAIN_STRICT") == "1")
+                self.last_valuation = result.baseline
                 search_configuration, policy_configuration = self._configurations(self.compute)
                 if self.parity_oracle is not None and provider.instance is not None:
                     self.parity_oracle(

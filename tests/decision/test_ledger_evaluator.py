@@ -31,6 +31,7 @@ def test_delta_hint_never_changes_exact_ledger_valuation():
     parent_value = evaluator.evaluate(EvaluationRequest(parent, model))
 
     hinted = evaluator.evaluate(EvaluationRequest(child, model, parent_value, delta))
+    assert evaluator.last_snapshot.reused_groups == ("context",)
     full = evaluator.evaluate(EvaluationRequest(child, model))
 
     assert hinted == full
