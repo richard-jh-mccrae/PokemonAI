@@ -29,7 +29,7 @@ def test_shell_defaults_to_local_viewer_and_sends_replay_and_selected_step():
     assert "replay:viewerReplayObj" in _SHELL_HTML
     assert "i=Number(viewerReplayObj.viewerOpeningFrame)||0" in _SHELL_HTML
     assert "plainLoaded?state" in _SHELL_HTML
-    assert "step:i" in _SHELL_HTML
+    assert "step:boardStep" in _SHELL_HTML
     assert "postPlain();" in _SHELL_HTML
     assert "player.hand=Array.from" in _SHELL_HTML
     assert "card.name='Hidden'" in _SHELL_HTML
@@ -38,10 +38,11 @@ def test_shell_defaults_to_local_viewer_and_sends_replay_and_selected_step():
     assert 'select[aria-label="Playback speed"]' in _SHELL_HTML
     assert "doc.defaultView.MutationObserver" in _SHELL_HTML
     assert "function drawPlainPrizes()" in _SHELL_HTML
+    assert 'id="boardprizes"' in _SHELL_HTML
     assert "slot.textContent=known?(card.name||('#'+card.id)):'Face-down'" in _SHELL_HTML
 
 
-def test_shell_owns_playback_at_one_decision_per_second():
+def test_shell_plays_only_the_board_at_one_decision_per_second():
     assert 'button id="play"' in _SHELL_HTML
     assert 'select id="playspeed"' in _SHELL_HTML
     for speed in ("0.3", "0.5", "1", "1.5", "2", "3"):
@@ -49,7 +50,10 @@ def test_shell_owns_playback_at_one_decision_per_second():
         assert f'x{speed}</option>' in _SHELL_HTML
     assert "const PLAYBACK_MS=1000;" in _SHELL_HTML
     assert "PLAYBACK_MS/playbackSpeed" in _SHELL_HTML
-    assert "step:i,playing:false,speed:playbackSpeed" in _SHELL_HTML
+    assert "let plainReady=false,plainLoaded=false,boardStep=0;" in _SHELL_HTML
+    assert "step:boardStep,playing:false,speed:playbackSpeed" in _SHELL_HTML
+    assert "boardStep+=1; postPlain();" in _SHELL_HTML
+    assert "await show(i+1)" not in _SHELL_HTML
     assert "await show(p.opening_frame||0); startPlayback();" in _SHELL_HTML
 
 

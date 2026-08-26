@@ -311,11 +311,12 @@ _VIEWER_PLACEHOLDER = """<!doctype html><meta charset='utf-8'>
 _SHELL_HTML = """<!doctype html><html><head><meta charset="utf-8"><title>blunder_correction</title>
 <style>
  *{box-sizing:border-box} body{font:14px system-ui,sans-serif;margin:0;display:flex;height:100vh;color:#1a1a1a}
- #left{flex:1;display:flex;flex-direction:column;min-width:0;border-right:1px solid #ddd}
+ #left{flex:1;display:flex;flex-direction:column;min-width:0;border-right:1px solid #ddd;position:relative}
  #vbar{padding:6px 8px;border-bottom:1px solid #eee;display:flex;gap:6px;align-items:center;flex-wrap:wrap}
  #vbar select{width:auto}
  #vbar .hint{color:#888;font-size:12px;margin-left:auto}
  iframe{flex:1;border:0;width:100%;background:#111}
+ #boardprizes{position:absolute;pointer-events:none;z-index:2;color:#fff;font:9px sans-serif}
  #right{width:400px;padding:14px;overflow:auto;font-size:12px}
  #ids{font-size:12px;color:#555;background:#f6f6f6;padding:6px 8px;border-radius:5px}
  #nav{display:flex;gap:6px;align-items:center;margin:12px 0}
@@ -354,9 +355,10 @@ _SHELL_HTML = """<!doctype html><html><head><meta charset="utf-8"><title>blunder
    <button id="gprev">◀</button><b id="gpos">1/1</b>
    <span style="color:#888">ep <span id="gep">?</span></span><button id="gnext">▶</button>
   </span>
-  <span class="hint">board follows the selected step</span>
+  <span class="hint">board playback · review pane changes only when selected</span>
  </div>
  <iframe id="viewer" name="viewer" src="/viewer/"></iframe>
+ <div id="boardprizes" aria-hidden="true"></div>
 </div>
 <div id="right">
  <div id="ids"></div>
@@ -402,7 +404,7 @@ _SHELL_HTML = """<!doctype html><html><head><meta charset="utf-8"><title>blunder
 <script>
 let FR=[],META={},i=0,replayObj=null,viewerReplayObj=null,saved=0,total=0,teamNames=[],editingId=null,LIST=[];
 let CFSESSION=null,CFPAYLOAD=null;
-let plainReady=false,plainLoaded=false;
+let plainReady=false,plainLoaded=false,boardStep=0;
 let playbackTimer=null,playbackSpeed=1,playbackPlaying=false,playbackRun=0;
 const PLAYBACK_MS=1000;
 const $=id=>document.getElementById(id);
@@ -421,6 +423,7 @@ const pname=s=>(teamNames&&teamNames[s])||('Player '+s);
 
 function openColorful(target){
   if(!replayObj) return;
+  if(target==='viewer') $('boardprizes').replaceChildren();
   const r=viewerReplayObj||replayObj, vl=r.steps[0][0].visualize, seat=viewSeat();
   for(let a=0;a<vl.length;a++)for(let j=0;j<2;j++){
     try{vl[a].current.players[j].ramainingTime=r.steps[a][j].observation.remainingOverageTime;}catch(e){}}
@@ -454,7 +457,7 @@ function normalizeViewerReplay(replay){
 }
 function postPlain(){
   if(!plainReady||!viewerReplayObj) return;
-  const state={step:i,playing:false,speed:playbackSpeed};
+  const state={step:boardStep,playing:false,speed:playbackSpeed};
   const payload=plainLoaded?state:{
     replay:viewerReplayObj, agents:teamNames.map(name=>({name})), ...state, parentHandlesUi:true};
   $('viewer').contentWindow.postMessage(payload,location.origin);
@@ -463,30 +466,35 @@ function postPlain(){
   setTimeout(drawPlainPrizes,50);
 }
 function drawPlainPrizes(){
-  const doc=$('viewer').contentDocument, canvas=doc&&doc.querySelector('canvas');
-  const frame=viewerReplayObj?.steps?.[0]?.[0]?.visualize?.[i];
+  const layer=$('boardprizes'), viewer=$('viewer');
+  layer.replaceChildren();
+  let doc;
+  try{doc=viewer.contentDocument;}catch(_e){return;}
+  const canvas=doc&&doc.querySelector('canvas');
+  const frame=viewerReplayObj?.steps?.[0]?.[0]?.visualize?.[boardStep];
   if(!canvas||!frame) return;
-  const host=canvas.parentElement;
-  host.querySelector('#shell-prizes')?.remove();
-  const layer=doc.createElement('div'); layer.id='shell-prizes';
-  Object.assign(layer.style,{position:'absolute',inset:'0',pointerEvents:'none',zIndex:'2',
-    color:'#fff',font:'9px sans-serif'});
+  const canvasRect=canvas.getBoundingClientRect(), viewerRect=viewer.getBoundingClientRect();
+  const leftRect=$('left').getBoundingClientRect();
+  Object.assign(layer.style,{left:(viewerRect.left-leftRect.left+canvasRect.left)+'px',
+    top:(viewerRect.top-leftRect.top+canvasRect.top)+'px',width:canvasRect.width+'px',
+    height:canvasRect.height+'px'});
+  layer.dataset.step=String(boardStep);
   for(let seat=0;seat<2;seat++){
-    const group=doc.createElement('div');
+    const group=document.createElement('div');
     Object.assign(group.style,{position:'absolute',top:'230px',left:seat===0?'175px':'415px',
       width:'160px',display:'grid',gridTemplateColumns:'repeat(2, 78px)',gap:'2px'});
     const prizes=frame.current?.players?.[seat]?.prize||[];
     for(const card of prizes){
-      const slot=doc.createElement('div');
+      const slot=document.createElement('div');
       const known=card&&card.id!=null&&card.name!=='Hidden';
       slot.textContent=known?(card.name||('#'+card.id)):'Face-down';
+      slot.title=slot.textContent;
       Object.assign(slot.style,{height:'14px',lineHeight:'14px',padding:'0 2px',overflow:'hidden',
         whiteSpace:'nowrap',textOverflow:'ellipsis',border:'1px solid #ccc',background:'#000'});
       group.appendChild(slot);
     }
     layer.appendChild(group);
   }
-  host.appendChild(layer);
 }
 function openPlain(force=false){
   plainLoaded=false;
@@ -517,7 +525,7 @@ function watchPlainControls(){
       const controls=speed.parentElement, wrapper=controls&&controls.parentElement;
       (wrapper||controls).style.display='none';
     }
-    if(doc.querySelector('canvas')&&!doc.querySelector('#shell-prizes')) drawPlainPrizes();
+    if(doc.querySelector('canvas')&&!$('boardprizes').children.length) drawPlainPrizes();
   };
   try{
     new Observer(tidy).observe(root,{childList:true,subtree:true});
@@ -534,6 +542,7 @@ window.addEventListener('message',event=>{
     markPlainReady();
   }
 });
+window.addEventListener('resize',drawPlainPrizes);
 function syncPlayback(){
   $('play').textContent=playbackPlaying?'⏸':'▶';
   $('play').title=playbackPlaying?'Pause':'Play';
@@ -547,22 +556,26 @@ function pausePlayback(){
 function schedulePlayback(run=playbackRun){
   clearPlayback();
   if(!playbackPlaying||run!==playbackRun) return;
-  if(i>=FR.length-1){pausePlayback();return;}
-  playbackTimer=setTimeout(async()=>{
+  if(boardStep>=FR.length-1){pausePlayback();return;}
+  playbackTimer=setTimeout(()=>{
     playbackTimer=null;
     if(!playbackPlaying||run!==playbackRun) return;
-    await show(i+1);
+    boardStep+=1; postPlain();
     schedulePlayback(run);
   },PLAYBACK_MS/playbackSpeed);
 }
 async function startPlayback(){
   clearPlayback(); const run=++playbackRun;
   if(!FR.length) return;
-  if(i>=FR.length-1) await show(Number(viewerReplayObj?.viewerOpeningFrame)||0);
+  if(boardStep>=FR.length-1){
+    boardStep=Number(viewerReplayObj?.viewerOpeningFrame)||0; postPlain();
+  }
   if(run!==playbackRun) return;
   playbackPlaying=true; syncPlayback(); schedulePlayback(run);
 }
-function selectStep(n){pausePlayback();return show(n);}
+function selectStep(n){
+  pausePlayback(); boardStep=Math.max(0,Math.min(FR.length-1,n)); postPlain(); return show(n);
+}
 // A scoped tag (turn, ADR-0049) shares its Anchor step with the Decision tags inside it, so
 // the row states what it is ABOUT; a prescription-free one has no "→ correct" line to show.
 const scopeTag=it=>it.scope==='turn'?`turn ${it.subject} (${it.span_len} decisions)`
@@ -708,7 +721,7 @@ async function loadGame(){
   $('ids').textContent='loading match…';
   replayObj=await (await fetch('/replay.json')).json();
   viewerReplayObj=normalizeViewerReplay(replayObj);
-  i=Number(viewerReplayObj.viewerOpeningFrame)||0;
+  i=Number(viewerReplayObj.viewerOpeningFrame)||0; boardStep=i;
   openPlain();
   const g=await (await fetch('/games.json')).json();
   $('gpos').textContent=(g.current+1)+'/'+g.count; $('gep').textContent=g.episode_id??'?';
@@ -770,7 +783,6 @@ function ledgerDecision(L,f){
 async function show(n){
   if(FR.length) resetCF();
   i=Math.max(0,Math.min(FR.length-1,n)); const f=FR[i];
-  postPlain();
   if(f.has_details&&!f.details_loaded){
     if(!f.details_promise) f.details_promise=(async()=>{
       const response=await fetch('/frame.json?frame='+f.frame), details=await response.json();
