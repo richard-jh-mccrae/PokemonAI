@@ -68,6 +68,32 @@ def test_recorder_maps_winner_to_seat_indexed_rewards():
     assert winner_index(draw.replay(episode_id=2, team_names=["a", "b"])) is None   # no label on a draw
 
 
+def test_recorder_keeps_legal_observations_but_uses_god_state_for_the_visual_board():
+    from sim.record import MatchRecorder
+
+    obs = _board_obs(1)
+    terminal = _board_obs(0, result=0)
+    god_players = [
+        {"hand": [{"id": 1}], "prize": [{"id": 2}]},
+        {"hand": [{"id": 3}], "prize": [{"id": 4}]},
+    ]
+    visualizer = [
+        {"current": {"yourIndex": 0, "players": god_players}, "logs": [{"type": "Draw"}]},
+        {"current": {"yourIndex": 0, "players": god_players}, "logs": []},
+    ]
+    recorder = MatchRecorder()
+    recorder.step(obs, [0])
+    recorder.finish(terminal, winner=0, visualizer=visualizer)
+
+    film = recorder.replay(episode_id=1, team_names=["a", "b"])["steps"][0][0]["visualize"]
+
+    assert film[0]["obs"] is obs
+    assert film[0]["obs"]["current"]["players"][0]["prize"] == [None] * 6
+    assert film[0]["current"]["players"] == god_players
+    assert film[0]["current"]["yourIndex"] == 1
+    assert film[0]["logs"] == [{"type": "Draw"}]
+
+
 @pytest.mark.req("REQ-SIM-0013")
 def test_play_match_with_a_recorder_yields_a_mineable_film():
     """The corpus comes off the SAME loop the A/B runs — process isolation, no two-deck collision."""
@@ -87,3 +113,8 @@ def test_play_match_with_a_recorder_yields_a_mineable_film():
     replay = rec.replay(episode_id=1, team_names=["mega_starmie#0", "mega_starmie#1"])
     decisions = iter_decisions(replay)
     assert len(decisions) > 10 and all(decision.obs is not None for decision in decisions)
+    film = replay["steps"][0][0]["visualize"]
+    assert all(isinstance(player.get("hand"), list)
+               for frame in film for player in frame["current"]["players"])
+    assert all(all(isinstance(card, dict) for card in player.get("prize") or [])
+               for frame in film for player in frame["current"]["players"])

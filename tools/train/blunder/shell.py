@@ -313,6 +313,7 @@ _SHELL_HTML = """<!doctype html><html><head><meta charset="utf-8"><title>blunder
  *{box-sizing:border-box} body{font:14px system-ui,sans-serif;margin:0;display:flex;height:100vh;color:#1a1a1a}
  #left{flex:1;display:flex;flex-direction:column;min-width:0;border-right:1px solid #ddd}
  #vbar{padding:6px 8px;border-bottom:1px solid #eee;display:flex;gap:6px;align-items:center;flex-wrap:wrap}
+ #vbar select{width:auto}
  #vbar .hint{color:#888;font-size:12px;margin-left:auto}
  iframe{flex:1;border:0;width:100%;background:#111}
  #right{width:400px;padding:14px;overflow:auto;font-size:12px}
@@ -342,6 +343,11 @@ _SHELL_HTML = """<!doctype html><html><head><meta charset="utf-8"><title>blunder
 </style></head><body>
 <div id="left">
  <div id="vbar">
+  <button id="play" title="Pause">⏸</button>
+  <select id="playspeed" aria-label="Playback speed">
+   <option value="0.3">x0.3</option><option value="0.5">x0.5</option><option value="1" selected>x1</option>
+   <option value="1.5">x1.5</option><option value="2">x2</option><option value="3">x3</option>
+  </select>
   <button id="reload">🎨 colorful</button><button id="tab">↗ new tab</button>
   <button id="plain">plain board</button>
   <span id="gnav" style="display:flex;gap:4px;align-items:center;margin-left:8px;border-left:1px solid #ddd;padding-left:8px">
@@ -397,6 +403,8 @@ _SHELL_HTML = """<!doctype html><html><head><meta charset="utf-8"><title>blunder
 let FR=[],META={},i=0,replayObj=null,viewerReplayObj=null,saved=0,total=0,teamNames=[],editingId=null,LIST=[];
 let CFSESSION=null,CFPAYLOAD=null;
 let plainReady=false,plainLoaded=false;
+let playbackTimer=null,playbackSpeed=1,playbackPlaying=false,playbackRun=0;
+const PLAYBACK_MS=1000;
 const $=id=>document.getElementById(id);
 const FORM=['scope','category','correct','source','attribution','critical','posture_wrong','rationale','save'];
 const esc=s=>String(s).replace(/[&<>]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]));
@@ -435,7 +443,7 @@ function normalizeViewerReplay(replay){
         player[area]=Array.isArray(player[area])?player[area]:[];
       if(!Array.isArray(player.hand))
         player.hand=Array.from({length:Number(player.handCount)||0},()=>({name:'Hidden'}));
-      for(const card of [...player.active,...player.bench,...player.hand,...player.discard,...current.stadium]){
+      for(const card of [...player.active,...player.bench,...player.hand,...player.discard,...player.prize,...current.stadium]){
         if(!card) continue;
         if(card.name==null) card.name='Hidden';
         if(!Array.isArray(card.energies)) card.energies=[];
@@ -446,10 +454,39 @@ function normalizeViewerReplay(replay){
 }
 function postPlain(){
   if(!plainReady||!viewerReplayObj) return;
-  const payload=plainLoaded?{step:i}:{
-    replay:viewerReplayObj, agents:teamNames.map(name=>({name})), step:i, parentHandlesUi:true};
+  const state={step:i,playing:false,speed:playbackSpeed};
+  const payload=plainLoaded?state:{
+    replay:viewerReplayObj, agents:teamNames.map(name=>({name})), ...state, parentHandlesUi:true};
   $('viewer').contentWindow.postMessage(payload,location.origin);
   plainLoaded=true;
+  setTimeout(drawPlainPrizes,0);
+  setTimeout(drawPlainPrizes,50);
+}
+function drawPlainPrizes(){
+  const doc=$('viewer').contentDocument, canvas=doc&&doc.querySelector('canvas');
+  const frame=viewerReplayObj?.steps?.[0]?.[0]?.visualize?.[i];
+  if(!canvas||!frame) return;
+  const host=canvas.parentElement;
+  host.querySelector('#shell-prizes')?.remove();
+  const layer=doc.createElement('div'); layer.id='shell-prizes';
+  Object.assign(layer.style,{position:'absolute',inset:'0',pointerEvents:'none',zIndex:'2',
+    color:'#fff',font:'9px sans-serif'});
+  for(let seat=0;seat<2;seat++){
+    const group=doc.createElement('div');
+    Object.assign(group.style,{position:'absolute',top:'230px',left:seat===0?'175px':'415px',
+      width:'160px',display:'grid',gridTemplateColumns:'repeat(2, 78px)',gap:'2px'});
+    const prizes=frame.current?.players?.[seat]?.prize||[];
+    for(const card of prizes){
+      const slot=doc.createElement('div');
+      const known=card&&card.id!=null&&card.name!=='Hidden';
+      slot.textContent=known?(card.name||('#'+card.id)):'Face-down';
+      Object.assign(slot.style,{height:'14px',lineHeight:'14px',padding:'0 2px',overflow:'hidden',
+        whiteSpace:'nowrap',textOverflow:'ellipsis',border:'1px solid #ccc',background:'#000'});
+      group.appendChild(slot);
+    }
+    layer.appendChild(group);
+  }
+  host.appendChild(layer);
 }
 function openPlain(force=false){
   plainLoaded=false;
@@ -463,7 +500,8 @@ function openPlain(force=false){
 function watchPlainControls(){
   const doc=$('viewer').contentDocument;
   const root=doc&&doc.documentElement;
-  if(!root||root.dataset.shellWatching) return;
+  const Observer=doc&&doc.defaultView&&doc.defaultView.MutationObserver;
+  if(!root||!Observer||root.dataset.shellWatching) return;
   root.dataset.shellWatching='1';
   const tidy=()=>{
     const seen=new Set();
@@ -475,9 +513,14 @@ function watchPlainControls(){
       if(holder.style.width==='750px'&&holder.style.height==='700px'&&
           !holder.querySelector('canvas')) holder.remove();
     }
+    for(const speed of doc.querySelectorAll('select[aria-label="Playback speed"]')){
+      const controls=speed.parentElement, wrapper=controls&&controls.parentElement;
+      (wrapper||controls).style.display='none';
+    }
+    if(doc.querySelector('canvas')&&!doc.querySelector('#shell-prizes')) drawPlainPrizes();
   };
   try{
-    new MutationObserver(tidy).observe(root,{childList:true,subtree:true});
+    new Observer(tidy).observe(root,{childList:true,subtree:true});
     tidy();
   }catch(_e){}
 }
@@ -491,6 +534,35 @@ window.addEventListener('message',event=>{
     markPlainReady();
   }
 });
+function syncPlayback(){
+  $('play').textContent=playbackPlaying?'⏸':'▶';
+  $('play').title=playbackPlaying?'Pause':'Play';
+}
+function clearPlayback(){
+  if(playbackTimer!==null){clearTimeout(playbackTimer);playbackTimer=null;}
+}
+function pausePlayback(){
+  playbackPlaying=false; playbackRun++; clearPlayback(); syncPlayback(); postPlain();
+}
+function schedulePlayback(run=playbackRun){
+  clearPlayback();
+  if(!playbackPlaying||run!==playbackRun) return;
+  if(i>=FR.length-1){pausePlayback();return;}
+  playbackTimer=setTimeout(async()=>{
+    playbackTimer=null;
+    if(!playbackPlaying||run!==playbackRun) return;
+    await show(i+1);
+    schedulePlayback(run);
+  },PLAYBACK_MS/playbackSpeed);
+}
+async function startPlayback(){
+  clearPlayback(); const run=++playbackRun;
+  if(!FR.length) return;
+  if(i>=FR.length-1) await show(Number(viewerReplayObj?.viewerOpeningFrame)||0);
+  if(run!==playbackRun) return;
+  playbackPlaying=true; syncPlayback(); schedulePlayback(run);
+}
+function selectStep(n){pausePlayback();return show(n);}
 // A scoped tag (turn, ADR-0049) shares its Anchor step with the Decision tags inside it, so
 // the row states what it is ABOUT; a prescription-free one has no "→ correct" line to show.
 const scopeTag=it=>it.scope==='turn'?`turn ${it.subject} (${it.span_len} decisions)`
@@ -632,6 +704,7 @@ async function boot(){
   loadGame();
 }
 async function loadGame(){
+  pausePlayback();
   $('ids').textContent='loading match…';
   replayObj=await (await fetch('/replay.json')).json();
   viewerReplayObj=normalizeViewerReplay(replayObj);
@@ -654,9 +727,10 @@ async function loadGame(){
   editingId=null;
   // Not frame 0: the film opens on the coin flip, whose board is empty (nothing dealt yet), so
   // landing there shows a blank board.
-  show(p.opening_frame||0); refreshList();
+  await show(p.opening_frame||0); startPlayback(); refreshList();
 }
 async function switchGame(d){
+  pausePlayback();
   const g=await (await fetch('/games.json')).json();
   const j=g.current+d; if(j<0||j>=g.count) return;
   await fetch('/game',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({i:j})});
@@ -798,10 +872,16 @@ function fillPick(){
   FR.forEach((f,k)=>$('pick').add(pickOption(f,k)));
   if(cur!=='') $('pick').value=cur;
 }
-function gotoStep(s){const k=FR.findIndex(f=>f.step==s); return k>=0?show(k):Promise.resolve();}
-$('prev').onclick=()=>show(i-1); $('next').onclick=()=>show(i+1);
-$('pick').onchange=e=>show(+e.target.value);
+function gotoStep(s){const k=FR.findIndex(f=>f.step==s); return k>=0?selectStep(k):Promise.resolve();}
+$('prev').onclick=()=>selectStep(i-1); $('next').onclick=()=>selectStep(i+1);
+$('pick').onchange=e=>selectStep(+e.target.value);
 $('step').onchange=e=>gotoStep(+e.target.value);
+$('play').onclick=()=>playbackPlaying?pausePlayback():startPlayback();
+$('playspeed').onchange=e=>{
+  playbackSpeed=Number(e.target.value)||1;
+  if(playbackPlaying) schedulePlayback();
+  postPlain();
+};
 $('reload').onclick=()=>openColorful('viewer'); $('tab').onclick=()=>openColorful('_blank');
 $('plain').onclick=()=>openPlain(true);
 $('save').onclick=async()=>{

@@ -28,12 +28,29 @@ def test_shell_defaults_to_local_viewer_and_sends_replay_and_selected_step():
     assert "contentDocument?.readyState==='complete'" in _SHELL_HTML
     assert "replay:viewerReplayObj" in _SHELL_HTML
     assert "i=Number(viewerReplayObj.viewerOpeningFrame)||0" in _SHELL_HTML
-    assert "plainLoaded?{step:i}" in _SHELL_HTML
+    assert "plainLoaded?state" in _SHELL_HTML
     assert "step:i" in _SHELL_HTML
     assert "postPlain();" in _SHELL_HTML
     assert "player.hand=Array.from" in _SHELL_HTML
     assert "card.name='Hidden'" in _SHELL_HTML
+    assert "...player.prize" in _SHELL_HTML
     assert "!holder.querySelector('canvas')" in _SHELL_HTML
+    assert 'select[aria-label="Playback speed"]' in _SHELL_HTML
+    assert "doc.defaultView.MutationObserver" in _SHELL_HTML
+    assert "function drawPlainPrizes()" in _SHELL_HTML
+    assert "slot.textContent=known?(card.name||('#'+card.id)):'Face-down'" in _SHELL_HTML
+
+
+def test_shell_owns_playback_at_one_decision_per_second():
+    assert 'button id="play"' in _SHELL_HTML
+    assert 'select id="playspeed"' in _SHELL_HTML
+    for speed in ("0.3", "0.5", "1", "1.5", "2", "3"):
+        assert f'value="{speed}"' in _SHELL_HTML
+        assert f'x{speed}</option>' in _SHELL_HTML
+    assert "const PLAYBACK_MS=1000;" in _SHELL_HTML
+    assert "PLAYBACK_MS/playbackSpeed" in _SHELL_HTML
+    assert "step:i,playing:false,speed:playbackSpeed" in _SHELL_HTML
+    assert "await show(p.opening_frame||0); startPlayback();" in _SHELL_HTML
 
 
 def test_viewer_replay_removes_null_board_slots_from_tool_generated_films():
@@ -96,6 +113,55 @@ def test_viewer_replay_supplies_the_colorful_viewers_preload_contract():
     assert all(isinstance(frame["logs"], list) for frame in film)
     assert all(isinstance(p["deck"], list)
                for frame in film for p in frame["current"]["players"])
+
+
+def test_viewer_replay_keeps_both_last_known_hands_visible_between_seat_observations():
+    def player(hand, count):
+        return {"active": [], "bench": [], "discard": [], "prize": [],
+                "hand": hand, "handCount": count}
+
+    a = [{"id": 666, "serial": 1}, {"id": 1031, "serial": 2}]
+    b = [{"id": 678, "serial": 61}, {"id": 1120, "serial": 62}]
+    replay = {"steps": [[{"visualize": [
+        {"current": {"yourIndex": 0, "players": [player(a, 2), player(None, 2)]}},
+        {"current": {"yourIndex": 1, "players": [player(None, 2), player(b, 2)]}},
+        {"current": {"yourIndex": 0, "players": [player(a, 2), player(None, 2)]}},
+    ]}]]}
+
+    film = viewer_replay_payload(replay)["steps"][0][0]["visualize"]
+
+    assert [[card["id"] for card in frame["current"]["players"][0]["hand"]]
+            for frame in film] == [[666, 1031]] * 3
+    assert [card["id"] for card in film[2]["current"]["players"][1]["hand"]] == [678, 1120]
+    assert replay["steps"][0][0]["visualize"][1]["current"]["players"][0]["hand"] is None
+
+
+def test_viewer_replay_infers_each_seats_known_prizes_from_full_deck_reveals():
+    def player(hand, active, deck_count):
+        return {"active": active, "bench": [], "discard": [], "prize": [None] * 4,
+                "hand": hand, "handCount": len(hand), "deckCount": deck_count}
+
+    decks = [list(range(1, 9)), list(range(11, 19))]
+    frames = [
+        {"current": {"yourIndex": 0, "players": [
+            player([{"id": 1, "serial": 1}], [{"id": 2, "serial": 2}], 2),
+            player([{"id": 11, "serial": 11}], [{"id": 12, "serial": 12}], 2),
+        ]}, "select": {"deck": [{"id": 3, "serial": 3}, {"id": 4, "serial": 4}]}},
+        {"current": {"yourIndex": 1, "players": [
+            player([{"id": 1, "serial": 1}], [{"id": 2, "serial": 2}], 2),
+            player([{"id": 11, "serial": 11}], [{"id": 12, "serial": 12}], 2),
+        ]}, "select": {"deck": [{"id": 13, "serial": 13}, {"id": 14, "serial": 14}]}},
+    ]
+    replay = {"steps": [[{"visualize": frames}]]}
+
+    film = viewer_replay_payload(replay, decklists=decks)["steps"][0][0]["visualize"]
+
+    for frame in film:
+        assert [card["id"] for card in frame["current"]["players"][0]["prize"]] == [5, 6, 7, 8]
+        assert [card["id"] for card in frame["current"]["players"][1]["prize"]] == [15, 16, 17, 18]
+        assert all(card["name"] != "Hidden"
+                   for player_state in frame["current"]["players"]
+                   for card in player_state["prize"])
 
 
 def test_shell_requests_the_board_before_full_ledger_decision_data():
