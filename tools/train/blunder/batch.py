@@ -12,7 +12,7 @@ import re
 from pathlib import Path
 
 from meta_tracker.parse import load_replay
-from train.corpus import load_episode_bundle
+from train.corpus import load_episode_bundle, load_episode_replay
 
 from .provenance import build_identity
 from .telemetry_log import find_log_any, find_logs, load_log
@@ -76,6 +76,18 @@ def _reject_heldout_bundle(path: Path, bundle_id: str) -> None:
     _run, slot = _correction_run(path, bundle_id)
     if slot is not None and slot.get("partition") == "heldout":
         raise ValueError("held-out Correction Run evidence is hidden from correction tools")
+
+
+def load_replay_for_viewer(path: Path | str) -> dict:
+    """Load only the Replay needed by the board; Correction telemetry remains lazy."""
+    path = Path(path)
+    manifest_path = path / "manifest.json"
+    if path.is_dir() and manifest_path.is_file():
+        manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+        if manifest.get("schema") == "ledger.episode-bundle":
+            _reject_heldout_bundle(path, manifest["bundle_id"])
+            return load_episode_replay(path)
+    return load_replay(path)
 
 
 def load_game(path: Path | str) -> dict:

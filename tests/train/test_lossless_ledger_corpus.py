@@ -21,7 +21,7 @@ from common.telemetry import (build_decision_record, build_episode_receipt, buil
 from train.corpus import (CorpusIntegrityError, CorpusRejection, build_snapshot, build_training_view,
                           certify_replay, load_episode_bundle, load_snapshot,
                           stage_episode_bundle)
-from train.blunder.batch import discover_replays, load_game
+from train.blunder.batch import discover_replays, load_game, load_replay_for_viewer
 
 
 def _Action(identity, selection):
@@ -206,6 +206,17 @@ def test_episode_bundle_v3_compresses_replay_and_telemetry_without_losing_record
     assert loaded_replay["info"]["EpisodeId"] == 42
 
 
+def test_correction_viewer_loads_the_replay_without_waiting_on_bundle_telemetry(tmp_path):
+    replay, telemetry = _episode(tmp_path)
+    bundle = stage_episode_bundle(replay_path=replay, telemetry_path=telemetry,
+                                  output_root=tmp_path / "bundles")
+    (bundle / "telemetry.jsonl.gz").unlink()
+
+    viewed = load_replay_for_viewer(bundle)
+
+    assert viewed["info"]["EpisodeId"] == 42
+
+
 def test_episode_bundle_reader_keeps_v2_compatibility(tmp_path):
     from train.corpus.io import digest_file
 
@@ -267,6 +278,8 @@ def test_correction_loader_reads_tuning_bundles_and_hides_heldout(tmp_path):
         discover_replays(heldout)
     with pytest.raises(ValueError, match="held-out"):
         load_game(heldout)
+    with pytest.raises(ValueError, match="held-out"):
+        load_replay_for_viewer(heldout)
 
 
 def test_partial_corrupt_unknown_and_legacy_evidence_never_publish(tmp_path):

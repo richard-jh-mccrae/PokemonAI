@@ -21,13 +21,16 @@ import socket
 import uuid
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
-from urllib.parse import unquote, urlsplit
+from urllib.parse import parse_qs, unquote, urlsplit
 
-from .batch import load_game
+from .batch import load_game, load_replay_for_viewer
 from .categories import CATEGORIES
 from .correction import SOURCES
 from .seats import detect_seat
-from .service import frames_payload, list_corrections, record_correction
+from .service import (
+    frame_details_payload, frames_index_payload, frames_payload, list_corrections,
+    record_correction, viewer_replay_payload,
+)
 from .store import delete_correction
 
 STATE: dict = {}  # set by serve(): replays (paths), current, cache, our_team, agent, source, ...
@@ -53,6 +56,15 @@ def _games_payload() -> dict:
     info = game["replay"].get("info") or {}
     return {"count": len(STATE["replays"]), "current": STATE["current"],
             "episode_id": info.get("EpisodeId"), "own_seat": _own_seat(game)}
+
+
+def _frames_payload() -> dict:
+    game = _game()
+    if "frames_payload" not in game:
+        game["frames_payload"] = frames_payload(
+            game["replay"], STATE.get("our_team"), game.get("live_records"),
+            game.get("live_seat"), game.get("live_records_by_seat"))
+    return game["frames_payload"]
 
 
 def _turn_plan_from_form(form: dict) -> dict | None:
@@ -139,12 +151,16 @@ class _Handler(BaseHTTPRequestHandler):
         if self.path in ("/", "/index.html"):
             return _send_html(self, _SHELL_HTML)
         if self.path.startswith("/replay.json"):
-            return _json(self, _game()["replay"])
+            path = STATE["replays"][STATE["current"]]
+            return _json(self, viewer_replay_payload(load_replay_for_viewer(path)))
         if self.path.startswith("/frames.json"):
-            game = _game()
-            return _json(self, frames_payload(game["replay"], STATE.get("our_team"),
-                                              game.get("live_records"), game.get("live_seat"),
-                                              game.get("live_records_by_seat")))
+            return _json(self, frames_index_payload(_frames_payload()))
+        if self.path.startswith("/frame.json"):
+            try:
+                frame = int(parse_qs(urlsplit(self.path).query)["frame"][0])
+                return _json(self, frame_details_payload(_frames_payload(), frame=frame))
+            except (KeyError, ValueError) as exc:
+                return _json(self, {"error": str(exc)}, 400)
         if self.path.startswith("/corrections.json"):
             return _json(self, list_corrections(_game()["replay"], STATE["store_path"]))
         if self.path.startswith("/games.json"):
@@ -177,7 +193,7 @@ class _Handler(BaseHTTPRequestHandler):
             idx = max(0, min(len(STATE["replays"]) - 1, int(form.get("i", 0))))
             STATE["current"] = idx
             STATE["counterfactuals"].clear()
-            return _json(self, {"ok": True, **_games_payload()})
+            return _json(self, {"ok": True, "count": len(STATE["replays"]), "current": idx})
         if self.path == "/counterfactual/start":
             try:
                 from .counterfactual import CounterfactualRecorder
@@ -437,6 +453,7 @@ function postPlain(){
 }
 function openPlain(force=false){
   plainLoaded=false;
+  if(!plainReady&&$('viewer').contentDocument?.readyState==='complete') markPlainReady();
   if(new URL($('viewer').src,location.href).pathname!=='/viewer/'){
     plainReady=false; $('viewer').src='/viewer/';
   }else if(force){
@@ -454,15 +471,24 @@ function watchPlainControls(){
       const key=button.textContent+'|'+button.style.left+'|'+button.style.top;
       if(seen.has(key)) button.remove(); else seen.add(key);
     }
+    for(const holder of doc.querySelectorAll('div')){
+      if(holder.style.width==='750px'&&holder.style.height==='700px'&&
+          !holder.querySelector('canvas')) holder.remove();
+    }
   };
   try{
     new MutationObserver(tidy).observe(root,{childList:true,subtree:true});
     tidy();
   }catch(_e){}
 }
+function markPlainReady(){
+  if(new URL($('viewer').src,location.href).pathname!=='/viewer/') return;
+  plainReady=true; watchPlainControls(); postPlain();
+}
+$('viewer').addEventListener('load',markPlainReady);
 window.addEventListener('message',event=>{
   if(event.source===$('viewer').contentWindow&&event.data&&event.data.ready){
-    plainReady=true; watchPlainControls(); postPlain();
+    markPlainReady();
   }
 });
 // A scoped tag (turn, ADR-0049) shares its Anchor step with the Decision tags inside it, so
@@ -495,9 +521,9 @@ async function removeItem(k){
   if(editingId===it.id) editingId=null;
   refreshList();
 }
-function editItem(k){
+async function editItem(k){
   const it=LIST[k]; if(!it) return;
-  gotoStep(it.step);
+  await gotoStep(it.step);
   $('category').value=it.category; $('rationale').value=it.rationale||''; $('source').value=it.source;
   $('posture_wrong').checked=!!it.posture_mismatch;   // after gotoStep→show() reset it
   $('intended_line').value=(it.turn_plan&&it.turn_plan.intended_line)||'';
@@ -607,13 +633,15 @@ async function boot(){
 }
 async function loadGame(){
   $('ids').textContent='loading match…';
+  replayObj=await (await fetch('/replay.json')).json();
+  viewerReplayObj=normalizeViewerReplay(replayObj);
+  i=Number(viewerReplayObj.viewerOpeningFrame)||0;
+  openPlain();
   const g=await (await fetch('/games.json')).json();
   $('gpos').textContent=(g.current+1)+'/'+g.count; $('gep').textContent=g.episode_id??'?';
   $('gprev').disabled=g.current<=0; $('gnext').disabled=g.current>=g.count-1;
   const p=await (await fetch('/frames.json')).json();
   FR=p.frames; total=p.total; teamNames=p.team_names||[];
-  replayObj=await (await fetch('/replay.json')).json();
-  viewerReplayObj=normalizeViewerReplay(replayObj);
   const seat=(g.own_seat!=null?g.own_seat:(p.seat!=null?p.seat:0));
   $('ids').innerHTML=`ep <b>${p.episode_id??'?'}</b> · sub <b>${META.submission_id??'—'}</b> · own seat <b>${g.own_seat??p.seat??'(none)'}</b>`;
   $('analyze').innerHTML='';
@@ -626,7 +654,7 @@ async function loadGame(){
   editingId=null;
   // Not frame 0: the film opens on the coin flip, whose board is empty (nothing dealt yet), so
   // landing there shows a blank board.
-  openPlain(); show(p.opening_frame||0); refreshList();
+  show(p.opening_frame||0); refreshList();
 }
 async function switchGame(d){
   const g=await (await fetch('/games.json')).json();
@@ -665,9 +693,22 @@ function ledgerDecision(L,f){
     ledgerDetails('behavior identity',L.behavior_identity)+ledgerDetails('configuration',L.configuration)+
     ledgerDetails('opponent snapshot',L.opponent_snapshot)+ledgerDetails('legal observation',L.observation)+`</div>`;
 }
-function show(n){
+async function show(n){
   if(FR.length) resetCF();
-  i=Math.max(0,Math.min(FR.length-1,n)); const f=FR[i], own=isOwn(f.seat);
+  i=Math.max(0,Math.min(FR.length-1,n)); const f=FR[i];
+  postPlain();
+  if(f.has_details&&!f.details_loaded){
+    if(!f.details_promise) f.details_promise=(async()=>{
+      const response=await fetch('/frame.json?frame='+f.frame), details=await response.json();
+      if(!response.ok) throw new Error(details.error||'decision details failed');
+      Object.assign(f,details); f.details_loaded=true;
+    })();
+    try{await f.details_promise;}catch(error){
+      f.details_loaded=true; f.details_error=String(error);
+    }
+    if(FR[i]!==f) return;
+  }
+  const own=isOwn(f.seat);
   $('pick').value=i; $('step').value=f.step; $('source').value=own?'own':'peer';
   let h=`<div class="big">Step ${f.step}/${total} &nbsp;·&nbsp; Turn ${f.turn}</div>`+
     `<div>decision by <b>${pname(f.seat)}</b> (seat ${f.seat}) → saves as <b>${own?'own':'peer'}</b></div>`+
@@ -742,7 +783,6 @@ function show(n){
   $('msg').className=''; $('msg').textContent=f.taggable?'':'(not a taggable frame — step to a decision)';
   fillScope(f);                        // anchor must be a Decision, whatever the scope
   syncCrit();
-  postPlain();
 }
 function pickOption(f,k){
   // Our-agent decisions stand out: ▶ marker + bold (bold on <option> is browser-dependent, the
@@ -758,7 +798,7 @@ function fillPick(){
   FR.forEach((f,k)=>$('pick').add(pickOption(f,k)));
   if(cur!=='') $('pick').value=cur;
 }
-function gotoStep(s){const k=FR.findIndex(f=>f.step==s); if(k>=0)show(k);}
+function gotoStep(s){const k=FR.findIndex(f=>f.step==s); return k>=0?show(k):Promise.resolve();}
 $('prev').onclick=()=>show(i-1); $('next').onclick=()=>show(i+1);
 $('pick').onchange=e=>show(+e.target.value);
 $('step').onchange=e=>gotoStep(+e.target.value);

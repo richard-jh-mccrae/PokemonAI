@@ -8,7 +8,9 @@ from conftest import FIXTURES
 
 from meta_tracker.parse import load_replay
 from train.blunder.decisions import iter_decisions
-from train.blunder.service import decisions_payload, frames_payload
+from train.blunder.service import (
+    decisions_payload, frame_details_payload, frames_index_payload, frames_payload,
+)
 from train.blunder.shell import _SHELL_HTML
 
 FIXTURE = FIXTURES / "episode-81364540-replay.json.gz"
@@ -199,6 +201,24 @@ def test_frames_and_shell_present_the_complete_ledger_decision_contract():
     assert "candidate roster" in _SHELL_HTML
     assert "legal observation" in _SHELL_HTML
     assert "opponent snapshot" in _SHELL_HTML
+
+
+def test_frames_index_keeps_full_ledger_details_off_the_initial_page_load():
+    replay = _timed_replay()
+    ledger = {
+        "schema": "ledger.telemetry", "record_type": "decision",
+        "decision": {"seat": 0, "selection": [0]},
+        "configuration": {"large": "x" * 1000},
+    }
+    full = frames_payload(replay, live_records_by_seat={0: [ledger]})
+
+    indexed = frames_index_payload(full)
+    details = frame_details_payload(full, frame=0)
+
+    assert indexed["frames"][0]["has_details"] is True
+    assert "ledger" not in indexed["frames"][0]
+    assert "live" not in indexed["frames"][0]
+    assert details == {"frame": 0, "live": None, "ledger": ledger}
 
 
 def test_frames_open_on_a_board_that_has_cards_on_it():
