@@ -62,3 +62,5 @@ htmlcov/
 
 # Scratch output of tools/move_equivalence.py — a run artifact, never a record.
 .move_*.json
+
+/data/correction-runs/
