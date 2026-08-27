@@ -52,8 +52,9 @@ def _provider_descriptor(factory, kwargs) -> dict:
     }
 
 
-def _provider_identity(factory, kwargs) -> str:
-    descriptor = _provider_descriptor(factory, kwargs)
+def _provider_identity(factory, kwargs, descriptor=None) -> str:
+    descriptor = (_provider_descriptor(factory, kwargs)
+                  if descriptor is None else descriptor)
     blob = json.dumps(descriptor, sort_keys=True, separators=(",", ":")).encode("utf-8")
     return hashlib.blake2b(blob, digest_size=PROVIDER_ID_DIGEST_BYTES).hexdigest()
 
@@ -94,7 +95,8 @@ class LedgerDecider:
         self.provider_kwargs = dict(provider_kwargs or {})
         descriptor = _provider_descriptor(self.provider_factory, self.provider_kwargs)
         self._provider_configuration = {
-            "identity": _provider_identity(self.provider_factory, self.provider_kwargs),
+            "identity": _provider_identity(
+                self.provider_factory, self.provider_kwargs, descriptor),
             **descriptor,
         }
         self._behavior_identity = None

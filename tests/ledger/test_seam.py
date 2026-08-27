@@ -3,12 +3,16 @@ from __future__ import annotations
 
 from observation_builders import build_observation, advance_observation
 
+from itertools import count
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 
 from agent_helpers import deck as agent_deck
+from ledger_helpers import printout
 
+from common.algebra import Deterministic
 from common.engine import CgpyTransitionProvider, LedgerCgpyProvider
 from common.ledger import (EvaluationModel, LedgerDecider, LedgerNativeProvider, PreviewState,
                            preview_provider_factory)
@@ -98,3 +102,30 @@ def test_factory_mapping_targets_the_preview_variants():
     assert mapped.func is LedgerNativeProvider and mapped.keywords == {"world_count": 1}
     sentinel = object()
     assert preview_provider_factory(sentinel) is sentinel
+
+
+def test_native_grouping_preserves_successor_metadata():
+    raw = printout()
+    raw["current"]["result"] = -1
+    board = build_observation(raw)
+    parent = PreviewState(raw, board, "root")
+    successor_raw = printout()
+    successor_raw["current"]["result"] = -1
+    provider = object.__new__(LedgerNativeProvider)
+    provider._preview_tokens = count()
+    provider._provider_metadata = {id(successor_raw): {
+        "actor_seat": 1,
+        "belief_token": "belief:1",
+        "recycled_card_ids": (1121,),
+    }}
+    provider._worlds = {}
+    provider._root_turn = board.turn.number
+
+    node = provider._group_children(
+        parent, SimpleNamespace(identity=SimpleNamespace(kind="probe")),
+        ((1.0, 7, False, successor_raw),))
+
+    assert isinstance(node, Deterministic)
+    assert node.state.actor_seat == 1
+    assert node.state.belief_token == "belief:1"
+    assert node.state.recycled_card_ids == (1121,)

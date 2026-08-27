@@ -276,6 +276,17 @@ def test_feature_catalog_executes_declared_function_rules_without_a_second_regis
         ("function.synthetic", 3.0)]
 
 
+def test_feature_catalog_reuses_a_compiled_rule_lookup():
+    catalog = FeatureCatalog((FeatureSpec(
+        "function.synthetic", 2.0,
+        rules=(ActivationRule("function", ("synthetic",), "constant"),)),),
+        schema_version=99)
+
+    first = catalog.activation_rules("function", {"synthetic"})
+
+    assert catalog.activation_rules("function", ("synthetic", "synthetic")) is first
+
+
 def test_every_valued_card_function_is_owned_by_a_feature_activation_rule():
     declared = {claim for spec in FEATURE_CATALOG.specs for rule in spec.rules
                 if rule.source == "function" for claim in rule.claims}

@@ -206,11 +206,10 @@ class CandidateRoster:
     def __post_init__(self):
         identities = tuple(_roster_action_id(candidate.action)
                            for candidate in self.candidates)
-        if any(identity in identities[:index]
-               for index, identity in enumerate(identities)):
+        if _has_duplicates(identities):
             raise ValueError("duplicate candidate action")
         legal = tuple(self.legal_action_identities)
-        if any(identity in legal[:index] for index, identity in enumerate(legal)):
+        if _has_duplicates(legal):
             raise ValueError("duplicate legal action")
         if self.legal_actions_proven and identities != legal:
             raise ValueError("candidate roster does not match ordered legal actions")
@@ -234,6 +233,13 @@ def _roster_action_id(action):
     selection = getattr(action, "selection", None)
     identity = getattr(action, "identity", action)
     return ((identity, tuple(selection)) if selection is not None else identity)
+
+
+def _has_duplicates(values) -> bool:
+    try:
+        return len(set(values)) != len(values)
+    except TypeError:
+        return any(value in values[:index] for index, value in enumerate(values))
 
 
 @dataclass(frozen=True, slots=True)

@@ -90,6 +90,7 @@ class LedgerOnePlySearch:
     def search(self, request, evaluator, policy_model, provider, configuration):
         root = request.state
         board = getattr(root, "observation", root)
+        budget = BudgetController(configuration)
         state_values = {}
         evaluation_states = {}
 
@@ -143,7 +144,6 @@ class LedgerOnePlySearch:
                 CandidateRoster.from_legal_actions(actions, (candidate,), forced=True),
                 stop_reason="forced",
             )
-        budget = BudgetController(configuration)
         try:
             provider = provider.open() if isinstance(provider, TransitionProviderSource) else provider
             if not getattr(provider, "available", True):
@@ -243,18 +243,20 @@ class GreedyDecisionPolicy:
 
     @staticmethod
     def _ranked(candidates, configuration):
-        indexed = list(enumerate(candidates))
-
         def value(candidate):
             return float("-inf") if candidate.delta is None else candidate.delta.total
 
+        indexed = sorted(enumerate(candidates), key=lambda item: value(item[1]), reverse=True)
         ranked = []
-        while indexed:
-            best = max(value(candidate) for _index, candidate in indexed)
-            tied = tuple(
-                (index, candidate) for index, candidate in indexed
-                if best == float("-inf")
-                or best - value(candidate) <= configuration.noise_tolerance)
+        start = 0
+        while start < len(indexed):
+            best = value(indexed[start][1])
+            stop = start + 1
+            while (stop < len(indexed)
+                   and (best == float("-inf")
+                        or best - value(indexed[stop][1]) <= configuration.noise_tolerance)):
+                stop += 1
+            tied = tuple(indexed[start:stop])
             exact = all(value(candidate) == best for _index, candidate in tied)
             tied = tuple(sorted(tied, key=lambda item: (
                 item[1].policy_tie_break if exact else (),
@@ -262,9 +264,7 @@ class GreedyDecisionPolicy:
                     f"{configuration.tie_seed}:{item[0]}".encode("utf-8"),
                     digest_size=LOTTERY_DIGEST_BYTES).digest())))
             ranked.extend(candidate for _index, candidate in tied)
-            used = {index for index, _candidate in tied}
-            indexed = [(index, candidate) for index, candidate in indexed
-                       if index not in used]
+            start = stop
         return tuple(ranked)
 
 

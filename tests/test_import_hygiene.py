@@ -17,6 +17,7 @@ from __future__ import annotations
 
 import re
 import ast
+import os
 import subprocess
 from pathlib import Path
 
@@ -163,6 +164,19 @@ def test_live_runtime_has_no_retired_bellman_or_latch_state():
     )
 
     assert all(name not in text for name in retired)
+
+
+def test_live_runtime_does_not_import_offline_readiness_audits():
+    environment = dict(os.environ)
+    environment["PYTHONPATH"] = str(REPO / "src")
+    process = subprocess.run(
+        ["python", "-c",
+         "import sys, common.runtime; "
+         "assert 'common.ledger.readiness' not in sys.modules; "
+         "assert 'common.ledger.sensitivity' not in sys.modules"],
+        cwd=REPO, env=environment, capture_output=True, text=True)
+
+    assert process.returncode == 0, process.stderr
 
 
 def test_policy_consumers_cannot_walk_raw_observations():

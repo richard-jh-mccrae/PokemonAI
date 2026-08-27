@@ -321,7 +321,7 @@ def _side(trace: _Trace, label: str, side: Side, sign: float, ctx: EvaluationMod
                         and _prize_value(body, ctx) >= opposing_side.prize_count),
               reach=body_reach, opponent=opponent, side=side,
               opposing_side=opposing_side, board=board,
-              capability=capability)
+              capability=capability, demand=demand)
         copies = seen.get(body.card.card_id, 0)
         if copies:
             trace.emit(f"{label}.bodies", "observation", ("surplus_in_play_copy",),
@@ -384,7 +384,6 @@ def _side(trace: _Trace, label: str, side: Side, sign: float, ctx: EvaluationMod
         return option_units(facts).total
 
     if sign > 0 and side.hand is not None:
-        demand = Demand.read(side, ctx, board.turn)
         copies = Counter(demand.body_id_counts)
         basic_energy = Counter()
         for card in side.hand:
@@ -474,7 +473,7 @@ def _side(trace: _Trace, label: str, side: Side, sign: float, ctx: EvaluationMod
 
 def _body(trace: _Trace, part: str, body: Body, sign: float, ctx: EvaluationModel, *,
           own: bool, active: bool, doomed: bool, terminal: bool, reach, opponent, side: Side,
-          opposing_side: Side, board: ObservationState, capability) -> None:
+          opposing_side: Side, board: ObservationState, capability, demand: Demand) -> None:
     body_facts = ctx.facts(body.card.card_id)
     if body_facts is not None and not isinstance(body_facts, PokemonCard):
         trace.emit(part, "observation", ("uncovered_card",), abs(sign))
@@ -517,8 +516,7 @@ def _body(trace: _Trace, part: str, body: Body, sign: float, ctx: EvaluationMode
             ("retreat_progress", capability.retreat_progress)):
         trace.emit(part, "observation", (claim,), sign * value)
     _situational_functions(
-        trace, part, body_facts, side, opposing_side,
-        Demand.read(side, ctx, board.turn), ctx,
+        trace, part, body_facts, side, opposing_side, demand, ctx,
         board.deck_counts if own else None, board, sign=sign, body=body)
     trace.gaps.extend(f"{part}: {gap}" for gap in capability.gaps)
 
@@ -545,8 +543,7 @@ def _body(trace: _Trace, part: str, body: Body, sign: float, ctx: EvaluationMode
               placement="attached_usable", interaction_amount=interaction_amount,
               opponent=opponent)
         _situational_functions(
-            trace, part, facts, side, opposing_side,
-            Demand.read(side, ctx, board.turn), ctx,
+            trace, part, facts, side, opposing_side, demand, ctx,
             board.deck_counts if own else None, board, sign=sign, body=body)
     if body.energies and not body.energy_cards:
         trace.emit(part, "card", ("kind:energy",), sign * len(body.energies))
@@ -564,8 +561,7 @@ def _body(trace: _Trace, part: str, body: Body, sign: float, ctx: EvaluationMode
         _card(trace, part, card.card_id, ctx.facts(card.card_id), sign, ctx, own=own,
               placement="tool_attached", opponent=opponent)
         _situational_functions(
-            trace, part, ctx.facts(card.card_id), side, opposing_side,
-            Demand.read(side, ctx, board.turn), ctx,
+            trace, part, ctx.facts(card.card_id), side, opposing_side, demand, ctx,
             board.deck_counts if own else None, board, sign=sign, body=body)
         trace.emit(part, "observation", ("attached_tool",), sign)
     for card in body.pre_evolution:

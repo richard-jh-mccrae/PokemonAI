@@ -5,6 +5,7 @@ import json
 import math
 from dataclasses import dataclass
 from enum import Enum
+from functools import cached_property
 from types import MappingProxyType
 
 
@@ -117,6 +118,10 @@ class FeatureCatalog:
                     indexed.setdefault((rule.source, claim), []).append((spec, rule))
         self._rules_by_source_claim = MappingProxyType({
             key: tuple(value) for key, value in indexed.items()})
+        self._rule_order = {
+            (spec.key, rule): index
+            for spec in specs for index, rule in enumerate(spec.rules)}
+        self._activation_rules_cache = {}
         self.schema_version = int(schema_version)
 
     def __contains__(self, key) -> bool:
@@ -125,32 +130,38 @@ class FeatureCatalog:
     def __getitem__(self, key: str) -> FeatureSpec:
         return self._specs[str(key)]
 
-    @property
+    @cached_property
     def priced_keys(self) -> tuple[str, ...]:
         return tuple(spec.key for spec in self.priced_specs)
 
-    @property
+    @cached_property
     def priced_specs(self) -> tuple[FeatureSpec, ...]:
         return tuple(spec for spec in self.specs
                      if spec.disposition is FeatureDisposition.ACTIVE)
 
-    @property
+    @cached_property
     def specs(self) -> tuple[FeatureSpec, ...]:
         return tuple(self._specs[key] for key in sorted(self._specs))
 
     def activation_rules(self, source: str, claims) -> tuple[tuple[FeatureSpec, ActivationRule], ...]:
+        cache_key = (str(source), tuple(sorted({str(claim) for claim in claims})))
+        cached = self._activation_rules_cache.get(cache_key)
+        if cached is not None:
+            return cached
         found = {}
-        for claim in {str(claim) for claim in claims}:
-            for spec, rule in self._rules_by_source_claim.get((str(source), claim), ()):
+        for claim in cache_key[1]:
+            for spec, rule in self._rules_by_source_claim.get((cache_key[0], claim), ()):
                 found[(spec.key, rule)] = (spec, rule)
-        return tuple(found[key] for key in sorted(found, key=lambda item: (
-            item[0], self[item[0]].rules.index(item[1]))))
+        compiled = tuple(found[key] for key in sorted(
+            found, key=lambda item: (item[0], self._rule_order[item])))
+        self._activation_rules_cache[cache_key] = compiled
+        return compiled
 
     def has_activation_rules(self, source: str, claims) -> bool:
         return any((str(source), str(claim)) in self._rules_by_source_claim
                    for claim in claims)
 
-    @property
+    @cached_property
     def identity(self) -> str:
         payload = {
             "schema_version": self.schema_version,

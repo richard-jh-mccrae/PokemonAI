@@ -1,0 +1,62 @@
+{
+  "schema": "ultra-ball-system-benchmark/1",
+  "captured_at": "2026-08-27T23:37:18.2912024+02:00",
+  "base_commit": "b988daf9719190be1787159244095e4146c03ddf",
+  "runtime_source_improvements": true,
+  "baseline": "ultra_ball_chain_20260827_baseline.json",
+  "command": "$env:ULTRA_BALL_BENCH_RUNS='20'; python -m pytest tests/ledger/test_real_engine_timing.py -q -s",
+  "environment": {
+    "python": "3.11.9",
+    "platform": "Windows",
+    "processor": "Intel64 Family 6 Model 186 Stepping 3, GenuineIntel"
+  },
+  "compute": {
+    "time_budget_ms": 10000,
+    "other_limits": "shipped defaults"
+  },
+  "scope": {
+    "system_total": "observation render, three AgentRuntime decisions, and two cgpy engine steps",
+    "system_start": "before choosing Ultra Ball from the main menu",
+    "system_stop": "after the fetched Pokemon choice returns and before applying that choice",
+    "excluded": "seeded match and AgentRuntime construction",
+    "board_chain": "one root, two advances, and all three Decision Keys over the same callbacks",
+    "board_phases": "root and advance construction only"
+  },
+  "runs_per_deck": 20,
+  "contexts": ["MAIN", "DISCARD", "TO_HAND"],
+  "results": {
+    "dragapult_ex": {
+      "choices": [[0], [0, 1], [6]],
+      "discarded_card_ids": [2, 5],
+      "fetched_card_id": 120,
+      "system_total_ms": {"median": 523.98035, "p95": 559.663},
+      "system_change_percent": {"median": -16.9886, "p95": -13.4346},
+      "decision_ms_median": [152.9038, 310.4135, 59.02715],
+      "board_chain_ms": {"median": 0.9951, "p95": 1.1982},
+      "board_change_percent": {"median": -16.336, "p95": -31.3274},
+      "board_phase_ms_median": [0.1979, 0.1743, 0.4738]
+    },
+    "mega_lucario": {
+      "choices": [[0], [0, 2], [10]],
+      "discarded_card_ids": [6, 674],
+      "fetched_card_id": 678,
+      "system_total_ms": {"median": 279.26515, "p95": 287.9786},
+      "system_change_percent": {"median": -17.7302, "p95": -19.1132},
+      "decision_ms_median": [81.04415, 147.6502, 50.54075],
+      "board_chain_ms": {"median": 1.02025, "p95": 1.1393},
+      "board_change_percent": {"median": -12.5787, "p95": -36.6704},
+      "board_phase_ms_median": [0.20335, 0.1744, 0.46605]
+    },
+    "mega_starmie": {
+      "choices": [[0], [0, 2], [5]],
+      "discarded_card_ids": [3, 666],
+      "fetched_card_id": 1031,
+      "system_total_ms": {"median": 214.94085, "p95": 227.6293},
+      "system_change_percent": {"median": -16.4461, "p95": -14.3036},
+      "decision_ms_median": [71.4101, 114.26075, 28.2357],
+      "board_chain_ms": {"median": 0.89555, "p95": 1.4557},
+      "board_change_percent": {"median": -9.5541, "p95": 15.5776},
+      "board_phase_ms_median": [0.1956, 0.17825, 0.3681]
+    }
+  }
+}

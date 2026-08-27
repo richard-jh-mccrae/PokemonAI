@@ -15,6 +15,22 @@ from observation_helpers import engine_opt
 REPO = Path(__file__).resolve().parents[2]
 
 
+def test_external_decision_limit_sets_the_inner_search_budget(monkeypatch):
+    monkeypatch.setenv("AGENT_DECISION_SECONDS", "20")
+
+    compute = runtime_module._compute_configuration_from_environment()
+
+    assert compute.search.time_budget_ms == 19_000
+
+
+def test_default_search_budget_is_unchanged_without_an_external_limit(monkeypatch):
+    monkeypatch.delenv("AGENT_DECISION_SECONDS", raising=False)
+
+    compute = runtime_module._compute_configuration_from_environment()
+
+    assert compute.search.time_budget_ms == 1_000
+
+
 def _strategy(name: str = "mega_starmie"):
     path = REPO / "src" / "agents" / name / "strategy.py"
     spec = importlib.util.spec_from_file_location(f"_net_{name}_strategy", path)

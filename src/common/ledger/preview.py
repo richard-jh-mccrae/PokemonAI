@@ -95,7 +95,9 @@ def price_actions(state, board: ObservationState, baseline: float, provider,
         local_action_contribution = _event_contributions(
             "action", _local_action_events(board, action, ctx), ctx, "action")
         local_action_value = sum(item.value for item in local_action_contribution)
-        if budget is not None and budget.stop_reason != "complete":
+        if (budget is not None
+                and (budget.stop_reason != "complete"
+                     or (hasattr(budget, "check") and budget.check()))):
             budget.frontier.append(action.identity)
             activations = tuple(FeatureActivation(
                 item.feature, item.activation, item.provenance)
@@ -417,6 +419,11 @@ class _Walk:
             actions = live or actions
             candidates = []
             for action in actions:
+                if self.budget is not None and not self.budget.visit(action.identity):
+                    self.gaps.append(f"search stopped: {self.budget.stop_reason}")
+                    self.path_stopped = True
+                    return (self.valuation(board), 0.0,
+                            ((1.0, state, board, False, tuple(path)),))
                 if self.nodes >= self.compute.path_node_budget:
                     self.gaps.append("damage-counter rollout capped")
                     self.path_stopped = True

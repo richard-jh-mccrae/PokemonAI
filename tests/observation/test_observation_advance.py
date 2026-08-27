@@ -8,7 +8,7 @@ import copy
 from test_observation_nodes import body, player, printout
 
 from common.observation import (KnownAttackLocks, KnownOwnPrizes, LegalKnowledge,
-                                ObservationState, ObservationStateBuilder)
+                                ObservationState, ObservationStateBuilder, OpponentBelief)
 
 DECK = (66,) * 3 + (112,) * 2 + (119,) * 4 + (120,) * 2
 
@@ -224,3 +224,46 @@ def test_deck_counts_recompute_when_my_hand_changed():
     child = advance_observation(root, successor)
     assert child.deck_counts != root.deck_counts
     assert child.me.hand.count(66) == 1
+
+
+def test_advance_reports_an_opponent_belief_change():
+    builder = ObservationStateBuilder(DECK)
+    root = builder.root(_base())
+    knowledge = LegalKnowledge(opponent=OpponentBelief(
+        evidence=(("seen", (66,)),), probabilities=((66, 250_000),)))
+
+    child, delta = builder.advance(root, copy.deepcopy(_base()), knowledge=knowledge)
+
+    assert child.knowledge == knowledge
+    assert ("knowledge", "opponent_belief") in delta.parts
+
+
+def test_advance_reports_a_public_event_change():
+    builder = ObservationStateBuilder(DECK)
+    root = builder.root(_base())
+    successor = copy.deepcopy(_base())
+    successor["logs"] = [{"type": 4, "playerIndex": 0, "drawcount": 1}]
+
+    child, delta = builder.advance(root, successor)
+
+    assert child.events
+    assert ("events",) in delta.parts
+
+
+def test_knowledge_rebind_preserves_board_nodes_and_matches_a_fresh_build():
+    builder = ObservationStateBuilder(DECK)
+    root = builder.root(_base())
+    knowledge = LegalKnowledge(
+        own_prizes=KnownOwnPrizes(((66, 1),)),
+        opponent=OpponentBelief(evidence=(("seen", (66,)),)))
+
+    rebound, delta = builder.rebind_knowledge(root, knowledge)
+    fresh = builder.root(copy.deepcopy(_base()), knowledge=knowledge)
+
+    assert rebound == fresh
+    assert rebound.position_key == fresh.position_key
+    assert rebound.me is root.me and rebound.them is root.them
+    assert set(delta.parts) == {
+        ("knowledge", "opponent_belief"),
+        ("knowledge", "own_prizes"),
+    }

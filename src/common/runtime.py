@@ -2,9 +2,11 @@
 from __future__ import annotations
 
 import gc
+import math
 import os
 import sys
 import traceback
+from dataclasses import replace
 from time import perf_counter
 
 from common import telemetry
@@ -81,10 +83,10 @@ class _FactsView:
 class _ProviderFactSources:
     """Typed card facts consumed by engine transition adapters."""
 
-    def __init__(self):
+    def __init__(self, identity=None):
         store = card_store()
         self.facts = _FactsView(store)
-        self.identity = content_identity(store)
+        self.identity = content_identity(store) if identity is None else str(identity)
 
 
 class AgentRuntime:
@@ -114,26 +116,29 @@ class AgentRuntime:
         self._parent_valuation = None
         self._observation_delta = None
         self._in_pregame = False
+        self.knowledge_enricher = None
         self.provider_factory = provider_factory
         self.telemetry_session = telemetry.TelemetrySession()
         self.knowledge = LegalKnowledge()
         profiles = getattr(self.opponent_knowledge, "profiles", {})
         inclusion = getattr(self.opponent_knowledge, "card_inclusion", {})
+        evaluation_model = EvaluationModel.build(
+            configuration=valuation_configuration or ValuationConfiguration.general(),
+            prize_plan=strategy.prize_plan,
+            overlay=DeckOverlay(strategy.ledger_overlay),
+            opponent_profiles={
+                name: OpponentProfile(
+                    profile.roles, profile.traits, profile.mechanics,
+                    inclusion[name])
+                for name, profile in profiles.items()
+            })
         self.ledger = LedgerDecider(
-            self.deck, strategy.name,
-            EvaluationModel.build(
-                configuration=valuation_configuration or ValuationConfiguration.general(),
-                prize_plan=strategy.prize_plan,
-                overlay=DeckOverlay(strategy.ledger_overlay),
-                opponent_profiles={
-                    name: OpponentProfile(
-                        profile.roles, profile.traits, profile.mechanics,
-                        inclusion[name])
-                    for name, profile in profiles.items()
-                }),
+            self.deck, strategy.name, evaluation_model,
             provider_factory=preview_provider_factory(self.provider_factory),
-            provider_kwargs={"registry": _ProviderFactSources(),
-                             "stats": self.stats},
+            provider_kwargs={
+                "registry": _ProviderFactSources(evaluation_model.store_identity),
+                "stats": self.stats,
+            },
             compute=compute_configuration or ComputeConfiguration(),
             parity_oracle=decision_parity_oracle)
 
@@ -253,6 +258,13 @@ class AgentRuntime:
             state = builder.root(observation, knowledge=self.knowledge)
             delta = None
             parent_valuation = None
+        if self.knowledge_enricher is not None:
+            enriched = self.knowledge_enricher(state, state.knowledge)
+            state, enrichment_delta = builder.rebind_knowledge(state, enriched)
+            if same_turn:
+                parts = set(() if delta is None else delta.parts)
+                parts.update(enrichment_delta.parts)
+                delta = ObservationDelta(tuple(sorted(parts)))
         self.last_state = state
         self.knowledge = state.knowledge
         if state.turn.number <= 0:
@@ -279,14 +291,12 @@ class AgentRuntime:
         self.knowledge = reduce_knowledge(
             self.knowledge, opponent=_belief_from_snapshot(snapshot))
         builder = ObservationStateBuilder(self.deck)
-        if parent_valuation is None:
-            state = builder.root(observation, knowledge=self.knowledge)
-        else:
-            state, knowledge_delta = builder.advance(
-                state, observation, knowledge=self.knowledge)
+        state, knowledge_delta = builder.rebind_knowledge(state, self.knowledge)
+        if parent_valuation is not None:
             parts = set(() if delta is None else delta.parts)
             parts.update(knowledge_delta.parts)
             delta = ObservationDelta(tuple(sorted(parts)))
+        self.knowledge = state.knowledge
         self.last_state = state
         return self.ledger.decide(
             observation, opponent=snapshot,
@@ -309,12 +319,36 @@ def _read_deck() -> list[int]:
         return [int(value) for value in handle.read().splitlines()[:60] if value.strip()]
 
 
+def _compute_configuration_from_environment() -> ComputeConfiguration:
+    compute = ComputeConfiguration()
+    raw_limit = os.environ.get("AGENT_DECISION_SECONDS")
+    if raw_limit is None:
+        return compute
+    seconds = float(raw_limit)
+    if not math.isfinite(seconds) or seconds <= 0:
+        raise ValueError("AGENT_DECISION_SECONDS must be positive and finite")
+    reserve = min(5.0, max(1.0, seconds * 0.05))
+    budget_ms = max(1, round(max(0.1, seconds - reserve) * 1000))
+    return replace(compute, search=replace(compute.search, time_budget_ms=budget_ms))
+
+
 def make_agent(strategy):
     """Create the Kaggle ``agent(observation)`` hook."""
 
-    runtime = build_runtime(strategy, _read_deck())
+    runtime = build_runtime(
+        strategy, _read_deck(),
+        compute_configuration=_compute_configuration_from_environment())
     own_cards = OwnCardModel(runtime.deck)
     telemetry_on = os.environ.get("AGENT_NO_TELEMETRY") != "1"
+
+    def enrich_knowledge(state, knowledge):
+        own_cards.observe(state)
+        return reduce_knowledge(
+            knowledge,
+            own_prizes=tuple(sorted((own_cards.prize_export() or {}).items())),
+            known_top=own_cards.known_top_export() or ())
+
+    runtime.knowledge_enricher = enrich_knowledge
 
     def agent(observation: dict) -> list[int]:
         protocol_operation = ("deck_submission"
@@ -328,19 +362,14 @@ def make_agent(strategy):
                 raise ValueError(f"unapproved protocol bypass {protocol_operation}")
             return list(runtime.deck)
         started = perf_counter()
-        provisional = ObservationStateBuilder(runtime.deck).root(
-            observation, knowledge=getattr(runtime, "knowledge", LegalKnowledge()))
-        own_cards.observe(provisional)
-        runtime.knowledge = reduce_knowledge(
-            getattr(runtime, "knowledge", LegalKnowledge()),
-            own_prizes=tuple(sorted((own_cards.prize_export() or {}).items())),
-            known_top=own_cards.known_top_export() or ())
         decision = runtime.decide(observation)
         if telemetry_on:
             try:
+                state = runtime.last_state
                 telemetry.emit(decision, opponent=runtime.opponent_snapshot,
-                               seat=provisional.seat,
-                               state=getattr(runtime, "last_state", provisional),
+                               seat=(int(observation["current"].get("yourIndex", 0))
+                                     if state is None else state.seat),
+                               state=state,
                                decision_seconds=perf_counter() - started,
                                session=runtime.telemetry_session,
                                evaluation_model=runtime.ledger.ctx,

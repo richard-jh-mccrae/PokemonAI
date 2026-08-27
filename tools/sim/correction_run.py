@@ -441,7 +441,8 @@ def _worker_agent(role: str, name: str):
         }
         server = AgentServer(
             directory, state["config"]["extra_syspath"], capture_telemetry=True,
-            emit_telemetry=True, strict=True, provenance=provenance)
+            emit_telemetry=True, decision_seconds=state["config"]["decision_timeout"],
+            strict=True, provenance=provenance)
         state["servers"][key] = server
         state["decks"][name] = read_deck(directory)
     return server, state["decks"][name]
