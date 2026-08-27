@@ -31,12 +31,13 @@ def test_compute_configuration_is_a_versioned_search_and_policy_envelope():
 def test_search_budget_supports_deterministic_node_and_wall_time_stops():
     configured = SearchConfiguration(node_budget=128, time_budget_ms=50)
 
+    assert SearchConfiguration().time_budget_ms == 1_000
     assert configured.node_budget == 128
     assert configured.time_budget_ms == 50
 
 
 def test_main_continuation_discount_is_bounded():
-    assert SearchConfiguration().main_continuation_discount == 0.8
+    assert SearchConfiguration().main_continuation_discount == 1.0
     with pytest.raises(ValueError, match="main_depth_budget"):
         SearchConfiguration(main_depth_budget=-1)
     with pytest.raises(ValueError, match="main_continuation_discount"):

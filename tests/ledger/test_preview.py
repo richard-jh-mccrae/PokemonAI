@@ -213,6 +213,52 @@ def test_a_tree_past_the_node_budget_caps_instead_of_running_away():
     assert any("chain capped" in gap for gap in decision.diagnostics["gaps"])
 
 
+def test_a_wide_chance_tree_stops_evaluator_calls_at_the_path_budget(monkeypatch):
+    from common.ledger import preview
+
+    calls = 0
+    actual = preview.evaluate
+
+    def counted(board, context):
+        nonlocal calls
+        calls += 1
+        return actual(board, context)
+
+    monkeypatch.setattr(preview, "evaluate", counted)
+    legs = tuple(WeightedEdge(1.0 / 10_000, f"leg{index}", Deterministic(GOOD))
+                 for index in range(10_000))
+    price_of(Chance(legs))
+
+    assert calls <= 140
+
+
+def test_information_probe_does_not_materialize_a_wide_chance_roster():
+    from common.ledger.preview import _immediate_information_value
+
+    edge = WeightedEdge(1.0, "leg", Deterministic(GOOD))
+
+    class WideChildren:
+        inspected = 0
+
+        def __len__(self):
+            return 10_000
+
+        def __getitem__(self, key):
+            assert isinstance(key, slice)
+            count = min(10_000, key.stop or 10_000)
+            self.inspected += count
+            return (edge,) * count
+
+    node = Chance((edge,))
+    children = WideChildren()
+    object.__setattr__(node, "children", children)
+
+    _value, capped = _immediate_information_value(node, 8)
+
+    assert capped
+    assert children.inspected <= 7
+
+
 def test_an_empty_forced_menu_logs_its_gap_and_scores_the_mid_board():
     starved = state_of(printout(me=player(active=body(DRAGAPULT, 1), hand=[FIRE_E]),
                                 select=_forced_select()))

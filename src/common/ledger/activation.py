@@ -30,6 +30,8 @@ class ActivationEnvironment:
     deck_counts: object | None = None
     candidate: object | None = None
     claim_value: object | None = None
+    clause: object | None = None
+    body: object | None = None
 
 
 class ActivationCompiler:
@@ -62,6 +64,15 @@ class ActivationCompiler:
 
 def _constant(environment, rule):
     return 1.0
+
+
+def _clause_parameter_units(environment, rule):
+    from .capabilities import clause_parameter_units
+
+    return clause_parameter_units(
+        rule.claims[0], environment.claim_value, environment.clause,
+        environment.facts, environment.side, environment.opponent,
+        environment.board, environment.evaluation_model, body=environment.body)
 
 
 def _side_hand_count(environment, rule):
@@ -111,6 +122,31 @@ def _opponent_bench(environment, rule):
     return len(environment.opponent.bench)
 
 
+def _bench_pressure_target(environment, rule):
+    target = str(getattr(environment.clause, "target", "") or "opp_bench")
+    kind = environment.clause.kind
+    if target == "own_bench":
+        count = len(environment.side.bench)
+        return -float(count if kind == "bench_spread" else bool(count))
+    if target == "opp_active":
+        return float(environment.opponent.active is not None)
+    if target == "opp_any":
+        return float(bool(environment.opponent.bodies))
+    if target in {"opp_bench", "benched"}:
+        count = len(environment.opponent.bench)
+        return float(count if kind == "bench_spread" else bool(count))
+    raise KeyError(f"unpriced bench-pressure target {target!r}")
+
+
+def _mill_target(environment, rule):
+    target = str(getattr(environment.clause, "target", "") or "opponent")
+    if target in {"opponent", "opp_any"}:
+        return float(environment.opponent.deck_count)
+    if target in {"self", "own"}:
+        return -float(environment.side.deck_count)
+    raise KeyError(f"unpriced mill target {target!r}")
+
+
 def _opponent_empty_bench(environment, rule):
     return float(not environment.opponent.bench)
 
@@ -124,6 +160,58 @@ def _incoming_pressure(environment, rule):
 
 def _active_target(environment, rule):
     return float(environment.opponent.active is not None)
+
+
+def _self_ko_liability(environment, rule):
+    from .capabilities import self_ko_liability_units
+
+    return self_ko_liability_units(
+        environment.body or environment.side.active,
+        environment.side, environment.opponent, environment.evaluation_model)
+
+
+def _status_target(environment, rule):
+    target = str(getattr(environment.clause, "target", "") or "defending")
+    if target in {"defending", "opp_active", "opponent_active"}:
+        return float(environment.opponent.active is not None)
+    if target == "self":
+        return -float(environment.body is not None)
+    raise KeyError(f"unpriced status target {target!r}")
+
+
+def _copy_attack_source(environment, rule):
+    clause = environment.clause
+    family = str(getattr(clause, "name_family", "") or "").casefold()
+    if getattr(clause, "source", None) == "milled_pokemon":
+        cards = environment.side.discard
+        candidates = (environment.evaluation_model.facts(card.card_id) for card in cards)
+    else:
+        candidates = (environment.evaluation_model.facts(body.card.card_id)
+                      for body in environment.side.bench)
+    return float(any(
+        getattr(facts, "attacks", ())
+        and (not family or family in getattr(facts, "name", "").casefold())
+        and not (getattr(clause, "no_rule_box", False)
+                 and getattr(facts, "is_rule_box", False))
+        for facts in candidates if facts is not None))
+
+
+def _piercing_target(environment, rule):
+    target = environment.opponent.active
+    if target is None:
+        return 0.0
+    clause = environment.clause
+    target_facts = environment.evaluation_model.facts(target.card.card_id)
+    if getattr(clause, "kind", None) == "ignores_wr":
+        own_type = getattr(environment.facts, "energy_type", None)
+        scope = getattr(clause, "scope", None)
+        return float(
+            (scope != "resistance" and getattr(target_facts, "weakness", None) == own_type)
+            or (scope != "weakness"
+                and getattr(target_facts, "resistance", None) == own_type))
+    return float(any(
+        effect.kind in {"damage_reduction", "prevent_damage"}
+        for effect in card_clauses(target_facts)))
 
 
 def _open_cost(environment, rule):
@@ -161,11 +249,6 @@ def _opponent_deck_count(environment, rule):
 def _opponent_damage_units(environment, rule):
     return sum(max(0, body.max_hp - body.hp)
                for body in environment.board.them.bodies) / DAMAGE_UNIT_HP
-
-
-def _candidate_role_bodies(environment, rule):
-    return sum(rule.argument in environment.candidate.roles.get(body.card.card_id, ())
-               for body in environment.board.them.bodies)
 
 
 def _turn_number(environment, rule):
@@ -270,14 +353,17 @@ STATUS_FIELDS = ("asleep", "paralyzed", "confused", "poisoned", "burned")
 _OPERATIONS = {
     "ability_target": _ability_target,
     "active_target": _active_target,
+    "bench_pressure_target": _bench_pressure_target,
     "bench_target": _bench_target,
     "board_body_count": _board_body_count,
-    "candidate_role_bodies": _candidate_role_bodies,
+    "copy_attack_source": _copy_attack_source,
+    "clause_parameter_units": _clause_parameter_units,
     "constant": _constant,
     "evolution_target": _evolution_target,
     "fetch_live_target": _fetch_live_target,
     "side_hand_count": _side_hand_count,
     "incoming_pressure": _incoming_pressure,
+    "mill_target": _mill_target,
     "multi_provision_capacity": _multi_provision_capacity,
     "open_cost": _open_cost,
     "open_energy_slot": _open_energy_slot,
@@ -298,10 +384,13 @@ _OPERATIONS = {
     "own_item_count": _own_item_count,
     "own_max_attack_units": _own_max_attack_units,
     "side_status_count": _side_status_count,
+    "self_ko_liability": _self_ko_liability,
     "active_retreat_cost": _active_retreat_cost,
     "active_tool_count": _active_tool_count,
     "prize_difference": _prize_difference,
+    "piercing_target": _piercing_target,
     "switch_target": _switch_target,
+    "status_target": _status_target,
     "turn_number": _turn_number,
 }
 if set(_OPERATIONS) != ACTIVATION_OPERATIONS:

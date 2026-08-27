@@ -10,9 +10,12 @@ from .certification import (WholeBoardCertification, certify_contract,
                             certify_incremental)
 from .evaluate import (EvaluationSnapshot, FeatureActivation, FeatureContribution, Valuation,
                        evaluate, evaluate_snapshot)
-from .features import ActivationRule, FEATURE_CATALOG, FeatureCatalog, FeatureSpec
+from .features import (
+    ActivationRule, FEATURE_CATALOG, FeatureCatalog, FeatureDisposition, FeatureSpec,
+)
 from .preview import ContinuationFootprint
 from .prizes import PrizeMap, derive_prize_map
+from .readiness import LedgerReadinessReport, ReadinessFinding, audit_readiness
 from .seam import (LedgerNativeProvider, PreviewState, preview_provider_factory,
                    register_preview_variant)
 from .search import GreedyDecisionPolicy, LedgerOnePlySearch, UniformPolicyModel
@@ -23,14 +26,15 @@ __all__ = ("AUTHORITATIVE_DECKS", "ActivationCompiler", "ActivationEnvironment",
            "BehaviorIdentity", "ComputeConfiguration",
            "ContinuationFootprint", "DeckOverlay",
            "FEATURE_CATALOG",
-           "FeatureActivation", "FeatureCatalog", "FeatureContribution", "FeatureSpec",
+           "FeatureActivation", "FeatureCatalog", "FeatureContribution",
+           "FeatureDisposition", "FeatureSpec",
            "EvaluationModel", "EvaluationSnapshot", "LEDGER_VALUE_SCALE", "LedgerDecider",
            "LedgerNativeProvider",
-           "LedgerUnavailable", "LedgerValueEvaluator",
+           "LedgerReadinessReport", "LedgerUnavailable", "LedgerValueEvaluator",
            "GreedyDecisionPolicy", "LedgerOnePlySearch", "UniformPolicyModel",
-           "PreviewState", "PrizeMap", "Valuation",
+           "PreviewState", "PrizeMap", "ReadinessFinding", "Valuation",
            "OpponentProfile", "ValuationConfiguration", "WholeBoardCertification",
-           "certify_contract", "certify_incremental", "derive_prize_map", "evaluate",
+           "audit_readiness", "certify_contract", "certify_incremental", "derive_prize_map", "evaluate",
            "evaluate_snapshot",
            "load_baseline", "preview_provider_factory", "require_baseline",
            "validate_baseline", "validate_certification",

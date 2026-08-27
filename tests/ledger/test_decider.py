@@ -104,7 +104,8 @@ def test_main_phase_preview_prices_the_best_remaining_turn_line():
     decision = LedgerDecider(
         DECK, "test", EvaluationModel.build(),
         provider_factory=lambda _state, **_kw: provider,
-        compute=ComputeConfiguration(search=SearchConfiguration(main_depth_budget=1)),
+        compute=ComputeConfiguration(search=SearchConfiguration(
+            main_depth_budget=1, main_continuation_discount=0.8)),
     ).decide(root_obs)
     prices = {row["action"]: row["swing"] for row in decision.diagnostics["prices"]}
     assert decision.action == attach.identity
@@ -134,7 +135,8 @@ def test_main_phase_discount_prefers_the_same_gain_now_over_one_action_later():
     decision = LedgerDecider(
         DECK, "test", EvaluationModel.build(),
         provider_factory=lambda _state, **_kw: provider,
-        compute=ComputeConfiguration(search=SearchConfiguration(main_depth_budget=1)),
+        compute=ComputeConfiguration(search=SearchConfiguration(
+            main_depth_budget=1, main_continuation_discount=0.8)),
     ).decide(root_obs)
     prices = {row["action"]: row["swing"] for row in decision.diagnostics["prices"]}
 
@@ -213,8 +215,8 @@ def test_forced_chain_resolves_to_the_best_leaf():
     assert decision.value > 0
 
 
-def test_refresh_pricing_is_deterministic_without_zero_weight_inventory_work():
-    """Lillie's sampled-hand price repeats without unused opportunity enumeration."""
+def test_refresh_pricing_is_deterministic_without_expanding_another_main_menu():
+    """Lillie's sampled-hand price repeats without multiplying every sample by MAIN."""
     hand = [LILLIES, DARK_E, DARK_E]
     root_obs = printout(me=player(active=body(DRAGAPULT, 1, energies=(FIRE, PSYCHIC)),
                                   hand=hand, deck_count=40),
@@ -549,7 +551,7 @@ def test_action_opportunity_cost_hands_a_small_positive_turn_to_the_ender():
     assert default.action.kind == "attach"
 
 
-def test_continuation_footprint_has_no_default_ranking_bonus():
+def test_continuation_footprint_contributes_seeded_board_accounting():
     root_obs = printout(me=player(active=body(DRAGAPULT, 1), hand=[FIRE_E]))
     successor = state_of(printout(
         me=player(active=body(DRAGAPULT, 1, energies=(FIRE,)), hand=[])), DECK)
@@ -562,10 +564,12 @@ def test_continuation_footprint_has_no_default_ranking_bonus():
     price = next(row for row in decision.diagnostics["prices"]
                  if row["action"] == str(attach.identity))
     footprint = price["continuation"]
-    assert footprint["action_opportunity"] == 0.0
-    assert all(item["value"] == 0.0 for item in footprint["contributions"]
-               if item["feature"].startswith("continuation.")
-               or item["feature"] == "action.opportunity_cost")
+    accounted = [item for item in footprint["contributions"]
+                 if item["feature"].startswith("continuation.")
+                 or item["feature"] == "action.opportunity_cost"]
+    assert footprint["action_opportunity"] != 0.0
+    assert accounted
+    assert all(item["value"] != 0.0 for item in accounted)
 
 
 def test_no_card_or_mechanic_specific_ordering_branch_remains():

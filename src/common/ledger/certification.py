@@ -1,8 +1,11 @@
 from __future__ import annotations
 
+import ast
 from dataclasses import dataclass
+from pathlib import Path
 
-from .coverage import unowned_clause_kinds, unowned_observation_fields
+from .coverage import (clause_contract_findings, observation_contract_findings,
+                       unowned_clause_kinds, unowned_observation_fields)
 from .evaluate import evaluate_snapshot
 from .features import FEATURE_CATALOG
 from .training import parameter_manifest
@@ -25,11 +28,25 @@ class WholeBoardCertification:
 
 def certify_contract() -> WholeBoardCertification:
     return WholeBoardCertification(
-        not unowned_observation_fields(),
-        not unowned_clause_kinds(),
-        not any(key.startswith("role.") for key in FEATURE_CATALOG.priced_keys),
+        not unowned_observation_fields() and not observation_contract_findings(),
+        not unowned_clause_kinds() and not clause_contract_findings(),
+        (not any(key.startswith("role.") for key in FEATURE_CATALOG.priced_keys)
+         and not _own_role_readers()),
         tuple(item.key for item in parameter_manifest()) == FEATURE_CATALOG.priced_keys,
     )
+
+
+def _own_role_readers():
+    root = Path(__file__).parent
+    readers = []
+    for path in root.glob("*.py"):
+        tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
+        if any(isinstance(node, ast.Call)
+               and isinstance(node.func, ast.Attribute)
+               and node.func.attr == "card_roles"
+               for node in ast.walk(tree)):
+            readers.append(path.name)
+    return tuple(readers)
 
 
 def certify_incremental(parent, child, delta, ctx) -> WholeBoardCertification:

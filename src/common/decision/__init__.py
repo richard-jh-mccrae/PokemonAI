@@ -19,7 +19,6 @@ from .contracts import (
     SearchValue,
     StateValuation,
     SuccessorResult,
-    ValuationCache,
     ValueComponent,
     ValueEvaluator,
     ValueScale,
@@ -39,6 +38,6 @@ __all__ = (
     "FailSafeRequest", "PolicyConfiguration", "PolicyModel", "SearchAlgorithm",
     "SearchConfiguration",
     "SearchResult", "SearchTrace", "SearchValue", "StateValuation",
-    "SuccessorResult", "ValuationCache", "ValueComponent", "ValueEvaluator", "ValueScale",
+    "SuccessorResult", "ValueComponent", "ValueEvaluator", "ValueScale",
     "ValuedCandidate", "fail_safe_request", "neutral_lottery_choice", "safe_legal_selection",
 )

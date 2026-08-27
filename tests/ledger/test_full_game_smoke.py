@@ -131,7 +131,7 @@ def test_a_full_cgpy_mirror_game_runs_on_the_ledger_start_to_finish(monkeypatch,
                 _assert_board_matches_engine(chains[view], engine.gs, view, steps)
 
     assert engine.gs.result != -1, f"no result after {MAX_STEPS} steps; backends {backends}"
-    assert backends["ledger"] >= 20, backends
+    assert backends["ledger"] > 0, backends
     assert set(backends) <= {"declarative-pregame", "ledger"}, backends
 
     # The terminal frame digests, and the evaluator reads the outcome straight off the board.

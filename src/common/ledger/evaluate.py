@@ -6,15 +6,16 @@ from dataclasses import dataclass
 import math
 
 from common.observation import ObservationState
-from common.observation.knowledge import KnownOwnPrizes
+from common.observation.knowledge import KnownDeckTop, KnownOwnPrizes
 from common.observation.nodes import Body, Side
 from common.cards import card_clauses
 from common.cards.card_facts import SPECIAL_ENERGY, EnergyCard, PokemonCard
 
 from .activation import (DAMAGE_UNIT_HP, ActivationCompiler, ActivationEnvironment,
                          FeatureActivation)
-from .capabilities import (best_current_damage, body_capability, card_option_value,
-                           hidden_zone_expectation, recoverable_discard_ids)
+from .capabilities import (best_current_damage, body_capability, card_option_units,
+                           card_option_value, clause_value_units, hidden_zone_expectation,
+                           expected_draw_counts, recoverable_discard_ids)
 from .features import FEATURE_CATALOG
 from .prizes import PrizeMap, derive_prize_map
 from .worth import (Demand, DemandState, EvaluationModel, _liveness, _unfilled,
@@ -48,7 +49,7 @@ class Valuation:
 
 @dataclass(frozen=True)
 class EvaluationSnapshot:
-    position_key: str
+    valuation_key: str
     model_identity: str
     groups: tuple[tuple[str, Valuation], ...]
     valuation: Valuation
@@ -109,7 +110,8 @@ class _Trace:
 
 EVALUATION_GROUPS = ("context", "me", "them", "public")
 OPPONENT_BELIEF_PATH = ("knowledge", "opponent_belief")
-PORTFOLIO_DISCOUNT = 0.5
+PRIZE_PHASE_PIVOT = 4
+ROUTE_STORED_ENERGY_VALUE = 0.5
 
 
 def evaluate(board: ObservationState, ctx: EvaluationModel) -> Valuation:
@@ -147,24 +149,25 @@ def evaluate_snapshot(board: ObservationState, ctx: EvaluationModel, *,
         prize_map = parent.valuation.prize_map if reusable else derive_prize_map(board, ctx)
     valuation = _combine_groups(tuple(groups), ctx, prize_map)
     return EvaluationSnapshot(
-        board.position_key, ctx.identity, tuple(groups), valuation, opponent, tuple(reused))
+        board.valuation_key, ctx.identity, tuple(groups), valuation, opponent, tuple(reused))
 
 
 def _dirty_groups(delta) -> frozenset[str]:
     dirty = set()
     for path in getattr(delta, "parts", ()):
         root = path[0] if path else ""
-        if root in {"select", "looking", "legal_actions"}:
+        if root in {"select", "looking"}:
             continue
         if root == "knowledge" and path[1:] == ("attack_locks",):
             continue
         if root == "knowledge" and path[1:] == ("deck_top",):
+            dirty.add("public")
             continue
         if root in {"me", "them"}:
             dirty.update(("me", "them", "public"))
         elif root == "knowledge":
             dirty.update(EVALUATION_GROUPS)
-        elif root in {"turn", "stadium", "events", "logs"}:
+        elif root in {"turn", "stadium", "events", "logs", "legal_actions"}:
             dirty.update(EVALUATION_GROUPS)
         else:
             dirty.update(EVALUATION_GROUPS)
@@ -192,12 +195,16 @@ def _side_group(label, side, sign, board, ctx, opponent) -> Valuation:
 
 
 def _portfolio(values) -> float:
-    return sum(value * PORTFOLIO_DISCOUNT ** index
-               for index, value in enumerate(sorted(values, reverse=True)))
+    return sum(values)
+
+
+def _emit_option(trace, part, units, scale) -> None:
+    for feature, value in units.activations():
+        trace.emit(part, "option", (feature,), scale * value)
 
 
 def _slot_option(open_slots) -> float:
-    return math.fsum(1.0 / slot for slot in range(1, int(open_slots) + 1))
+    return float(open_slots)
 
 
 def _public_group(board, ctx) -> tuple[Valuation, PrizeMap]:
@@ -211,17 +218,26 @@ def _public_group(board, ctx) -> tuple[Valuation, PrizeMap]:
         sign = 1.0 if card.owner is None or card.owner == board.seat else -1.0
         side, opposing = ((board.me, board.them) if sign > 0
                           else (board.them, board.me))
-        trace.emit("stadium", "observation", ("stadium_option_value",),
-                   sign * card_option_value(facts, side, opposing, board, ctx))
+        _emit_option(trace, "stadium", card_option_units(
+            facts, side, opposing, board, ctx), sign)
         _situational_functions(
             trace, "stadium", facts, side, opposing,
             Demand.read(side, ctx, board.turn), ctx,
-            board.deck_counts if sign > 0 else None, sign=sign)
+            board.deck_counts if sign > 0 else None, board, sign=sign)
     if isinstance(board.knowledge.own_prizes, KnownOwnPrizes):
         for card_id, count in board.knowledge.own_prizes.cards:
-            trace.emit("me.prizes", "observation", ("known_prize_option_value",),
-                       count * card_option_value(
-                           ctx.facts(card_id), board.me, board.them, board, ctx))
+            _emit_option(trace, "me.prizes", card_option_units(
+                ctx.facts(card_id), board.me, board.them, board, ctx), -count)
+    if isinstance(board.knowledge.known_top, KnownDeckTop):
+        for depth, row in enumerate(board.knowledge.known_top.cards):
+            card_id = row[1]
+            units = card_option_units(
+                ctx.facts(card_id), board.me, board.them, board, ctx)
+            _emit_option(trace, "me.deck_top", units, 1.0)
+            for feature, value in units.activations():
+                depth_feature = f"option.depth.{feature.removeprefix('option.')}"
+                trace.emit("me.deck_top", "option_depth", (depth_feature,),
+                           depth * value)
     return trace.finish(), prize_map
 
 
@@ -283,6 +299,8 @@ def _side(trace: _Trace, label: str, side: Side, sign: float, ctx: EvaluationMod
     opposing_side = board.them if sign > 0 else board.me
     doomed = _active_doomed(
         board.them if sign > 0 else board.me, side, ctx, board)
+    if side.active_hidden:
+        trace.emit(f"{label}.active", "observation", ("unknown_card_belief",), -1.0)
     demand = Demand.read(side, ctx, board.turn)
     reach = (line_reach(
         demand.hand_name_counts, deck_counts, ctx, hand=demand.hand, turn=board.turn)
@@ -299,13 +317,15 @@ def _side(trace: _Trace, label: str, side: Side, sign: float, ctx: EvaluationMod
         capabilities.append((body, capability))
         _body(trace, f"{label}.bodies", body, sign, ctx, own=sign > 0,
               active=body is side.active, doomed=doomed and body is side.active,
+              terminal=(doomed and body is side.active
+                        and _prize_value(body, ctx) >= opposing_side.prize_count),
               reach=body_reach, opponent=opponent, side=side,
               opposing_side=opposing_side, board=board,
               capability=capability)
         copies = seen.get(body.card.card_id, 0)
         if copies:
             trace.emit(f"{label}.bodies", "observation", ("surplus_in_play_copy",),
-                       -sign * copies)
+                       sign * copies)
         seen[body.card.card_id] = copies + 1
 
     active_capability = next((value for body, value in capabilities
@@ -326,6 +346,9 @@ def _side(trace: _Trace, label: str, side: Side, sign: float, ctx: EvaluationMod
         for body, value in capabilities))
     trace.emit(f"{label}.combat", "observation", ("line_potential",), sign * _portfolio(
         value.line_potential for _body_node, value in capabilities))
+    trace.emit(f"{label}.combat", "observation", ("prize_phase_fit",), sign * _portfolio(
+        _prize_phase_fit(body, value, opposing_side.prize_count, ctx)
+        for body, value in capabilities))
 
     if side.active is not None and (side.active.max_hp <= 0 or side.active.hp > 0):
         trace.emit(f"{label}.active", "observation", ("active_body",), sign)
@@ -339,6 +362,10 @@ def _side(trace: _Trace, label: str, side: Side, sign: float, ctx: EvaluationMod
                    sign * _damage_pressure(active_facts) / DAMAGE_UNIT_HP)
     trace.emit(f"{label}.bench_slots", "observation", ("open_bench_slot",),
                sign * _slot_option(max(0, side.bench_max - len(side.bench))))
+    trace.emit(f"{label}.bench_slots", "observation", ("developed_bench_body",),
+               sign * len(side.bench))
+    trace.emit(f"{label}.bench_slots", "observation", ("full_bench",),
+               sign * float(len(side.bench) >= side.bench_max))
     trace.emit(f"{label}.liability", "observation", ("extra_prize_liability",),
                -sign * sum(max(0, _prize_value(body, ctx) - 1)
                            for body in side.bodies
@@ -346,12 +373,15 @@ def _side(trace: _Trace, label: str, side: Side, sign: float, ctx: EvaluationMod
 
     option_cache = {}
 
-    def option_value(facts):
+    def option_units(facts):
         card_id = getattr(facts, "card_id", None)
         if card_id not in option_cache:
-            option_cache[card_id] = card_option_value(
+            option_cache[card_id] = card_option_units(
                 facts, side, opposing_side, board, ctx, reaches=body_reaches)
         return option_cache[card_id]
+
+    def option_value(facts):
+        return option_units(facts).total
 
     if sign > 0 and side.hand is not None:
         demand = Demand.read(side, ctx, board.turn)
@@ -370,13 +400,12 @@ def _side(trace: _Trace, label: str, side: Side, sign: float, ctx: EvaluationMod
             }[claim]
             _card(trace, f"{label}.hand", card.card_id, facts, sign, ctx, own=True,
                   placement=placement, opponent=opponent)
-            if not isinstance(facts, PokemonCard):
-                _situational_functions(
-                    trace, f"{label}.hand", facts, side, board.them, demand, ctx,
-                    deck_counts, sign=sign)
+            _situational_functions(
+                trace, f"{label}.hand", facts, side, board.them, demand, ctx,
+                deck_counts, board, sign=sign)
             trace.emit(f"{label}.hand", "observation", (claim,), sign)
-            trace.emit(f"{label}.hand", "observation", ("hand_option_value",),
-                       sign * option_value(facts))
+            if claim != "dead_hand_card":
+                _emit_option(trace, f"{label}.hand", option_units(facts), sign)
             if (isinstance(facts, EnergyCard) and facts.kind != SPECIAL_ENERGY
                     and basic_energy[facts.provides]):
                 trace.emit(f"{label}.hand", "observation", ("surplus_basic_energy",), sign)
@@ -401,7 +430,8 @@ def _side(trace: _Trace, label: str, side: Side, sign: float, ctx: EvaluationMod
                        option_value=option_value))
 
     if sign > 0 and deck_counts is not None:
-        deck_option = 0.0
+        deck_options = {key: 0.0 for key, _value in card_option_units(
+            None, side, opposing_side, board, ctx).activations()}
         deck_cards = 0
         for card_id, count in deck_counts:
             facts = ctx.facts(card_id)
@@ -409,10 +439,12 @@ def _side(trace: _Trace, label: str, side: Side, sign: float, ctx: EvaluationMod
                   placement="in_deck", opponent=opponent)
             trace.emit(f"{label}.deck", "observation", ("card_in_deck",),
                        sign * count)
-            deck_option += count * option_value(facts)
+            for key, value in option_units(facts).activations():
+                deck_options[key] += count * value
             deck_cards += count
-        trace.emit(f"{label}.deck", "observation", ("deck_option_value",),
-                   sign * deck_option / max(1, deck_cards))
+        for key, value in deck_options.items():
+            trace.emit(f"{label}.deck", "option", (key,),
+                       sign * value / max(1, deck_cards))
     else:
         unknown = ("unknown_own_deck_card" if sign > 0
                    else "unknown_opponent_deck_card")
@@ -441,11 +473,11 @@ def _side(trace: _Trace, label: str, side: Side, sign: float, ctx: EvaluationMod
 
 
 def _body(trace: _Trace, part: str, body: Body, sign: float, ctx: EvaluationModel, *,
-          own: bool, active: bool, doomed: bool, reach, opponent, side: Side,
+          own: bool, active: bool, doomed: bool, terminal: bool, reach, opponent, side: Side,
           opposing_side: Side, board: ObservationState, capability) -> None:
     body_facts = ctx.facts(body.card.card_id)
     if body_facts is not None and not isinstance(body_facts, PokemonCard):
-        trace.emit(part, "observation", ("uncovered_card",), sign)
+        trace.emit(part, "observation", ("uncovered_card",), abs(sign))
         trace.emit(part, "observation", ("card_in_play",), sign)
         trace.emit(part, "observation", ("body_hp_units",),
                    sign * body.max_hp / DAMAGE_UNIT_HP)
@@ -469,6 +501,8 @@ def _body(trace: _Trace, part: str, body: Body, sign: float, ctx: EvaluationMode
         trace.emit(part, "observation", ("body_damage_fraction",), -sign * missing)
     if doomed:
         trace.emit(part, "observation", ("doomed_active",), -sign)
+    if terminal:
+        trace.emit(part, "observation", ("terminal_active_liability",), -sign)
 
     for claim, value in (
             ("ability_draw_cards", capability.draw_cards),
@@ -482,6 +516,10 @@ def _body(trace: _Trace, part: str, body: Body, sign: float, ctx: EvaluationMode
             ("ability_future", capability.ability_future),
             ("retreat_progress", capability.retreat_progress)):
         trace.emit(part, "observation", (claim,), sign * value)
+    _situational_functions(
+        trace, part, body_facts, side, opposing_side,
+        Demand.read(side, ctx, board.turn), ctx,
+        board.deck_counts if own else None, board, sign=sign, body=body)
     trace.gaps.extend(f"{part}: {gap}" for gap in capability.gaps)
 
     usable = usable_units(body_facts, body.energies, ctx, reach)
@@ -494,8 +532,7 @@ def _body(trace: _Trace, part: str, body: Body, sign: float, ctx: EvaluationMode
         facts = ctx.facts(card.card_id)
         riders = tuple(clause.rider for clause in card_clauses(facts)
                        if clause.rider is not None)
-        rental = (() if active else ActivationCompiler().compile(
-            "attached_energy", riders, ActivationEnvironment(scale=sign)))
+        rental = not active and "discard_eot" in riders
         energy_rows.append((card, facts, rental))
     priced_energy_cards = [card for card, _facts, rental in energy_rows if not rental]
     interaction_amount = (sign * min(1.0, usable / len(priced_energy_cards))
@@ -503,12 +540,14 @@ def _body(trace: _Trace, part: str, body: Body, sign: float, ctx: EvaluationMode
     for card, facts, rental in energy_rows:
         if rental:
             rentals += 1
-            for activation in rental:
-                trace.record(part, activation)
             continue
         _card(trace, part, card.card_id, facts, sign, ctx, own=own,
               placement="attached_usable", interaction_amount=interaction_amount,
               opponent=opponent)
+        _situational_functions(
+            trace, part, facts, side, opposing_side,
+            Demand.read(side, ctx, board.turn), ctx,
+            board.deck_counts if own else None, board, sign=sign, body=body)
     if body.energies and not body.energy_cards:
         trace.emit(part, "card", ("kind:energy",), sign * len(body.energies))
     usable = max(0, usable - rentals)
@@ -524,6 +563,10 @@ def _body(trace: _Trace, part: str, body: Body, sign: float, ctx: EvaluationMode
     for card in body.tools:
         _card(trace, part, card.card_id, ctx.facts(card.card_id), sign, ctx, own=own,
               placement="tool_attached", opponent=opponent)
+        _situational_functions(
+            trace, part, ctx.facts(card.card_id), side, opposing_side,
+            Demand.read(side, ctx, board.turn), ctx,
+            board.deck_counts if own else None, board, sign=sign, body=body)
         trace.emit(part, "observation", ("attached_tool",), sign)
     for card in body.pre_evolution:
         _card(trace, part, card.card_id, ctx.facts(card.card_id), sign, ctx, own=own,
@@ -536,11 +579,11 @@ def _card(trace: _Trace, part: str, card_id: int, facts, amount: float,
           interaction_amount: float | None = None, opponent=None) -> None:
     situated = amount if interaction_amount is None else interaction_amount
     if facts is None:
-        trace.emit(part, "observation", ("uncovered_card",), amount)
+        trace.emit(part, "observation", ("uncovered_card",), abs(amount))
         trace.gaps.append(f"{part}: unknown card {int(card_id)}")
         return
     if getattr(facts, "covers", None) != "full":
-        trace.emit(part, "observation", ("uncovered_card",), amount)
+        trace.emit(part, "observation", ("uncovered_card",), abs(amount))
         verdict = getattr(facts, "covers", None) or "unruled"
         trace.gaps.append(f"{part}: incomplete card coverage {int(card_id)} ({verdict})")
     if isinstance(facts, PokemonCard):
@@ -568,16 +611,45 @@ def _hand_claim(card_id, facts, demand: Demand, copies_before: int,
 
 
 def _situational_functions(trace: _Trace, part: str, facts, side: Side, opponent: Side,
-                           demand: Demand, ctx: EvaluationModel, deck_counts, *, sign: float) -> None:
+                           demand: Demand, ctx: EvaluationModel, deck_counts,
+                           board: ObservationState, *, sign: float, body=None) -> None:
     clauses = card_clauses(facts)
-    kinds = {clause.kind for clause in clauses}
-    if any(clause.rider == "shuffle_both_hands" for clause in clauses):
-        kinds.add("opp_hand_to_deck")
-    environment = ActivationEnvironment(
-        scale=sign, evaluation_model=ctx, side=side, opponent=opponent,
-        demand=demand, facts=facts, deck_counts=deck_counts)
-    for activation in ActivationCompiler().compile("function", kinds, environment):
-        trace.record(part, activation)
+    compiler = ActivationCompiler()
+    for clause in clauses:
+        units = clause_value_units(
+            clause, facts, side, opponent, board, ctx, body=body)
+        environment = ActivationEnvironment(
+            scale=sign * units, board=board, evaluation_model=ctx, side=side,
+            opponent=opponent, demand=demand, facts=facts,
+            deck_counts=deck_counts, clause=clause, body=body)
+        for activation in compiler.compile("function", (clause.kind,), environment):
+            trace.record(part, activation)
+        for parameter, value in clause.params.items():
+            parameter_environment = ActivationEnvironment(
+                scale=sign, board=board, evaluation_model=ctx, side=side,
+                opponent=opponent, demand=demand, facts=facts,
+                deck_counts=deck_counts, claim_value=value, clause=clause, body=body)
+            for activation in compiler.compile(
+                    "clause_parameter", (parameter,), parameter_environment):
+                trace.record(part, activation)
+        if clause.kind == "draw":
+            _mine, theirs = expected_draw_counts(
+                clause, side, opponent, ctx,
+                cards_leaving_hand=int(not isinstance(facts, PokemonCard)))
+            opponent_draw = ActivationEnvironment(
+                scale=sign * theirs, board=board, evaluation_model=ctx,
+                side=side, opponent=opponent, facts=facts, clause=clause, body=body)
+            for activation in compiler.compile(
+                    "draw_effect", ("opponent_cards",), opponent_draw):
+                trace.record(part, activation)
+        if clause.rider == "shuffle_both_hands":
+            rider = ActivationEnvironment(
+                scale=sign, board=board, evaluation_model=ctx, side=side,
+                opponent=opponent, demand=demand, facts=facts,
+                deck_counts=deck_counts, clause=clause, body=body)
+            for activation in compiler.compile(
+                    "function", ("opp_hand_to_deck",), rider):
+                trace.record(part, activation)
 
 
 def _active_doomed(attacker: Side, defender: Side, ctx: EvaluationModel,
@@ -592,6 +664,23 @@ def _active_doomed(attacker: Side, defender: Side, ctx: EvaluationModel,
               if board is None else
               best_current_damage(attacker.active, attacker, defender, board, ctx))
     return 0 < defender.active.hp <= damage
+
+
+def _prize_phase_fit(body, capability, opposing_prizes, ctx) -> float:
+    facts = ctx.facts(body.card.card_id)
+    if facts is None:
+        return 0.0
+    from .worth import _forward_lines
+
+    line = (facts, *(ctx.facts(card_id)
+                     for card_id in _forward_lines().get(facts.name, ())))
+    route_prizes = max((int(getattr(card, "prize_value", 1) or 1)
+                        for card in line if card is not None), default=1)
+    if (route_prizes > 1) != (int(opposing_prizes) <= PRIZE_PHASE_PIVOT):
+        return 0.0
+    readiness = (capability.attack_now + capability.attack_progress
+                 + capability.attack_future)
+    return readiness + len(body.energies) * ROUTE_STORED_ENERGY_VALUE
 
 
 def _damage_pressure(facts) -> int:

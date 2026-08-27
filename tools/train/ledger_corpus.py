@@ -91,7 +91,6 @@ def _recorded_model(configuration: dict) -> EvaluationModel:
     model = EvaluationModel(
         ValuationConfiguration(valuation["values"],
                                schema_version=valuation["schema_version"]),
-        {int(card_id): tuple(roles) for card_id, roles in saved["roles"].items()},
         card_store(),
         PrizePlan(tuple(saved["prize_plan"]["protect"]),
                   tuple(saved["prize_plan"]["offer"])),

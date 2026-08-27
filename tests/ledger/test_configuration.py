@@ -17,6 +17,7 @@ import pytest
 from common.cards import FUNCTION_CATALOG, Attack, Clause, PokemonCard, card_store
 from common.cards.pokemon_roles import POKEMON_ROLES
 from common.ledger.worth import _compile_forward_lines, usable_units
+from common.ledger.features import FeatureDisposition
 from common.opponent import (
     ArchetypeBelief, OpponentEvidence, OpponentMechanic, OpponentSnapshot, OpponentTrait,
 )
@@ -50,8 +51,8 @@ def test_runtime_context_resolves_the_complete_catalog_with_a_deck_residual():
     assert context.configuration.identity != general.identity
 
 
-def test_runtime_context_rejects_an_unknown_declared_role():
-    with pytest.raises(KeyError, match="unknown Pokemon Role 'typo_role'"):
+def test_runtime_context_rejects_the_retired_role_surface():
+    with pytest.raises(TypeError, match="unexpected keyword argument 'roles'"):
         EvaluationModel.build(roles={1: ("typo_role",)})
 
 
@@ -82,16 +83,14 @@ def test_evaluation_model_identity_covers_canonical_card_store_content():
     assert changed.identity != context.identity
 
 
-def test_evaluation_model_identity_ignores_roles_but_covers_profiles_and_valuation():
+def test_evaluation_model_identity_covers_profiles_and_valuation():
     base = EvaluationModel.build()
-    role = EvaluationModel.build(roles={999_995: ("healer",)})
     profile = EvaluationModel.build(opponent_profiles={
         "fixture": OpponentProfile({}, (), (), {1: 0.5})})
     valued = EvaluationModel.build(configuration=
                                    ValuationConfiguration.general().with_values({
                                        "prize.race": 2.0}))
 
-    assert base.identity == role.identity
     assert len({base.identity, profile.identity, valued.identity}) == 3
 
 
@@ -138,11 +137,28 @@ def test_catalog_contains_the_complete_generic_surface_without_tags_or_card_pins
     assert not any(key.startswith(("tag.", "card.")) for key in keys)
 
 
+def test_every_active_feature_has_a_nonzero_seed():
+    assert not [spec.key for spec in FEATURE_CATALOG.priced_specs
+                if spec.default == 0.0]
+
+
+def test_nonpriced_feature_dispositions_stay_out_of_valuation():
+    catalog = FeatureCatalog((
+        FeatureSpec("active", 1.0),
+        FeatureSpec("old", 0.0, disposition=FeatureDisposition.ALIAS,
+                    replacement="active"),
+        FeatureSpec("rule", 0.0, disposition=FeatureDisposition.LEGALITY_ONLY),
+        FeatureSpec("gone", 0.0, disposition=FeatureDisposition.RETIRED),
+        FeatureSpec("seed-me", 0.0,
+                    disposition=FeatureDisposition.AWAITING_SEED),
+    ), schema_version=1)
+
+    assert catalog.priced_keys == ("active",)
+
+
 def test_unknown_card_ignores_declared_roles_and_emits_explicit_coverage():
     card_id = 999_999
-    context = EvaluationModel.build(
-        roles={card_id: ("primary_attacker", "healer")},
-    )
+    context = EvaluationModel.build()
 
     valuation = evaluate(ObservationStateBuilder().root(printout(me=player(hand=[card_id]))), context)
     activation = {item.feature: item.value for item in valuation.activations}
@@ -179,7 +195,7 @@ def test_opponent_roles_are_belief_metadata_not_board_value():
     activation = {item.feature: item.value for item in valuation.activations}
 
     assert not any(key.startswith("role.") for key in activation)
-    assert activation["coverage.unknown_card"] < 0
+    assert activation["coverage.unknown_card"] > 0
 
 
 def test_runtime_context_has_one_valuation_authority():
@@ -269,8 +285,10 @@ def test_every_valued_card_function_is_owned_by_a_feature_activation_rule():
 
 
 def test_every_valuation_feature_owns_a_typed_activation_rule_without_direct_bypass():
-    assert all(spec.rules for spec in FEATURE_CATALOG.specs)
-    assert not any(rule.source == "direct" for spec in FEATURE_CATALOG.specs
+    active_specs = tuple(spec for spec in FEATURE_CATALOG.specs
+                         if spec.disposition is FeatureDisposition.ACTIVE)
+    assert all(spec.rules for spec in active_specs)
+    assert not any(rule.source == "direct" for spec in active_specs
                    for rule in spec.rules)
 
 
@@ -460,4 +478,5 @@ def test_card_functions_compile_to_situational_feature_activations():
 
     assert any(item.feature == "continuation.multi_provision_in_hand"
                for item in valuation.activations)
-    assert not any(item.feature.startswith("function.") for item in valuation.activations)
+    assert any(item.feature == "function.energy.provision"
+               for item in valuation.activations)

@@ -1,3 +1,6 @@
+from dataclasses import replace
+from types import SimpleNamespace
+
 import pytest
 
 from common.algebra import Deterministic
@@ -35,11 +38,13 @@ class CountingLedgerEvaluator(LedgerValueEvaluator):
 
     def __init__(self):
         self.calls = {}
+        self.parent_states = []
 
-    def evaluate(self, request):
+    def evaluate_with_state(self, request, parent_state=None):
         board = getattr(request.state, "observation", request.state)
         self.calls[board.position_key] = self.calls.get(board.position_key, 0) + 1
-        return super().evaluate(request)
+        self.parent_states.append(parent_state)
+        return super().evaluate_with_state(request, parent_state)
 
 
 def test_one_ply_search_retains_every_candidate_and_explicit_successor():
@@ -112,6 +117,85 @@ def test_search_rejects_non_distribution_policy_priors():
         LedgerOnePlySearch().search(
             EvaluationRequest(root, EvaluationModel.build()), LedgerValueEvaluator(),
             InvalidPolicyModel(), provider, SearchConfiguration())
+
+
+def test_exhausted_budget_keeps_every_root_action_comparable(monkeypatch):
+    class StoppedBudget:
+        stop_reason = "time_budget"
+        frontier = []
+        nodes = 0
+
+    monkeypatch.setattr(
+        "common.ledger.search.BudgetController", lambda _configuration: StoppedBudget())
+    observation = printout(me=player(active=body(DRAGAPULT, 1)))
+    board = ObservationStateBuilder(DECK).root(observation)
+    root = PreviewState(observation, board, "root", deck=DECK,
+                        deck_counts=board.deck_counts or ())
+    first, second = action("card", (0,)), action("card", (1,))
+    provider = ScriptedProvider(menus={"root": (first, second)}, nodes={})
+
+    result = LedgerOnePlySearch().search(
+        EvaluationRequest(root, EvaluationModel.build()), LedgerValueEvaluator(),
+        UniformPolicyModel(), provider, SearchConfiguration())
+
+    assert {candidate.status for candidate in result.roster.candidates} == {
+        EvaluationStatus.ESTIMATED}
+    assert GreedyDecisionPolicy().choose(
+        result.roster, PolicyConfiguration()).action in {first, second}
+
+
+def test_search_owns_and_reuses_the_previous_turn_snapshot():
+    builder = ObservationStateBuilder(DECK)
+    first_observation = printout(
+        me=player(active=body(DRAGAPULT, 1), hand=[DARK_E]))
+    first_board = builder.root(first_observation)
+    second_observation = printout(
+        me=player(active=body(DRAGAPULT, 1, energies=(8,)), hand=[]))
+    second_board, delta = builder.advance(first_board, second_observation)
+    ending = action("end", (0,))
+    evaluator = CountingLedgerEvaluator()
+    search = LedgerOnePlySearch()
+    model = EvaluationModel.build()
+
+    first = search.search(
+        EvaluationRequest(PreviewState(
+            first_observation, first_board, "first", deck=DECK,
+            deck_counts=first_board.deck_counts or ()), model),
+        evaluator, UniformPolicyModel(), ScriptedProvider(
+            menus={"first": (ending,)}, nodes={}), SearchConfiguration())
+    search.search(
+        EvaluationRequest(PreviewState(
+            second_observation, second_board, "second", deck=DECK,
+            deck_counts=second_board.deck_counts or ()), model,
+            first.baseline, delta),
+        evaluator, UniformPolicyModel(), ScriptedProvider(
+            menus={"second": (ending,)}, nodes={}), SearchConfiguration())
+
+    assert evaluator.parent_states[0] is None
+    assert evaluator.parent_states[1] is not None
+
+
+def test_search_rejects_a_same_position_snapshot_from_a_different_menu():
+    observation = printout(me=player(active=body(DRAGAPULT, 1)))
+    board = ObservationStateBuilder(DECK).root(observation)
+    root = PreviewState(observation, board, "root", deck=DECK,
+                        deck_counts=board.deck_counts or ())
+    ending = action("end", (0,))
+    provider = ScriptedProvider(menus={"root": (ending,)}, nodes={})
+    evaluator = CountingLedgerEvaluator()
+    search = LedgerOnePlySearch()
+    model = EvaluationModel.build()
+
+    first = search.search(
+        EvaluationRequest(root, model), evaluator, UniformPolicyModel(),
+        provider, SearchConfiguration())
+    search.search(
+        EvaluationRequest(
+            root, model, replace(first.baseline, cache_key="different-menu"),
+            SimpleNamespace(parts=())),
+        evaluator, UniformPolicyModel(), provider, SearchConfiguration())
+
+    assert evaluator.parent_states[-1] is None
 
 
 def test_forced_roster_marks_each_candidate_forced():

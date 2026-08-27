@@ -100,14 +100,13 @@ class LedgerDecider:
         self._behavior_identity = None
         self.gap_sink = gap_sink
         self.parity_oracle = parity_oracle
+        self._search = LedgerOnePlySearch()
         self.coordinator = self._build_coordinator()
         self.last_valuation = None
 
     def reset_turn(self) -> None:
         self.last_valuation = None
-        evaluator = getattr(self.coordinator, "evaluator", None)
-        if evaluator is not None and hasattr(evaluator, "clear"):
-            evaluator.clear()
+        self._search.reset()
 
     @property
     def provider_configuration(self) -> dict:
@@ -220,7 +219,7 @@ class LedgerDecider:
         return DecisionCoordinator(
             evaluator=LedgerValueEvaluator(),
             evaluation_model=self.ctx,
-            search=LedgerOnePlySearch(),
+            search=self._search,
             search_configuration=search_configuration,
             policy_model=UniformPolicyModel(),
             decision_policy=GreedyDecisionPolicy(),

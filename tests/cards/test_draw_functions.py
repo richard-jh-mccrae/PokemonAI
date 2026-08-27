@@ -33,9 +33,38 @@ def test_opponent_low_prize_condition_excludes_zero_and_four():
 def test_hand_size_condition_counts_the_card_being_played():
     clause = Clause("draw", amount=1,
                     amount_if={"condition": "hand_size_10_plus_after_draw", "amount": 3})
-    assert draw_branches(clause, 6, 6, my_hand_size=10) == ((3, 0),)   # 9 left + 1 drawn = 10
-    assert draw_branches(clause, 6, 6, my_hand_size=9) == ((1, 0),)
+    assert draw_branches(
+        clause, 6, 6, my_hand_size=10, cards_leaving_hand=1) == ((3, 0),)
+    assert draw_branches(
+        clause, 6, 6, my_hand_size=9, cards_leaving_hand=1) == ((1, 0),)
     assert draw_branches(clause, 6, 6) == ((1, 0),)                    # unknown hand: base
+
+
+def test_conditional_to_hand_size_uses_the_explicit_board_condition():
+    clause = Clause(
+        "draw", to_hand_size=5,
+        amount_if={"condition": "all_own_pokemon_team_rocket", "to_hand_size": 8})
+
+    assert draw_branches(
+        clause, 6, 6, my_hand_size=3,
+        all_own_pokemon_team_rocket=False, cards_leaving_hand=1) == ((3, 0),)
+    assert draw_branches(
+        clause, 6, 6, my_hand_size=3,
+        all_own_pokemon_team_rocket=True, cards_leaving_hand=1) == ((6, 0),)
+
+
+def test_attack_to_hand_size_does_not_remove_a_card_from_hand():
+    clause = Clause("draw", to_hand_size=6)
+
+    assert draw_branches(
+        clause, 6, 6, my_hand_size=3, cards_leaving_hand=0) == ((3, 0),)
+
+
+def test_non_draw_rider_preserves_the_scalar_draw_equation():
+    clause = Clause("draw", to_hand_size=5, rider="self_switch")
+
+    assert draw_branches(
+        clause, 6, 6, my_hand_size=3, cards_leaving_hand=1) == ((3, 0),)
 
 
 def test_symmetric_shuffle_and_opponent_draw_travel_together():

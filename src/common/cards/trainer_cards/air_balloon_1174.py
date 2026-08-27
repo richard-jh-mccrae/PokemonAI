@@ -7,4 +7,5 @@ CARD = TrainerCard(
     kind=TOOL,
     text='The Retreat Cost of the Pokémon this card is attached to is {C}{C} less.',
     clauses=(Clause('retreat_reduction', amount=2),),
+    covers='full',
 )

@@ -70,8 +70,7 @@ def _preference(route, plan: PrizePlan, ctx) -> tuple[int, ...]:
 
     def positions(selector):
         return tuple(index for index, card_id in enumerate(card_ids)
-                     if selector == card_id or (isinstance(selector, str)
-                                                and selector in ctx.card_roles(card_id)))
+                     if selector == card_id)
 
     offers = []
     for selector in plan.offer:

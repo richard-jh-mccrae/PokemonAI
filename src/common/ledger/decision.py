@@ -47,26 +47,11 @@ def evaluator_semantics_identity(paths=None) -> str:
 class LedgerValueEvaluator:
     identity = f"ledger-linear-v2:{FEATURE_CATALOG.identity}:{evaluator_semantics_identity()}"
 
-    def __init__(self):
-        self._snapshots: dict[tuple[str, str], EvaluationSnapshot] = {}
-        self.last_snapshot: EvaluationSnapshot | None = None
-
-    def clear(self) -> None:
-        self._snapshots = {}
-        self.last_snapshot = None
-
-    def snapshot(self, model_identity: str, position_key: str):
-        return getattr(self, "_snapshots", {}).get((str(model_identity), str(position_key)))
-
-    def evaluate(self, request) -> StateValuation:
+    def evaluate_with_state(
+            self, request, parent_state=None) -> tuple[StateValuation, EvaluationSnapshot]:
         board = getattr(request.state, "observation", request.state)
         model = request.evaluation_model
-        snapshots = getattr(self, "_snapshots", None)
-        if snapshots is None:
-            self._snapshots = snapshots = {}
-        parent_key = (None if request.parent_valuation is None else
-                      (model.identity, request.parent_valuation.state_key))
-        parent = None if parent_key is None else snapshots.get(parent_key)
+        parent = parent_state if isinstance(parent_state, EvaluationSnapshot) else None
         snapshot = evaluate_snapshot(
             board, model, parent=parent, delta=request.observation_delta)
         if parent is not None and os.environ.get("LEDGER_INCREMENTAL_PARITY") == "1":
@@ -76,9 +61,10 @@ class LedgerValueEvaluator:
                     or snapshot.valuation.gaps != full.gaps
                     or snapshot.valuation.prize_map != full.prize_map):
                 raise AssertionError("incremental Ledger valuation differs from full valuation")
-        snapshots[(model.identity, board.position_key)] = snapshot
-        self.last_snapshot = snapshot
-        return state_valuation_from_ledger(board, snapshot.valuation)
+        return state_valuation_from_ledger(board, snapshot.valuation), snapshot
+
+    def evaluate(self, request) -> StateValuation:
+        return self.evaluate_with_state(request)[0]
 
 
 def value_components(contributions) -> tuple[ValueComponent, ...]:
@@ -94,7 +80,7 @@ def state_valuation_from_ledger(board, valuation: Valuation,
     return StateValuation(
         board.position_key, valuation.total, LEDGER_VALUE_SCALE,
         board.seat, evaluator_identity, value_components(valuation.contributions),
-        status, valuation.gaps, valuation.prize_map)
+        status, valuation.gaps, valuation.prize_map, board.valuation_key)
 
 
 def ledger_valuation_from_state(valuation: StateValuation) -> Valuation:

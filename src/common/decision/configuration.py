@@ -16,13 +16,13 @@ def _positive(name, value):
 
 @dataclass(frozen=True, slots=True)
 class SearchConfiguration:
-    schema_version: int = 1
+    schema_version: int = 4
     depth_budget: int = 16
-    main_depth_budget: int = 0
-    main_continuation_discount: float = 0.8
+    main_depth_budget: int = 1
+    main_continuation_discount: float = 1.0
     path_node_budget: int = 128
     node_budget: int = 4096
-    time_budget_ms: int = 10_000
+    time_budget_ms: int = 1_000
     chance_sample_budget: int = 24
     chance_seed: int = 582
     noise_tolerance: float = 1e-9

@@ -123,8 +123,6 @@ class AgentRuntime:
             self.deck, strategy.name,
             EvaluationModel.build(
                 configuration=valuation_configuration or ValuationConfiguration.general(),
-                roles={card_id: tuple(self.roles.get(card_id, ()) or ())
-                       for card_id in self.deck},
                 prize_plan=strategy.prize_plan,
                 overlay=DeckOverlay(strategy.ledger_overlay),
                 opponent_profiles={

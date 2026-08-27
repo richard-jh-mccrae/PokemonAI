@@ -46,7 +46,9 @@ def test_compiled_snapshot_roles_do_not_enter_board_value():
         them=player(own=False, active=body(UNKNOWN_ID, 1))), beliefs), context)
 
     assert not any(item.feature.startswith("role.") for item in valuation.activations)
-    assert _activation(valuation, "coverage.unknown_card") < 0
+    assert _activation(valuation, "coverage.unknown_card") > 0
+    assert next(item.value for item in valuation.contributions
+                if item.feature == "coverage.unknown_card") < 0
     assert any("unknown card" in gap for gap in valuation.gaps)
 
 
@@ -62,8 +64,8 @@ def test_opponent_role_evidence_cannot_create_valuation_contributions():
     assert not any(item.feature.startswith("role.") for item in valuation.contributions)
 
 
-def test_our_deck_role_declarations_do_not_leak_onto_opponent_cards():
-    context = EvaluationModel.build(roles={DRAGAPULT: ("healer",)})
+def test_our_evaluation_model_has_no_role_values_for_opponent_cards():
+    context = EvaluationModel.build()
     valuation = evaluate(ObservationStateBuilder().root(printout(
         them=player(own=False, active=body(DRAGAPULT, 1)))), context)
 

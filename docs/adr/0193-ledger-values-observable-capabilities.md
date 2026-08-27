@@ -11,22 +11,25 @@ an action name instead of its resulting board and remaining legal line.
 
 ## Decision
 
-The Ledger prices observable capabilities and resources directly. Attacks use exact payment,
-damage, target HP, Weakness, Resistance, prize yield, bench reach, partner gates, and reachable
-evolutions. Abilities price their current draw, search, movement, healing, acceleration, denial,
-and costs. Hand, deck, discard, prizes, Stadium, and opponent hidden zones expose contextual option
-factors. Strategy roles remain scouting metadata but cannot emit valuation features.
+The Ledger prices observable capabilities and resources directly. Card Function names carry no
+value themselves; their amounts, conditions, targets, costs, and resulting board changes feed
+independent valuation axes. Strategy roles remain scouting metadata and cannot emit value.
 
-Remaining-turn value comes from bounded conditional preview. Static continuation bonuses default
-to zero; root reveal choices expose expected log-choice information value. A turn begins with a
-four-group valuation snapshot; later observations use
-`ObservationDelta` to invalidate dependent groups, with an opt-in full-evaluation parity assertion.
+Bounded preview values the remaining legal line. Search owns a dependency-group snapshot for the
+turn and invalidates it from observation deltas while retaining full-evaluation parity.
 
-Every feature has a catalog seed and a constrained training parameter. Correction sweeps export
-candidate feature vectors. Training splits by match, fits pairwise correction preferences under
-sign and range constraints, calibrates margins, and emits artifacts bound to catalog, seed, and
-data identities. Coverage, role removal, parameter coverage, and incremental parity are executable
-certification checks.
+The feature catalog distinguishes trainable value from aliases, legality, conditional rules,
+retired terms, and missing seeds. Executable field and mechanic contracts prevent unvalued state
+from silently entering weight-only correction rounds.
+
+Every deployed clause parameter is a direct equation input. Qualifiers that were previously left
+to an assumed successor receive seeded `clause.parameter.*` features, and the readiness gate
+removes or perturbs every exact card/clause occurrence to require a nonzero valuation delta. Each
+seeded qualifier also declares its expected feature and monotonic direction; reversed equations
+fail the same gate.
+
+Multi-step effects are valued as one successor chain. Target-local effects choose a legal target
+jointly with that target's costs; terminal self-KO routes include their prize-loss liability.
 
 ## Consequences
 
@@ -35,3 +38,5 @@ names. New card clauses and observation fields must enter the coverage ownership
 changes remain learned residuals over explicit seeded factors; exact rules and legality stay code.
 Incremental groups are deliberately coarse: correctness is identical to a full evaluation, while
 future profiling may split hot groups without changing valuation semantics.
+
+Untyped printed effects remain explicit coverage failures, never silent zeroes.

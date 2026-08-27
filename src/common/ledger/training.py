@@ -48,7 +48,7 @@ def parameter_manifest(catalog: FeatureCatalog = FEATURE_CATALOG) -> tuple[Param
     fixed = {"result.win"}
     fixed_prefixes = ("continuation.", "action.")
     rows = []
-    for spec in catalog.specs:
+    for spec in catalog.priced_specs:
         radius = max(1.0, abs(spec.default) * BOUND_MULTIPLIER)
         lower = 0.0 if spec.default > 0 else -radius
         upper = 0.0 if spec.default < 0 else radius

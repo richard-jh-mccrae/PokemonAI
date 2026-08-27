@@ -21,7 +21,6 @@ from common.decision import (
     SearchResult,
     SearchValue,
     StateValuation,
-    ValuationCache,
     ValuedCandidate,
     neutral_lottery_choice,
     safe_legal_selection,
@@ -82,16 +81,41 @@ class UniformPolicyModel:
 class LedgerOnePlySearch:
     identity = f"ledger-one-ply-v2:{SEARCH_SEMANTICS_IDENTITY}"
 
+    def __init__(self):
+        self._previous_evaluation_state = None
+
+    def reset(self):
+        self._previous_evaluation_state = None
+
     def search(self, request, evaluator, policy_model, provider, configuration):
         root = request.state
         board = getattr(root, "observation", root)
-        cache = ValuationCache()
+        state_values = {}
+        evaluation_states = {}
 
         def state_value(state):
             parent = request.parent_valuation if state is board else None
             delta = request.observation_delta if state is board else None
-            return cache.evaluate(EvaluationRequest(
-                state, request.evaluation_model, parent, delta), evaluator)
+            reusable_parent = (
+                self._previous_evaluation_state
+                if state is board and parent is not None
+                and self._previous_evaluation_state is not None
+                and getattr(parent, "cache_key", None)
+                == self._previous_evaluation_state.valuation_key
+                else None)
+            child_request = EvaluationRequest(
+                state, request.evaluation_model, parent, delta)
+            observed = getattr(state, "observation", state)
+            key = (request.evaluation_model.identity, observed.valuation_key)
+            if key not in state_values:
+                if hasattr(evaluator, "evaluate_with_state"):
+                    value, evaluation_state = evaluator.evaluate_with_state(
+                        child_request, reusable_parent)
+                    evaluation_states[key] = evaluation_state
+                else:
+                    value = evaluator.evaluate(child_request)
+                state_values[key] = value
+            return state_values[key]
 
         def ledger_value(state):
             return ledger_valuation_from_state(state_value(state))
@@ -101,6 +125,8 @@ class LedgerOnePlySearch:
         except Exception as exc:
             raise DecisionExecutionError(DecisionFailure.capture(
                 DecisionFailureStage.EVALUATION, exc)) from exc
+        self._previous_evaluation_state = evaluation_states.get(
+            (request.evaluation_model.identity, board.valuation_key))
         actions = tuple(root.legal_actions)
         if board.select is not None and len(actions) == 1:
             candidate = ValuedCandidate(
