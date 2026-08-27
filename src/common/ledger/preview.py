@@ -92,11 +92,23 @@ def price_actions(state, board: ObservationState, baseline: float, provider,
                 action, 0.0, True, (), ContinuationFootprint(0.0, 0.0, False),
                 successors=(successor,), prize_map=baseline_valuation.prize_map))
             continue
+        local_action_contribution = _event_contributions(
+            "action", _local_action_events(board, action, ctx), ctx, "action")
+        local_action_value = sum(item.value for item in local_action_contribution)
         if budget is not None and budget.stop_reason != "complete":
             budget.frontier.append(action.identity)
+            activations = tuple(FeatureActivation(
+                item.feature, item.activation, item.provenance)
+                for item in local_action_contribution)
+            footprint = ContinuationFootprint(
+                0.0, local_action_value, False,
+                activations=activations,
+                contributions=local_action_contribution)
             prices.append(OptionPrice(
-                action, 0.0, False, (f"search stopped: {budget.stop_reason}",),
-                status=EvaluationStatus.ESTIMATED))
+                action, local_action_value, False,
+                (f"search stopped: {budget.stop_reason}",), footprint,
+                status=EvaluationStatus.ESTIMATED,
+                prize_map=baseline_valuation.prize_map))
             continue
         forced_counter = (board.select is not None
                           and board.select.context == _DAMAGE_COUNTER_ANY)
@@ -119,8 +131,6 @@ def price_actions(state, board: ObservationState, baseline: float, provider,
         action_events = [("continued_action", activation)]
         action_contribution = _event_contributions(
             "continuation", action_events, ctx, "continuation")
-        local_action_contribution = _event_contributions(
-            "action", _local_action_events(board, action, ctx), ctx, "action")
         opportunity_cost = sum(item.value for item in action_contribution)
         opportunity_cost += sum(item.value for item in local_action_contribution)
         state_contributions = _state_contributions(baseline_valuation, successor, ctx)

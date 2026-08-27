@@ -159,7 +159,7 @@ def test_three_prize_ko_is_terminal_liability_when_opponent_has_three_prizes():
     assert safe_value == 0.0
 
 
-def _phantom_dive_targets(bench):
+def _phantom_dive_targets(bench, *, stopped_budget=None):
     engine, agent = scenario(
         "dragapult_ex", me_active=BodySpec((119, 120, 121), energies=(2, 5)),
         them_active=BodySpec((119, 120, 121), energies=(2, 5)), them_bench=bench)
@@ -167,6 +167,8 @@ def _phantom_dive_targets(bench):
     _decision, option = decide_option(engine, agent)
     assert option["type"] == int(OptionType.ATTACK)
     assert option["attackId"] == 154
+    if stopped_budget is not None:
+        stopped_budget()
     initial = {
         target.top: (engine.gs.card_id(target.top), target.hp)
         for target in engine.gs.players[1].bench
@@ -197,3 +199,17 @@ def test_phantom_dive_target_priorities_do_not_depend_on_bench_order():
         BodySpec((119,), hp=70), BodySpec((119, 120, 121), hp=20),
         BodySpec((119,), hp=10)))
     assert Counter(original) == Counter(permuted)
+
+
+def test_phantom_dive_avoids_ko_targets_after_search_budget_exhaustion(monkeypatch):
+    class StoppedBudget:
+        stop_reason = "time_budget"
+        frontier = []
+        nodes = 0
+
+    targets = _phantom_dive_targets(
+        (BodySpec((119, 120, 121), hp=20), BodySpec((119,), hp=10),
+         BodySpec((119,), hp=70)),
+        stopped_budget=lambda: monkeypatch.setattr(
+            "common.ledger.search.BudgetController", lambda _configuration: StoppedBudget()))
+    assert Counter(targets) == Counter({(121, 20): 2, (119, 10): 1, (119, 70): 3})
