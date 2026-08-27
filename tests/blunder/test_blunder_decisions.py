@@ -78,13 +78,29 @@ def test_decision_embeds_selfcontained_full_info_snapshot():
 
 
 def test_decision_carries_pilot_ready_obs_aligned_to_its_options():
-    """The obs carries runtime-ready int enums; the film records it one frame AFTER the
-    prompt, like `selected`."""
+    """The obs carries runtime-ready int enums and aligns option-for-option."""
     main = next(d for d in iter_decisions(load_replay(FIXTURE)) if d.select_context == "Main")
     assert main.obs is not None
     assert isinstance(main.obs["select"]["type"], int)                  # runtime-ready enum
     assert len(main.obs["select"]["option"]) == len(main.options)       # aligned to Decision
     assert all(0 <= c < len(main.obs["select"]["option"]) for c in main.chosen)
+
+
+def test_decision_accepts_same_frame_observation_layout():
+    replay = _timed_replay()
+    film = replay["steps"][0][0]["visualize"]
+    film[0]["obs"] = {
+        "current": film[0]["current"],
+        "select": {"context": "Main", "type": "Main", "option": [{"type": "End"}]},
+    }
+    film[1]["obs"] = {
+        "current": film[1]["current"],
+        "select": {"context": "Main", "type": "Main", "option": [{"type": "Play"}]},
+    }
+
+    decision = iter_decisions(replay)[0]
+
+    assert decision.obs == film[0]["obs"]
 
 
 def test_decision_time_uses_the_next_same_seat_clock_and_terminal_state():

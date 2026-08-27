@@ -13,6 +13,7 @@ def test_ledger_evaluator_exposes_total_and_every_linear_component():
     valuation = LedgerValueEvaluator().evaluate(EvaluationRequest(board, model))
 
     assert valuation.state_key == board.position_key
+    assert valuation.cache_key == board.valuation_key
     assert valuation.scale == LEDGER_VALUE_SCALE
     assert valuation.status is EvaluationStatus.ESTIMATED
     assert valuation.gaps
@@ -28,9 +29,12 @@ def test_delta_hint_never_changes_exact_ledger_valuation():
         me=player(active=body(DRAGAPULT, 1, energies=(8,)), hand=[])))
     evaluator = LedgerValueEvaluator()
     model = EvaluationModel.build()
-    parent_value = evaluator.evaluate(EvaluationRequest(parent, model))
+    parent_value, parent_state = evaluator.evaluate_with_state(
+        EvaluationRequest(parent, model))
 
-    hinted = evaluator.evaluate(EvaluationRequest(child, model, parent_value, delta))
+    hinted, hinted_state = evaluator.evaluate_with_state(
+        EvaluationRequest(child, model, parent_value, delta), parent_state)
+    assert hinted_state.reused_groups == ("context",)
     full = evaluator.evaluate(EvaluationRequest(child, model))
 
     assert hinted == full

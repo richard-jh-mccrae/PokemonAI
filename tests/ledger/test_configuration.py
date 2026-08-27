@@ -17,6 +17,7 @@ import pytest
 from common.cards import FUNCTION_CATALOG, Attack, Clause, PokemonCard, card_store
 from common.cards.pokemon_roles import POKEMON_ROLES
 from common.ledger.worth import _compile_forward_lines, usable_units
+from common.ledger.features import FeatureDisposition
 from common.opponent import (
     ArchetypeBelief, OpponentEvidence, OpponentMechanic, OpponentSnapshot, OpponentTrait,
 )
@@ -42,23 +43,21 @@ def test_runtime_context_resolves_the_complete_catalog_with_a_deck_residual():
     general = ValuationConfiguration.general()
     context = EvaluationModel.build(
         configuration=general,
-        overlay=DeckOverlay({"role.primary_attacker": 0.25}),
+        overlay=DeckOverlay({"combat.attack_now": 0.25}),
     )
 
     assert set(context.configuration) == set(FEATURE_CATALOG.priced_keys)
-    assert context.configuration["role.primary_attacker"] == 0.75
+    assert context.configuration["combat.attack_now"] == 0.60
     assert context.configuration.identity != general.identity
 
 
-def test_runtime_context_rejects_an_unknown_declared_role():
-    with pytest.raises(KeyError, match="unknown Pokemon Role 'typo_role'"):
+def test_runtime_context_rejects_the_retired_role_surface():
+    with pytest.raises(TypeError, match="unexpected keyword argument 'roles'"):
         EvaluationModel.build(roles={1: ("typo_role",)})
 
 
-def test_feature_catalog_covers_every_pokemon_role():
-    catalog_roles = {key.removeprefix("role.") for key in FEATURE_CATALOG.priced_keys
-                     if key.startswith("role.")}
-    assert catalog_roles == set(POKEMON_ROLES)
+def test_feature_catalog_contains_no_strategy_role_values():
+    assert not any("role." in key for key in FEATURE_CATALOG.priced_keys)
 
 
 def test_ambiguous_and_target_directive_roles_are_retired_from_construction():
@@ -84,16 +83,15 @@ def test_evaluation_model_identity_covers_canonical_card_store_content():
     assert changed.identity != context.identity
 
 
-def test_evaluation_model_identity_covers_roles_profiles_and_valuation():
+def test_evaluation_model_identity_covers_profiles_and_valuation():
     base = EvaluationModel.build()
-    role = EvaluationModel.build(roles={999_995: ("healer",)})
     profile = EvaluationModel.build(opponent_profiles={
         "fixture": OpponentProfile({}, (), (), {1: 0.5})})
     valued = EvaluationModel.build(configuration=
                                    ValuationConfiguration.general().with_values({
                                        "prize.race": 2.0}))
 
-    assert len({base.identity, role.identity, profile.identity, valued.identity}) == 4
+    assert len({base.identity, profile.identity, valued.identity}) == 3
 
 
 def test_feature_catalog_identity_covers_activation_semantics():
@@ -139,18 +137,33 @@ def test_catalog_contains_the_complete_generic_surface_without_tags_or_card_pins
     assert not any(key.startswith(("tag.", "card.")) for key in keys)
 
 
-def test_card_worth_adds_independent_roles_and_explicit_unknown_coverage():
+def test_every_active_feature_has_a_nonzero_seed():
+    assert not [spec.key for spec in FEATURE_CATALOG.priced_specs
+                if spec.default == 0.0]
+
+
+def test_nonpriced_feature_dispositions_stay_out_of_valuation():
+    catalog = FeatureCatalog((
+        FeatureSpec("active", 1.0),
+        FeatureSpec("old", 0.0, disposition=FeatureDisposition.ALIAS,
+                    replacement="active"),
+        FeatureSpec("rule", 0.0, disposition=FeatureDisposition.LEGALITY_ONLY),
+        FeatureSpec("gone", 0.0, disposition=FeatureDisposition.RETIRED),
+        FeatureSpec("seed-me", 0.0,
+                    disposition=FeatureDisposition.AWAITING_SEED),
+    ), schema_version=1)
+
+    assert catalog.priced_keys == ("active",)
+
+
+def test_unknown_card_ignores_declared_roles_and_emits_explicit_coverage():
     card_id = 999_999
-    context = EvaluationModel.build(
-        roles={card_id: ("primary_attacker", "healer")},
-        overlay=DeckOverlay({"role.primary_attacker": 0.25}),
-    )
+    context = EvaluationModel.build()
 
     valuation = evaluate(ObservationStateBuilder().root(printout(me=player(hand=[card_id]))), context)
     activation = {item.feature: item.value for item in valuation.activations}
 
-    assert activation["role.primary_attacker"] == 1.0
-    assert activation["role.healer"] == 1.0
+    assert not any(key.startswith("role.") for key in activation)
     assert activation["coverage.unknown_card"] >= 1.0
     assert any(f"unknown card {card_id}" in gap for gap in valuation.gaps)
 
@@ -163,7 +176,7 @@ def test_partial_known_card_emits_coverage_unknown_activation_and_gap():
     assert any("incomplete card coverage 1052" in gap for gap in valuation.gaps)
 
 
-def test_opponent_roles_use_continuous_posterior_expectation_not_compiled_claims():
+def test_opponent_roles_are_belief_metadata_not_board_value():
     card_id = 999_998
     beliefs = _snapshot(
         observed_roles={card_id: ("support_pokemon",)},
@@ -181,9 +194,8 @@ def test_opponent_roles_use_continuous_posterior_expectation_not_compiled_claims
         them=player(own=False, active=body(card_id, 1))), knowledge=knowledge), context)
     activation = {item.feature: item.value for item in valuation.activations}
 
-    assert "role.support_pokemon" not in activation
-    assert activation["role.primary_attacker"] == -0.25
-    assert activation["role.healer"] == -0.50
+    assert not any(key.startswith("role.") for key in activation)
+    assert activation["coverage.unknown_card"] > 0
 
 
 def test_runtime_context_has_one_valuation_authority():
@@ -273,8 +285,10 @@ def test_every_valued_card_function_is_owned_by_a_feature_activation_rule():
 
 
 def test_every_valuation_feature_owns_a_typed_activation_rule_without_direct_bypass():
-    assert all(spec.rules for spec in FEATURE_CATALOG.specs)
-    assert not any(rule.source == "direct" for spec in FEATURE_CATALOG.specs
+    active_specs = tuple(spec for spec in FEATURE_CATALOG.specs
+                         if spec.disposition is FeatureDisposition.ACTIVE)
+    assert all(spec.rules for spec in active_specs)
+    assert not any(rule.source == "direct" for spec in active_specs
                    for rule in spec.rules)
 
 
@@ -323,7 +337,8 @@ def test_behavior_component_identities_cover_all_ranking_semantic_dependencies()
     from common.ledger import decision, search
 
     evaluator_paths = tuple(Path(decision.__file__).with_name(name) for name in (
-        "activation.py", "evaluate.py", "features.py", "prizes.py", "worth.py"))
+        "activation.py", "capabilities.py", "evaluate.py", "features.py", "prizes.py",
+        "worth.py"))
     search_paths = (
         Path(search.__file__), Path(search.__file__).with_name("chance.py"),
         Path(search.__file__).with_name("preview.py"))
@@ -332,18 +347,18 @@ def test_behavior_component_identities_cover_all_ranking_semantic_dependencies()
     assert evaluator_semantics_identity(search_paths) in LedgerOnePlySearch.identity
 
 
-def test_reusable_in_play_function_emits_a_situational_activation():
+def test_reusable_in_play_function_emits_an_exact_capability_activation():
     valuation = evaluate(
         ObservationStateBuilder().root(printout(me=player(active=body(120, 1), hand=[]))),
         EvaluationModel.build())
 
-    assert any(item.feature == "function.draw.available" and item.value > 0
+    assert any(item.feature == "ability.draw_cards" and item.value > 0
                for item in valuation.activations)
 
     opponent = evaluate(
         ObservationStateBuilder().root(printout(them=player(own=False, active=body(120, 1), hand=[]))),
         EvaluationModel.build())
-    assert any(item.feature == "function.draw.available" and item.value < 0
+    assert any(item.feature == "ability.draw_cards" and item.value < 0
                for item in opponent.activations)
 
 
@@ -433,7 +448,7 @@ def test_opponent_belief_keeps_public_evidence_not_compiled_roles():
     assert card_id in belief.decision_evidence.revealed_card_ids
 
 
-def test_same_opponent_belief_can_be_interpreted_by_two_evaluation_models():
+def test_same_opponent_facts_have_same_value_under_different_role_labels():
     card_id = 999_996
     evidence = OpponentEvidence.from_state(ObservationStateBuilder().root(printout(
         them=player(own=False, active=body(card_id, 1)))))
@@ -452,11 +467,8 @@ def test_same_opponent_belief_can_be_interpreted_by_two_evaluation_models():
     healer_value = evaluate(state, EvaluationModel.build(
         opponent_profiles=_profiles(healer)))
 
-    assert any(item.feature == "role.primary_attacker"
-               for item in attacker_value.activations)
-    assert not any(item.feature == "role.primary_attacker"
-                   for item in healer_value.activations)
-    assert any(item.feature == "role.healer" for item in healer_value.activations)
+    assert attacker_value.total == healer_value.total
+    assert attacker_value.activations == healer_value.activations
 
 
 def test_card_functions_compile_to_situational_feature_activations():
@@ -466,4 +478,5 @@ def test_card_functions_compile_to_situational_feature_activations():
 
     assert any(item.feature == "continuation.multi_provision_in_hand"
                for item in valuation.activations)
-    assert not any(item.feature.startswith("function.") for item in valuation.activations)
+    assert any(item.feature == "function.energy.provision"
+               for item in valuation.activations)

@@ -168,6 +168,21 @@ class ObservationState:
         return hasher.hexdigest()
 
     @property
+    def valuation_key(self) -> str:
+        hasher = hashlib.blake2b(digest_size=KEY_BYTES)
+        feed(hasher.update, 1)
+        feed(hasher.update, self.position_key)
+        feed(hasher.update, tuple(
+            (card.card_id, card.owner) for card in self.stadium))
+        feed(hasher.update, tuple(
+            (action.identity.kind, action.identity.parts)
+            for action in self.legal_actions))
+        feed(hasher.update, tuple(
+            (event.kind, event.public_fields, event.recognized)
+            for event in self.events))
+        return hasher.hexdigest()
+
+    @property
     def key(self) -> str:
         return self.position_key
 
@@ -533,6 +548,8 @@ def _delta_parts(changed, parent, state: ObservationState) -> tuple[tuple[str, .
                 parts.add(("knowledge", "attack_locks"))
             if parent.knowledge.opponent != state.knowledge.opponent:
                 parts.add(("knowledge", "opponent_belief"))
+        if parent.legal_actions != state.legal_actions:
+            parts.add(("legal_actions",))
     return tuple(sorted(parts))
 
 

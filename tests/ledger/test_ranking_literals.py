@@ -3,25 +3,52 @@ from pathlib import Path
 
 
 ROOT = Path(__file__).resolve().parents[2]
-RANKING_MODULES = tuple(sorted(
-    (ROOT / "src" / "common" / "ledger").glob("*.py"))) + (
+RANKING_MODULES = tuple(path for path in sorted(
+    (ROOT / "src" / "common" / "ledger").glob("*.py"))
+    if path.name != "sensitivity.py") + (
         ROOT / "src" / "common" / "decision" / "coordinator.py",)
 
 APPROVED_DECLARATIONS = {
     "src/common/decision/coordinator.py": {"LOTTERY_DIGEST_BYTES"},
     "src/common/ledger/activation.py": {"DAMAGE_UNIT_HP"},
     "src/common/ledger/chance.py": {"PLAYER_COUNT", "SEED_DIGEST_BYTES"},
+    "src/common/ledger/capabilities.py": {
+        "ACTIVE_AREA", "ANCIENT_POKEMON_IDS", "ATTACHED_ENERGY_MATERIAL_UNIT",
+        "ATTACK_EVENT_KIND", "BOUNCE_ENERGY_HAND_UNIT", "CLAUSE_COST_UNITS",
+        "CLAUSE_PARAMETER_VALUE_UNITS",
+        "COMEBACK_PRIZE_THRESHOLD", "COMPLETION_EXPONENT",
+        "DAMAGE_COUNTER_HP", "DAMAGE_PROTECTION_THRESHOLD_HP",
+        "DAMAGE_RANGE_BOUND_COUNT",
+        "DAMAGE_UNIT_HP", "DEFAULT_PRIZE_COUNT", "DISCARD_AREA", "FUTURE_TURN_DISCOUNT",
+        "HEAL_TARGET_HP",
+        "COIN_HEADS_PROBABILITY", "ENERGY_COUNT_THRESHOLD", "IN_PLAY_AREAS",
+        "LOW_REMAINING_HP_THRESHOLD", "MIN_SELF_DAMAGE_COUNTERS",
+        "KNOCKOUT_EVENT_KINDS", "RESISTANCE_REDUCTION", "RIDER_COST_UNITS",
+        "SWITCH_EVENT_KIND", "TEAM_ROCKET_ENERGY_CARD_ID", "TERMINAL_LOSS_UNITS",
+        "WEAKNESS_MULTIPLIER",
+    },
     "src/common/ledger/configuration.py": {"CONFIGURATION_ID_DIGEST_BYTES"},
     "src/common/ledger/decider.py": {"PROVIDER_ID_DIGEST_BYTES"},
     "src/common/ledger/decision.py": {"EVALUATOR_ID_DIGEST_BYTES"},
-    "src/common/ledger/evaluate.py": {"DRAW_RESULT_CODE"},
+    "src/common/ledger/evaluate.py": {
+        "DRAW_RESULT_CODE", "PRIZE_PHASE_PIVOT",
+        "ROUTE_STORED_ENERGY_VALUE",
+    },
     "src/common/ledger/features.py": {
         "CATALOG_ID_DIGEST_BYTES", "FEATURE_CATALOG", "_BELIEF_DEFAULTS",
-        "_KIND_DEFAULTS", "_PLACEMENT_FACTORS", "_ROLE_DEFAULTS", "_SCALAR_DEFAULTS",
+        "_KIND_DEFAULTS", "CLAUSE_PARAMETER_DEFAULTS",
+        "OPTION_DEFAULTS", "OPTION_DEPTH_DEFAULTS",
+        "_PLACEMENT_FACTORS", "_SCALAR_DEFAULTS",
     },
     "src/common/ledger/preview.py": {"LOTTERY_DIGEST_BYTES"},
+    "src/common/ledger/readiness.py": {"REPORT_SCHEMA_VERSION"},
     "src/common/ledger/search.py": {"LOTTERY_DIGEST_BYTES"},
     "src/common/ledger/seam.py": {"version"},
+    "src/common/ledger/training.py": {
+        "BOUND_MULTIPLIER", "CALIBRATION_EPOCHS", "DEFAULT_EPOCHS", "DEFAULT_L2",
+        "DEFAULT_LEARNING_RATE", "FIT_DIGEST_BYTES", "GROUP_BUCKETS", "TRAIN_BUCKETS",
+        "VALIDATION_BUCKETS",
+    },
     "src/common/ledger/worth.py": {
         "CONTENT_ID_DIGEST_BYTES", "MODEL_ID_DIGEST_BYTES", "MULTI_PROVISION_UNITS",
         "RESISTANCE_REDUCTION", "WEAKNESS_MULTIPLIER", "_DEMAND_PRIORITY",

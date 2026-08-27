@@ -3,7 +3,8 @@ from __future__ import annotations
 
 from types import SimpleNamespace
 
-from train.ledger_corpus import _satisfies_human, payload, render_markdown
+from train.ledger_corpus import (_runtime_equivalence, _satisfies_human, payload,
+                                 render_markdown)
 
 
 def row(deck, row_id, *, agrees, graded=True, gaps=(), chosen=(0,), correct=(1,)):
@@ -51,6 +52,19 @@ def test_any_recorded_alternative_ruling_satisfies():
     assert _satisfies_human([0], correction, equivalence)
     assert _satisfies_human([6], correction, equivalence)
     assert not _satisfies_human([3], correction, equivalence)
+
+
+def test_runtime_legal_actions_supply_duplicate_card_equivalence():
+    action = SimpleNamespace(equivalent_selections=((3,), (6,)))
+    candidate = SimpleNamespace(action=action)
+    decision = SimpleNamespace(decision_result=SimpleNamespace(
+        roster=SimpleNamespace(candidates=(candidate,))))
+
+    equivalence = _runtime_equivalence(decision)
+
+    assert equivalence == {3: frozenset({3, 6}), 6: frozenset({3, 6})}
+    assert _satisfies_human([3], SimpleNamespace(
+        correct=[6], correct_alternatives=[]), equivalence)
 
 
 def test_regressions_name_frames_that_used_to_agree():

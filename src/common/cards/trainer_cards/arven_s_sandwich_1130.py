@@ -6,6 +6,6 @@ CARD = TrainerCard(
     name="Arven's Sandwich",
     kind=ITEM,
     text='Heal 30 damage from your Active Pokémon. If that Pokémon is an Arven’s Pokémon, heal 100 damage from it instead.',
-    clauses=(Clause('heal', amount=100, restriction='arvens_pokemon'), Clause('heal', amount=30, restriction='active_only')),
+    clauses=(Clause('heal', amount=100, restriction='arvens_pokemon'), Clause('heal', amount=30, restriction='active_non_arvens_pokemon')),
     covers='full',
 )

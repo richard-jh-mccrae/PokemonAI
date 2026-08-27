@@ -53,6 +53,7 @@ class ValuationConfiguration(Mapping[str, float]):
     schema_version: int
     values: tuple[tuple[str, float], ...]
     _lookup: Mapping[str, float] = field(repr=False, compare=False)
+    _identity: str = field(repr=False, compare=False)
 
     def __init__(self, values: Mapping[str, float], *, schema_version: int):
         version = int(schema_version)
@@ -71,6 +72,10 @@ class ValuationConfiguration(Mapping[str, float]):
             (str(key), _finite(key, value)) for key, value in pairs))
         object.__setattr__(self, "values", normalized)
         object.__setattr__(self, "_lookup", MappingProxyType(dict(normalized)))
+        payload = {"schema_version": version, "values": normalized}
+        blob = json.dumps(payload, sort_keys=True).encode("utf-8")
+        object.__setattr__(self, "_identity", hashlib.blake2b(
+            blob, digest_size=CONFIGURATION_ID_DIGEST_BYTES).hexdigest())
 
     @classmethod
     def general(cls, catalog: FeatureCatalog = FEATURE_CATALOG):
@@ -113,10 +118,7 @@ class ValuationConfiguration(Mapping[str, float]):
 
     @property
     def identity(self) -> str:
-        payload = {"schema_version": self.schema_version, "values": self.values}
-        blob = json.dumps(payload, sort_keys=True).encode("utf-8")
-        return hashlib.blake2b(
-            blob, digest_size=CONFIGURATION_ID_DIGEST_BYTES).hexdigest()
+        return self._identity
 
 
 @dataclass(frozen=True, slots=True)

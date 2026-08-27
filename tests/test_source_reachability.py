@@ -33,6 +33,10 @@ def test_reflective_provider_registration_is_an_executed_positive_control():
     assert preview_provider_factory(CgpyTransitionProvider) is LedgerCgpyProvider
 
 
+def test_incremental_certification_is_an_external_diagnostic_contract():
+    assert "common.ledger.certification.certify_incremental" in EXTERNAL_FUNCTIONS
+
+
 def test_unrelated_method_names_cannot_hide_dead_top_level_functions():
     trees = {
         "target": ast.parse("def collision():\n    return 1\n"),

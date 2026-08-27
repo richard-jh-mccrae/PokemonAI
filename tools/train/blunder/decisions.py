@@ -8,8 +8,18 @@ hands are visible -- unlike the per-seat agent Observation, which hides the oppo
 from __future__ import annotations
 
 import copy
+import json
 import math
+import re
 from dataclasses import dataclass, replace
+
+from cgpy.schema import OptionType
+
+
+_OPTION_TYPES = {
+    re.sub(r"[^a-z0-9]", "", member.name.lower()): int(member)
+    for member in OptionType
+}
 
 
 @dataclass(frozen=True)
@@ -54,6 +64,35 @@ def _remaining_time(observation) -> float | None:
         return None
     value = float(value)
     return value if math.isfinite(value) else None
+
+
+def _option_type(value):
+    if isinstance(value, str):
+        return _OPTION_TYPES.get(re.sub(r"[^a-z0-9]", "", value.lower()), value)
+    return value
+
+
+def _menu_key(options) -> str:
+    normalized = [
+        {key: _option_type(value) if key == "type" else value
+         for key, value in option.items()}
+        for option in options or ()
+    ]
+    return json.dumps(normalized, sort_keys=True, separators=(",", ":"))
+
+
+def _aligned_obs(frame: dict, nxt: dict | None, options: list[dict]) -> dict | None:
+    candidates = tuple(candidate for candidate in (frame.get("obs"), (nxt or {}).get("obs"))
+                       if isinstance(candidate, dict))
+    for candidate in candidates:
+        if _menu_key(((candidate.get("select") or {}).get("option"))) == _menu_key(options):
+            return copy.deepcopy(candidate)
+    if candidates and not any((candidate.get("select") or {}).get("option")
+                              for candidate in candidates):
+        return copy.deepcopy(candidates[-1])
+    if len(candidates) == 1:
+        return copy.deepcopy(candidates[0])
+    return None
 
 
 def _with_decision_times(replay: dict, decisions: list[Decision]) -> list[Decision]:
@@ -106,9 +145,7 @@ def iter_decisions(replay: dict) -> list[Decision]:
                 options=copy.deepcopy(select.get("option")),
                 chosen=list(chosen),
                 current=copy.deepcopy(current),
-                # agent obs (int enums) recorded one frame after the prompt, same as
-                # `selected` -- so it aligns option-for-option with this Decision (verified).
-                obs=copy.deepcopy(nxt.get("obs")),
+                obs=_aligned_obs(frame, nxt, select.get("option")),
             )
         )
     return _with_decision_times(replay, out)

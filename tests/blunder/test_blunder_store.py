@@ -1,4 +1,6 @@
 """Append-only JSONL store for Corrections."""
+from pathlib import Path
+
 from conftest import FIXTURES
 
 from meta_tracker.parse import load_replay
@@ -7,6 +9,11 @@ from train.blunder.decisions import iter_decisions
 from train.blunder.store import append_correction, delete_correction, load_corrections
 
 FIXTURE = FIXTURES / "episode-81364540-replay.json.gz"
+REPO = Path(__file__).resolve().parents[2]
+REPAIRED_RUNS = (
+    "20260826-170838_e81af793_mega_starmie",
+    "20260826-180657_e81af793_dragapult_ex",
+)
 
 
 def _corr(category="missed_win", correct=(4,)):
@@ -46,3 +53,11 @@ def test_delete_correction_removes_by_id(tmp_path):
     removed = delete_correction(a.id, path)
     left = load_corrections(path)
     assert removed == 1 and [c.category for c in left] == ["overextension"]
+
+
+def test_repaired_run_observations_match_their_anchor_menus():
+    for run in REPAIRED_RUNS:
+        corrections = load_corrections(REPO / "data" / "corrections" / run)
+        assert corrections
+        for correction in corrections:
+            assert correction.obs["select"]["option"] == correction.decision["options"]

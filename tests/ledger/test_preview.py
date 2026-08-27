@@ -7,7 +7,6 @@ the same scripts, never recomputed by hand, so the assertions read pure arithmet
 from __future__ import annotations
 
 import math
-
 import pytest
 
 from ledger_helpers import (DRAGAPULT, FIRE_E, ScriptedProvider, action, body, player,
@@ -19,6 +18,7 @@ from common.ledger import DeckOverlay, EvaluationModel, LedgerDecider
 from deprecated.bellman.state import DecisionState
 
 DECK = (DRAGAPULT, FIRE_E) * 20
+INFORMATION_VALUE = EvaluationModel.build().configuration["continuation.information_value"]
 
 
 def state_of(observation):
@@ -129,8 +129,8 @@ def test_reveal_choice_honors_its_actor_in_both_directions():
     outcomes = (RevealOutcome(1.0, ("good", "bad")),)
     ours, _, _ = price_of(RevealChoice(Actor.OURS, choices, outcomes))
     theirs, _, _ = price_of(RevealChoice(Actor.OPPONENT, choices, outcomes))
-    assert ours == pytest.approx(good_swing, abs=1e-9)
-    assert theirs == pytest.approx(bad_swing, abs=1e-9)
+    assert ours == pytest.approx(good_swing + INFORMATION_VALUE, abs=1e-9)
+    assert theirs == pytest.approx(bad_swing + INFORMATION_VALUE, abs=1e-9)
 
 
 def test_reveal_choice_weights_outcomes_and_chooses_within_each():
@@ -140,7 +140,8 @@ def test_reveal_choice_weights_outcomes_and_chooses_within_each():
     outcomes = (RevealOutcome(0.5, ("bad",)),            # the reveal offered only the bad leg
                 RevealOutcome(0.5, ("good", "bad")))     # both on offer: we take the good one
     swing, _, _ = price_of(RevealChoice(Actor.OURS, choices, outcomes))
-    assert swing == pytest.approx(0.5 * bad_swing + 0.5 * good_swing, abs=1e-9)
+    assert swing == pytest.approx(
+        0.5 * bad_swing + 0.5 * good_swing + 0.5 * INFORMATION_VALUE, abs=1e-9)
 
 
 def test_a_reveal_whose_chosen_leg_resolves_the_turn_counts_as_an_ender():
@@ -210,6 +211,52 @@ def test_a_tree_past_the_node_budget_caps_instead_of_running_away():
                  for index in range(200))
     _, _, decision = price_of(Chance(legs))
     assert any("chain capped" in gap for gap in decision.diagnostics["gaps"])
+
+
+def test_a_wide_chance_tree_stops_evaluator_calls_at_the_path_budget(monkeypatch):
+    from common.ledger import preview
+
+    calls = 0
+    actual = preview.evaluate
+
+    def counted(board, context):
+        nonlocal calls
+        calls += 1
+        return actual(board, context)
+
+    monkeypatch.setattr(preview, "evaluate", counted)
+    legs = tuple(WeightedEdge(1.0 / 10_000, f"leg{index}", Deterministic(GOOD))
+                 for index in range(10_000))
+    price_of(Chance(legs))
+
+    assert calls <= 140
+
+
+def test_information_probe_does_not_materialize_a_wide_chance_roster():
+    from common.ledger.preview import _immediate_information_value
+
+    edge = WeightedEdge(1.0, "leg", Deterministic(GOOD))
+
+    class WideChildren:
+        inspected = 0
+
+        def __len__(self):
+            return 10_000
+
+        def __getitem__(self, key):
+            assert isinstance(key, slice)
+            count = min(10_000, key.stop or 10_000)
+            self.inspected += count
+            return (edge,) * count
+
+    node = Chance((edge,))
+    children = WideChildren()
+    object.__setattr__(node, "children", children)
+
+    _value, capped = _immediate_information_value(node, 8)
+
+    assert capped
+    assert children.inspected <= 7
 
 
 def test_an_empty_forced_menu_logs_its_gap_and_scores_the_mid_board():

@@ -322,5 +322,10 @@
     "disposition": "deferred",
     "reason": "first-pick ordering quirk: Crushing Hammer un-dooms our 190/430 active (breaks their projected KO) and outprices the near-zero attach (damage blend on a hurt carrier). Owner set-aside 2026-08-21.",
     "round": "2026-08-21"
+  },
+  "37109263850698692-38": {
+    "disposition": "deferred-multi-turn",
+    "reason": "the rationale requires retreat -> evolve -> attack; a one-ply ruling cannot grade that maneuver and returns when the turn planner grades sequences",
+    "round": "2026-08-26"
   }
 }

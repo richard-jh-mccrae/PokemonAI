@@ -109,6 +109,7 @@ class StateValuation:
     status: EvaluationStatus = EvaluationStatus.COMPLETE
     gaps: tuple[str, ...] = ()
     evidence: object | None = None
+    cache_key: str | None = None
 
     def __post_init__(self):
         if not math.isfinite(self.total):
@@ -243,20 +244,6 @@ class EvaluationRequest:
     observation_delta: object | None = None
 
 
-class ValuationCache:
-    def __init__(self):
-        self._values: dict[tuple[str, str, str], StateValuation] = {}
-
-    def evaluate(self, request: EvaluationRequest, evaluator) -> StateValuation:
-        state = getattr(request.state, "observation", request.state)
-        state_key = getattr(state, "position_key", str(id(state)))
-        model_key = getattr(request.evaluation_model, "identity", "anonymous-model")
-        key = (evaluator.identity, model_key, state_key)
-        if key not in self._values:
-            self._values[key] = evaluator.evaluate(request)
-        return self._values[key]
-
-
 @dataclass(frozen=True, slots=True)
 class SearchResult:
     baseline: StateValuation
@@ -347,7 +334,6 @@ __all__ = (
     "DecisionPolicy",
     "DecisionResult", "EvaluationRequest", "EvaluationStatus", "PolicyModel",
     "SearchAlgorithm", "SearchResult", "SearchTrace", "SearchValue", "StateValuation",
-    "SuccessorResult",
-    "ValuationCache", "ValueComponent", "ValueEvaluator", "ValueScale",
+    "SuccessorResult", "ValueComponent", "ValueEvaluator", "ValueScale",
     "ValuedCandidate",
 )

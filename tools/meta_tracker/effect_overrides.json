@@ -1262,7 +1262,7 @@
   {
    "kind": "heal",
    "amount": 30,
-   "restriction": "active_only"
+   "restriction": "active_non_arvens_pokemon"
   },
   {
    "kind": "heal",

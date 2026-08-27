@@ -387,18 +387,34 @@ def test_unresolved_identity_and_provider_substitution_reject_before_publication
         certify_replay(substituted, replay)
 
 
+def _tamper_root_component(row, field):
+    components = row["root"]["components"]
+    if not components:
+        components.append({
+            "key": "tampered", "activation": 1.0, "coefficient": 1.0,
+            "value": 1.0, "provenance": [],
+        })
+        return
+    components[0][field] += 1.0
+
+
+def _tamper_successor_total(row):
+    candidate = row["candidates"][0]
+    if candidate["delta"] is None:
+        candidate["delta"] = {"total": 1.0}
+        return
+    candidate["delta"]["total"] += 1.0
+
+
 @pytest.mark.parametrize(("mutation", "reason"), [
     (lambda row: row["actions"].reverse(), "legal_actions_drift"),
     (lambda row: row["root"].__setitem__("total", row["root"]["total"] + 1.0),
      "root_valuation_drift"),
-    (lambda row: row["root"]["components"][0].__setitem__(
-        "activation", row["root"]["components"][0]["activation"] + 1.0),
+    (lambda row: _tamper_root_component(row, "activation"),
      "root_valuation_drift"),
-    (lambda row: row["root"]["components"][0].__setitem__(
-        "value", row["root"]["components"][0]["value"] + 1.0),
+    (lambda row: _tamper_root_component(row, "value"),
      "root_valuation_drift"),
-    (lambda row: row["candidates"][0]["delta"].__setitem__(
-        "total", row["candidates"][0]["delta"]["total"] + 1.0),
+    (_tamper_successor_total,
      "successor_evaluation_drift"),
 ])
 def test_exact_replay_rejects_legal_root_activation_contribution_and_successor_drift(

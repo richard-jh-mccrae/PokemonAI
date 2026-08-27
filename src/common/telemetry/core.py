@@ -238,8 +238,10 @@ def _validate_configuration(value, *, pregame: bool) -> None:
     _exact_fields(compute, {"identity", "schema_version", "search", "policy"},
                   "compute configuration")
     _exact_fields(compute["search"], {
-        "identity", "schema_version", "depth_budget", "path_node_budget", "node_budget",
-        "time_budget_ms", "chance_sample_budget", "chance_seed", "noise_tolerance", "tie_seed",
+        "identity", "schema_version", "depth_budget", "main_depth_budget",
+        "main_continuation_discount",
+        "path_node_budget", "node_budget", "time_budget_ms", "chance_sample_budget",
+        "chance_seed", "noise_tolerance", "tie_seed",
     }, "search configuration")
     _exact_fields(compute["policy"], {
         "identity", "schema_version", "noise_tolerance", "tie_seed", "accepted_statuses",
@@ -563,6 +565,8 @@ def _allowed(value):
         if not all(isinstance(key, str) for key in value):
             raise TypeError("telemetry mapping keys must be strings")
         return {key: _allowed(item) for key, item in sorted(value.items())}
+    if hasattr(value, "kind") and hasattr(value, "parts"):
+        return {"kind": _allowed(value.kind), "parts": _allowed(value.parts)}
     if hasattr(value, "value"):
         return _allowed(value.value)
     raise TypeError(f"unsupported telemetry value {type(value).__name__}")
@@ -630,8 +634,7 @@ def _evaluation_model_configuration(value) -> dict:
             "values": {key: float(coefficient)
                        for key, coefficient in value.configuration.values},
         },
-        "roles": {str(card_id): list(roles)
-                  for card_id, roles in sorted(value.roles.items())},
+        "roles": {},
         "prize_plan": {
             "identity": value.prize_plan.identity,
             "protect": list(value.prize_plan.protect),

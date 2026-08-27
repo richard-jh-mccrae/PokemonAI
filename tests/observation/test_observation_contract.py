@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import copy
-from dataclasses import FrozenInstanceError
+from dataclasses import FrozenInstanceError, replace
 
 import pytest
 
@@ -12,6 +12,7 @@ from common.observation import (
     KnownOwnPrizes,
     LegalKnowledge,
     ObservationConstructionError,
+    ObservationEvent,
     ObservationRecord,
     ObservationStateBuilder,
     OpponentBelief,
@@ -109,9 +110,26 @@ def test_position_key_excludes_question_while_decision_key_includes_canonical_me
 
     assert a.position_key == b.position_key
     assert a.decision_key != b.decision_key
+    assert a.valuation_key != b.valuation_key
     assert a.legal_actions
     assert tuple(action.identity for action in a.legal_actions) == tuple(
         sorted(action.identity for action in a.legal_actions))
+
+
+def test_valuation_key_covers_events_and_stadium_ownership():
+    raw = printout()
+    raw["current"]["stadium"] = [{
+        "id": 1248, "serial": 40, "playerIndex": 0}]
+    mine = ObservationStateBuilder().root(raw)
+    theirs = replace(
+        mine, stadium=(replace(mine.stadium[0], owner=1),))
+    eventful = replace(
+        mine, events=(ObservationEvent(
+            6, (("fromArea", 4), ("toArea", 3)), True),))
+
+    assert mine.position_key == theirs.position_key == eventful.position_key
+    assert len({mine.valuation_key, theirs.valuation_key,
+                eventful.valuation_key}) == 3
 
 
 def test_advance_returns_parent_relative_typed_delta_and_reuses_nodes():
@@ -138,6 +156,7 @@ def test_record_round_trip_preserves_keys_without_tracking_serial_identity():
     assert restored == state
     assert restored.position_key == state.position_key
     assert restored.decision_key == state.decision_key
+    assert restored.valuation_key == state.valuation_key
     assert record.schema_version == 1
 
 

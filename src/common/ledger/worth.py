@@ -14,11 +14,10 @@ from enum import Enum
 from types import MappingProxyType
 from typing import Mapping
 
-from common.cards import FUNCTION_CATALOG, card_store, play_clauses, pokemon_default_roles
+from common.cards import FUNCTION_CATALOG, card_store, play_clauses
 from common.cards.card_facts import COLORLESS, SUPPORTER, EnergyCard, PokemonCard, TrainerCard
 from common.cards.functions.energy import provision_units
 from common.cards.functions.fetch import DEADNESS, fetch_target_matches
-from common.cards.pokemon_roles import undeclared_pokemon_roles
 from common.observation.knowledge import PROBABILITY_SCALE
 from common.opponent import ArchetypeBelief, OpponentMechanic, OpponentTrait
 from common.strategy import PrizePlan
@@ -33,38 +32,32 @@ MULTI_PROVISION_UNITS = 2
 
 @dataclass(frozen=True)
 class EvaluationModel:
-    """Everything deck-scoped the evaluator needs: configuration, Roles, and card facts."""
+    """Everything deck-scoped the evaluator needs for observable valuation."""
 
     configuration: ValuationConfiguration
-    roles: Mapping[int, tuple[str, ...]]
     store: Mapping[int, object] = field(repr=False)
     prize_plan: PrizePlan = PrizePlan()
     opponent_profiles: Mapping[str, "OpponentProfile"] = field(
         default_factory=dict, repr=False)
     store_identity: str = field(init=False)
+    _identity: str = field(init=False, repr=False, compare=False)
 
     def __post_init__(self):
         identity = (_default_store_identity() if self.store is card_store()
                     else content_identity(self.store))
         object.__setattr__(self, "store_identity", identity)
+        object.__setattr__(self, "_identity", _model_identity(
+            self.configuration, identity, self.prize_plan,
+            self.opponent_profiles))
 
     @classmethod
-    def build(cls, *, roles: Mapping[int, tuple[str, ...]] | None = None,
-              configuration: ValuationConfiguration | None = None,
+    def build(cls, *, configuration: ValuationConfiguration | None = None,
               overlay: DeckOverlay | None = None,
               prize_plan: PrizePlan | None = None,
               opponent_profiles: Mapping[str, "OpponentProfile"] | None = None,
               ) -> "EvaluationModel":
         configured = (configuration or ValuationConfiguration.general()).resolve(
             overlay or DeckOverlay())
-        merged = dict(pokemon_default_roles())
-        for card_id, declared in (roles or {}).items():
-            if declared:
-                merged[int(card_id)] = tuple(declared)
-        unknown_roles = undeclared_pokemon_roles(
-            role for declared in merged.values() for role in declared)
-        if unknown_roles:
-            raise KeyError(f"unknown Pokemon Role {unknown_roles[0]!r}")
         store = card_store()
         for facts in store.values():
             clauses = list(getattr(facts, "clauses", ()) or ())
@@ -74,29 +67,15 @@ class EvaluationModel:
                 clauses.extend(attack.clauses)
             FUNCTION_CATALOG.compile(clauses)
         profiles = MappingProxyType(dict(sorted((opponent_profiles or {}).items())))
-        return cls(configuration=configured, roles=merged, store=store,
+        return cls(configuration=configured, store=store,
                    prize_plan=prize_plan or PrizePlan(), opponent_profiles=profiles)
 
     @property
     def identity(self) -> str:
-        payload = {
-            "configuration": self.configuration.identity,
-            "prize_plan": self.prize_plan.identity,
-            "roles": tuple(sorted(self.roles.items())),
-            "store": self.store_identity,
-            "opponent_profiles": {
-                name: profile.canonical_data()
-                for name, profile in self.opponent_profiles.items()},
-        }
-        blob = json.dumps(payload, sort_keys=True).encode("utf-8")
-        return hashlib.blake2b(blob, digest_size=MODEL_ID_DIGEST_BYTES).hexdigest()
+        return self._identity
 
     def facts(self, card_id: int):
         return self.store.get(int(card_id))
-
-    def card_roles(self, card_id: int) -> tuple[str, ...]:
-        return self.roles.get(int(card_id), ())
-
 
 def _canonical(value):
     if is_dataclass(value) and not isinstance(value, type):
@@ -121,6 +100,19 @@ def _canonical(value):
 def content_identity(value) -> str:
     blob = json.dumps(_canonical(value), sort_keys=True, separators=(",", ":")).encode("utf-8")
     return hashlib.blake2b(blob, digest_size=CONTENT_ID_DIGEST_BYTES).hexdigest()
+
+
+def _model_identity(configuration, store_identity, prize_plan, opponent_profiles):
+    payload = {
+        "configuration": configuration.identity,
+        "prize_plan": prize_plan.identity,
+        "store": store_identity,
+        "opponent_profiles": {
+            name: profile.canonical_data()
+            for name, profile in opponent_profiles.items()},
+    }
+    blob = json.dumps(payload, sort_keys=True).encode("utf-8")
+    return hashlib.blake2b(blob, digest_size=MODEL_ID_DIGEST_BYTES).hexdigest()
 
 
 @lru_cache(maxsize=1)
@@ -498,7 +490,10 @@ def _liveness(card_id, facts, demand: Demand, ctx: EvaluationModel, deck_counts)
         clauses = tuple(getattr(facts, "clauses", ()) or ())
         fetches = tuple(c for c in clauses if c.kind == "fetch" and c.zone == "deck")
         if fetches and len(fetches) == len(clauses):
-            return _fetch_liveness(fetches, demand, ctx, deck_counts), None
+            return _fetch_liveness(fetches, demand, ctx, deck_counts), (
+                1 if facts.kind == SUPPORTER else None)
+        if facts.kind == SUPPORTER:
+            return DemandState.LIVE, 1
     return DemandState.LIVE, None
 
 

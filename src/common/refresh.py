@@ -51,6 +51,7 @@ def refresh_transition(state, action, cards=None) -> Refresh | None:
     branches = draw_branches(
         candidates[0], len(mine.get("prize") or ()), len(opponent.get("prize") or ()),
         my_hand_size=len(mine.get("hand") or ()),
+        cards_leaving_hand=1,
     )
     if not branches:
         return None

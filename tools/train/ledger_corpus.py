@@ -91,7 +91,6 @@ def _recorded_model(configuration: dict) -> EvaluationModel:
     model = EvaluationModel(
         ValuationConfiguration(valuation["values"],
                                schema_version=valuation["schema_version"]),
-        {int(card_id): tuple(roles) for card_id, roles in saved["roles"].items()},
         card_store(),
         PrizePlan(tuple(saved["prize_plan"]["protect"]),
                   tuple(saved["prize_plan"]["offer"])),
@@ -153,6 +152,34 @@ def _satisfies_human(chosen, correction, equivalence) -> bool:
     return any(_satisfies_one(chosen, ruling, equivalence) for ruling in rulings)
 
 
+def _runtime_equivalence(decision) -> dict:
+    result = getattr(decision, "decision_result", None)
+    roster = getattr(result, "roster", None)
+    classes = {}
+    for candidate in getattr(roster, "candidates", ()):
+        selections = getattr(candidate.action, "equivalent_selections", ())
+        singleton_indices = {selection[0] for selection in selections if len(selection) == 1}
+        if len(singleton_indices) > 1:
+            group = frozenset(singleton_indices)
+            classes.update((index, group) for index in group)
+    return classes
+
+
+def _training_candidates(decision) -> list[dict]:
+    result = getattr(decision, "decision_result", None)
+    roster = getattr(result, "roster", None)
+    rows = []
+    for candidate in getattr(roster, "candidates", ()):
+        delta = getattr(candidate, "delta", None)
+        rows.append({
+            "selection": list(candidate.action.selection),
+            "status": candidate.status.value,
+            "features": {component.key: component.activation
+                         for component in (() if delta is None else delta.components)},
+        })
+    return rows
+
+
 def _labels(obs, indices) -> str:
     select = obs.get("select") or {}
     options = select.get("option") or []
@@ -176,11 +203,13 @@ def _replay_one(deck_name: str, correction, weight_overrides=None) -> dict:
     chosen = list(decision.chosen)
     correct = list(correction.correct or ())
     graded = bool(correction.correct) or correction.correct == []
-    equivalence = option_equivalence(((obs.get("select") or {}).get("option") or []), obs)
+    equivalence = (_runtime_equivalence(decision) or
+                   option_equivalence(((obs.get("select") or {}).get("option") or []), obs))
     agrees = _satisfies_human(chosen, correction, equivalence) if graded else None
     diagnostics = decision.diagnostics or {}
     row = {
         "deck": deck_name,
+        "episode_id": correction.episode_id,
         "key": f"{correction.episode_id}-{(correction.decision or {}).get('frame', -1)}",
         "id": correction.id,
         # Not always "ledger": a shell fallback (exception, forced selection) names itself
@@ -192,6 +221,9 @@ def _replay_one(deck_name: str, correction, weight_overrides=None) -> dict:
         "graded": graded,
         "chosen": chosen,
         "correct": correct,
+        "acceptable": [correct, *[list(value or ())
+                                   for value in correction.correct_alternatives or ()]],
+        "candidates": _training_candidates(decision),
         "exact": bool(graded and chosen == correct),
         "agrees": agrees,
         "chosen_label": _labels(obs, chosen),

@@ -459,8 +459,8 @@ def main() -> None:
         source = effects.get(card_id) or TOOL_CLAUSES.get(card_id)
         if not source and card_id in core:
             raise SystemExit(f"trainer {card_id} has no clause encoding")
-        name, body = _emit_trainer(card, tuple(source or ()),
-                                   covers.get(card_id))
+        coverage = covers.get(card_id) or ("full" if card_id in TOOL_CLAUSES else None)
+        name, body = _emit_trainer(card, tuple(source or ()), coverage)
         emitted.append((TRAINER_OUT, name, body))
 
     for card_id in energies:

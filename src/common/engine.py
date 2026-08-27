@@ -156,24 +156,7 @@ class CgpyTransitionProvider:
                 self._engines[self._key(root)] = engine
                 self._attack_committed[self._key(root)] = False
                 return
-            from cgpy.rng import SeededRng
-            from cgpy.search import state_from_obs
-
-            obs = _payload(root)
-            current = obs.get("current") or {}
-            players = current.get("players") or ()
-            me = players[root.root_seat] if len(players) > root.root_seat else {}
-            opp = players[1 - root.root_seat] if len(players) > 1 else {}
-            own_deck, own_prize = _own_hidden_zones(
-                root, me, world_index=0, world_count=1)
-            filler = tuple(root.deck)
-            engine = state_from_obs(
-                obs, own_deck, own_prize,
-                _take(filler, int(opp.get("deckCount", 0))),
-                _take(filler, len(opp.get("prize") or ())),
-                _take(filler, int(opp.get("handCount", 0))), [],
-                manual_coin=True, rng=SeededRng(DEFAULT_RNG_SEED),
-            )
+            engine = self._begin_engine(root)
             self._engines[self._key(root)] = engine
             self._attack_committed[self._key(root)] = False
         except Exception as exc:  # noqa: BLE001 - becomes first-class Unknown
@@ -197,6 +180,27 @@ class CgpyTransitionProvider:
     def _key(self, state) -> str:
         """The engine-map key for a state; the preview seam substitutes identity tokens."""
         return state.semantic_key
+
+    @staticmethod
+    def _begin_engine(state):
+        from cgpy.rng import SeededRng
+        from cgpy.search import state_from_obs
+
+        obs = _payload(state)
+        current = obs.get("current") or {}
+        players = current.get("players") or ()
+        me = players[state.root_seat] if len(players) > state.root_seat else {}
+        opp = players[1 - state.root_seat] if len(players) > 1 else {}
+        own_deck, own_prize = _own_hidden_zones(
+            state, me, world_index=0, world_count=1)
+        filler = tuple(state.deck)
+        return state_from_obs(
+            obs, own_deck, own_prize,
+            _take(filler, int(opp.get("deckCount", 0))),
+            _take(filler, len(opp.get("prize") or ())),
+            _take(filler, int(opp.get("handCount", 0))), [],
+            manual_coin=True, rng=SeededRng(DEFAULT_RNG_SEED),
+        )
 
     def actions(self, state) -> tuple[LegalAction, ...]:
         if not self._local_nested and self._key(state) not in self._engines:
@@ -389,8 +393,13 @@ class CgpyTransitionProvider:
 
         players = engine.gs.players
         mine, opponent = players[state.root_seat], players[1 - state.root_seat]
+        bodies = tuple(body for body in (mine.active, *mine.bench) if body is not None)
+        all_team_rocket = bool(bodies) and all(
+            getattr(self.cards.get(engine.gs.card_id(body.top)), "name", "")
+            .casefold().startswith("team rocket") for body in bodies)
         amounts = draw_branches(
-            clause, len(mine.prize), len(opponent.prize), my_hand_size=len(mine.hand))
+            clause, len(mine.prize), len(opponent.prize), my_hand_size=len(mine.hand),
+            all_own_pokemon_team_rocket=all_team_rocket, cards_leaving_hand=1)
         if amounts is None or len(amounts) != 1 or amounts[0][1] != 0:
             return None
         draws = amounts[0][0]
