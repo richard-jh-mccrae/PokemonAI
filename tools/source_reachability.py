@@ -12,6 +12,7 @@ DYNAMIC_CARD_PACKAGES = (
 )
 OFFLINE_MODULES = frozenset({"common.engine", "common.information"})
 EXTERNAL_FUNCTIONS = frozenset({
+    "common.ledger.certification.certify_incremental",
     "common.ledger.seam.register_preview_variant",
     "common.telemetry.core.migrate_record",
 })
@@ -137,6 +138,7 @@ def analyze(root: Path) -> ReachabilityReport:
         *sorted((Path(root) / "tools" / "train" / "corpus").glob("*.py")),
         *sorted((Path(root) / "tools" / "train" / "blunder").glob("*.py")),
         Path(root) / "tools" / "train" / "ledger_corpus.py",
+        Path(root) / "tools" / "train" / "ledger_fit.py",
     ]
     trees.update({
         f"approved.{index}": ast.parse(
