@@ -90,6 +90,7 @@ class LedgerOnePlySearch:
     def search(self, request, evaluator, policy_model, provider, configuration):
         root = request.state
         board = getattr(root, "observation", root)
+        budget = BudgetController(configuration)
         state_values = {}
         evaluation_states = {}
 
@@ -125,6 +126,7 @@ class LedgerOnePlySearch:
         except Exception as exc:
             raise DecisionExecutionError(DecisionFailure.capture(
                 DecisionFailureStage.EVALUATION, exc)) from exc
+        root_budget_exhausted = budget.check()
         self._previous_evaluation_state = evaluation_states.get(
             (request.evaluation_model.identity, board.valuation_key))
         actions = tuple(root.legal_actions)
@@ -133,7 +135,8 @@ class LedgerOnePlySearch:
                 actions[0],
                 DecisionDelta(0.0, baseline.scale),
                 CandidateDisposition.FORCED,
-                EvaluationStatus.COMPLETE,
+                (EvaluationStatus.ESTIMATED if root_budget_exhausted
+                 else EvaluationStatus.COMPLETE),
                 search_value=SearchValue(baseline.total, baseline.scale),
                 prior=1.0,
                 policy_evidence=baseline.evidence,
@@ -141,9 +144,8 @@ class LedgerOnePlySearch:
             return SearchResult(
                 baseline,
                 CandidateRoster.from_legal_actions(actions, (candidate,), forced=True),
-                stop_reason="forced",
+                stop_reason=(budget.stop_reason if root_budget_exhausted else "forced"),
             )
-        budget = BudgetController(configuration)
         try:
             provider = provider.open() if isinstance(provider, TransitionProviderSource) else provider
             if not getattr(provider, "available", True):
@@ -243,18 +245,20 @@ class GreedyDecisionPolicy:
 
     @staticmethod
     def _ranked(candidates, configuration):
-        indexed = list(enumerate(candidates))
-
         def value(candidate):
             return float("-inf") if candidate.delta is None else candidate.delta.total
 
+        indexed = sorted(enumerate(candidates), key=lambda item: value(item[1]), reverse=True)
         ranked = []
-        while indexed:
-            best = max(value(candidate) for _index, candidate in indexed)
-            tied = tuple(
-                (index, candidate) for index, candidate in indexed
-                if best == float("-inf")
-                or best - value(candidate) <= configuration.noise_tolerance)
+        start = 0
+        while start < len(indexed):
+            best = value(indexed[start][1])
+            stop = start + 1
+            while (stop < len(indexed)
+                   and (best == float("-inf")
+                        or best - value(indexed[stop][1]) <= configuration.noise_tolerance)):
+                stop += 1
+            tied = tuple(indexed[start:stop])
             exact = all(value(candidate) == best for _index, candidate in tied)
             tied = tuple(sorted(tied, key=lambda item: (
                 item[1].policy_tie_break if exact else (),
@@ -262,9 +266,7 @@ class GreedyDecisionPolicy:
                     f"{configuration.tie_seed}:{item[0]}".encode("utf-8"),
                     digest_size=LOTTERY_DIGEST_BYTES).digest())))
             ranked.extend(candidate for _index, candidate in tied)
-            used = {index for index, _candidate in tied}
-            indexed = [(index, candidate) for index, candidate in indexed
-                       if index not in used]
+            start = stop
         return tuple(ranked)
 
 

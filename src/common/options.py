@@ -68,7 +68,7 @@ def _fingerprint(observation: Mapping, option: Mapping) -> str:
     return json.dumps([public, enriched], sort_keys=True, separators=(",", ":"))
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, slots=True)
 class LegalAction:
     identity: ActionIdentity
     selection: tuple[int, ...]
@@ -94,6 +94,10 @@ def enumerate_legal_actions(observation: Mapping) -> tuple[LegalAction, ...]:
     maximum = DEFAULT_PICK_COUNT if raw_maximum is None else int(raw_maximum)
     maximum = min(maximum, len(options))
     minimum = min(minimum, maximum)                  # an impossible ask still submits its closest
+    option_kinds = tuple(_KIND_NAMES.get(option.get("type"),
+                                          f"option_{option.get('type')}")
+                         for option in options)
+    option_fingerprints = tuple(_fingerprint(observation, option) for option in options)
     groups: dict[tuple[str, tuple[str, ...]], list[tuple[int, ...]]] = {}
     budget = SELECTION_ENUMERATION_CAP
     for count in range(max(0, minimum), maximum + 1):
@@ -103,12 +107,9 @@ def enumerate_legal_actions(observation: Mapping) -> tuple[LegalAction, ...]:
             if budget <= 0:
                 break
             budget -= 1
-            kinds = tuple(_KIND_NAMES.get(options[index].get("type"),
-                                          f"option_{options[index].get('type')}")
-                          for index in selection)
+            kinds = tuple(option_kinds[index] for index in selection)
             kind = "decline" if not selection else kinds[0] if len(set(kinds)) == 1 else "selection"
-            fingerprints = tuple(sorted(_fingerprint(observation, options[index])
-                                        for index in selection))
+            fingerprints = tuple(sorted(option_fingerprints[index] for index in selection))
             groups.setdefault((kind, fingerprints), []).append(selection)
     actions = []
     for (kind, fingerprints), selections in groups.items():

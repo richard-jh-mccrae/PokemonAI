@@ -13,6 +13,7 @@ DYNAMIC_CARD_PACKAGES = (
 OFFLINE_MODULES = frozenset({"common.engine", "common.information"})
 EXTERNAL_FUNCTIONS = frozenset({
     "common.cards.pokemon_default_roles",
+    "common.ledger.__getattr__",
     "common.ledger.certification.certify_incremental",
     "common.ledger.seam.register_preview_variant",
     "common.telemetry.core.migrate_record",

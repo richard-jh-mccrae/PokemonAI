@@ -412,6 +412,7 @@ class EngineCardStatProvider:
         self._attack_stats: dict[int, AttackStat] | None = None
         self._forward: _ForwardIndex | None = None
         self._name_ids: dict[str, frozenset[int]] | None = None
+        self._identity: str | None = None
 
     def _ensure_cache(self) -> None:
         """The single build site for all three tables, so they never diverge (ADR-0056)."""
@@ -429,7 +430,9 @@ class EngineCardStatProvider:
     @property
     def identity(self) -> str:
         self._ensure_cache()
-        return _stat_identity(self._cache, self._attack_stats)
+        if self._identity is None:
+            self._identity = _stat_identity(self._cache, self._attack_stats)
+        return self._identity
 
     def get(self, card_id: int) -> CardStat | None:
         self._ensure_cache()
