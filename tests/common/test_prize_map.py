@@ -2,7 +2,7 @@ from ledger_helpers import ScriptedProvider, action, body, player, printout
 
 from common.algebra import Deterministic
 from common.ledger import PrizeMap, ValuationConfiguration
-from common.ledger.chance import _average
+from common.ledger.chance import _RunningValuation
 from common.ledger.evaluate import Valuation
 from common.opponent import OpponentSnapshot
 from common.runtime import AgentRuntime
@@ -140,11 +140,13 @@ def test_prize_plan_cannot_override_superior_ledger_value(monkeypatch):
     assert runtime.decide(root).action == fund.identity
 
 
-def test_refresh_average_preserves_a_prize_map_shared_by_every_sample():
+def test_refresh_accumulator_preserves_a_prize_map_shared_by_every_sample():
     prize_map = PrizeMap(3, (CINDERACE, MEGA_STARMIE), 4, 1, (1,))
     valuation = Valuation(1.0, (), (), prize_map=prize_map)
+    running = _RunningValuation()
 
-    averaged, _gaps = _average(((valuation, object(), object()),
-                                (valuation, object(), object())), ())
+    running.add(valuation)
+    running.add(valuation)
+    averaged = running.finish(())
 
     assert averaged.prize_map == prize_map
