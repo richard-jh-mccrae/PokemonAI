@@ -141,6 +141,20 @@ def test_runtime_legal_actions_supply_duplicate_card_equivalence():
         correct=[6], correct_alternatives=[]), equivalence)
 
 
+def test_training_candidates_preserve_duplicate_card_selections():
+    from train.ledger_corpus import _training_candidates
+
+    action = SimpleNamespace(identity="play", selection=(3,),
+                             equivalent_selections=((3,), (6,)))
+    candidate = SimpleNamespace(action=action, delta=None, search_value=None,
+                                status=SimpleNamespace(value="complete"),
+                                successors=(), gaps=())
+    decision = SimpleNamespace(decision_result=SimpleNamespace(
+        roster=SimpleNamespace(candidates=(candidate,))))
+
+    assert _training_candidates(decision)[0]["equivalent_selections"] == [[3], [6]]
+
+
 def test_regressions_name_frames_that_used_to_agree():
     baseline = payload([row("a_deck", "r1", agrees=True), row("a_deck", "r2", agrees=False)])
     result = payload([row("a_deck", "r1", agrees=False), row("a_deck", "r2", agrees=False)],
@@ -210,6 +224,28 @@ def test_issue_626_structurally_valid_named_run_decisions_do_not_regress():
     assert all(row["graded"] and row["agrees"] for row in rows), [
         (frame, row["graded"], row["agrees"], row["chosen"], row["correct"])
         for frame, row in zip((4, 14, 26, 28, 29, 43), rows)]
+
+
+def test_latest_corrections_resolve_or_rank_the_ruled_action_above_the_blunder():
+    from pathlib import Path
+
+    from train.blunder.store import load_corrections
+    from train.ledger_corpus import _replay_one
+
+    store = (Path(__file__).resolve().parents[2] / "data" / "corrections"
+             / "20260828-221100_a39dfc83_mega_starmie")
+    corrections = {record.decision.get("frame"): record
+                   for record in load_corrections(store)}
+    rows = {frame: _replay_one(record.agent, record)
+            for frame, record in corrections.items()}
+
+    assert all(rows[frame]["agrees"]
+               for frame in (20, 22, 24, 36, 37, 38, 58, 81))
+    for frame in (9, 29, 49, 60):
+        row = rows[frame]
+        values = {tuple(candidate["selection"]): candidate["decision_delta"]
+                  for candidate in row["candidates"]}
+        assert values[tuple(row["correct"])] > values[tuple(row["recorded_chosen"])]
 
 
 def _archived_frame(deck_dir="mega_starmie_20260813_c9991b12"):

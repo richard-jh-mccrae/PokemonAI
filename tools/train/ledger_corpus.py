@@ -193,6 +193,9 @@ def _training_candidates(decision) -> list[dict]:
         rows.append({
             "action": str(candidate.action.identity),
             "selection": list(candidate.action.selection),
+            "equivalent_selections": [list(selection) for selection in getattr(
+                candidate.action, "equivalent_selections",
+                (candidate.action.selection,))],
             "status": candidate.status.value,
             "decision_delta": None if delta is None else delta.total,
             "search_value": (None if candidate.search_value is None

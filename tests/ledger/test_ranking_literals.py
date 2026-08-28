@@ -12,7 +12,9 @@ APPROVED_DECLARATIONS = {
     "src/common/decision/coordinator.py": {"LOTTERY_DIGEST_BYTES"},
     "src/common/ledger/activation.py": {"DAMAGE_UNIT_HP"},
     "src/common/ledger/chance.py": {
-        "DIRECT_REFRESH_CARD_GAIN", "PLAYER_COUNT", "SEED_DIGEST_BYTES"},
+        "DIRECT_REFRESH_CARD_GAIN", "DIRECT_REFRESH_MAX_RETAINED",
+        "MIN_ADAPTIVE_SAMPLES", "PLAYER_COUNT",
+        "SAMPLES_PER_OUTCOME", "SEED_DIGEST_BYTES"},
     "src/common/ledger/capabilities.py": {
         "ACTIVE_AREA", "ANCIENT_POKEMON_IDS", "ATTACHED_ENERGY_MATERIAL_UNIT",
         "ATTACK_EVENT_KIND", "BOUNCE_ENERGY_HAND_UNIT", "CLAUSE_COST_UNITS",
@@ -33,7 +35,6 @@ APPROVED_DECLARATIONS = {
     "src/common/ledger/decision.py": {"EVALUATOR_ID_DIGEST_BYTES"},
     "src/common/ledger/evaluate.py": {
         "DRAW_RESULT_CODE", "PRIZE_PHASE_PIVOT",
-        "ROUTE_STORED_ENERGY_VALUE",
     },
     "src/common/ledger/features.py": {
         "CATALOG_ID_DIGEST_BYTES", "FEATURE_CATALOG", "_BELIEF_DEFAULTS",
@@ -41,7 +42,8 @@ APPROVED_DECLARATIONS = {
         "OPTION_DEFAULTS", "OPTION_DEPTH_DEFAULTS",
         "_PLACEMENT_FACTORS", "_SCALAR_DEFAULTS",
     },
-    "src/common/ledger/preview.py": {"LOTTERY_DIGEST_BYTES"},
+    "src/common/ledger/preview.py": {"LOTTERY_DIGEST_BYTES", "PRIZE_PHASE_PIVOT"},
+    "src/common/ledger/prizes.py": {"PRIZE_ROUTE_CACHE_SIZE"},
     "src/common/ledger/portfolio.py": {"HAND_POKEMON_REALIZATION_DISCOUNT"},
     "src/common/ledger/readiness.py": {"REPORT_SCHEMA_VERSION"},
     "src/common/ledger/search.py": {"LOTTERY_DIGEST_BYTES"},

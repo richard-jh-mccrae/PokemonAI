@@ -223,7 +223,7 @@ def test_refresh_pricing_is_deterministic_without_expanding_another_main_menu():
     play, end = action("play", (0,)), action("end", (1,))
     provider = ScriptedProvider(
         menus={"root": (play, end)},
-        nodes={("root", play.identity): Refresh(LILLIES, ((6, 0),), False)})
+               nodes={("root", play.identity): Refresh(LILLIES, ((6, 0),), False)})
     decider = LedgerDecider(deck, "test", EvaluationModel.build(),
                             provider_factory=lambda _state, **_kw: provider)
     first = decider.decide(root_obs)
@@ -246,7 +246,7 @@ def test_lillies_prices_higher_when_the_hand_it_shuffles_away_is_dead():
         play, end = action("play", (0,)), action("end", (1,))
         provider = ScriptedProvider(
             menus={"root": (play, end)},
-            nodes={("root", play.identity): Refresh(LILLIES, ((6, 0),), False)})
+            nodes={("root", play.identity): Refresh(LILLIES, ((4, 0),), False)})
         decision = LedgerDecider(deck, "test", EvaluationModel.build(),
                                  provider_factory=lambda _s, **_kw: provider).decide(root_obs)
         return {entry["action"]: entry["swing"]

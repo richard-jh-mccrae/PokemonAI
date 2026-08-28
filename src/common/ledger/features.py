@@ -186,6 +186,8 @@ _DECLARED_RULES = {
     "action.overkill_counter": _rule("action", ("overkill_counter",), "constant"),
     "action.draw_before_refresh": _rule(
         "action", ("draw_before_refresh",), "constant"),
+    "action.acceleration_phase_fit": _rule(
+        "action", ("acceleration_phase_fit",), "constant"),
     "ability.resource_cost": _rule(
         "draw_effect", ("opponent_cards",), "constant"),
     "function.draw.available": _rule("function", ("draw",), "constant"),
@@ -257,6 +259,7 @@ _OBSERVATION_CLAIMS = {
     "demand.colorless_only": "colorless_only_hand_card",
     "demand.setup": "setup_hand_card",
     "development.ready_evolution": "evolution_access",
+    "development.hand_line": "hand_line",
     "development.visible_reach": "visible_development_reach",
     "development.next_turn_reach": "next_turn_development_reach",
     "copy.surplus": "surplus_hand_copy",
@@ -414,6 +417,7 @@ _KIND_PLACEMENTS = {
 }
 
 _SCALAR_DEFAULTS = {
+    "action.acceleration_phase_fit": 1.0,
     "action.damage_counter_progress": 1.0,
     "action.overkill_counter": -100.0,
     "action.draw_before_refresh": -0.75,
@@ -430,6 +434,7 @@ _SCALAR_DEFAULTS = {
     "demand.colorless_only": -0.02,
     "demand.setup": -0.01,
     "development.ready_evolution": 0.20,
+    "development.hand_line": 0.15,
     "development.visible_reach": 0.05,
     "development.next_turn_reach": 0.03,
     "copy.surplus": -0.03,
@@ -657,7 +662,7 @@ FEATURE_CATALOG = FeatureCatalog(
                 "resource.hand_option", "resource.stadium_option",
                 "resource.deck_option", "resource.prize_locked",
                 "resource.known_top_option")),
-    schema_version=18,
+    schema_version=19,
 )
 
 

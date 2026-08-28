@@ -1809,6 +1809,8 @@ def card_option_units(facts, side, opponent, board, ctx, *, reaches=None,
             values["cost"] += gate * (
                 clause_cost_units(clause, side)
                 + (0.0 if clause.kind == "heal"
+                   or (clause.kind == "draw"
+                       and clause.rider == "shuffle_own_hand_in")
                    else clause_rider_cost_units(clause, side)))
             if clause.kind == "draw":
                 mine, theirs = expected_draw_counts(

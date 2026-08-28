@@ -30,6 +30,24 @@ def _legacy_preservation_frontier(candidates, noise_tolerance=0.0):
             if other is candidate:
                 continue
             preserved = set(other.footprint.opportunities_preserved)
+            allowances_consumed = getattr(
+                candidate.footprint, "allowances_consumed", ())
+            zones_replaced = getattr(
+                candidate.footprint, "zones_replaced", ())
+            opportunities_created = getattr(
+                other.footprint, "opportunities_created", ())
+            other_allowances_consumed = getattr(
+                other.footprint, "allowances_consumed", ())
+            refresh_after_preparation = (
+                "supporter_played" in allowances_consumed
+                and "hand" in zones_replaced
+                and other.swing > noise_tolerance
+                and bool(opportunities_created)
+                and "play" in preserved
+                and "supporter_played" not in other_allowances_consumed)
+            if refresh_after_preparation:
+                deferred.add(candidate.action.identity)
+                break
             use_expiring_ability = (
                 other.action.identity.kind == "ability"
                 and candidate.action.identity.kind == "evolve"

@@ -62,6 +62,18 @@ def test_audit_sums_owner_split_components_before_comparison():
     }]
 
 
+def test_audit_finds_a_duplicate_card_through_its_equivalent_selection():
+    row = _row()
+    row["correct"] = [4]
+    row["acceptable"] = [[4]]
+    row["candidates"][1]["equivalent_selections"] = [[1], [4]]
+
+    audit = build_value_audit([row])["audits"][0]
+
+    assert audit["ruled"]["selection"] == [1]
+    assert audit["gradeable"] is True
+
+
 def test_value_audit_compares_the_ruled_and_original_committed_paths_at_the_locus():
     artifact = build_value_audit([_row()])
     audit = artifact["audits"][0]
