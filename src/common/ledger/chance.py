@@ -70,13 +70,6 @@ class _RunningValuation:
                          averaged, contributions, prize_map)
 
 
-def _average(samples, gaps):
-    running = _RunningValuation()
-    for valuation, _board, _observation in samples:
-        running.add(valuation)
-    return running.finish(gaps), tuple(gaps)
-
-
 def refresh_outcomes(observation, board: ObservationState, card_id: int,
                      draws, opponent_shuffles: bool, evaluate_fn, compute, ctx=None):
     compute = getattr(compute, "search", compute)

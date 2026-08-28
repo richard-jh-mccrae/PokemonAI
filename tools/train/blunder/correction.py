@@ -269,6 +269,7 @@ def build_correction(
 
     # Resolved ONCE, and the same value is stored below: validating against the Anchor's own `obs`
     # while storing an override would admit a record on evidence it does not carry.
+    evidence_available = obs is not None or getattr(decision, "obs", None) is not None
     obs = obs if obs is not None else getattr(decision, "obs", None)
     n_options = len(decision.options)
     if not correct:                          # turn scope may simply stay silent; decision must PROVE
@@ -282,12 +283,13 @@ def build_correction(
             raise ValueError(f"correct {correct!r} must index legal options 0..{n_options - 1}")
         if len(set(correct)) != len(correct):
             raise ValueError(f"correct {correct!r} contains a duplicate option")
-        minimum, maximum = select_min_count(obs), select_max_count(obs)
-        if (minimum is None or maximum is None
-                or len(correct) < minimum or len(correct) > maximum):
-            raise ValueError(
-                f"correct {correct!r} requires {minimum if minimum is not None else '?'}.."
-                f"{maximum if maximum is not None else '?'} option(s)")
+        if evidence_available:
+            minimum, maximum = select_min_count(obs), select_max_count(obs)
+            if (minimum is None or maximum is None
+                    or len(correct) < minimum or len(correct) > maximum):
+                raise ValueError(
+                    f"correct {correct!r} requires {minimum if minimum is not None else '?'}.."
+                    f"{maximum if maximum is not None else '?'} option(s)")
         if scope == "turn" and set(correct) == set(decision.chosen):
             raise ValueError(f"correct {correct!r} is what was chosen — a turn-scope prescription "
                              "must name the first DIVERGENT option at the Anchor")
