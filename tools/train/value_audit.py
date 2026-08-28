@@ -3,6 +3,7 @@ from __future__ import annotations
 import hashlib
 from itertools import combinations
 import json
+import math
 
 from common.ledger.training import parameter_manifest
 from train.blunder.correction import is_critical
@@ -32,7 +33,19 @@ def _gaps(candidate) -> tuple[str, ...]:
 
 
 def _components(candidate) -> dict[str, dict]:
-    return {str(item["feature"]): item for item in candidate.get("components", ())}
+    grouped = {}
+    for item in candidate.get("components", ()):
+        grouped.setdefault(str(item["feature"]), []).append(item)
+    return {feature: {
+        "feature": feature,
+        "activation": math.fsum(float(item.get("activation", 0.0)) for item in items),
+        "coefficient": next((item.get("coefficient") for item in items
+                             if item.get("coefficient") is not None), None),
+        "contribution": math.fsum(
+            float(item.get("contribution", 0.0)) for item in items),
+        "provenance": sorted({owner for item in items
+                              for owner in item.get("provenance", ())}),
+    } for feature, items in grouped.items()}
 
 
 def _component_differences(ruled, committed) -> list[dict]:
@@ -128,8 +141,10 @@ def _audit(row) -> dict:
     differences = [] if worst is None else worst["contribution_differences"]
     cause = _cause(gradeable, ruled or {}, committed or {}, differences,
                    float("-inf") if atomic_margin is None else atomic_margin)
-    proposal = (_proposal([], None) if satisfied_by_committed else
-                _proposal(differences, atomic_margin))
+    coefficient_ready = cause == "coefficient_seed"
+    proposal = (_proposal(differences, atomic_margin)
+                if not satisfied_by_committed and coefficient_ready
+                else _proposal([], None))
     return {
         "correction_id": row.get("id"),
         "deck": row.get("deck"),

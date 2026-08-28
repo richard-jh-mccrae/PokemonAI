@@ -36,6 +36,8 @@ def test_shell_defaults_to_local_viewer_and_sends_replay_and_selected_step():
     assert "player.hand=Array.from" in _SHELL_HTML
     assert "card.name='Hidden'" in _SHELL_HTML
     assert "...player.prize" in _SHELL_HTML
+    assert "f.min_count==null||f.max_count==null" in _SHELL_HTML
+    assert "correct.length<f.min_count||correct.length>f.max_count" in _SHELL_HTML
     assert "!holder.querySelector('canvas')" in _SHELL_HTML
     assert 'select[aria-label="Playback speed"]' in _SHELL_HTML
     assert "doc.defaultView.MutationObserver" in _SHELL_HTML
@@ -205,6 +207,16 @@ def test_shell_requests_the_board_before_full_ledger_decision_data():
     assert "await loadGame(true);" in _SHELL_HTML
     assert "openPlain(forceViewer);" in _SHELL_HTML
     assert "if(run!==gameLoadRun) return;" in _SHELL_HTML
+
+
+def test_decision_navigation_repaints_before_lazy_ledger_details_arrive():
+    show = _SHELL_HTML.index("async function show(n,withDetails=true)")
+    repaint = _SHELL_HTML.index("renderFrame(f,true);", show)
+    details = _SHELL_HTML.index("fetch('/frame.json?frame='+f.frame)", show)
+    hydration = _SHELL_HTML.index("renderFrame(f,false);", details)
+
+    assert repaint < details < hydration
+    assert "if(!resetForm) return;" in _SHELL_HTML
 
 
 def test_initial_match_index_does_not_load_decision_telemetry(tmp_path, monkeypatch):

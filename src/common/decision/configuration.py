@@ -21,7 +21,7 @@ class SearchConfiguration:
     path_node_budget: int = 128
     node_budget: int = 4096
     time_budget_ms: int | None = 1_000
-    chance_sample_budget: int = 24
+    chance_sample_budget: int = 12
     chance_seed: int = 582
     noise_tolerance: float = 1e-9
     tie_seed: int = 1178
@@ -127,10 +127,10 @@ def correction_compute_profile() -> ComputeConfiguration:
     return ComputeConfiguration(
         search=SearchConfiguration(
             depth_budget=32,
-            path_node_budget=2_048,
-            node_budget=200_000,
+            path_node_budget=512,
+            node_budget=8_192,
             time_budget_ms=None,
-            chance_sample_budget=128,
+            chance_sample_budget=12,
         ),
         policy=PolicyConfiguration(accepted_statuses=("complete", "estimated")),
         profile="correction",

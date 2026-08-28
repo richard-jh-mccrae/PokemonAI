@@ -1,4 +1,4 @@
-from train.value_audit import build_value_audit
+from train.value_audit import _component_differences, build_value_audit
 import json
 from pathlib import Path
 import subprocess
@@ -43,6 +43,25 @@ def _row(*, ruled_status="complete"):
     }
 
 
+def test_audit_sums_owner_split_components_before_comparison():
+    ruled = {"components": [
+        {"feature": "option.draw", "activation": 1.0, "coefficient": 0.5,
+         "contribution": 0.5, "provenance": ["first"]},
+        {"feature": "option.draw", "activation": 2.0, "coefficient": 0.5,
+         "contribution": 1.0, "provenance": ["second"]},
+    ]}
+    committed = {"components": [
+        {"feature": "option.draw", "activation": 1.0, "coefficient": 0.5,
+         "contribution": 0.5, "provenance": ["base"]},
+    ]}
+
+    assert _component_differences(ruled, committed) == [{
+        "feature": "option.draw", "activation_delta": 2.0,
+        "coefficient": 0.5, "contribution_delta": 1.0,
+        "provenance": ["base", "first", "second"],
+    }]
+
+
 def test_value_audit_compares_the_ruled_and_original_committed_paths_at_the_locus():
     artifact = build_value_audit([_row()])
     audit = artifact["audits"][0]
@@ -73,7 +92,26 @@ def test_successor_coverage_gap_precedes_search_completeness():
     row["candidates"][1]["successors"][0]["gaps"] = [
         "me.hand: incomplete card coverage 99"]
 
-    assert build_value_audit([row])["audits"][0]["cause"] == "coverage"
+    audit = build_value_audit([row])["audits"][0]
+    assert audit["cause"] == "coverage"
+    assert audit["calibration_proposal"]["changes"] == []
+
+
+def test_structural_causes_cannot_emit_coefficient_proposals():
+    for cause_setup in ("transition", "activation_equation", "portfolio_constraint"):
+        row = _row()
+        row["candidates"][1] = _candidate([1], 0.0, 2.0)
+        if cause_setup == "transition":
+            row["candidates"][1]["gaps"] = ["unsupported transition"]
+        elif cause_setup == "activation_equation":
+            row["candidates"][1]["components"] = row["candidates"][0]["components"]
+        else:
+            row["candidates"][1]["components"][0]["provenance"] = [
+                "feasible_option_portfolio"]
+        audit = build_value_audit([row])["audits"][0]
+        assert audit["cause"] == cause_setup
+        assert audit["calibration_proposal"]["required"] is False
+        assert audit["calibration_proposal"]["changes"] == []
 
 
 def test_portfolio_provenance_classifies_shared_resource_failures():

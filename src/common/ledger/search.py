@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import hashlib
 import math
+import re
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -39,6 +40,15 @@ SEARCH_SEMANTICS_IDENTITY = evaluator_semantics_identity((
     Path(__file__).with_name("chance.py"),
     Path(__file__).with_name("preview.py"),
 ))
+
+
+def _continuation_label(identity):
+    if identity.kind == "decline":
+        return "decline"
+    if identity.kind != "card":
+        return None
+    card_ids = re.findall(r'"id":(\d+)', "".join(identity.parts))
+    return f"card:{card_ids[-1]}" if len(set(card_ids)) == 1 else None
 
 
 class DecisionExecutionError(RuntimeError):
@@ -83,14 +93,78 @@ class LedgerOnePlySearch:
 
     def __init__(self):
         self._previous_evaluation_state = None
+        self._active_continuation_policy = {}
+        self._last_continuation_policies = {}
+        self._served_cached_continuation = False
 
     def reset(self):
         self._previous_evaluation_state = None
+        self._active_continuation_policy = {}
+        self._last_continuation_policies = {}
+        self._served_cached_continuation = False
+
+    def commit(self, action):
+        if self._served_cached_continuation:
+            self._served_cached_continuation = False
+            return
+        identity = getattr(action, "identity", action)
+        self._active_continuation_policy = dict(
+            self._last_continuation_policies.get(identity, ()))
+
+    def _cached_continuation(self, actions, baseline):
+        menu = tuple(action.identity for action in actions)
+        chosen_identity = self._active_continuation_policy.pop(menu, None)
+        if chosen_identity is None:
+            offered = set(menu)
+            compatible = [
+                (len(offered & set(cached_menu)), cached_menu, cached_choice)
+                for cached_menu, cached_choice in self._active_continuation_policy.items()
+                if cached_choice in offered
+                and (set(cached_menu) <= offered or offered <= set(cached_menu))]
+            if compatible:
+                _overlap, cached_menu, chosen_identity = max(
+                    compatible, key=lambda row: row[0])
+                del self._active_continuation_policy[cached_menu]
+        if chosen_identity is None:
+            labels = {_continuation_label(action.identity): action.identity
+                      for action in actions}
+            offered = set(labels) - {None}
+            compatible = [
+                (len(offered & set(cached_menu)), cached_menu, cached_choice)
+                for cached_menu, cached_choice in self._active_continuation_policy.items()
+                if isinstance(cached_choice, str) and cached_choice in offered
+                and (set(cached_menu) <= offered or offered <= set(cached_menu))]
+            if compatible:
+                _overlap, cached_menu, cached_choice = max(
+                    compatible, key=lambda row: row[0])
+                del self._active_continuation_policy[cached_menu]
+                chosen_identity = labels[cached_choice]
+        if chosen_identity is None:
+            return None
+        self._served_cached_continuation = True
+        candidates = []
+        for action in actions:
+            chosen = action.identity == chosen_identity
+            candidates.append(ValuedCandidate(
+                action,
+                DecisionDelta(0.0, baseline.scale) if chosen else None,
+                CandidateDisposition.FORCED,
+                EvaluationStatus.COMPLETE if chosen else EvaluationStatus.UNAVAILABLE,
+                gaps=() if chosen else ("not selected by cached compound policy",),
+                search_value=(SearchValue(baseline.total, baseline.scale)
+                              if chosen else None),
+                prior=1.0 if chosen else 0.0,
+                policy_evidence=baseline.evidence if chosen else None,
+            ))
+        return SearchResult(
+            baseline,
+            CandidateRoster.from_legal_actions(actions, tuple(candidates), forced=True),
+            stop_reason="cached_continuation",
+        )
 
     def search(self, request, evaluator, policy_model, provider, configuration):
         root = request.state
         board = getattr(root, "observation", root)
-        budget = BudgetController(configuration)
         state_values = {}
         evaluation_states = {}
 
@@ -126,10 +200,15 @@ class LedgerOnePlySearch:
         except Exception as exc:
             raise DecisionExecutionError(DecisionFailure.capture(
                 DecisionFailureStage.EVALUATION, exc)) from exc
-        root_budget_exhausted = budget.check()
         self._previous_evaluation_state = evaluation_states.get(
             (request.evaluation_model.identity, board.valuation_key))
         actions = tuple(root.legal_actions)
+        cached = self._cached_continuation(actions, baseline)
+        if cached is not None:
+            return cached
+        self._active_continuation_policy = {}
+        budget = BudgetController(configuration)
+        root_budget_exhausted = budget.check()
         if board.select is not None and len(actions) == 1:
             candidate = ValuedCandidate(
                 actions[0],
@@ -171,6 +250,8 @@ class LedgerOnePlySearch:
                                                       abs_tol=configuration.noise_tolerance))):
             raise ValueError("policy priors must be a finite normalized distribution")
         candidates = []
+        self._last_continuation_policies = {
+            price.action.identity: price.continuation_policy for price in prices}
         for price, prior in zip(prices, prior_values):
             disposition = (CandidateDisposition.FORCED if forced else
                            CandidateDisposition.ENDS_TURN if price.ends_turn else
@@ -214,6 +295,39 @@ class LedgerOnePlySearch:
         )
 
 
+def preservation_frontier(candidates, noise_tolerance=0.0):
+    deferred = set()
+    for candidate in candidates:
+        continuation = (getattr(candidate, "continuation", None)
+                        or getattr(candidate, "footprint", None))
+        consumed = set(() if continuation is None else
+                       continuation.opportunities_consumed)
+        if not consumed:
+            continue
+        for other in candidates:
+            if other is candidate:
+                continue
+            if other.delta is None or candidate.delta is None:
+                continue
+            other_continuation = (getattr(other, "continuation", None)
+                                  or getattr(other, "footprint", None))
+            preserved = (() if other_continuation is None else
+                         other_continuation.opportunities_preserved)
+            use_expiring_ability = (
+                other.action.identity.kind == "ability"
+                and candidate.action.identity.kind == "evolve"
+                and other.delta.total > noise_tolerance)
+            if (not use_expiring_ability
+                    and other.delta.total + noise_tolerance < candidate.delta.total):
+                continue
+            if (other.action.identity.kind in consumed
+                    and candidate.action.identity.kind in preserved):
+                deferred.add(id(candidate))
+                break
+    return tuple(candidate for candidate in candidates
+                 if id(candidate) not in deferred) or tuple(candidates)
+
+
 class GreedyDecisionPolicy:
     identity = f"ledger-spend-then-end-v1:{SEARCH_SEMANTICS_IDENTITY}"
 
@@ -233,7 +347,8 @@ class GreedyDecisionPolicy:
                 and candidate.delta is not None
                 and candidate.delta.total > configuration.noise_tolerance)
             if continuing:
-                candidates = continuing
+                candidates = preservation_frontier(
+                    continuing, configuration.noise_tolerance)
                 reason = DecisionReason.POSITIVE_CONTINUATION
             else:
                 enders = tuple(candidate for candidate in candidates

@@ -131,7 +131,8 @@ def _corrections(tmp_path):
     records = []
     for index, focal in enumerate(FOCALS):
         episode = 10 + index * 10
-        decision = Decision(episode, 1, 0, 1, "Main", "Main", [{}, {}], [0], {})
+        obs = {"select": {"minCount": 1, "maxCount": 1}}
+        decision = Decision(episode, 1, 0, 1, "Main", "Main", [{}, {}], [0], {}, obs=obs)
         records.append(build_correction(
             decision, source="own", agent=focal, correct=[1], category="other",
             rationale="Prefer the better line.").to_dict())

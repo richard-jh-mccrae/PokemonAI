@@ -71,6 +71,9 @@ def test_correction_profile_uses_structural_bounds_without_an_inner_deadline():
 
     assert compute.profile == "correction"
     assert compute.search.time_budget_ms is None
+    assert compute.search.path_node_budget == 512
+    assert compute.search.node_budget == 8_192
+    assert compute.search.chance_sample_budget == 12
     assert budget.visit("first")
     assert budget.visit("second")
     assert budget.stop_reason == "complete"

@@ -17,6 +17,7 @@ in `reviewed.json` are RETIRED — listed in their own section, never graded.
 from __future__ import annotations
 
 import argparse
+import math
 from collections import Counter
 from concurrent.futures import ProcessPoolExecutor, as_completed
 from datetime import datetime, timezone
@@ -45,6 +46,7 @@ from common.ledger import (EvaluationModel, LedgerDecider, OpponentProfile,
 from common.opponent import OpponentMechanic, OpponentTrait  # noqa: E402
 from common.strategy import PrizePlan  # noqa: E402
 from train.blunder.store import dedup_corrections, jsonl_files, load_corrections  # noqa: E402
+from train.blunder.correction import correction_selection_error  # noqa: E402
 from train.blunder.decode import option_label  # noqa: E402
 from train.blunder.reviewed import load_reviewed, partition_reviewed  # noqa: E402
 from train.ledger_parity import assert_runtime_parity  # noqa: E402
@@ -184,6 +186,10 @@ def _training_candidates(decision) -> list[dict]:
     rows = []
     for candidate in getattr(roster, "candidates", ()):
         delta = getattr(candidate, "delta", None)
+        components = (() if delta is None else delta.components)
+        feature_values = {}
+        for component in components:
+            feature_values.setdefault(component.key, []).append(component.activation)
         rows.append({
             "action": str(candidate.action.identity),
             "selection": list(candidate.action.selection),
@@ -191,15 +197,15 @@ def _training_candidates(decision) -> list[dict]:
             "decision_delta": None if delta is None else delta.total,
             "search_value": (None if candidate.search_value is None
                              else candidate.search_value.total),
-            "features": {component.key: component.activation
-                         for component in (() if delta is None else delta.components)},
+            "features": {feature: math.fsum(values)
+                         for feature, values in feature_values.items()},
             "components": [{
                 "feature": component.key,
                 "activation": component.activation,
                 "coefficient": component.coefficient,
                 "contribution": component.value,
                 "provenance": list(component.provenance),
-            } for component in (() if delta is None else delta.components)],
+            } for component in components],
             "successors": [{
                 "probability": successor.probability,
                 "ended": successor.ended,
@@ -213,7 +219,10 @@ def _training_candidates(decision) -> list[dict]:
     return rows
 
 
-def _grading_eligibility(has_ruling: bool, candidates) -> tuple[bool, str | None]:
+def _grading_eligibility(has_ruling: bool, candidates,
+                         structural_error: str | None = None) -> tuple[bool, str | None]:
+    if structural_error is not None:
+        return False, structural_error
     if not has_ruling:
         return False, "no_ruling"
     candidates = tuple(candidates)
@@ -249,7 +258,8 @@ def _replay_one(deck_name: str, correction, weight_overrides=None) -> dict:
     equivalence = (_runtime_equivalence(decision) or
                    option_equivalence(((obs.get("select") or {}).get("option") or []), obs))
     candidates = _training_candidates(decision)
-    graded, excluded_reason = _grading_eligibility(has_ruling, candidates)
+    graded, excluded_reason = _grading_eligibility(
+        has_ruling, candidates, correction_selection_error(correction))
     agrees = _satisfies_human(chosen, correction, equivalence) if graded else None
     diagnostics = decision.diagnostics or {}
     row = {

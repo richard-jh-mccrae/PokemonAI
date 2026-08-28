@@ -1618,7 +1618,7 @@ def body_capability(body, side, opponent, board, ctx, *, reach=None) -> Capabili
     retreat = ((1.0 if facts.retreat_cost <= 0 else
                 min(1.0, len(body.energies) / facts.retreat_cost))
                if body is side.active and side.bench else 0.0)
-    return replace(ability, attack_now=immediate, attack_progress=progress,
+    result = replace(ability, attack_now=immediate, attack_progress=progress,
                    attack_future=future, attack_potential=potential,
                    line_potential=line_potential, bench_reach=bench,
                    resource_cost=(ability.resource_cost + attack_lock_cost
@@ -1626,24 +1626,49 @@ def body_capability(body, side, opponent, board, ctx, *, reach=None) -> Capabili
                    search_cards=ability.search_cards + first_turn_search,
                    denial=ability.denial + weakness_override + future_protection,
                    retreat_progress=retreat)
+    persistent_body = _without_end_turn_energy(body, ctx)
+    if persistent_body is not body:
+        persistent_side = replace(
+            side,
+            active=persistent_body if side.active is body else side.active,
+            bench=tuple(persistent_body if item is body else item for item in side.bench),
+        )
+        persistent = body_capability(
+            persistent_body, persistent_side, opponent, board, ctx, reach=reach)
+        result = replace(
+            result, attack_progress=persistent.attack_progress,
+            attack_future=persistent.attack_future)
+    return result
 
 
 def _without_bench_rentals(body, side, ctx):
-    if body is side.active or not body.energy_cards:
+    if body is side.active:
+        return body
+    return _without_end_turn_energy(body, ctx)
+
+
+def _without_end_turn_energy(body, ctx):
+    if not body.energy_cards:
         return body
     provisions = list(body.energies)
+    persistent_cards = []
     changed = False
     for card in body.energy_cards:
         facts = ctx.facts(card.card_id)
         if not any(clause.rider == "discard_eot" for clause in card_clauses(facts)):
+            persistent_cards.append(card)
             continue
         supplied = getattr(facts, "provides", None)
-        index = next((index for index, unit in enumerate(provisions)
-                      if supplied is None or unit == supplied), None)
-        if index is not None:
-            provisions.pop(index)
-            changed = True
-    return replace(body, energies=tuple(provisions)) if changed else body
+        for _unit in range(provision_units(
+                facts, evolved=bool(getattr(ctx.facts(body.card.card_id),
+                                             "evolves_from", None)))):
+            index = next((index for index, unit in enumerate(provisions)
+                          if supplied is None or unit == supplied), None)
+            if index is not None:
+                provisions.pop(index)
+                changed = True
+    return (replace(body, energies=tuple(provisions), energy_cards=tuple(persistent_cards))
+            if changed else body)
 
 
 def best_current_damage(body, side, opponent, board, ctx) -> float:
@@ -1705,7 +1730,8 @@ def recoverable_discard_ids(side, ctx) -> frozenset[int]:
     return frozenset(recoverable)
 
 
-def card_option_units(facts, side, opponent, board, ctx, *, reaches=None) -> OptionUnits:
+def card_option_units(facts, side, opponent, board, ctx, *, reaches=None,
+                      _price_shuffle_loss=True) -> OptionUnits:
     if isinstance(facts, EnergyCard):
         hand = tuple(side.hand)
         copies = sum(
@@ -1792,15 +1818,19 @@ def card_option_units(facts, side, opponent, board, ctx, *, reaches=None) -> Opt
                 if clause.rider == "shuffle_own_hand_in":
                     target = max(0.0, target - max(0, side.hand_count - 1))
                 values["draw"] += gate * target
-                if clause.rider == "shuffle_own_hand_in":
+                if clause.rider == "shuffle_own_hand_in" and _price_shuffle_loss:
+                    skipped_played_copy = False
                     for card in tuple(side.hand):
                         held = ctx.facts(card.card_id)
-                        if isinstance(held, TrainerCard):
+                        if card.card_id == facts.card_id and not skipped_played_copy:
+                            skipped_played_copy = True
                             continue
                         units = card_option_units(
-                            held, side, opponent, board, ctx, reaches=reaches)
+                            held, side, opponent, board, ctx, reaches=reaches,
+                            _price_shuffle_loss=False)
                         for field in OptionUnits.__dataclass_fields__:
-                            values[field] -= gate * getattr(units, field)
+                            if field != "cost":
+                                values[field] -= gate * max(0.0, getattr(units, field))
             elif clause.kind == "fetch":
                 values["search"] += gate * _quantity(clause.amount, 1)
             elif clause.kind in {"accel", "energy_recur", "move_energy"}:

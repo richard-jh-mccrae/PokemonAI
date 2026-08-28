@@ -7,6 +7,7 @@ the same scripts, never recomputed by hand, so the assertions read pure arithmet
 from __future__ import annotations
 
 import math
+from types import SimpleNamespace
 import pytest
 
 from ledger_helpers import (DRAGAPULT, FIRE_E, ScriptedProvider, action, body, player,
@@ -14,7 +15,10 @@ from ledger_helpers import (DRAGAPULT, FIRE_E, ScriptedProvider, action, body, p
 
 from common.algebra import (Actor, Chance, Choice, Deterministic, Edge, RevealChoice,
                             RevealOutcome, Terminal, WeightedEdge)
+from common.decision import EvaluationStatus, SearchConfiguration
 from common.ledger import DeckOverlay, EvaluationModel, LedgerDecider
+from common.ledger.evaluate import FeatureActivation, FeatureContribution, Valuation, evaluate
+from common.ledger.preview import _realized_portfolio_contributions, price_actions
 from common.observation import ObservationStateBuilder
 from deprecated.bellman.state import DecisionState
 
@@ -55,6 +59,129 @@ def test_chance_weights_its_legs_by_probability():
     mixed, _, _ = price_of(Chance((WeightedEdge(0.25, "good", Deterministic(GOOD)),
                                    WeightedEdge(0.75, "bad", Deterministic(BAD)))))
     assert mixed == pytest.approx(0.25 * good_swing + 0.75 * bad_swing, abs=1e-9)
+
+
+def test_terminal_action_is_priced_against_the_legal_end_successor():
+    play, end = action("play", (0,)), action("end", (1,))
+    pass_good = state_of(printout(
+        me=player(active=body(DRAGAPULT, 1), hand=[FIRE_E]),
+        them=player(own=False, active=body(DRAGAPULT, 2, hp=80)), turn=3))
+    providers = tuple(ScriptedProvider(
+        menus={"root": (play, end)},
+        nodes={("root", play.identity): Terminal(GOOD, "done"),
+               ("root", end.identity): Terminal(pass_state, "passed")})
+        for pass_state in (BAD, pass_good))
+
+    swings = []
+    for provider in providers:
+        decision = LedgerDecider(
+            DECK, "test", EvaluationModel.build(),
+            provider_factory=lambda _s, **_kw: provider).decide(ROOT_OBS)
+        swings.append(next(row["swing"] for row in decision.diagnostics["prices"]
+                           if row["action"] == str(play.identity)))
+
+    ctx = EvaluationModel.build()
+    builder = ObservationStateBuilder(DECK)
+    expected_shift = evaluate(builder.root(BAD.observation), ctx).total - evaluate(
+        builder.root(pass_good.observation), ctx).total
+    assert swings[1] == pytest.approx(swings[0] + expected_shift)
+
+
+def _end_price(end_node, *, compute=None, valuation_fn=None):
+    end = action("end", (1,))
+    root = state_of(ROOT_OBS)
+    key = root.semantic_key
+    provider_type = ScriptedProvider
+    if end_node is None:
+        class UnavailableProvider(ScriptedProvider):
+            def transition(self, _state, _action):
+                raise KeyError("pass unavailable")
+        provider_type = UnavailableProvider
+    provider = provider_type(
+        menus={key: (end,)},
+        nodes={} if end_node is None else {(key, end.identity): end_node})
+    context = EvaluationModel.build()
+    board = ObservationStateBuilder(DECK).root(ROOT_OBS)
+    prices = price_actions(
+        root, board, evaluate(board, context).total, provider,
+        context, compute=compute, valuation_fn=valuation_fn)
+    return prices[0]
+
+
+def test_end_counterfactual_reports_complete_estimated_and_unavailable():
+    complete = _end_price(Terminal(BAD, "passed"))
+    estimated = _end_price(
+        Deterministic(BAD), compute=SearchConfiguration(path_node_budget=1))
+    unavailable = _end_price(None)
+
+    assert complete.status is EvaluationStatus.COMPLETE
+    assert estimated.status is EvaluationStatus.ESTIMATED
+    assert estimated.gaps == ("chain capped; scored mid-effect board",)
+    assert unavailable.status is EvaluationStatus.UNAVAILABLE
+    assert unavailable.gaps == ("end counterfactual unavailable: KeyError",)
+
+
+def test_unavailable_end_counterfactual_still_returns_the_legal_failsafe():
+    end = action("end", (1,))
+    class UnavailableProvider(ScriptedProvider):
+        def transition(self, _state, _action):
+            raise KeyError("pass unavailable")
+    provider = UnavailableProvider(menus={"root": (end,)}, nodes={})
+
+    decision = LedgerDecider(
+        DECK, "test", EvaluationModel.build(),
+        provider_factory=lambda _state, **_kwargs: provider).decide(ROOT_OBS)
+
+    assert decision.chosen == end.selection
+    assert decision.complete is False
+
+
+def test_end_successor_valuation_is_computed_once():
+    counts = {}
+    context = EvaluationModel.build()
+
+    def counted(board):
+        counts[board.position_key] = counts.get(board.position_key, 0) + 1
+        return evaluate(board, context)
+
+    price = _end_price(Terminal(BAD, "passed"), valuation_fn=counted)
+    end_board = ObservationStateBuilder(DECK).root(BAD.observation)
+
+    assert price.status is EvaluationStatus.COMPLETE
+    assert counts[end_board.position_key] == 1
+
+
+def test_generated_shared_phase_value_cancels_against_end():
+    play, end = action("play", (0,)), action("end", (1,))
+    root = state_of(ROOT_OBS)
+    key = root.semantic_key
+    provider = ScriptedProvider(
+        menus={key: (play, end)},
+        nodes={(key, play.identity): Terminal(GOOD, "played"),
+               (key, end.identity): Terminal(BAD, "passed")})
+    context = EvaluationModel.build()
+    board = ObservationStateBuilder(DECK).root(ROOT_OBS)
+
+    swings = []
+    for shared_phase in (0.0, 3.0, 20.0):
+        def phased(candidate):
+            material = float(bool(candidate.me.active and candidate.me.active.energies))
+            activation = material + shared_phase
+            feature = "kind.energy"
+            coefficient = context.configuration[feature]
+            return Valuation(
+                activation * coefficient, (), (),
+                (FeatureActivation(feature, activation, ("phase",)),),
+                (FeatureContribution(feature, activation, coefficient,
+                                     activation * coefficient, ("phase",)),))
+
+        prices = price_actions(
+            root, board, 0.0, provider, context,
+            valuation_fn=phased)
+        swings.append(next(price.swing for price in prices if price.action is play))
+
+    assert swings[0] > 0
+    assert swings == pytest.approx([swings[0]] * len(swings))
 
 
 def test_chance_activations_are_independent_of_valuation_coefficients():
@@ -298,3 +425,42 @@ def test_an_empty_forced_menu_logs_its_gap_and_scores_the_mid_board():
                              provider_factory=lambda _s, **_kw: provider).decide(ROOT_OBS)
     assert any("forced menu offered no actions" in gap
                for gap in decision.diagnostics["gaps"])
+
+
+@pytest.mark.parametrize("kind", ("play", "attach", "evolve"))
+def test_realization_credits_only_the_selected_portfolio_source(kind):
+    first = "feasible_option_portfolio:serial:11"
+    second = "feasible_option_portfolio:serial:12"
+    baseline = Valuation(0.5, (), (), contributions=(
+        FeatureContribution("option.draw", 1.0, 0.2, 0.2, (first,)),
+        FeatureContribution("option.draw", 1.5, 0.2, 0.3, (second,)),
+    ))
+    board = SimpleNamespace(select=SimpleNamespace(options=(
+        SimpleNamespace(serial=11, cardId=100),
+        SimpleNamespace(serial=12, cardId=100),
+    )))
+    selected = SimpleNamespace(
+        identity=SimpleNamespace(kind=kind), selection=(0,))
+
+    realized = _realized_portfolio_contributions(baseline, board, selected)
+
+    assert [(item.activation, item.value) for item in realized] == [(1.0, 0.2)]
+    assert first in realized[0].provenance
+    assert second not in realized[0].provenance
+
+
+@pytest.mark.parametrize("kind", ("play", "attach", "evolve"))
+def test_realization_resolves_main_options_through_their_hand_index(kind):
+    board = ObservationStateBuilder().root(printout(
+        me=player(hand=[FIRE_E]),
+        select={"context": 0, "minCount": 1, "maxCount": 1,
+                "option": [{"area": 2, "index": 0, "type": 7}]}))
+    owner = "feasible_option_portfolio:serial:800"
+    baseline = Valuation(0.2, (), (), contributions=(
+        FeatureContribution("option.energy", 2.0, 0.1, 0.2, (owner,)),))
+    selected = SimpleNamespace(
+        identity=SimpleNamespace(kind=kind), selection=(0,))
+
+    realized = _realized_portfolio_contributions(baseline, board, selected)
+
+    assert [(item.activation, item.value) for item in realized] == [(2.0, 0.2)]

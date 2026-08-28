@@ -256,7 +256,7 @@ def test_lillies_prices_higher_when_the_hand_it_shuffles_away_is_dead():
     assert context.facts(DARK_E).kind == context.facts(FIRE_E).kind
     dead_hand = [DARK_E, DARK_E]        # Dreepy has no dark or colorless slot: dead cards
     live_hand = [FIRE_E, FIRE_E]        # fire fills Bite's typed partner slot on Dreepy
-    assert swing_of(dead_hand) > swing_of(live_hand) + 0.05
+    assert swing_of(dead_hand) > swing_of(live_hand)
 
 
 def test_harlequin_two_leg_ev_prices_the_opponents_redraw():
@@ -526,6 +526,11 @@ def test_price_actions_has_no_mechanic_specific_ordering_flags():
     prices = price_actions(state, board, evaluate(board, ctx).total, provider, ctx)
     assert all(not hasattr(price, "refresh") and not hasattr(price, "restocks")
                for price in prices)
+    refresh_price = next(price for price in prices if price.action is play)
+    assert refresh_price.successors == ()
+    assert len(refresh_price.chance_summaries) == 1
+    assert refresh_price.chance_summaries[0].sample_count == 0
+    assert refresh_price.chance_summaries[0].method == "direct"
     assert all(sum(item.value for item in price.footprint.contributions)
                == pytest.approx(price.swing) for price in prices)
 

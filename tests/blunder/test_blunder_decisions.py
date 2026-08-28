@@ -120,6 +120,8 @@ def test_decision_time_reaches_both_shell_payloads_and_visible_ui():
 
     assert listed[0]["decision_seconds"] == pytest.approx(2.5)
     assert frames[0]["decision_seconds"] == pytest.approx(2.5)
+    assert "min_count" in frames[0]
+    assert "max_count" in frames[0]
     assert frames[-1]["decision_seconds"] is None
     assert "decision time" in _SHELL_HTML
     assert "decision_seconds" in _SHELL_HTML

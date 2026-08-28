@@ -3,8 +3,11 @@ from __future__ import annotations
 
 from types import SimpleNamespace
 
-from train.ledger_corpus import (_runtime_equivalence, _satisfies_human, payload,
-                                 render_markdown, _grading_eligibility)
+import pytest
+
+from train.ledger_corpus import (_runtime_equivalence, _satisfies_human, _training_candidates,
+                                 payload, render_markdown, _grading_eligibility)
+from train.blunder.correction import correction_selection_error
 
 
 def row(deck, row_id, *, agrees, graded=True, gaps=(), chosen=(0,), correct=(1,)):
@@ -36,6 +39,69 @@ def test_incomplete_search_is_excluded_from_correction_grading():
             False, "search_incomplete")
     assert _grading_eligibility(True, [
         {"status": "complete"}, {"status": "complete"}]) == (True, None)
+
+
+def test_training_vectors_sum_owner_split_components_with_the_same_feature():
+    components = tuple(SimpleNamespace(
+        key="option.draw", activation=value, coefficient=0.5,
+        value=value * 0.5, provenance=(owner,))
+        for value, owner in ((1.0, "first"), (2.0, "second")))
+    candidate = SimpleNamespace(
+        action=SimpleNamespace(identity="play", selection=(0,)),
+        status=SimpleNamespace(value="complete"),
+        delta=SimpleNamespace(total=1.5, components=components),
+        search_value=SimpleNamespace(total=2.0), successors=(), gaps=())
+    decision = SimpleNamespace(decision_result=SimpleNamespace(
+        roster=SimpleNamespace(candidates=(candidate,))))
+
+    row = _training_candidates(decision)[0]
+
+    assert row["features"]["option.draw"] == 3.0
+    assert len(row["components"]) == 2
+
+
+def test_historical_over_cardinality_correction_is_structurally_excluded():
+    correction = SimpleNamespace(correct=[0, 2], obs={
+        "select": {"minCount": 1, "maxCount": 1, "option": [{}, {}, {}]},
+    })
+
+    assert correction_selection_error(correction) == "invalid_correction_cardinality"
+
+
+def test_historical_empty_required_selection_is_structurally_excluded():
+    correction = SimpleNamespace(correct=[], scope="decision", obs={
+        "select": {"minCount": 1, "maxCount": 1, "option": [{}, {}]},
+    })
+
+    assert correction_selection_error(correction) == "invalid_correction_cardinality"
+
+
+def test_empty_turn_scope_evidence_is_not_anchor_cardinality():
+    correction = SimpleNamespace(correct=[], scope="turn", obs={
+        "select": {"minCount": 1, "maxCount": 1, "option": [{}, {}]},
+    })
+
+    assert correction_selection_error(correction) is None
+
+
+def test_empty_decision_with_unknown_minimum_is_structurally_excluded():
+    correction = SimpleNamespace(correct=[], scope="decision", obs={
+        "select": {"maxCount": 1, "option": [{}, {}]},
+    })
+
+    assert correction_selection_error(correction) == "invalid_correction_cardinality"
+
+
+@pytest.mark.parametrize("scope,select", (
+    ("decision", {"minCount": 1, "option": [{}, {}]}),
+    ("decision", {"maxCount": 1, "option": [{}, {}]}),
+    ("turn", {"minCount": 1, "option": [{}, {}]}),
+    ("turn", {"maxCount": 1, "option": [{}, {}]}),
+))
+def test_nonempty_correction_with_unknown_cardinality_bound_is_excluded(scope, select):
+    correction = SimpleNamespace(correct=[0], scope=scope, obs={"select": select})
+
+    assert correction_selection_error(correction) == "invalid_correction_cardinality"
 
 
 def test_gap_census_counts_decisions_affected_not_mentions():
@@ -125,6 +191,25 @@ def test_the_real_producer_feeds_the_dashboard_shape():
 
     rendered = render_markdown(payload([produced]))
     assert "Generality floor" in rendered
+
+
+def test_issue_626_structurally_valid_named_run_decisions_do_not_regress():
+    from pathlib import Path
+
+    from train.blunder.store import load_corrections
+    from train.ledger_corpus import _replay_one
+
+    store = (Path(__file__).resolve().parents[2] / "data" / "corrections"
+             / "20260828-111914_ad58ab7d_mega_starmie")
+    corrections = {record.decision.get("frame"): record
+                   for record in load_corrections(store)}
+
+    rows = [_replay_one(corrections[frame].agent, corrections[frame])
+            for frame in (4, 14, 26, 28, 29, 43)]
+
+    assert all(row["graded"] and row["agrees"] for row in rows), [
+        (frame, row["graded"], row["agrees"], row["chosen"], row["correct"])
+        for frame, row in zip((4, 14, 26, 28, 29, 43), rows)]
 
 
 def _archived_frame(deck_dir="mega_starmie_20260813_c9991b12"):

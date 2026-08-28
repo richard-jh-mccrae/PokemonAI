@@ -159,6 +159,8 @@ class LedgerDecider:
                     parent_valuation=parent_valuation,
                     observation_delta=observation_delta,
                     strict=os.environ.get("AGENT_BRAIN_STRICT") == "1")
+                if result.chosen_candidate is not None:
+                    self._search.commit(result.chosen_candidate.action)
                 self.last_valuation = result.baseline
                 search_configuration, policy_configuration = self._configurations(self.compute)
                 if self.parity_oracle is not None and provider.instance is not None:

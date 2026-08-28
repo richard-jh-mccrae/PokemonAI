@@ -504,7 +504,7 @@ def test_rental_energy_on_the_bench_prices_zero():
     body can attack — worth zero there, priced normally on the Active."""
     def ignition_body(serial):
         shell = body(MEGA_STARMIE, serial)
-        shell["energies"] = [0]
+        shell["energies"] = [0, 0, 0]
         shell["energyCards"] = [{"id": IGNITION, "serial": 701}]
         return shell
 
@@ -517,7 +517,7 @@ def test_rental_energy_on_the_bench_prices_zero():
 
     bare_active = evaluate(board(me=player(active=body(MEGA_STARMIE, 1))), context)
     rental_active = evaluate(board(me=player(active=ignition_body(1))), context)
-    assert rental_active.part("me.bodies") > bare_active.part("me.bodies")
+    assert rental_active.total > bare_active.total
 
 
 def test_hp_value_makes_the_evolve_pay_for_its_hand_card():

@@ -2,7 +2,7 @@ from ledger_helpers import ScriptedProvider, action, body, player, printout
 
 from common.algebra import Deterministic
 from common.ledger import PrizeMap, ValuationConfiguration
-from common.ledger.chance import _average
+from common.ledger.chance import _RunningValuation
 from common.ledger.evaluate import Valuation
 from common.opponent import OpponentSnapshot
 from common.runtime import AgentRuntime
@@ -42,7 +42,7 @@ def test_runtime_prefers_forcing_the_opponent_to_overrun_its_last_three_prizes(m
         nodes={("root", offer.identity): Deterministic(forced_four),
                ("root", protect.identity): Deterministic(exact_three)})
     general = ValuationConfiguration.general()
-    prize_only = general.with_values({key: (1.0 if key == "prize.race" else 0.0)
+    prize_only = general.with_values({key: (1.0 if key == "prize.overrun" else 0.0)
                                       for key in general})
     strategy = Strategy(
         name="prize-map-test", roles=Roles({MEGA_STARMIE: ["primary_attacker"]}),
@@ -68,7 +68,7 @@ def test_runtime_prefers_forcing_the_opponent_to_overrun_its_last_three_prizes(m
         if row["action"] == str(offer.identity)
         for item in row["continuation"]["contributions"]
     }
-    assert activations["prize.race"] == 1.0
+    assert activations["prize.overrun"] == 1.0
 
 
 def test_prize_plan_breaks_only_an_equal_structural_tie(monkeypatch):
@@ -140,11 +140,13 @@ def test_prize_plan_cannot_override_superior_ledger_value(monkeypatch):
     assert runtime.decide(root).action == fund.identity
 
 
-def test_refresh_average_preserves_a_prize_map_shared_by_every_sample():
+def test_refresh_accumulator_preserves_a_prize_map_shared_by_every_sample():
     prize_map = PrizeMap(3, (CINDERACE, MEGA_STARMIE), 4, 1, (1,))
     valuation = Valuation(1.0, (), (), prize_map=prize_map)
+    running = _RunningValuation()
 
-    averaged, _gaps = _average(((valuation, object(), object()),
-                                (valuation, object(), object())), ())
+    running.add(valuation)
+    running.add(valuation)
+    averaged = running.finish(())
 
     assert averaged.prize_map == prize_map

@@ -98,7 +98,7 @@ OBSERVATION_FIELD_FEATURES = MappingProxyType({
     "Side.hand": ("option.attack",),
     "Side.hand_count": ("resource.opponent_hidden_option",),
     "Side.discard": ("zone.in_discard",),
-    "Side.prize_count": ("prize.race", "combat.prize_phase_fit"),
+    "Side.prize_count": ("prize.race", "prize.overrun", "combat.prize_phase_fit"),
     "Side.poisoned": ("status.poisoned",),
     "Side.burned": ("status.burned",),
     "Side.asleep": ("status.asleep",),

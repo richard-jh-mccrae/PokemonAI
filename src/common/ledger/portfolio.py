@@ -1,14 +1,14 @@
 from __future__ import annotations
 
 from collections import Counter
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from math import comb
 
 from common.cards import card_clauses
 from common.cards.card_facts import EnergyCard, PokemonCard, TrainerCard, STADIUM, SUPPORTER, TOOL
 from common.cards.functions.fetch import DEADNESS, WINDOW, fetch_target_matches
 
-from .capabilities import (DAMAGE_UNIT_HP, OptionUnits, _heal_rider_cost,
+from .capabilities import (DAMAGE_UNIT_HP, FUTURE_TURN_DISCOUNT, OptionUnits, _heal_rider_cost,
                            _heal_targets, _healed_hp, clause_cost_units)
 
 
@@ -34,19 +34,24 @@ class _Opportunity:
     discard_cost: int
     fetches: tuple[_Fetch, ...] = ()
     discards_hand: bool = False
+    entry_index: int = -1
+    direct_worth: float = 0.0
 
 
 @dataclass(frozen=True, slots=True)
 class PortfolioResult:
     units: OptionUnits
     binding_features: tuple[str, ...]
+    selected_indices: tuple[int, ...] = ()
+    selected_units: tuple[tuple[int, OptionUnits], ...] = ()
 
 
 def _requirements(facts, side, board, ctx) -> tuple[tuple[str, float], ...] | None:
     if isinstance(facts, EnergyCard):
-        if board.turn.energy_attached or not side.bodies:
+        if not side.bodies:
             return None
-        return (("energy", 1.0), (f"hand:{facts.card_id}", 1.0))
+        allowance = "future_energy" if board.turn.energy_attached else "energy"
+        return ((allowance, 1.0), (f"hand:{facts.card_id}", 1.0))
     if isinstance(facts, PokemonCard):
         if facts.evolves_from is None:
             return (("bench", 1.0), (f"hand:{facts.card_id}", 1.0)) \
@@ -62,8 +67,7 @@ def _requirements(facts, side, board, ctx) -> tuple[tuple[str, float], ...] | No
     if not isinstance(facts, TrainerCard):
         return None
     if facts.kind == SUPPORTER:
-        return None if board.turn.supporter_played else (
-            ("supporter", 1.0), (f"hand:{facts.card_id}", 1.0))
+        return (("supporter", 1.0), (f"hand:{facts.card_id}", 1.0))
     if facts.kind == STADIUM:
         return None if board.turn.stadium_played else (
             ("stadium", 1.0), (f"hand:{facts.card_id}", 1.0))
@@ -75,8 +79,9 @@ def _requirements(facts, side, board, ctx) -> tuple[tuple[str, float], ...] | No
 
 def _capacities(side, board, ctx) -> dict[str, float]:
     capacities = {
-        "supporter": int(not board.turn.supporter_played),
+        "supporter": 1,
         "energy": int(not board.turn.energy_attached),
+        "future_energy": int(board.turn.energy_attached),
         "stadium": int(not board.turn.stadium_played),
         "bench": max(0, side.bench_max - len(side.bench)),
         "tool": sum(not body.tools for body in side.bodies),
@@ -405,7 +410,10 @@ def feasible_option_portfolio_result(entries, side, board, ctx, *, hand_size: in
     capacities = _capacities(side, board, ctx)
     opportunities = []
     unconstrained_entries = []
-    for index, (facts, units) in enumerate(entries):
+    for index, entry in enumerate(entries):
+        facts, units, *optional_direct_worth = entry
+        direct_worth = (float(optional_direct_worth[0])
+                        if optional_direct_worth else 0.0)
         requirements = _requirements(facts, side, board, ctx)
         if requirements is None:
             continue
@@ -424,14 +432,17 @@ def feasible_option_portfolio_result(entries, side, board, ctx, *, hand_size: in
         units = _with_unit(units, "cost", units.cost - raw_cost + shared_cost)
         if isinstance(facts, PokemonCard):
             units = _scale(units, HAND_POKEMON_REALIZATION_DISCOUNT)
+        elif isinstance(facts, EnergyCard) and board.turn.energy_attached:
+            units = _scale(units, FUTURE_TURN_DISCOUNT)
         variants = _fetch_variants(facts, units, requirements, side, board, ctx)
         if any(clause.kind == "heal" for clause in card_clauses(facts)):
             variants = _heal_variants(facts, units, requirements, side, board, ctx)
         energy_claims = _energy_claims(facts, side, board, ctx)
-        realized_opportunities = tuple(_Opportunity(
+        realized_opportunities = tuple(replace(_Opportunity(
             _with_energy_ceiling(facts, opportunity.units, energy_claims),
             opportunity.requirements, discard_cost,
-            (*opportunity.fetches, *energy_claims), discards_hand)
+            (*opportunity.fetches, *energy_claims), discards_hand),
+            entry_index=index, direct_worth=direct_worth)
             for opportunity in variants)
         opportunities.extend(realized_opportunities)
         if realized_opportunities:
@@ -452,12 +463,12 @@ def feasible_option_portfolio_result(entries, side, board, ctx, *, hand_size: in
 
     keys = tuple(sorted(capacities))
     initial = tuple(0 for _key in keys)
-    states = {(initial, 0, 0, False): OptionUnits()}
+    states = {(initial, 0, 0, False): (OptionUnits(), (), 0.0)}
     opportunities.sort(key=lambda opportunity: (opportunity.discards_hand, sum(
         len(fetch.eligible) for fetch in opportunity.fetches) or side.deck_count + 1))
     for opportunity in opportunities:
         expanded = dict(states)
-        for (used, plays, discards, exhausted), units in states.items():
+        for (used, plays, discards, exhausted), (units, selected, direct_worth) in states.items():
             if exhausted:
                 continue
             usage = dict(zip(keys, used))
@@ -483,18 +494,29 @@ def feasible_option_portfolio_result(entries, side, board, ctx, *, hand_size: in
             key = (tuple(usage.get(name, 0) for name in keys), next_plays,
                    next_discards, opportunity.discards_hand)
             candidate = _add(units, realized_units)
-            if _weighted_worth(candidate, ctx) > _weighted_worth(
-                    expanded.get(key, OptionUnits()), ctx):
-                expanded[key] = candidate
+            candidate_direct_worth = direct_worth + opportunity.direct_worth
+            incumbent, _incumbent_selected, incumbent_direct_worth = expanded.get(
+                key, (OptionUnits(), (), 0.0))
+            if (_weighted_worth(candidate, ctx) + candidate_direct_worth
+                    > _weighted_worth(incumbent, ctx) + incumbent_direct_worth):
+                expanded[key] = (
+                    candidate, (*selected, (opportunity.entry_index, realized_units)),
+                    candidate_direct_worth)
         states = expanded
-    chosen = max(states.values(), key=lambda units: _weighted_worth(units, ctx))
+    def portfolio_worth(result):
+        units, _selected, direct_worth = result
+        return _weighted_worth(units, ctx) + direct_worth
+
+    chosen, selected, _direct_worth = max(states.values(), key=portfolio_worth)
     unconstrained = OptionUnits()
     for units in unconstrained_entries:
         unconstrained = _add(unconstrained, units)
     binding = tuple(
         f"option.{field}" for field in OptionUnits.__dataclass_fields__
         if getattr(chosen, field) < getattr(unconstrained, field))
-    return PortfolioResult(chosen, binding)
+    selected_units = tuple(sorted(selected, key=lambda item: item[0]))
+    return PortfolioResult(
+        chosen, binding, tuple(index for index, _units in selected_units), selected_units)
 
 
 __all__ = ("PortfolioResult", "feasible_option_portfolio_result")
