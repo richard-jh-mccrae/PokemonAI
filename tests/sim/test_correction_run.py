@@ -115,6 +115,7 @@ def test_correction_run_audit_accepts_declared_pregame_and_complete_ledger_recor
     assert summary["ledger_decisions"] == 1
     assert summary["pregame_decisions"] == 1
     assert summary["selected_chain_caps"] == []
+    assert summary["incomplete_decisions"] == []
     assert len(summary["behavior_identities"]) == 1
 
 

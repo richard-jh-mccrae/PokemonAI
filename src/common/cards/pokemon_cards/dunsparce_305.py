@@ -10,6 +10,7 @@ CARD = PokemonCard(
     weakness=FIGHTING,
     retreat_cost=1,
     default_roles=('draw_engine', 'retreat_assist'),
+    covers='full',
     attacks=(
         Attack(
             attack_id=423,

@@ -17,7 +17,7 @@ def test_a_gain_that_regresses_one_frame_is_rejected(monkeypatch):
     outcomes = {
         None: _result(["a", "b"], ["c", "d"]),                # baseline: 2 of 4
         0.9: _result(["a", "c", "d"], ["b"]),                 # +1 total but loses "b"
-        0.7: _result(["a", "b", "c"], ["d"]),                 # +1 total, keeps everything
+        0.7: _result(["a", "b", "c", "d"], []),               # all constraints satisfied
     }
 
     def fake_sweep(*, store, decks, workers, weight_overrides=None):
@@ -33,7 +33,26 @@ def test_a_gain_that_regresses_one_frame_is_rejected(monkeypatch):
     verdicts = {(t["lever"], t["value"]): t["verdict"] for t in outcome["trials"]}
     assert verdicts[("zone.in_hand", 0.9)] == "rejected"     # the regression gate fired
     assert verdicts[("zone.in_hand", 0.7)] == "ADOPTED"
-    assert tune._score(outcome["best"]) == (0.75, 3)
+    assert tune._score(outcome["best"]) == (1.0, 4)
+
+
+def test_a_candidate_can_reduce_existing_violations_without_regressing(monkeypatch):
+    outcomes = {
+        None: _result(["a"], ["b", "c"]),
+        0.7: _result(["a", "b"], ["c"]),
+    }
+
+    monkeypatch.setattr(tune, "sweep", lambda **kwargs: outcomes[
+        None if not kwargs.get("weight_overrides") else
+        kwargs["weight_overrides"]["zone.in_hand"]])
+    monkeypatch.setattr(tune.ValuationConfiguration, "with_values",
+                        lambda self, replacements: self, raising=True)
+
+    outcome = tune.run(levers={"zone.in_hand": [0.7]}, store="unused",
+                       decks=("a_deck",), workers=1, log=lambda *_: None)
+
+    assert outcome["adopted"] == {"zone.in_hand": 0.7}
+    assert outcome["trials"][0]["violated_preferences"] == 1
 
 
 def test_an_unknown_lever_name_fails_before_any_sweep(monkeypatch):

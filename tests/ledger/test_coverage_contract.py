@@ -15,6 +15,7 @@ from common.ledger.coverage import (
     ClauseValuationMode,
     clause_parameter_expected_direction,
     clause_parameter_mode,
+    card_coverage_gap,
     SUCCESSOR_CLAUSES,
     clause_contract_findings,
     clause_parameter_findings,
@@ -32,6 +33,11 @@ from ledger_helpers import body, player, printout
 def test_every_observation_field_has_a_value_legal_belief_or_identity_owner():
     assert unowned_observation_fields() == ()
     assert observation_contract_findings() == ()
+
+
+def test_runtime_and_readiness_share_the_card_coverage_verdict():
+    assert card_coverage_gap(858, card_store()[858]) == (
+        "incomplete card coverage 858 (partial)")
 
 
 def test_every_value_or_belief_field_names_a_seeded_feature_witness():

@@ -41,6 +41,7 @@ APPROVED_DECLARATIONS = {
         "_PLACEMENT_FACTORS", "_SCALAR_DEFAULTS",
     },
     "src/common/ledger/preview.py": {"LOTTERY_DIGEST_BYTES"},
+    "src/common/ledger/portfolio.py": {"HAND_POKEMON_REALIZATION_DISCOUNT"},
     "src/common/ledger/readiness.py": {"REPORT_SCHEMA_VERSION"},
     "src/common/ledger/search.py": {"LOTTERY_DIGEST_BYTES"},
     "src/common/ledger/seam.py": {"version"},

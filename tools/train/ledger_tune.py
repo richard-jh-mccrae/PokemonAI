@@ -42,6 +42,11 @@ def _score(result: dict) -> tuple[float, int]:
     return floor, sum(1 for row in result["rows"] if row["graded"] and row["agrees"])
 
 
+def _violated_preferences(result: dict) -> set[tuple[str, str]]:
+    return {(row["deck"], row["id"]) for row in result["rows"]
+            if row["graded"] and not row["agrees"]}
+
+
 def _fmt(overrides: dict) -> str:
     return ", ".join(f"{key}={value}" for key, value in sorted(overrides.items())) or "(none)"
 
@@ -71,8 +76,8 @@ def run(*, levers: dict[str, list[float]], store, decks=DECKS, workers: int = 1,
                 score = _score(result)
                 _, agreed = _agree_sets(result)
                 regressions = sorted(best_agreed - agreed)
+                violations = sorted(_violated_preferences(result))
                 verdict = "rejected"
-                # The gate: strictly better on (floor, total) AND nothing already-right lost.
                 if not regressions and score > best_score:
                     best, best_score, best_agreed = result, score, agreed
                     adopted = candidate
@@ -80,9 +85,12 @@ def run(*, levers: dict[str, list[float]], store, decks=DECKS, workers: int = 1,
                     improved = True
                 trials.append({"pass": tuning_pass, "lever": lever, "value": value,
                                "floor": score[0], "agrees": score[1],
-                               "regressions": len(regressions), "verdict": verdict})
+                               "regressions": len(regressions),
+                               "violated_preferences": len(violations),
+                               "verdict": verdict})
                 log(f"[pass {tuning_pass}] {lever}={value}: floor {score[0]:.4f} "
-                    f"agrees {score[1]} regressions {len(regressions)} -> {verdict}")
+                    f"agrees {score[1]} regressions {len(regressions)} "
+                    f"violations {len(violations)} -> {verdict}")
         if not improved:
             break
     return {"adopted": adopted, "baseline": baseline, "best": best, "trials": trials}
@@ -108,11 +116,12 @@ def render_report(outcome: dict, levers: dict) -> str:
         "Adoption means editing the Feature Catalog defaults to the adopted values.",
         "Zero-regression gate enforced per nudge.",
         "",
-        "| pass | lever | value | floor | agrees | regressions | verdict |",
-        "|---|---|---|---|---|---|---|",
+        "| pass | lever | value | floor | agrees | regressions | violations | verdict |",
+        "|---|---|---|---|---|---|---|---|",
     ]
     lines += [f"| {t['pass']} | {t['lever']} | {t['value']} | {t['floor']:.4f} | "
-              f"{t['agrees']} | {t['regressions']} | {t['verdict']} |"
+              f"{t['agrees']} | {t['regressions']} | {t['violated_preferences']} | "
+              f"{t['verdict']} |"
               for t in outcome["trials"]]
     return "\n".join(lines) + "\n"
 

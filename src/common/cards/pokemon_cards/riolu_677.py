@@ -10,6 +10,7 @@ CARD = PokemonCard(
     weakness=PSYCHIC,
     retreat_cost=2,
     default_roles=('primary_attacker',),
+    covers='full',
     attacks=(
         Attack(
             attack_id=981,

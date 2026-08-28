@@ -76,7 +76,7 @@ def test_positive_develop_beats_a_bigger_turn_ender():
     assert decision.decision_result.chosen is decision.decision_result.roster.candidates[0].action
 
 
-def test_main_phase_preview_prices_the_best_remaining_turn_line():
+def test_main_phase_preview_does_not_price_a_second_independent_action():
     root_obs = printout(me=player(active=body(DRAGAPULT, 1), hand=[FIRE_E]),
                         them=player(own=False, active=body(DRAGAPULT, 2)))
     attached = state_of(printout(
@@ -104,15 +104,15 @@ def test_main_phase_preview_prices_the_best_remaining_turn_line():
     decision = LedgerDecider(
         DECK, "test", EvaluationModel.build(),
         provider_factory=lambda _state, **_kw: provider,
-        compute=ComputeConfiguration(search=SearchConfiguration(
-            main_depth_budget=1, main_continuation_discount=0.8)),
     ).decide(root_obs)
     prices = {row["action"]: row["swing"] for row in decision.diagnostics["prices"]}
-    assert decision.action == attach.identity
-    assert prices[str(attach.identity)] > prices[str(weak_attack.identity)]
+    assert prices[str(weak_attack.identity)] > prices[str(attach.identity)]
+    attach_candidate = decision.decision_result.roster.candidates[0]
+    assert all(follow_attack.identity not in successor.action_path
+               for successor in attach_candidate.successors)
 
 
-def test_main_phase_discount_prefers_the_same_gain_now_over_one_action_later():
+def test_one_ply_prefers_an_immediate_gain_over_an_unchanged_landing():
     root_obs = printout(me=player(active=body(DRAGAPULT, 1)),
                         them=player(own=False, active=body(DRAGAPULT, 2)))
     waiting = state_of(root_obs, DECK)
@@ -135,8 +135,6 @@ def test_main_phase_discount_prefers_the_same_gain_now_over_one_action_later():
     decision = LedgerDecider(
         DECK, "test", EvaluationModel.build(),
         provider_factory=lambda _state, **_kw: provider,
-        compute=ComputeConfiguration(search=SearchConfiguration(
-            main_depth_budget=1, main_continuation_discount=0.8)),
     ).decide(root_obs)
     prices = {row["action"]: row["swing"] for row in decision.diagnostics["prices"]}
 

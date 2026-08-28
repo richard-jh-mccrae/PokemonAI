@@ -39,7 +39,7 @@ from deprecated.bellman.effects import CardEffects  # noqa: E402 - replay covera
 from common.runtime import build_runtime  # noqa: E402
 from common.cards import card_store  # noqa: E402
 from common.decision import (ComputeConfiguration, PolicyConfiguration,
-                             SearchConfiguration)  # noqa: E402
+                             SearchConfiguration, correction_compute_profile)  # noqa: E402
 from common.ledger import (EvaluationModel, LedgerDecider, OpponentProfile,
                            ValuationConfiguration)  # noqa: E402
 from common.opponent import OpponentMechanic, OpponentTrait  # noqa: E402
@@ -79,6 +79,7 @@ def _build_runtime(deck_name: str, weight_overrides=None, *, provider_backend="c
         raise ValueError(f"unsupported replay provider {provider_backend!r}")
     return build_runtime(module.STRATEGY, deck, provider_factory=replay_provider,
                          valuation_configuration=valuation_configuration,
+                         compute_configuration=correction_compute_profile(),
                          decision_parity_oracle=assert_runtime_parity)
 
 
@@ -112,14 +113,26 @@ def _recorded_model(configuration: dict) -> EvaluationModel:
 def _recorded_compute(configuration: dict) -> ComputeConfiguration:
     saved = configuration["compute"]
     search = {key: value for key, value in saved["search"].items() if key != "identity"}
+    if search.get("schema_version") not in {1, 4, 5}:
+        raise ValueError("unsupported recorded Search Configuration schema version")
+    if saved.get("schema_version") not in {1, 2}:
+        raise ValueError("unsupported recorded Compute Configuration schema version")
+    legacy_search = search.get("schema_version", 0) < 5
+    legacy_compute = saved.get("schema_version") < 2
+    search.pop("main_depth_budget", None)
+    search.pop("main_continuation_discount", None)
+    if legacy_search:
+        search["schema_version"] = 5
     policy = {key: value for key, value in saved["policy"].items() if key != "identity"}
     policy["accepted_statuses"] = tuple(policy["accepted_statuses"])
     compute = ComputeConfiguration(
-        schema_version=saved["schema_version"],
-        search=SearchConfiguration(**search), policy=PolicyConfiguration(**policy))
-    if compute.search.identity != saved["search"]["identity"] \
-            or compute.policy.identity != saved["policy"]["identity"] \
-            or compute.identity != saved["identity"]:
+        schema_version=2,
+        search=SearchConfiguration(**search), policy=PolicyConfiguration(**policy),
+        profile=saved.get("profile", "deployment"))
+    if (not legacy_search and not legacy_compute and (
+            compute.search.identity != saved["search"]["identity"]
+            or compute.policy.identity != saved["policy"]["identity"]
+            or compute.identity != saved["identity"])):
         raise ValueError("recorded Compute Configuration identity cannot be resolved")
     return compute
 
@@ -172,12 +185,42 @@ def _training_candidates(decision) -> list[dict]:
     for candidate in getattr(roster, "candidates", ()):
         delta = getattr(candidate, "delta", None)
         rows.append({
+            "action": str(candidate.action.identity),
             "selection": list(candidate.action.selection),
             "status": candidate.status.value,
+            "decision_delta": None if delta is None else delta.total,
+            "search_value": (None if candidate.search_value is None
+                             else candidate.search_value.total),
             "features": {component.key: component.activation
                          for component in (() if delta is None else delta.components)},
+            "components": [{
+                "feature": component.key,
+                "activation": component.activation,
+                "coefficient": component.coefficient,
+                "contribution": component.value,
+                "provenance": list(component.provenance),
+            } for component in (() if delta is None else delta.components)],
+            "successors": [{
+                "probability": successor.probability,
+                "ended": successor.ended,
+                "status": successor.status.value,
+                "position_key": successor.state.position_key,
+                "action_path": [str(action) for action in successor.action_path],
+                "gaps": list(successor.valuation.gaps),
+            } for successor in candidate.successors],
+            "gaps": list(candidate.gaps),
         })
     return rows
+
+
+def _grading_eligibility(has_ruling: bool, candidates) -> tuple[bool, str | None]:
+    if not has_ruling:
+        return False, "no_ruling"
+    candidates = tuple(candidates)
+    if not candidates or any(candidate.get("status") != "complete"
+                             for candidate in candidates):
+        return False, "search_incomplete"
+    return True, None
 
 
 def _labels(obs, indices) -> str:
@@ -202,9 +245,11 @@ def _replay_one(deck_name: str, correction, weight_overrides=None) -> dict:
     elapsed = time.perf_counter() - started
     chosen = list(decision.chosen)
     correct = list(correction.correct or ())
-    graded = bool(correction.correct) or correction.correct == []
+    has_ruling = bool(correction.correct) or correction.correct == []
     equivalence = (_runtime_equivalence(decision) or
                    option_equivalence(((obs.get("select") or {}).get("option") or []), obs))
+    candidates = _training_candidates(decision)
+    graded, excluded_reason = _grading_eligibility(has_ruling, candidates)
     agrees = _satisfies_human(chosen, correction, equivalence) if graded else None
     diagnostics = decision.diagnostics or {}
     row = {
@@ -220,10 +265,12 @@ def _replay_one(deck_name: str, correction, weight_overrides=None) -> dict:
         "category": correction.category,
         "graded": graded,
         "chosen": chosen,
+        "recorded_chosen": list(correction.chosen),
         "correct": correct,
         "acceptable": [correct, *[list(value or ())
                                    for value in correction.correct_alternatives or ()]],
-        "candidates": _training_candidates(decision),
+        "candidates": candidates,
+        "grading_exclusion": excluded_reason,
         "exact": bool(graded and chosen == correct),
         "agrees": agrees,
         "chosen_label": _labels(obs, chosen),
@@ -257,6 +304,8 @@ def _deck_summary(rows: list[dict]) -> dict:
         "misses": len(graded) - agrees,
         "agreement": round(agrees / len(graded), 4) if graded else None,
         "ungraded": len(rows) - len(graded),
+        "incomplete": sum(row.get("grading_exclusion") == "search_incomplete"
+                          for row in rows),
         "decision_seconds": round(sum(row["elapsed_seconds"] for row in rows), 2),
         "gap_decisions": sum(1 for row in rows if row["gaps"]),
         "gap_census": dict(gap_census.most_common()),
@@ -357,6 +406,13 @@ def render_markdown(result: dict) -> str:
                          + (f" — {error.get('type')}: {error.get('message')}"
                             if error else ""))
         lines.append("")
+    incomplete = [row for row in result["rows"]
+                  if row.get("grading_exclusion") == "search_incomplete"]
+    if incomplete:
+        lines += [f"## Incomplete searches ({len(incomplete)}) — played, not graded", ""]
+        lines += [f"- {row['deck']} `{row['key']}`: "
+                  + (", ".join(row.get("gaps", ())) or "non-complete candidate")
+                  for row in incomplete] + [""]
     lines += ["## Misses (the triage queue: read the rationale first)", ""]
     for row in result["rows"]:
         if not row["graded"] or row["agrees"]:
@@ -445,6 +501,11 @@ def main(argv=None) -> int:
                    semantic_flips=semantic_flips)
     args.output.write_text(json.dumps(result, indent=2, ensure_ascii=False) + "\n",
                            encoding="utf-8")
+    from train.value_audit import build_value_audit
+    audit_path = args.output.with_name(f"{args.output.stem}.value-audit.json")
+    audit_path.write_text(json.dumps(
+        build_value_audit(result["rows"]), indent=2, sort_keys=True) + "\n",
+        encoding="utf-8")
     args.output.with_suffix(".md").write_text(render_markdown(result) + "\n",
                                               encoding="utf-8")
     floor = result["generality_floor"]

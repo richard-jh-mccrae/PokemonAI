@@ -15,9 +15,12 @@ from .activation import (DAMAGE_UNIT_HP, ActivationCompiler, ActivationEnvironme
                          FeatureActivation)
 from .capabilities import (best_current_damage, body_capability, card_option_units,
                            card_option_value, clause_value_units, hidden_zone_expectation,
-                           expected_draw_counts, recoverable_discard_ids)
+                           expected_draw_counts, recoverable_discard_ids,
+                           FUTURE_TURN_DISCOUNT)
+from .coverage import card_coverage_gap
 from .features import FEATURE_CATALOG
 from .prizes import PrizeMap, derive_prize_map
+from .portfolio import feasible_option_portfolio_result
 from .worth import (Demand, DemandState, EvaluationModel, _liveness, _unfilled,
                     any_attack_payable,
                     development_reach_units,
@@ -194,13 +197,17 @@ def _side_group(label, side, sign, board, ctx, opponent) -> Valuation:
     return trace.finish()
 
 
-def _portfolio(values) -> float:
-    return sum(values)
+def _sequenced_portfolio(values) -> float:
+    ordered = sorted((float(value) for value in values if value > 0), reverse=True)
+    return sum(value * FUTURE_TURN_DISCOUNT ** index
+               for index, value in enumerate(ordered))
 
 
-def _emit_option(trace, part, units, scale) -> None:
+def _emit_option(trace, part, units, scale, *, provenance=None,
+                 provenance_features=()) -> None:
     for feature, value in units.activations():
-        trace.emit(part, "option", (feature,), scale * value)
+        trace.emit(part, "option", (feature,), scale * value,
+                   provenance=(provenance if feature in provenance_features else None))
 
 
 def _slot_option(open_slots) -> float:
@@ -339,14 +346,14 @@ def _side(trace: _Trace, label: str, side: Side, sign: float, ctx: EvaluationMod
     trace.emit(f"{label}.combat", "observation", ("active_threat",),
                sign * (0.0 if active_capability is None
                        else active_capability.attack_potential))
-    trace.emit(f"{label}.combat", "observation", ("attack_progress",), sign * _portfolio(
+    trace.emit(f"{label}.combat", "observation", ("attack_progress",), sign * _sequenced_portfolio(
         value.attack_progress for _body_node, value in capabilities))
-    trace.emit(f"{label}.combat", "observation", ("attack_future",), sign * _portfolio(
+    trace.emit(f"{label}.combat", "observation", ("attack_future",), sign * _sequenced_portfolio(
         max(value.attack_future, value.attack_now if body is not side.active else 0.0)
         for body, value in capabilities))
-    trace.emit(f"{label}.combat", "observation", ("line_potential",), sign * _portfolio(
+    trace.emit(f"{label}.combat", "observation", ("line_potential",), sign * _sequenced_portfolio(
         value.line_potential for _body_node, value in capabilities))
-    trace.emit(f"{label}.combat", "observation", ("prize_phase_fit",), sign * _portfolio(
+    trace.emit(f"{label}.combat", "observation", ("prize_phase_fit",), sign * _sequenced_portfolio(
         _prize_phase_fit(body, value, opposing_side.prize_count, ctx)
         for body, value in capabilities))
 
@@ -386,6 +393,7 @@ def _side(trace: _Trace, label: str, side: Side, sign: float, ctx: EvaluationMod
     if sign > 0 and side.hand is not None:
         copies = Counter(demand.body_id_counts)
         basic_energy = Counter()
+        portfolio_entries = []
         for card in side.hand:
             facts = ctx.facts(card.card_id)
             claim, capacity = _hand_claim(
@@ -404,7 +412,7 @@ def _side(trace: _Trace, label: str, side: Side, sign: float, ctx: EvaluationMod
                 deck_counts, board, sign=sign)
             trace.emit(f"{label}.hand", "observation", (claim,), sign)
             if claim != "dead_hand_card":
-                _emit_option(trace, f"{label}.hand", option_units(facts), sign)
+                portfolio_entries.append((facts, option_units(facts)))
             if (isinstance(facts, EnergyCard) and facts.kind != SPECIAL_ENERGY
                     and basic_energy[facts.provides]):
                 trace.emit(f"{label}.hand", "observation", ("surplus_basic_energy",), sign)
@@ -412,12 +420,19 @@ def _side(trace: _Trace, label: str, side: Side, sign: float, ctx: EvaluationMod
                     and any(demand.body_name_counts.get(name, 0) for name in facts.synergy)):
                 trace.emit(f"{label}.hand", "observation", ("synergy_in_hand",), sign)
             if (isinstance(facts, PokemonCard) and facts.evolves_from
-                    and demand.body_name_counts.get(facts.evolves_from, 0)):
+                    and (demand.body_name_counts.get(facts.evolves_from, 0)
+                         or demand.hand_name_counts.get(facts.evolves_from, 0))):
                 trace.emit(f"{label}.hand", "observation",
                            ("evolution_access",), sign)
             copies[card.card_id] += 1
             if isinstance(facts, EnergyCard) and facts.kind != SPECIAL_ENERGY:
                 basic_energy[facts.provides] += 1
+        portfolio = feasible_option_portfolio_result(
+            portfolio_entries, side, board, ctx, hand_size=len(side.hand))
+        _emit_option(
+            trace, f"{label}.hand", portfolio.units, sign,
+            provenance="feasible_option_portfolio",
+            provenance_features=portfolio.binding_features)
     else:
         trace.emit(f"{label}.hand", "observation", ("unknown_opponent_hand_card",),
                    sign * side.hand_count)
@@ -574,14 +589,14 @@ def _card(trace: _Trace, part: str, card_id: int, facts, amount: float,
           ctx: EvaluationModel, *, own: bool, placement: str,
           interaction_amount: float | None = None, opponent=None) -> None:
     situated = amount if interaction_amount is None else interaction_amount
+    coverage_gap = card_coverage_gap(card_id, facts)
     if facts is None:
         trace.emit(part, "observation", ("uncovered_card",), abs(amount))
-        trace.gaps.append(f"{part}: unknown card {int(card_id)}")
+        trace.gaps.append(f"{part}: {coverage_gap}")
         return
-    if getattr(facts, "covers", None) != "full":
+    if coverage_gap is not None:
         trace.emit(part, "observation", ("uncovered_card",), abs(amount))
-        verdict = getattr(facts, "covers", None) or "unruled"
-        trace.gaps.append(f"{part}: incomplete card coverage {int(card_id)} ({verdict})")
+        trace.gaps.append(f"{part}: {coverage_gap}")
     if isinstance(facts, PokemonCard):
         kind = "pokemon"
     elif isinstance(facts, EnergyCard):

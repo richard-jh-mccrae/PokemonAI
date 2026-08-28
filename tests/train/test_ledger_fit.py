@@ -10,6 +10,7 @@ def rows():
     return [{
         "episode_id": "match-a",
         "id": "frame-a",
+        "graded": True,
         "acceptable": [[0]],
         "candidates": [
             {"selection": [0], "status": "complete",
@@ -28,6 +29,11 @@ def test_parameter_manifest_seeds_every_catalog_feature_with_constraints():
         ValuationConfiguration.general().values)
     assert all(item.lower <= item.seed <= item.upper for item in manifest)
     assert next(item for item in manifest if item.key == "result.win").trainable is False
+    assert next(item for item in manifest if item.key == "prize.race").trainable is False
+    assert next(item for item in manifest
+                if item.key == "active.terminal_liability").trainable is False
+    assert next(item for item in manifest
+                if item.key == "function.ko.self_prize_liability").trainable is False
     assert all(not item.trainable for item in manifest
                if item.key.startswith(("continuation.", "action.")))
 
@@ -39,6 +45,16 @@ def test_match_group_split_never_leaks_frames_across_partitions():
     locations = [name for name, values in splits.items()
                  if any(example.group == "match-a" for example in values)]
     assert len(locations) == 1
+
+
+def test_incomplete_or_ungraded_rows_never_become_training_examples():
+    ungraded = rows()[0] | {"graded": False}
+    incomplete = rows()[0] | {"graded": True}
+    incomplete["candidates"] = [
+        candidate | {"status": "estimated"}
+        for candidate in incomplete["candidates"]]
+
+    assert examples_from_rows([ungraded, incomplete]) == ()
 
 
 def test_constrained_pairwise_fit_moves_a_zero_seed_and_improves_loss():

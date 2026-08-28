@@ -1765,10 +1765,10 @@ def card_option_units(facts, side, opponent, board, ctx, *, reaches=None) -> Opt
                          for clause in clauses if clause.kind == "heal"), default=0.0),
             mobility=max((gate(clause) for clause in clauses
                           if clause.kind in {"self_switch", "switch_self"}), default=0.0),
-            cost=max((gate(clause) for clause in clauses
+            cost=(max((gate(clause) for clause in clauses
                       if clause.rider in {"shuffle_self_in", "self_shuffle_in"}), default=0.0)
                  + max((draw_units(clause)[1]
-                        for clause in clauses if clause.kind == "draw"), default=0.0),
+                        for clause in clauses if clause.kind == "draw"), default=0.0)),
         )
     if isinstance(facts, TrainerCard):
         availability = (FUTURE_TURN_DISCOUNT

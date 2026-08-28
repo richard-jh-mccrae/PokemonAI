@@ -413,7 +413,7 @@ _SCALAR_DEFAULTS = {
     "action.damage_counter_progress": 1.0,
     "action.overkill_counter": -100.0,
     "zone.in_play": 0.002,
-    "zone.in_hand": 0.002,
+    "zone.in_hand": 0.01,
     "zone.in_deck": 0.001,
     "zone.in_discard": 0.001,
     "zone.under_body": 0.002,

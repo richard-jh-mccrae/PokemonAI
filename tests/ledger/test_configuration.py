@@ -348,8 +348,8 @@ def test_behavior_component_identities_cover_all_ranking_semantic_dependencies()
     from common.ledger import decision, search
 
     evaluator_paths = tuple(Path(decision.__file__).with_name(name) for name in (
-        "activation.py", "capabilities.py", "evaluate.py", "features.py", "prizes.py",
-        "worth.py"))
+        "activation.py", "capabilities.py", "evaluate.py", "features.py", "portfolio.py",
+        "prizes.py", "worth.py"))
     search_paths = (
         Path(search.__file__), Path(search.__file__).with_name("chance.py"),
         Path(search.__file__).with_name("preview.py"))

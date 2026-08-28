@@ -224,6 +224,10 @@ def _validate_configuration(value, *, pregame: bool) -> None:
     model = value["evaluation_model"]
     compute = value["compute"]
     provider = value["provider"]
+    if compute.get("schema_version") not in {1, 2}:
+        raise ValueError("unsupported compute configuration schema version")
+    if compute.get("search", {}).get("schema_version") not in {1, 4, 5}:
+        raise ValueError("unsupported search configuration schema version")
     _exact_fields(model, {
         "identity", "card_store_identity", "valuation", "roles", "prize_plan",
         "opponent_profiles",
@@ -235,14 +239,18 @@ def _validate_configuration(value, *, pregame: bool) -> None:
     for profile in model["opponent_profiles"].values():
         _exact_fields(profile, {"roles", "traits", "mechanics", "resources"},
                       "opponent profile")
-    _exact_fields(compute, {"identity", "schema_version", "search", "policy"},
-                  "compute configuration")
-    _exact_fields(compute["search"], {
-        "identity", "schema_version", "depth_budget", "main_depth_budget",
-        "main_continuation_discount",
+    compute_fields = {"identity", "schema_version", "search", "policy"}
+    if compute.get("schema_version") == 2:
+        compute_fields.add("profile")
+    _exact_fields(compute, compute_fields, "compute configuration")
+    search_fields = {
+        "identity", "schema_version", "depth_budget",
         "path_node_budget", "node_budget", "time_budget_ms", "chance_sample_budget",
         "chance_seed", "noise_tolerance", "tie_seed",
-    }, "search configuration")
+    }
+    if compute["search"].get("schema_version") == 4:
+        search_fields.update({"main_depth_budget", "main_continuation_discount"})
+    _exact_fields(compute["search"], search_fields, "search configuration")
     _exact_fields(compute["policy"], {
         "identity", "schema_version", "noise_tolerance", "tie_seed", "accepted_statuses",
         "unavailable_fallback",
@@ -662,6 +670,7 @@ def _compute_configuration(value) -> dict:
     result = {
         "identity": value.identity,
         "schema_version": int(value.schema_version),
+        "profile": value.profile,
         "search": {"identity": value.search.identity, **_allowed(dataclasses.asdict(value.search))},
         "policy": {"identity": value.policy.identity, **_allowed(dataclasses.asdict(value.policy))},
     }

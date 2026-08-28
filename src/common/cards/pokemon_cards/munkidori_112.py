@@ -11,6 +11,7 @@ CARD = PokemonCard(
     resistance=FIGHTING,
     retreat_cost=1,
     default_roles=('backup_attacker', 'counter_mover'),
+    covers='full',
     abilities=(
         Ability(
             name='Adrena-Brain',

@@ -10,6 +10,7 @@ CARD = PokemonCard(
     weakness=FIRE,
     retreat_cost=0,
     default_roles=('item_locker',),
+    covers='full',
     attacks=(
         Attack(
             attack_id=323,

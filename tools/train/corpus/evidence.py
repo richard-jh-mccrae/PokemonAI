@@ -37,7 +37,7 @@ def _replay_choices(replay: dict) -> list[tuple[object, object, list, object]]:
 
 
 def audit_correction_records(records: list[dict], *, replay: dict | None = None) -> dict:
-    ledger, pregame, identities, selected_chain_caps = [], [], {}, []
+    ledger, pregame, identities, selected_chain_caps, incomplete = [], [], {}, [], []
     completeness = {"complete": 0, "estimated": 0}
     emitted = [record for record in records if record.get("record_type") == "decision"]
     if replay is not None:
@@ -79,6 +79,8 @@ def audit_correction_records(records: list[dict], *, replay: dict | None = None)
         if not isinstance(decision.get("turn"), int) or decision["turn"] <= 0:
             raise ValueError("Ledger decision occurred during setup")
         completeness[state] += 1
+        if state != "complete":
+            incomplete.append(record.get("record_id"))
         identity = record.get("behavior_identity") or {}
         identities[json.dumps(identity, sort_keys=True, separators=(",", ":"))] = identity
         chosen_id = decision.get("chosen_action_id")
@@ -90,7 +92,8 @@ def audit_correction_records(records: list[dict], *, replay: dict | None = None)
         raise ValueError("Correction Run episode contains no Ledger decisions")
     return {
         "ledger_decisions": len(ledger), "pregame_decisions": len(pregame),
-        "completeness": completeness, "selected_chain_caps": selected_chain_caps,
+        "completeness": completeness, "incomplete_decisions": incomplete,
+        "selected_chain_caps": selected_chain_caps,
         "behavior_identities": [identities[key] for key in sorted(identities)],
     }
 

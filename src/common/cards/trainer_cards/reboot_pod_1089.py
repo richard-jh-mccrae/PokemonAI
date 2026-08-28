@@ -8,5 +8,5 @@ CARD = TrainerCard(
     text='Attach a Basic Energy card from your discard pile to each of your Future Pokémon.',
     ace_spec=True,
     clauses=(Clause('accel', amount=1, source='discard', energy='basic', target='future', each_of=True),),
-    covers='partial',
+    covers='full',
 )
