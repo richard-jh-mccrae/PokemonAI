@@ -327,6 +327,8 @@ def _compute_configuration_from_environment() -> ComputeConfiguration:
     seconds = float(raw_limit)
     if not math.isfinite(seconds) or seconds <= 0:
         raise ValueError("AGENT_DECISION_SECONDS must be positive and finite")
+    if seconds <= 0.1:
+        raise ValueError("AGENT_DECISION_SECONDS must be greater than 0.1")
     reserve = min(5.0, max(1.0, seconds * 0.05))
     budget_ms = max(1, round(max(0.1, seconds - reserve) * 1000))
     return replace(compute, search=replace(compute.search, time_budget_ms=budget_ms))

@@ -23,6 +23,15 @@ def test_external_decision_limit_sets_the_inner_search_budget(monkeypatch):
     assert compute.search.time_budget_ms == 19_000
 
 
+@pytest.mark.parametrize("seconds", ("0.05", "0.1"))
+def test_external_decision_limit_rejects_an_outer_clock_without_fallback_room(
+        monkeypatch, seconds):
+    monkeypatch.setenv("AGENT_DECISION_SECONDS", seconds)
+
+    with pytest.raises(ValueError, match="greater than 0.1"):
+        runtime_module._compute_configuration_from_environment()
+
+
 def test_default_search_budget_is_unchanged_without_an_external_limit(monkeypatch):
     monkeypatch.delenv("AGENT_DECISION_SECONDS", raising=False)
 

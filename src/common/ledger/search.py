@@ -126,6 +126,7 @@ class LedgerOnePlySearch:
         except Exception as exc:
             raise DecisionExecutionError(DecisionFailure.capture(
                 DecisionFailureStage.EVALUATION, exc)) from exc
+        root_budget_exhausted = budget.check()
         self._previous_evaluation_state = evaluation_states.get(
             (request.evaluation_model.identity, board.valuation_key))
         actions = tuple(root.legal_actions)
@@ -134,7 +135,8 @@ class LedgerOnePlySearch:
                 actions[0],
                 DecisionDelta(0.0, baseline.scale),
                 CandidateDisposition.FORCED,
-                EvaluationStatus.COMPLETE,
+                (EvaluationStatus.ESTIMATED if root_budget_exhausted
+                 else EvaluationStatus.COMPLETE),
                 search_value=SearchValue(baseline.total, baseline.scale),
                 prior=1.0,
                 policy_evidence=baseline.evidence,
@@ -142,7 +144,7 @@ class LedgerOnePlySearch:
             return SearchResult(
                 baseline,
                 CandidateRoster.from_legal_actions(actions, (candidate,), forced=True),
-                stop_reason="forced",
+                stop_reason=(budget.stop_reason if root_budget_exhausted else "forced"),
             )
         try:
             provider = provider.open() if isinstance(provider, TransitionProviderSource) else provider
