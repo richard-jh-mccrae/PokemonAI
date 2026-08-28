@@ -175,6 +175,46 @@ def test_decision_record_keeps_the_complete_typed_candidate_roster():
     assert record["completeness"] == "complete"
 
 
+@pytest.mark.parametrize(("stop_reason", "expected"), (
+    ("cached_continuation", "complete"),
+    ("complete", "unavailable"),
+))
+def test_cached_continuation_completeness_uses_the_committed_candidate(
+        stop_reason, expected):
+    state = ObservationStateBuilder().root(printout())
+    scale = ValueScale("ledger-worth", 1)
+    baseline = StateValuation(state.position_key, 0.0, scale, state.seat, "eval")
+    chosen = Action(ActionIdentity("card", ("chosen",)), (0,))
+    rejected = Action(ActionIdentity("card", ("rejected",)), (1,))
+    state = replace(state, legal_actions=(chosen, rejected))
+    candidates = (
+        ValuedCandidate(
+            chosen, DecisionDelta(0.0, scale), CandidateDisposition.FORCED,
+            EvaluationStatus.COMPLETE, prior=1.0,
+        ),
+        ValuedCandidate(
+            rejected, None, CandidateDisposition.FORCED, EvaluationStatus.UNAVAILABLE,
+            gaps=("not selected by cached compound policy",), prior=0.0,
+        ),
+    )
+    roster = CandidateRoster.from_legal_actions(
+        state.legal_actions, candidates, forced=True)
+    result = DecisionResult(
+        chosen, baseline, roster, SearchResult(baseline, roster, stop_reason=stop_reason))
+
+    record = build_decision_record(
+        result, state, episode_key="cached-completeness", decision_index=0,
+        parent_decision_id=None, selection=(0,),
+        evaluation_model=EvaluationModel.build(),
+        compute_configuration=ComputeConfiguration(),
+        provider_configuration=_provider_configuration(),
+        provenance={"agent": "test", "artifact": "fixture", "code": "abc", "data": {}},
+        decision_seconds=0.01,
+    )
+
+    assert record["completeness"] == expected
+
+
 def test_decision_record_keeps_every_successor_and_continuation_component():
     state = ObservationStateBuilder().root(printout())
     scale = ValueScale("ledger-worth", 1)

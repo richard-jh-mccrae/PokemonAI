@@ -810,6 +810,10 @@ def build_decision_record(result, state, *, episode_key: str, decision_index: in
     if chosen is None:
         raise ValueError("Ledger decision requires a chosen candidate")
     chosen_id = action_ids[tuple(getattr(chosen.action, "selection", ()))]
+    completeness_candidates = (
+        (chosen,) if result.search.stop_reason == "cached_continuation"
+        else result.roster.candidates
+    )
     record = {
         "schema": SCHEMA,
         "schema_version": SCHEMA_VERSION,
@@ -865,9 +869,9 @@ def build_decision_record(result, state, *, episode_key: str, decision_index: in
             "deadline_hit": None if deadline_hit is None else bool(deadline_hit),
         },
         "completeness": ("unavailable" if any(
-            candidate.status.value == "unavailable" for candidate in result.roster.candidates
+            candidate.status.value == "unavailable" for candidate in completeness_candidates
         ) else "estimated" if any(
-            candidate.status.value == "estimated" for candidate in result.roster.candidates
+            candidate.status.value == "estimated" for candidate in completeness_candidates
         ) else "complete"),
     }
     record["record_id"] = _record_identifier(record)
