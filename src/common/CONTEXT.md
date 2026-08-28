@@ -72,6 +72,12 @@ _Avoid_: Swing, Search Value, action score
 The versioned semantic unit and bounds shared by every value and delta in one search.
 _Avoid_: Untyped score, model identity, coefficient
 
+**Ledger-worth**:
+The Ledger Value Scale anchored so one net Prize Card equals `1.0` and terminal victory or defeat
+equals `+100` or `-100`. These anchors are fixed; learned coefficients remain regularized toward
+their reviewed seeds so Pairwise Value Audits stay interpretable in prize-equivalent units.
+_Avoid_: arbitrary score, trainable Prize unit, unbounded preference logit
+
 **Value Component**:
 One stable, versioned contribution to a State Valuation or Decision Delta. Every evaluator exposes
 components that sum to its total; concrete evaluators may add typed evidence.
@@ -86,10 +92,20 @@ The owner of candidate transition traversal and Search Value assembly. It return
 root candidate and leaves the deployed choice to Decision Policy.
 _Avoid_: Value Evaluator, decider
 
+**One-Ply Ledger Boundary**:
+One root action plus every required effect-resolution choice until control returns to the main
+action menu or the turn ends. It never selects a second independent main action.
+_Avoid_: whole-turn search, PUCT horizon, fixed action count
+
 **Search Value**:
 What a Search Algorithm has established for one action on the root State Valuation's Value Scale,
 including its Decision Delta and decomposed contributions.
 _Avoid_: State Valuation, policy prior, reward
+
+**Feasible Option Portfolio**:
+The state value of compatible opportunities remaining in the current turn under shared allowances,
+costs, and targets. It is derived without traversing actions and never sums conflicting plays.
+_Avoid_: hand-value sum, Action Path, committed turn plan
 
 **Decision Delta**:
 One candidate's decomposed marginal value against the root State Valuation.
@@ -186,6 +202,11 @@ _Avoid_: Absolute replacement, card override, opponent preference
 **Compute Configuration**:
 A versioned deployment-owned envelope pairing Search Configuration with Policy Configuration.
 _Avoid_: Valuation weight, policy preference
+
+**Correction Compute Profile**:
+The deterministic Compute Configuration used by Correction Runs to complete root-candidate pricing
+under structural work bounds. Wall time is failure containment, never a search allocation.
+_Avoid_: Submission profile, Performance Profile, unlimited search
 
 **Search Configuration**:
 The versioned depth, node, time, chance-sampling, and randomness controls bounding Search Algorithm

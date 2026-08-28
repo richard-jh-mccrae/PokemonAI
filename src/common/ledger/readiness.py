@@ -4,11 +4,10 @@ from collections import Counter
 from dataclasses import dataclass
 
 from common.cards import card_clauses, card_store
-from common.cards.card_facts import EnergyCard, PokemonCard, TrainerCard
 
 from .coverage import (
     CLAUSE_VALUATION_CONTRACTS, clause_contract_findings, clause_parameter_findings,
-    observation_contract_findings,
+    observation_contract_findings, card_coverage_gap,
 )
 from .features import FEATURE_CATALOG, FeatureDisposition
 from .sensitivity import (
@@ -199,27 +198,10 @@ def audit_readiness(*, catalog=FEATURE_CATALOG,
 
 def _card_coverage_warnings(card_id, facts):
     warnings = []
-    if getattr(facts, "covers", None) == "partial":
+    coverage_gap = card_coverage_gap(card_id, facts)
+    if coverage_gap is not None:
         warnings.append(ReadinessFinding(
-            "card.partial_coverage", str(card_id),
-            "card is explicitly classified partial; untyped text remains"))
-    untyped = []
-    if isinstance(facts, TrainerCard) and facts.text.strip() and not facts.clauses:
-        untyped.append(facts.name)
-    elif isinstance(facts, EnergyCard) and facts.kind == "special_energy" \
-            and facts.text.strip() and not facts.clauses:
-        untyped.append(facts.name)
-    elif isinstance(facts, PokemonCard):
-        untyped.extend(
-            f"ability {ability.name}" for ability in facts.abilities
-            if ability.text.strip() and not ability.clauses)
-        untyped.extend(
-            f"attack {attack.name}" for attack in facts.attacks
-            if attack.text.strip() and not attack.clauses)
-    warnings.extend(ReadinessFinding(
-        "card.untyped_mechanic", str(card_id),
-        f"{label} is explicitly unruled and uses coverage.unknown_card")
-        for label in untyped)
+            "card.incomplete_coverage", str(card_id), coverage_gap))
     return warnings
 
 

@@ -28,6 +28,10 @@ ENERGY_NAME = {0: "COLORLESS", 1: "GRASS", 2: "FIRE", 3: "WATER", 4: "LIGHTNING"
 STAGE_NAME = {"basic": "BASIC", "stage1": "STAGE1", "stage2": "STAGE2"}
 TRAINER_KIND = {1: "ITEM", 2: "TOOL", 3: "SUPPORTER", 4: "STADIUM"}
 ENERGY_KIND = {5: "BASIC_ENERGY", 6: "SPECIAL_ENERGY"}
+POKEMON_TAGS = {
+    27: ("future",), 37: ("future",), 75: ("future",),
+    80: ("future",), 192: ("future",), 971: ("future",),
+}
 
 # Attack-borne effects, hand-encoded from the printed text; amounts are damage points.
 ATTACK_CLAUSES: dict[int, tuple[dict, ...]] = {
@@ -336,6 +340,8 @@ def _emit_pokemon(card: dict, attacks: dict, ability_clauses: tuple,
         lines.append(f"    covers={covers!r},")
     if card["cardId"] in SYNERGY:
         lines.append(f"    synergy={SYNERGY[card['cardId']]!r},")
+    if card["cardId"] in POKEMON_TAGS:
+        lines.append(f"    tags={POKEMON_TAGS[card['cardId']]!r},")
     if card.get("skills"):
         needed.add("Ability")
         lines.append("    abilities=(")

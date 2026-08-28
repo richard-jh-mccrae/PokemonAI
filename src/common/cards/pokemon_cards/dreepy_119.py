@@ -9,6 +9,7 @@ CARD = PokemonCard(
     stage=BASIC,
     retreat_cost=1,
     default_roles=('primary_attacker',),
+    covers='full',
     attacks=(
         Attack(
             attack_id=150,

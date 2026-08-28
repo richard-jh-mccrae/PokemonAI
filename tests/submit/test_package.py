@@ -34,8 +34,6 @@ def test_manifest_describes_declarations_and_ledger_only():
         "kind.special_energy": 0.05}
     assert manifest["compute_configuration"]["identity"]
     assert manifest["compute_configuration"]["search"]["path_node_budget"] == 128
-    assert manifest["compute_configuration"]["search"]["main_depth_budget"] == 1
-    assert manifest["compute_configuration"]["search"]["main_continuation_discount"] == 1.0
     assert manifest["compute_configuration"]["search"]["node_budget"] == 4096
     assert manifest["compute_configuration"]["policy"]["tie_seed"] == 1178
 

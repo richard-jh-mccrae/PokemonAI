@@ -442,7 +442,7 @@ def _worker_agent(role: str, name: str):
         server = AgentServer(
             directory, state["config"]["extra_syspath"], capture_telemetry=True,
             emit_telemetry=True, decision_seconds=state["config"]["decision_timeout"],
-            strict=True, provenance=provenance)
+            strict=True, provenance=provenance, compute_profile="correction")
         state["servers"][key] = server
         state["decks"][name] = read_deck(directory)
     return server, state["decks"][name]
@@ -579,6 +579,7 @@ def _agent_identity(agents_root: Path, name: str) -> dict:
 
 def _ledger_identity() -> dict:
     from common.ledger import FEATURE_CATALOG, LedgerValueEvaluator, ValuationConfiguration
+    from common.decision import correction_compute_profile
 
     configuration = ValuationConfiguration.general()
     payload = {"schema_version": configuration.schema_version,
@@ -592,6 +593,8 @@ def _ledger_identity() -> dict:
         source.update(len(body).to_bytes(8, "big") + body)
     return {
         "evaluator": LedgerValueEvaluator.identity,
+        "compute_profile": "correction",
+        "compute_identity": correction_compute_profile().identity,
         "feature_schema_version": FEATURE_CATALOG.schema_version,
         "global_configuration_sha256": hashlib.sha256(
             json.dumps(payload, sort_keys=True, separators=(",", ":")).encode()).hexdigest(),

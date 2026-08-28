@@ -25,6 +25,60 @@ One agent choice point retained with its complete legal alternatives and a termi
 exclusion. Action-level examples and diagnostic reports are derived views.
 _Avoid_: Training Row, Action Sample, Episode Sample
 
+**Atomic Decision Margin**:
+The ruled candidate's Search Value minus the committed candidate's Search Value at one actual
+Decision Record. It localizes a wrong play, discard, fetch, promotion, or other presented choice.
+_Avoid_: Compound Decision Margin, outcome reward, agreement flag
+
+**Compound Decision Margin**:
+The ruled root candidate's Search Value minus the committed root candidate's after their complete
+Action Paths are resolved. It grades whether beginning the whole action was strategically sound.
+_Avoid_: Atomic Decision Margin, turn plan, hidden rollout value
+
+**Pairwise Value Audit**:
+A complete contrast between the ruled and committed candidates: Search Values, Decision Deltas,
+resolved Action Paths, feature activations, coefficients, contribution differences, provenance, and
+break-even sensitivity. It preserves the human ruling as a relative preference and classifies the
+cause as transition, coverage, activation equation, coefficient seed, portfolio constraint, or
+search completeness; it does not invent an absolute target score.
+_Avoid_: score target, rank-only report, unexplained weight change
+
+**Value Audit Artifact**:
+The canonical machine-readable output of Pairwise Value Audits for a correction run. CLI reports
+and the correction UI consume it; CI validates its contract and gates the underlying readiness
+report rather than recomputing correction scores.
+_Avoid_: UI-only audit, console-only audit, independently computed report
+
+**Correction Severity**:
+A reviewer-supplied triage signal used to order investigation and reports. It does not multiply the
+pairwise training loss unless later evidence establishes a calibrated confidence model.
+_Avoid_: preference strength, target margin, loss weight
+
+**Correction Locus**:
+The exact Decision Record on which the reviewer places a correction. It identifies where the
+blunder is believed to occur: initiating action, discard, fetch, promotion, or another prompt. Its
+preference label does not propagate backward to an earlier decision; downstream required choices
+may still be resolved to value each candidate through its return to MAIN.
+_Avoid_: inferred root correction, blame propagation, whole-turn label
+
+**Ledger-Best Continuation**:
+The highest-valued complete legal resolution from a corrected candidate through any remaining
+required non-MAIN prompts to its first return to MAIN or turn end. A Pairwise Value Audit exposes
+this path; later corrections do not silently replace it during grading.
+_Avoid_: correction-forced continuation, hidden oracle path, independent MAIN continuation
+
+**Calibration Proposal**:
+A non-mutating recommendation derived from a Pairwise Value Audit. It identifies the smallest
+equation or coefficient-seed change and its break-even range, but requires review before changing
+Ledger behavior. Automatic fitting begins only with a sufficiently large, structurally clean corpus.
+_Avoid_: automatic weight rewrite, unreviewed tuning, correction-specific patch
+
+**Correction Non-Regression Constraint**:
+An accepted pairwise preference that every Calibration Proposal must preserve. Conflicting
+constraints are reported as a minimal conflicting set and require equation or feature work, or an
+explicitly superseded correction; aggregate accuracy cannot conceal a flipped correction.
+_Avoid_: soft historical example, silent regression, latest-correction-wins
+
 **Canonical Corpus**:
 The immutable, manifested collection of complete Corpus Decisions from which every Training View can
 be rebuilt. It favors reproducibility over direct analytical speed.

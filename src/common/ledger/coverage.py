@@ -42,7 +42,7 @@ OBSERVATION_FIELD_OWNERS = {
     Card: {"card_id": "value", "serial": "identity", "owner": "value"},
     Turn: {
         "number": "value", "first_player": "conditional", "supporter_played": "conditional",
-        "stadium_played": "legal", "energy_attached": "legal",
+        "stadium_played": "legal", "energy_attached": "conditional",
         "retreated": "conditional", "result": "value",
     },
     Looking: {"count": "legal", "cards": "legal"},
@@ -116,6 +116,7 @@ OBSERVATION_FIELD_FEATURES = MappingProxyType({
     "Turn.number": ("development.visible_reach",),
     "Turn.first_player": ("ability.search_cards",),
     "Turn.supporter_played": ("option.draw",),
+    "Turn.energy_attached": ("option.energy",),
     "Turn.retreated": ("combat.attack_now",),
     "Turn.result": ("result.win",),
     "KnownOwnPrizes.cards": ("option.search",),
@@ -1002,6 +1003,17 @@ def unowned_clause_kinds() -> tuple[str, ...]:
     return tuple(sorted(set(FUNCTION_CATALOG.kinds) - set(CLAUSE_VALUATION_CONTRACTS)))
 
 
+def card_coverage_gap(card_id, facts) -> str | None:
+    if facts is None:
+        return f"unknown card {int(card_id)}"
+    verdict = getattr(facts, "covers", None)
+    if verdict == "full":
+        return None
+    if verdict == "partial":
+        return f"incomplete card coverage {int(card_id)} (partial)"
+    return f"incomplete card coverage {int(card_id)} (unruled)"
+
+
 __all__ = (
     "CLAUSE_PARAMETER_BRANCH_CONTRACTS", "CLAUSE_PARAMETER_CONTRACTS",
     "CLAUSE_PARAMETER_DIRECT_EQUATIONS", "CLAUSE_PARAMETER_PLACEMENT_CONTRACTS",
@@ -1010,7 +1022,7 @@ __all__ = (
     "OBSERVATION_FIELD_EXPECTATIONS", "OBSERVATION_FIELD_FEATURES",
     "OBSERVATION_FIELD_OWNERS", "SUCCESSOR_CLAUSES",
     "ClauseValuationContract", "ClauseValuationMode", "DirectEquationOwner",
-    "clause_contract_findings", "clause_parameter_findings", "clause_parameter_mode",
+    "card_coverage_gap", "clause_contract_findings", "clause_parameter_findings", "clause_parameter_mode",
     "observation_contract_findings", "unowned_clause_kinds", "unowned_observation_fields",
     "placed_clauses",
 )

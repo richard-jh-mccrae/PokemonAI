@@ -604,6 +604,35 @@ def _clause_probe_board(board, facts, kind, ctx, *, parameter=None, locator=None
         deck_counts[2] = max(1, deck_counts.get(2, 0))
         deck_counts[3] = max(1, deck_counts.get(3, 0))
         board = replace(board, deck_counts=tuple(sorted(deck_counts.items())))
+    if parameter == "to_hand":
+        clause = next(clause for clause in clauses if clause.to_hand is not None)
+        target = next(candidate for candidate in ctx.store.values()
+                      if isinstance(candidate, EnergyCard)
+                      and (clause.energy != "basic"
+                           or candidate.kind == "basic_energy")
+                      and (clause.energy_type is None
+                           or candidate.provides == clause.energy_type))
+        needed = int(clause.amount or 1) + int(clause.to_hand or 0)
+        source = clause.source or clause.zone
+        if source == "deck":
+            deck_counts = dict(board.deck_counts)
+            deck_counts[target.card_id] = max(
+                needed, deck_counts.get(target.card_id, 0))
+            if clause.distinct_types and needed > 1:
+                second = next(candidate for candidate in ctx.store.values()
+                              if isinstance(candidate, EnergyCard)
+                              and candidate.kind == "basic_energy"
+                              and candidate.provides != target.provides)
+                deck_counts[second.card_id] = max(
+                    1, deck_counts.get(second.card_id, 0))
+            board = replace(board, deck_counts=tuple(sorted(deck_counts.items())))
+        elif source == "discard":
+            cards = (*tuple(board.me.discard), *(Card(
+                target.card_id, 7850 + index, board.seat)
+                for index in range(needed)))
+            board = replace(board, me=replace(board.me, discard=card_bag([{
+                "id": card.card_id, "serial": card.serial,
+                "playerIndex": card.owner} for card in cards])))
     if parameter == "exclude_name":
         wanted = next(str(clause.exclude_name) for clause in clauses
                       if clause.exclude_name)

@@ -10,6 +10,7 @@ CARD = PokemonCard(
     weakness=GRASS,
     retreat_cost=1,
     default_roles=('backup_attacker',),
+    covers='full',
     synergy=('Lunatone',),
     attacks=(
         Attack(

@@ -128,6 +128,7 @@ class PokemonCard:
     synergy: tuple[str, ...] = ()
     abilities: tuple[Ability, ...] = ()
     attacks: tuple[Attack, ...] = ()
+    tags: tuple[str, ...] = ()
 
     @property
     def prize_value(self) -> int:

@@ -15,8 +15,8 @@ def test_ledger_evaluator_exposes_total_and_every_linear_component():
     assert valuation.state_key == board.position_key
     assert valuation.cache_key == board.valuation_key
     assert valuation.scale == LEDGER_VALUE_SCALE
-    assert valuation.status is EvaluationStatus.ESTIMATED
-    assert valuation.gaps
+    assert valuation.status is EvaluationStatus.COMPLETE
+    assert not valuation.gaps
     assert valuation.total == sum(component.value for component in valuation.components)
     assert all(component.value == component.activation * component.coefficient
                for component in valuation.components)

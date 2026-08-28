@@ -16,28 +16,25 @@ def _positive(name, value):
 
 @dataclass(frozen=True, slots=True)
 class SearchConfiguration:
-    schema_version: int = 4
+    schema_version: int = 5
     depth_budget: int = 16
-    main_depth_budget: int = 1
-    main_continuation_discount: float = 1.0
     path_node_budget: int = 128
     node_budget: int = 4096
-    time_budget_ms: int = 1_000
+    time_budget_ms: int | None = 1_000
     chance_sample_budget: int = 24
     chance_seed: int = 582
     noise_tolerance: float = 1e-9
     tie_seed: int = 1178
 
     def __post_init__(self):
+        if self.schema_version != 5:
+            raise ValueError("unsupported search configuration schema version")
         for name in ("schema_version", "depth_budget",
-                     "path_node_budget", "node_budget", "time_budget_ms",
+                     "path_node_budget", "node_budget",
                      "chance_sample_budget"):
             _positive(name, getattr(self, name))
-        if self.main_depth_budget < 0:
-            raise ValueError("main_depth_budget must be nonnegative")
-        if not math.isfinite(self.main_continuation_discount) \
-                or not 0 < self.main_continuation_discount <= 1:
-            raise ValueError("main_continuation_discount must be in (0, 1]")
+        if self.time_budget_ms is not None:
+            _positive("time_budget_ms", self.time_budget_ms)
         if not math.isfinite(self.noise_tolerance) or self.noise_tolerance <= 0:
             raise ValueError("noise_tolerance must be positive and finite")
 
@@ -55,6 +52,8 @@ class PolicyConfiguration:
     unavailable_fallback: str = "neutral_lottery"
 
     def __post_init__(self):
+        if self.schema_version != 1:
+            raise ValueError("unsupported policy configuration schema version")
         _positive("schema_version", self.schema_version)
         if not math.isfinite(self.noise_tolerance) or self.noise_tolerance <= 0:
             raise ValueError("noise_tolerance must be positive and finite")
@@ -73,12 +72,17 @@ class PolicyConfiguration:
 
 @dataclass(frozen=True, slots=True)
 class ComputeConfiguration:
-    schema_version: int = 1
+    schema_version: int = 2
     search: SearchConfiguration = SearchConfiguration()
     policy: PolicyConfiguration = PolicyConfiguration()
+    profile: str = "deployment"
 
     def __post_init__(self):
+        if self.schema_version != 2:
+            raise ValueError("unsupported compute configuration schema version")
         _positive("schema_version", self.schema_version)
+        if self.profile not in {"deployment", "correction"}:
+            raise ValueError("unknown compute profile")
 
     @property
     def identity(self) -> str:
@@ -98,7 +102,8 @@ class BudgetController:
         elapsed_ms = (self.clock() - self.started) * 1000
         if self.nodes >= self.configuration.node_budget:
             self.stop_reason = "node_budget"
-        elif elapsed_ms >= self.configuration.time_budget_ms:
+        elif (self.configuration.time_budget_ms is not None
+              and elapsed_ms >= self.configuration.time_budget_ms):
             self.stop_reason = "time_budget"
         else:
             return False
@@ -118,5 +123,19 @@ def _identity(value) -> str:
     return hashlib.blake2b(blob, digest_size=8).hexdigest()
 
 
+def correction_compute_profile() -> ComputeConfiguration:
+    return ComputeConfiguration(
+        search=SearchConfiguration(
+            depth_budget=32,
+            path_node_budget=2_048,
+            node_budget=200_000,
+            time_budget_ms=None,
+            chance_sample_budget=128,
+        ),
+        policy=PolicyConfiguration(accepted_statuses=("complete", "estimated")),
+        profile="correction",
+    )
+
+
 __all__ = ("BudgetController", "ComputeConfiguration", "PolicyConfiguration",
-           "SearchConfiguration")
+           "SearchConfiguration", "correction_compute_profile")

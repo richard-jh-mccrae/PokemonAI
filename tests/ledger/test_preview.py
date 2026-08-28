@@ -15,6 +15,7 @@ from ledger_helpers import (DRAGAPULT, FIRE_E, ScriptedProvider, action, body, p
 from common.algebra import (Actor, Chance, Choice, Deterministic, Edge, RevealChoice,
                             RevealOutcome, Terminal, WeightedEdge)
 from common.ledger import DeckOverlay, EvaluationModel, LedgerDecider
+from common.observation import ObservationStateBuilder
 from deprecated.bellman.state import DecisionState
 
 DECK = (DRAGAPULT, FIRE_E) * 20
@@ -180,6 +181,33 @@ def test_a_two_menu_forced_chain_is_walked_to_its_leaf():
                  if row["action"] == str(play.identity))
     assert entry["swing"] == pytest.approx(leaf_swing, abs=1e-9)
     assert not any("chain capped" in gap for gap in decision.diagnostics["gaps"])
+
+
+def test_root_preview_stops_at_the_first_return_to_main():
+    landing = state_of(printout(
+        me=player(active=body(DRAGAPULT, 1, energies=(2,)), hand=[]),
+        them=player(own=False, active=body(DRAGAPULT, 2))))
+    beyond = state_of(printout(
+        me=player(active=body(DRAGAPULT, 1, energies=(2,)), hand=[]),
+        them=player(own=False, active=body(DRAGAPULT, 2, hp=0))))
+    play, end = action("play", (0,)), action("end", (1,))
+    second = action("attack", (2,))
+    provider = ScriptedProvider(
+        menus={"root": (play, end), landing.semantic_key: (second, end)},
+        nodes={("root", play.identity): Deterministic(landing),
+               (landing.semantic_key, second.identity): Terminal(beyond, "done")})
+
+    decision = LedgerDecider(
+        DECK, "test", EvaluationModel.build(),
+        provider_factory=lambda _s, **_kw: provider).decide(ROOT_OBS)
+    price = next(row for row in decision.diagnostics["prices"]
+                 if row["action"] == str(play.identity))
+    assert math.isfinite(price["swing"])
+    assert all(str(second.identity) not in tuple(map(str, successor.action_path))
+               for successor in decision.decision_result.roster.candidates[0].successors)
+    assert {successor.state.position_key
+            for successor in decision.decision_result.roster.candidates[0].successors} == {
+                ObservationStateBuilder(DECK).root(landing.observation).position_key}
 
 
 def test_a_chain_past_the_depth_cap_scores_mid_board_and_keeps_the_root():

@@ -320,9 +320,15 @@ def _read_deck() -> list[int]:
 
 
 def _compute_configuration_from_environment() -> ComputeConfiguration:
-    compute = ComputeConfiguration()
+    from common.decision import correction_compute_profile
+
+    profile = os.environ.get("AGENT_LEDGER_COMPUTE_PROFILE", "deployment")
+    compute = (correction_compute_profile()
+               if profile == "correction" else ComputeConfiguration())
+    if profile not in {"deployment", "correction"}:
+        raise ValueError("AGENT_LEDGER_COMPUTE_PROFILE must be deployment or correction")
     raw_limit = os.environ.get("AGENT_DECISION_SECONDS")
-    if raw_limit is None:
+    if raw_limit is None or profile == "correction":
         return compute
     seconds = float(raw_limit)
     if not math.isfinite(seconds) or seconds <= 0:

@@ -27,6 +27,7 @@ def evaluator_semantics_identity(paths=None) -> str:
         Path(__file__).with_name("capabilities.py"),
         Path(__file__).with_name("evaluate.py"),
         Path(__file__).with_name("features.py"),
+        Path(__file__).with_name("portfolio.py"),
         Path(__file__).with_name("prizes.py"),
         Path(__file__).with_name("worth.py"),
     ))

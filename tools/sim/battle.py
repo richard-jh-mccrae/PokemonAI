@@ -184,7 +184,7 @@ class AgentServer:
 
     def __init__(self, bundle: Path | str, extra_syspath=(), *, overlay=None,
                  capture_telemetry=False, emit_telemetry=None, decision_seconds=None,
-                 strict=False, provenance=None):
+                 strict=False, provenance=None, compute_profile=None):
         emit_telemetry = capture_telemetry if emit_telemetry is None else bool(emit_telemetry)
         env = dict(os.environ, AGENT_NO_TELEMETRY="0" if emit_telemetry else "1",
                    AGENT_CAPTURE_TELEMETRY="1" if capture_telemetry else "0",
@@ -194,6 +194,10 @@ class AgentServer:
             env["AGENT_DECISION_SECONDS"] = str(float(decision_seconds))
         else:
             env.pop("AGENT_DECISION_SECONDS", None)
+        if compute_profile is not None:
+            env["AGENT_LEDGER_COMPUTE_PROFILE"] = str(compute_profile)
+        else:
+            env.pop("AGENT_LEDGER_COMPUTE_PROFILE", None)
         if provenance is not None:
             env["AGENT_RUNTIME_PROVENANCE"] = json.dumps(
                 provenance, sort_keys=True, separators=(",", ":"))

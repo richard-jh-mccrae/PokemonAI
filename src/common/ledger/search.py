@@ -79,7 +79,7 @@ class UniformPolicyModel:
 
 
 class LedgerOnePlySearch:
-    identity = f"ledger-one-ply-v2:{SEARCH_SEMANTICS_IDENTITY}"
+    identity = f"ledger-one-ply-v3:{SEARCH_SEMANTICS_IDENTITY}"
 
     def __init__(self):
         self._previous_evaluation_state = None

@@ -45,7 +45,12 @@ class PairwiseExample:
 
 
 def parameter_manifest(catalog: FeatureCatalog = FEATURE_CATALOG) -> tuple[ParameterSpec, ...]:
-    fixed = {"result.win"}
+    fixed = {
+        "active.terminal_liability",
+        "function.ko.self_prize_liability",
+        "prize.race",
+        "result.win",
+    }
     fixed_prefixes = ("continuation.", "action.")
     rows = []
     for spec in catalog.priced_specs:
@@ -63,14 +68,16 @@ def parameter_manifest(catalog: FeatureCatalog = FEATURE_CATALOG) -> tuple[Param
 def examples_from_rows(rows) -> tuple[PairwiseExample, ...]:
     examples = []
     for row in rows:
+        if not row.get("graded"):
+            continue
         acceptable = {tuple(selection) for selection in row.get("acceptable", ())}
         candidates = tuple(row.get("candidates", ()))
         positive = tuple(candidate for candidate in candidates
                          if tuple(candidate.get("selection", ())) in acceptable
-                         and candidate.get("status") != "unavailable")
+                         and candidate.get("status") == "complete")
         negative = tuple(candidate for candidate in candidates
                          if tuple(candidate.get("selection", ())) not in acceptable
-                         and candidate.get("status") != "unavailable")
+                         and candidate.get("status") == "complete")
         group = str(row.get("episode_id") or row.get("key") or row.get("id"))
         for good in positive:
             for bad in negative:

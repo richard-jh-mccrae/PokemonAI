@@ -12,6 +12,7 @@ CARD = PokemonCard(
     tera=True,
     retreat_cost=1,
     default_roles=('primary_attacker', 'sniper'),
+    covers='full',
     attacks=(
         Attack(
             attack_id=153,

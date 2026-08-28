@@ -112,20 +112,15 @@ def price_actions(state, board: ObservationState, baseline: float, provider,
                 status=EvaluationStatus.ESTIMATED,
                 prize_map=baseline_valuation.prize_map))
             continue
-        forced_counter = (board.select is not None
-                          and board.select.context == _DAMAGE_COUNTER_ANY)
         walk = _Walk(
-            provider, ctx, board.decklist, compute, budget, valuation_fn,
-            stop_at_damage_counter=forced_counter)
+            provider, ctx, board.decklist, compute, budget, valuation_fn)
         node = provider.transition(state, action)
         information_value, information_capped = _immediate_information_value(
             node, compute.path_node_budget)
-        main_depth = _main_depth(
-            board, action, original_actions, node, compute.main_depth_budget)
         if information_capped:
             walk.gaps.append("information branches capped")
         successor, end_probability, landings = walk.node(
-            state, board, node, compute.depth_budget, main_depth)
+            state, board, node, compute.depth_budget)
         landings = _coalesce_landings(landings)
         ends_turn = end_probability >= 1.0
         state_delta = successor.total - baseline
@@ -138,15 +133,6 @@ def price_actions(state, board: ObservationState, baseline: float, provider,
         state_contributions = _state_contributions(baseline_valuation, successor, ctx)
         track_opportunities = not isinstance(node, (Chance, Refresh, RevealChoice))
         footprint_landings = landings
-        if track_opportunities and main_depth > 0:
-            footprint_walk = _Walk(
-                provider, ctx, board.decklist, compute, None, valuation_fn,
-                stop_at_damage_counter=forced_counter)
-            _value, _ended, footprint_landings = footprint_walk.node(
-                state, board, node, compute.depth_budget, 0)
-            footprint_landings = _coalesce_landings(footprint_landings)
-            walk.gaps.extend(footprint_walk.gaps)
-            walk.unavailable = walk.unavailable or footprint_walk.unavailable
         footprint_values = _root_footprint(
             board, provider, state, action, footprint_landings, walk.gaps,
             track_opportunities=track_opportunities)
@@ -194,7 +180,7 @@ class _Walk:
     """One root option's preview: a node budget, a gap log, and the recursion over nodes."""
 
     def __init__(self, provider, ctx: EvaluationModel, decklist, compute, budget,
-                 valuation_fn, *, stop_at_damage_counter=False):
+                 valuation_fn):
         self.provider = provider
         self.ctx = ctx
         self.decklist = decklist
@@ -205,10 +191,8 @@ class _Walk:
         self.nodes = 0
         self.path_stopped = False
         self.unavailable = False
-        self.stop_at_damage_counter = bool(stop_at_damage_counter)
 
-    def node(self, state, board: ObservationState, node, depth: int, main_depth=None):
-        main_depth = (self.compute.main_depth_budget if main_depth is None else main_depth)
+    def node(self, state, board: ObservationState, node, depth: int):
         if self.budget is not None and not self.budget.visit(getattr(state, "semantic_key", None)):
             self.gaps.append(f"search stopped: {self.budget.stop_reason}")
             self.path_stopped = True
@@ -228,13 +212,13 @@ class _Walk:
             return self.valuation(board), 0.0, ((1.0, landing_state, board, False, ()),)
         if isinstance(node, Deterministic):
             return self.deterministic(
-                node.state, self._typed(node.state, board), depth, main_depth)
+                node.state, self._typed(node.state, board), depth)
         if isinstance(node, Chance):
             weighted, landings, end_probability = [], [], 0.0
             processed_probability = 0.0
             for index, edge in enumerate(node.children):
                 child_value, child_end_probability, child_landings = self.node(
-                    state, board, edge.node, depth - 1, main_depth)
+                    state, board, edge.node, depth - 1)
                 if self._budget_stopped():
                     residual = max(0.0, 1.0 - processed_probability)
                     weighted.append((residual, self.valuation(board)))
@@ -259,41 +243,18 @@ class _Walk:
             self.gaps.extend(gaps)
             if not outcomes:
                 self.unavailable = True
-            if main_depth <= 0:
-                landings = []
-                for index, (probability, successor, synthetic) in enumerate(outcomes):
-                    landing_state = _refresh_state(state, synthetic, index)
-                    landings.append((probability, landing_state, successor, False, ()))
-                return valuation, 0.0, tuple(landings)
-            weighted, landings, end_probability = [], [], 0.0
-            processed_probability = 0.0
+            landings = []
             for index, (probability, successor, synthetic) in enumerate(outcomes):
-                if self._budget_stopped():
-                    residual = max(0.0, 1.0 - processed_probability)
-                    weighted.append((residual, self.valuation(board)))
-                    landings.append((residual, state, board, False, ()))
-                    self.gaps.append(
-                        "refresh branches capped; remaining mass scored at parent")
-                    break
                 landing_state = _refresh_state(state, synthetic, index)
-                child_value, child_end, child_landings = self.deterministic(
-                    landing_state, successor, depth - 1, main_depth)
-                weighted.append((probability, child_value))
-                landings.extend((probability * child_probability, child_state,
-                                 child_board, ended, path)
-                                for child_probability, child_state, child_board, ended, path
-                                in child_landings)
-                end_probability += probability * child_end
-                processed_probability += probability
-            return (_expected_valuation(weighted, self.ctx), end_probability,
-                    tuple(landings))
+                landings.append((probability, landing_state, successor, False, ()))
+            return valuation, 0.0, tuple(landings)
         if isinstance(node, RevealChoice):
             priced = {}
             for edge in node.choices:
                 if self._budget_stopped():
                     break
                 priced[edge.label] = self.node(
-                    state, board, edge.node, depth - 1, main_depth)
+                    state, board, edge.node, depth - 1)
             if self._budget_stopped():
                 self.gaps.append(
                     "reveal branches capped; remaining outcomes scored at parent")
@@ -329,7 +290,7 @@ class _Walk:
                 if self._budget_stopped():
                     break
                 entries.append((edge.label, self.node(
-                    state, board, edge.node, depth - 1, main_depth)))
+                    state, board, edge.node, depth - 1)))
             if not entries:
                 return self.valuation(board), 0.0, ((1.0, state, board, False, ()),)
             label, result = self._choose(entries, node.actor, salt=f"choice:{depth}")
@@ -342,51 +303,13 @@ class _Walk:
         self.unavailable = True
         return self.valuation(board), 0.0, ((1.0, state, board, False, ()),)
 
-    def deterministic(self, state, board: ObservationState, depth: int, main_depth: int):
+    def deterministic(self, state, board: ObservationState, depth: int):
         context_value = None if board.select is None else board.select.context
         context = _MAIN if context_value is None else int(context_value)
         if context == _DAMAGE_COUNTER_ANY:
-            if self.stop_at_damage_counter:
-                return self.valuation(board), 0.0, ((1.0, state, board, False, ()),)
             return self.damage_counter_rollout(state, board, depth)
         if context == _MAIN:
-            if main_depth <= 0:
-                return self.valuation(board), 0.0, ((1.0, state, board, False, ()),)
-            try:
-                actions = tuple(self.provider.actions(state))
-            except (KeyError, LookupError):
-                return self.valuation(board), 0.0, ((1.0, state, board, False, ()),)
-            if not actions:
-                return self.valuation(board), 0.0, ((1.0, state, board, False, ()),)
-            actor = self.provider.actor(state)
-            entries = []
-            for action in actions:
-                if self._budget_stopped():
-                    break
-                if action.identity.kind == "end":
-                    result = (self.valuation(board), 1.0,
-                              ((1.0, state, board, True, ()),))
-                else:
-                    try:
-                        successor = self.provider.transition(state, action)
-                    except (KeyError, LookupError):
-                        result = (self.valuation(board), 0.0,
-                                  ((1.0, state, board, False, ()),))
-                    else:
-                        result = self.node(
-                            state, board, successor, depth - 1, main_depth - 1)
-                        valuation, end_probability, landings = result
-                        result = (_expected_valuation((
-                            (1.0 - self.compute.main_continuation_discount,
-                             self.valuation(board)),
-                            (self.compute.main_continuation_discount, valuation),
-                        ), self.ctx), end_probability, landings)
-                entries.append((action.identity, result))
-            if not entries:
-                return self.valuation(board), 0.0, ((1.0, state, board, False, ()),)
-            identity, result = self._choose(entries, actor, salt=f"main:{depth}")
-            valuation, _planned_end_probability, landings = _with_path(result, identity)
-            return valuation, 0.0, landings
+            return self.valuation(board), 0.0, ((1.0, state, board, False, ()),)
         actions = self.provider.actions(state)
         if not actions:
             self.gaps.append("forced menu offered no actions; unavailable")
@@ -403,7 +326,7 @@ class _Walk:
             if self._budget_stopped():
                 break
             entries.append((action.identity, self.node(
-                state, board, self.provider.transition(state, action), depth - 1, main_depth)))
+                state, board, self.provider.transition(state, action), depth - 1)))
         if not entries:
             return self.valuation(board), 0.0, ((1.0, state, board, False, ()),)
         identity, result = self._choose(entries, actor, salt=f"menu:{depth}")
@@ -463,8 +386,13 @@ class _Walk:
                 and board.select.context == _DAMAGE_COUNTER_ANY:
             self.gaps.append("damage-counter rollout depth capped")
             self.path_stopped = True
-        return (self.valuation(board), 0.0,
-                ((1.0, state, board, False, tuple(path)),))
+            return (self.valuation(board), 0.0,
+                    ((1.0, state, board, False, tuple(path)),))
+        valuation, end_probability, landings = self.deterministic(state, board, depth)
+        return valuation, end_probability, tuple(
+            (probability, landing_state, landing_board, ended,
+             (*path, *suffix))
+            for probability, landing_state, landing_board, ended, suffix in landings)
 
     def _budget_stopped(self):
         return self.path_stopped or (
@@ -602,38 +530,6 @@ def _action_key(action) -> str:
 
 def _action_roster_key(action):
     return action.identity, tuple(action.selection)
-
-
-def _main_depth(board, action, actions, node, configured):
-    if board.select is not None and board.select.context == _DAMAGE_COUNTER_ANY:
-        return 0
-    if isinstance(node, (Chance, Refresh, RevealChoice)):
-        return 0
-    configured = int(configured)
-    if configured <= 0:
-        return 0
-    if board.select is not None and board.select.context == _DISCARD:
-        return 1
-    if action.identity.kind in {"attach", "retreat"}:
-        return 1
-    if action.identity.kind not in {"ability", "skill"}:
-        return 0
-    options = () if board.select is None else board.select.options
-    if len(action.selection) != 1 or not 0 <= action.selection[0] < len(options):
-        return 1
-    source = options[action.selection[0]]
-    source_location = (source.area, source.index)
-    for candidate in actions:
-        if candidate.identity.kind != "evolve" or len(candidate.selection) != 1:
-            continue
-        index = candidate.selection[0]
-        if not 0 <= index < len(options):
-            continue
-        target = options[index]
-        if target.type == _EVOLVE \
-                and (target.inPlayArea, target.inPlayIndex) == source_location:
-            return configured
-    return 0
 
 
 def _local_action_events(board, action, ctx=None):

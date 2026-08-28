@@ -4,7 +4,7 @@ from __future__ import annotations
 from types import SimpleNamespace
 
 from train.ledger_corpus import (_runtime_equivalence, _satisfies_human, payload,
-                                 render_markdown)
+                                 render_markdown, _grading_eligibility)
 
 
 def row(deck, row_id, *, agrees, graded=True, gaps=(), chosen=(0,), correct=(1,)):
@@ -28,6 +28,14 @@ def test_payload_reports_per_deck_agreement_and_the_generality_floor():
     assert result["decks"]["b_deck"]["agreement"] == 0.5
     assert result["decks"]["b_deck"]["ungraded"] == 1
     assert result["generality_floor"] == 0.5
+
+
+def test_incomplete_search_is_excluded_from_correction_grading():
+    assert _grading_eligibility(True, [
+        {"status": "complete"}, {"status": "estimated"}]) == (
+            False, "search_incomplete")
+    assert _grading_eligibility(True, [
+        {"status": "complete"}, {"status": "complete"}]) == (True, None)
 
 
 def test_gap_census_counts_decisions_affected_not_mentions():
@@ -228,7 +236,9 @@ def test_damage_targets_are_priced_with_engine_facts():
                  and int((record.decision or {}).get("frame", -1)) == 50)
     produced = _replay_one("mega_starmie", frame)
     assert produced["backend"] == "ledger"
-    assert produced["agrees"] is True
+    assert produced["chosen"] == produced["correct"] == [1]
+    assert produced["agrees"] is None
+    assert produced["grading_exclusion"] == "search_incomplete"
 
 
 def test_a_crashed_decision_is_surfaced_even_when_it_agrees():

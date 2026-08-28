@@ -6,4 +6,5 @@ CARD = EnergyCard(
     name='Basic {D} Energy',
     kind=BASIC_ENERGY,
     provides=DARKNESS,
+    covers='full',
 )
