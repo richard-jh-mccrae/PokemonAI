@@ -56,6 +56,31 @@ def select_min_count(obs: dict | None) -> int | None:
     return value if isinstance(value, int) and not isinstance(value, bool) else None
 
 
+def select_max_count(obs: dict | None) -> int | None:
+    value = ((obs or {}).get("select") or {}).get("maxCount")
+    return value if isinstance(value, int) and not isinstance(value, bool) else None
+
+
+def correction_selection_error(correction) -> str | None:
+    correct = list(getattr(correction, "correct", ()) or ())
+    obs = getattr(correction, "obs", None) or {}
+    options = ((obs.get("select") or {}).get("option") or ())
+    minimum, maximum = select_min_count(obs), select_max_count(obs)
+    if not correct:
+        return ("invalid_correction_cardinality"
+                if getattr(correction, "scope", "decision") == "decision"
+                and minimum is not None and minimum > 0 else None)
+    if len(set(correct)) != len(correct) or any(
+            not isinstance(index, int) or index < 0 or index >= len(options)
+            for index in correct):
+        return "invalid_correction_selection"
+    if minimum is not None and len(correct) < minimum:
+        return "invalid_correction_cardinality"
+    if maximum is not None and len(correct) > maximum:
+        return "invalid_correction_cardinality"
+    return None
+
+
 def identity_key(correction) -> tuple:
     """What makes two Corrections the SAME blunder: the Scope's subject, never the Anchor frame."""
     return (correction.episode_id, correction.seat, correction.scope, correction.subject)
@@ -253,6 +278,14 @@ def build_correction(
     else:                                    # named: Anchor-indexed at both decision and turn scope
         if any(not isinstance(i, int) or i < 0 or i >= n_options for i in correct):
             raise ValueError(f"correct {correct!r} must index legal options 0..{n_options - 1}")
+        if len(set(correct)) != len(correct):
+            raise ValueError(f"correct {correct!r} contains a duplicate option")
+        minimum, maximum = select_min_count(obs), select_max_count(obs)
+        if ((minimum is not None and len(correct) < minimum)
+                or (maximum is not None and len(correct) > maximum)):
+            raise ValueError(
+                f"correct {correct!r} requires {minimum if minimum is not None else '?'}.."
+                f"{maximum if maximum is not None else '?'} option(s)")
         if scope == "turn" and set(correct) == set(decision.chosen):
             raise ValueError(f"correct {correct!r} is what was chosen — a turn-scope prescription "
                              "must name the first DIVERGENT option at the Anchor")

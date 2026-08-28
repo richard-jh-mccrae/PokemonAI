@@ -214,6 +214,30 @@ class LedgerOnePlySearch:
         )
 
 
+def preservation_frontier(candidates):
+    deferred = set()
+    for candidate in candidates:
+        continuation = (getattr(candidate, "continuation", None)
+                        or getattr(candidate, "footprint", None))
+        consumed = set(() if continuation is None else
+                       continuation.opportunities_consumed)
+        if not consumed:
+            continue
+        for other in candidates:
+            if other is candidate:
+                continue
+            other_continuation = (getattr(other, "continuation", None)
+                                  or getattr(other, "footprint", None))
+            preserved = (() if other_continuation is None else
+                         other_continuation.opportunities_preserved)
+            if (other.action.identity.kind in consumed
+                    and candidate.action.identity.kind in preserved):
+                deferred.add(id(candidate))
+                break
+    return tuple(candidate for candidate in candidates
+                 if id(candidate) not in deferred) or tuple(candidates)
+
+
 class GreedyDecisionPolicy:
     identity = f"ledger-spend-then-end-v1:{SEARCH_SEMANTICS_IDENTITY}"
 
@@ -233,7 +257,7 @@ class GreedyDecisionPolicy:
                 and candidate.delta is not None
                 and candidate.delta.total > configuration.noise_tolerance)
             if continuing:
-                candidates = continuing
+                candidates = preservation_frontier(continuing)
                 reason = DecisionReason.POSITIVE_CONTINUATION
             else:
                 enders = tuple(candidate for candidate in candidates

@@ -14,9 +14,28 @@ def legacy_choose(prices, *, forced, configuration):
                        if not price.ends_turn
                        and price.swing > configuration.noise_tolerance)
     if continuing:
-        return _legacy_ranked(continuing, configuration)[0]
+        return _legacy_ranked(_legacy_preservation_frontier(continuing), configuration)[0]
     enders = tuple(price for price in prices if price.ends_turn)
     return _legacy_ranked(enders or prices, configuration)[0]
+
+
+def _legacy_preservation_frontier(candidates):
+    deferred = set()
+    for candidate in candidates:
+        consumed = set(candidate.footprint.opportunities_consumed)
+        if not consumed:
+            continue
+        for other in candidates:
+            if other is candidate:
+                continue
+            preserved = set(other.footprint.opportunities_preserved)
+            if (other.action.identity.kind in consumed
+                    and candidate.action.identity.kind in preserved):
+                deferred.add(candidate.action.identity)
+                break
+    kept = tuple(candidate for candidate in candidates
+                 if candidate.action.identity not in deferred)
+    return kept or tuple(candidates)
 
 
 def assert_decision_parity(prices, search_result, choice, *, forced, configuration):
@@ -41,7 +60,9 @@ def assert_decision_parity(prices, search_result, choice, *, forced, configurati
                         item.value, item.provenance)
                        for item in candidate.delta.components)
         if actual != expected:
-            raise AssertionError(f"candidate decomposition changed: {price.action.identity}")
+            raise AssertionError(
+                f"candidate decomposition changed: {price.action.identity}; "
+                f"expected={expected!r}; actual={actual!r}")
         expected_tie_break = (() if price.prize_map is None
                               else price.prize_map.plan_rank_key())
         if candidate.policy_tie_break != expected_tie_break:

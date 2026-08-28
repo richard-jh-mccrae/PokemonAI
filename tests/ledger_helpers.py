@@ -73,7 +73,13 @@ class ScriptedProvider:
         return self._menus[state.semantic_key]
 
     def transition(self, state, act):
-        return self._nodes[(state.semantic_key, act.identity)]
+        node = self._nodes.get((state.semantic_key, act.identity))
+        if node is not None:
+            return node
+        if act.identity.kind == "end":
+            from common.algebra import Terminal
+            return Terminal(state, "scripted end")
+        raise KeyError((state.semantic_key, act.identity))
 
     def actor(self, state):
         return self._actors.get(state.semantic_key, Actor.OURS)

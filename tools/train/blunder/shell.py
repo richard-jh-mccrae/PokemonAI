@@ -942,6 +942,8 @@ $('save').onclick=async()=>{
   // pane must never offer a save the validator will reject, nor block one it would accept.
   if(scope==='decision'&&!correct.length&&f.min_count!==0){
     $('msg').className='ko';$('msg').textContent='pick the correct move(s)';return;}
+  if(correct.length&&(correct.length<f.min_count||correct.length>f.max_count)){
+    $('msg').className='ko';$('msg').textContent=`pick ${f.min_count}..${f.max_count} move(s)`;return;}
   const rationale=applyCritical($('rationale').value,$('critical').checked);   // checkbox owns the CRITICAL token
   const body={frame:f.frame,correct,category:$('category').value,rationale,
     scope:$('scope').value,                        // what the tag is about (ADR-0049)

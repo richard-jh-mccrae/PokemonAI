@@ -2,14 +2,15 @@
 from __future__ import annotations
 
 from collections import Counter
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 import math
 
 from common.observation import ObservationState
 from common.observation.knowledge import KnownDeckTop, KnownOwnPrizes
 from common.observation.nodes import Body, Side
 from common.cards import card_clauses
-from common.cards.card_facts import SPECIAL_ENERGY, EnergyCard, PokemonCard
+from common.cards.card_facts import COLORLESS, SPECIAL_ENERGY, EnergyCard, PokemonCard
+from common.cards.functions.energy import provision_units
 
 from .activation import (DAMAGE_UNIT_HP, ActivationCompiler, ActivationEnvironment,
                          FeatureActivation)
@@ -21,7 +22,7 @@ from .coverage import card_coverage_gap
 from .features import FEATURE_CATALOG
 from .prizes import PrizeMap, derive_prize_map
 from .portfolio import feasible_option_portfolio_result
-from .worth import (Demand, DemandState, EvaluationModel, _liveness, _unfilled,
+from .worth import (Demand, DemandState, EvaluationModel, Reach, _liveness, _unfilled,
                     any_attack_payable,
                     development_reach_units,
                     legal_line_reach, line_reach, opponent_evaluation,
@@ -67,8 +68,8 @@ class _Trace:
     def __init__(self, ctx: EvaluationModel):
         self.ctx = ctx
         self.compiler = ActivationCompiler()
-        self.by_feature: dict[str, float] = {}
         self.provenance: dict[str, set[str]] = {}
+        self.by_owner: dict[tuple[str, tuple[str, ...]], list[float]] = {}
         self.by_part: dict[str, float] = {}
         self.gaps: list[str] = []
 
@@ -92,20 +93,31 @@ class _Trace:
             return
         if feature not in FEATURE_CATALOG:
             raise KeyError(f"unregistered Valuation Feature {feature!r}")
-        self.by_feature[feature] = self.by_feature.get(feature, 0.0) + activation
-        self.provenance.setdefault(feature, set()).update(
-            item.provenance or (provenance or part,))
+        owner_tokens = (*item.provenance,)
+        if provenance:
+            owner_tokens = (*owner_tokens, provenance)
+        owner = tuple(sorted(set(owner_tokens)))
+        if not owner:
+            owner = (part,)
+        self.provenance.setdefault(feature, set()).update(owner)
+        key = (feature, owner)
+        self.by_owner.setdefault(key, []).append(activation)
         self.by_part[part] = self.by_part.get(part, 0.0) + (
             activation * self.ctx.configuration[feature])
 
     def finish(self) -> Valuation:
-        activations = tuple(FeatureActivation(
-            feature, value, tuple(sorted(self.provenance[feature])))
-                            for feature, value in sorted(self.by_feature.items()))
         contributions = tuple(FeatureContribution(
-            item.feature, item.value, self.ctx.configuration[item.feature],
-            item.value * self.ctx.configuration[item.feature], item.provenance)
-            for item in activations)
+            feature, activation, self.ctx.configuration[feature],
+            activation * self.ctx.configuration[feature], owner)
+            for (feature, owner), values in sorted(self.by_owner.items())
+            if (activation := math.fsum(values)))
+        owner_values = {}
+        for item in contributions:
+            owner_values.setdefault(item.feature, []).append(item.activation)
+        activations = tuple(FeatureActivation(
+            feature, math.fsum(values), tuple(sorted(self.provenance[feature])))
+            for feature, values in sorted(owner_values.items())
+            if math.fsum(values))
         total = sum(item.value for item in contributions)
         return Valuation(total, tuple(sorted(self.by_part.items())), tuple(self.gaps),
                          activations, contributions)
@@ -203,11 +215,275 @@ def _sequenced_portfolio(values) -> float:
                for index, value in enumerate(ordered))
 
 
+@dataclass(frozen=True)
+class _DevelopmentOpportunity:
+    attack: float
+    ability: float
+    evolution: int | None
+    typed_energy: tuple[tuple[int, int], ...]
+    energy_units: int
+    ability_claims: tuple[str, ...]
+    bench_units: int = 0
+
+
+def _development_attack_claim(body, reach, ctx):
+    from .worth import _forward_lines
+
+    facts = ctx.facts(body.card.card_id)
+    candidates = []
+    cards = [(None, facts)]
+    cards.extend((card_id, ctx.facts(card_id))
+                 for card_id in _forward_lines().get(getattr(facts, "name", None), ())
+                 if (reach or {}).get(card_id, Reach.ABSENT) is not Reach.ABSENT)
+    attached = Counter(body.energies)
+    for target, candidate in cards:
+        for attack in getattr(candidate, "attacks", ()) or ():
+            typed, colorless = _unfilled(attack.cost, attached)
+            missing = sum(typed.values()) + colorless
+            impact = max(int(attack.damage or 0), int(attack.damage_fix or 0),
+                         int(attack.damage_max or 0))
+            candidates.append((impact, -missing, target, tuple(sorted(typed.items())), missing))
+    if not candidates:
+        return None, (), 0, 0.0
+    def candidate_rank(row):
+        impact, missing_rank, target, _typed, _missing = row
+        return impact, missing_rank, -1 if target is None else target
+
+    _impact, _missing_rank, target, typed, missing = max(
+        candidates, key=candidate_rank)
+    return target, typed, missing, _impact / DAMAGE_UNIT_HP
+
+
+def _development_ability_claims(facts) -> tuple[str, ...]:
+    claims = set()
+    for clause in card_clauses(facts):
+        if clause.trigger != "ability" and clause.kind not in {
+                "draw", "fetch", "accel", "energy_recur", "move_damage", "heal"}:
+            continue
+        allowance = getattr(clause, "allowance", None)
+        if allowance == "card":
+            claims.add(f"ability:card:{getattr(facts, 'name', '')}")
+    return tuple(sorted(claims))
+
+
+def _development_energy_capacities(side, deck_counts, ctx):
+    typed = Counter()
+    total = 0
+    counts = Counter(card.card_id for card in tuple(side.hand))
+    counts.update({card_id: count for card_id, count in deck_counts or ()})
+    for card_id, count in counts.items():
+        facts = ctx.facts(card_id)
+        if not isinstance(facts, EnergyCard):
+            continue
+        units = int(provision_units(facts)) * max(0, count)
+        typed[facts.provides] += units
+        total += units
+    return typed, total
+
+
+def _projected_evolution_capability(body, target, side, opposing_side, board, ctx):
+    facts = ctx.facts(target)
+    if not isinstance(facts, PokemonCard):
+        return None
+    damage = max(0, body.max_hp - body.hp)
+    evolved = replace(
+        body, card=replace(body.card, card_id=target),
+        hp=max(0, int(facts.hp) - damage), max_hp=int(facts.hp),
+        appeared_this_turn=False,
+        pre_evolution=(*body.pre_evolution, body.card))
+    projected_side = replace(
+        side,
+        active=evolved if side.active is body else side.active,
+        bench=tuple(evolved if candidate is body else candidate
+                    for candidate in side.bench))
+    projected_board = replace(
+        board,
+        me=projected_side if side is board.me else board.me,
+        them=projected_side if side is board.them else board.them)
+    return body_capability(
+        evolved, projected_side, opposing_side, projected_board, ctx, reach={})
+
+
+def _basic_hand_development_opportunities(side, opposing_side, board, ctx):
+    opportunities = []
+    for card in tuple(side.hand):
+        facts = ctx.facts(card.card_id)
+        if not isinstance(facts, PokemonCard) or facts.evolves_from is not None:
+            continue
+        attacks = []
+        for attack in facts.attacks:
+            typed, colorless = _unfilled(attack.cost, Counter())
+            missing = sum(typed.values()) + colorless
+            impact = max(int(attack.damage or 0), int(attack.damage_fix or 0),
+                         int(attack.damage_max or 0)) / DAMAGE_UNIT_HP
+            attacks.append((impact, -missing, tuple(sorted(typed.items())), missing))
+        attack, _rank, typed, missing = max(
+            attacks, default=(0.0, 0, (), 0), key=lambda row: (row[0], row[1]))
+        body = Body(card, int(facts.hp), int(facts.hp), False, (), (), (), (), b"")
+        projected_side = replace(side, bench=(*side.bench, body))
+        projected_board = replace(
+            board,
+            me=projected_side if side is board.me else board.me,
+            them=projected_side if side is board.them else board.them)
+        capability = body_capability(
+            body, projected_side, opposing_side, projected_board, ctx, reach={})
+        ability = max(0.0, sum((
+            capability.draw_cards, capability.search_cards,
+            capability.damage_move, capability.healing,
+            capability.acceleration, capability.denial,
+            capability.ability_future)) - capability.resource_cost - capability.self_cost)
+        if attack > 0 or ability > 0:
+            opportunities.append(_DevelopmentOpportunity(
+                attack, ability, None, typed, missing,
+                _development_ability_claims(facts), bench_units=1))
+    return opportunities
+
+
+def _feasible_development_portfolio(rows, side, deck_counts, ctx, *,
+                                    board=None, opposing_side=None):
+    hand_counts = Counter(card.card_id for card in tuple(side.hand))
+    deck_supply = dict(deck_counts or ())
+    opportunities = []
+    evolution_capacities = {}
+    acceleration = 0
+    for body, capability, reach in rows:
+        attack = max(capability.attack_future,
+                     capability.attack_now if body is not side.active else 0.0)
+        ability = max(0.0, capability.ability_future)
+        acceleration += max(0, int(capability.acceleration))
+        target, typed, missing, full_attack = _development_attack_claim(body, reach, ctx)
+        if target is not None and board is not None and opposing_side is not None:
+            projected = _projected_evolution_capability(
+                body, target, side, opposing_side, board, ctx)
+            if projected is not None:
+                ability = max(ability, sum((
+                    projected.draw_cards, projected.search_cards,
+                    projected.damage_move, projected.healing,
+                    projected.acceleration, projected.denial,
+                    projected.ability_future))
+                    - projected.resource_cost - projected.self_cost)
+        if not body.energies:
+            attack = max(attack, full_attack)
+        if attack <= 0 and ability <= 0:
+            continue
+        if target is not None:
+            status = (reach or {}).get(target, Reach.ABSENT)
+            evolution_capacities[target] = (
+                hand_counts[target] if status is Reach.HAND else
+                hand_counts[target] + deck_supply.get(target, 0))
+        target_facts = ctx.facts(target) if target is not None else ctx.facts(
+            body.card.card_id)
+        opportunities.append(_DevelopmentOpportunity(
+            attack, ability, target,
+            (() if body.energies else typed),
+            (0 if body.energies else missing),
+            _development_ability_claims(target_facts)))
+    if board is not None and opposing_side is not None:
+        opportunities.extend(_basic_hand_development_opportunities(
+            side, opposing_side, board, ctx))
+    if not opportunities:
+        return 0.0, 0.0
+
+    energy_capacities, total_energy = _development_energy_capacities(
+        side, deck_counts, ctx)
+    energy_types = tuple(sorted(energy_capacities))
+    evolution_ids = tuple(sorted(evolution_capacities))
+    ability_keys = tuple(sorted({claim for item in opportunities
+                                 for claim in item.ability_claims}))
+    initial_resources = ((0,) * len(evolution_ids), (0,) * len(energy_types),
+                         0, 0, 0, (0,) * len(ability_keys), 0)
+    states = {(0, initial_resources): (0.0, 0.0)}
+    development_horizon = len(side.bodies) + max(
+        0, side.bench_max - len(side.bench))
+    attack_weight = ctx.configuration["combat.attack_future"]
+    ability_weight = ctx.configuration["ability.future"]
+    for _step in range(len(opportunities)):
+        expanded = dict(states)
+        for (mask, resources), totals in states.items():
+            (evolution_used, typed_used, total_used, bench_used,
+             accel_used, ability_used, elapsed) = resources
+            for index, opportunity in enumerate(opportunities):
+                if mask & (1 << index):
+                    continue
+                variants = [(opportunity.attack, opportunity.ability,
+                             opportunity.typed_energy, opportunity.energy_units)]
+                if opportunity.ability > 0 and opportunity.energy_units:
+                    variants.append((0.0, opportunity.ability, (), 0))
+                for attack, ability, typed_energy, energy_units in variants:
+                    next_evolution = list(evolution_used)
+                    if opportunity.evolution is not None:
+                        position = evolution_ids.index(opportunity.evolution)
+                        next_evolution[position] += 1
+                        if next_evolution[position] > evolution_capacities[
+                                opportunity.evolution]:
+                            continue
+                    next_typed = list(typed_used)
+                    feasible = True
+                    for energy_type, amount in typed_energy:
+                        if energy_type not in energy_types:
+                            feasible = False
+                            break
+                        position = energy_types.index(energy_type)
+                        next_typed[position] += amount
+                        if next_typed[position] > energy_capacities[energy_type]:
+                            feasible = False
+                            break
+                    if not feasible or total_used + energy_units > total_energy:
+                        continue
+                    next_bench = bench_used + opportunity.bench_units
+                    if next_bench > max(0, side.bench_max - len(side.bench)):
+                        continue
+                    next_ability = list(ability_used)
+                    for claim in opportunity.ability_claims:
+                        position = ability_keys.index(claim)
+                        next_ability[position] += 1
+                        if next_ability[position] > 1:
+                            feasible = False
+                            break
+                    if not feasible:
+                        continue
+                    remaining_acceleration = max(0, acceleration - accel_used)
+                    for accelerated in range(min(energy_units,
+                                                 remaining_acceleration) + 1):
+                        turns = max(int(opportunity.evolution is not None),
+                                    opportunity.bench_units,
+                                    energy_units - accelerated,
+                                    int(bool(attack or ability)))
+                        next_elapsed = elapsed + turns
+                        if next_elapsed > development_horizon:
+                            continue
+                        discount = FUTURE_TURN_DISCOUNT ** max(0, next_elapsed - 1)
+                        candidate = (totals[0] + attack * discount,
+                                     totals[1] + ability * discount)
+                        next_resources = (tuple(next_evolution), tuple(next_typed),
+                                          total_used + energy_units, next_bench,
+                                          accel_used + accelerated, tuple(next_ability),
+                                          next_elapsed)
+                        key = (mask | (1 << index), next_resources)
+                        incumbent = expanded.get(key)
+                        worth = candidate[0] * attack_weight + candidate[1] * ability_weight
+                        if incumbent is None or worth > (
+                                incumbent[0] * attack_weight
+                                + incumbent[1] * ability_weight):
+                            expanded[key] = candidate
+        states = expanded
+    return max(states.values(), key=lambda totals: (
+        totals[0] * attack_weight + totals[1] * ability_weight, totals))
+
+
 def _emit_option(trace, part, units, scale, *, provenance=None,
                  provenance_features=()) -> None:
     for feature, value in units.activations():
         trace.emit(part, "option", (feature,), scale * value,
                    provenance=(provenance if feature in provenance_features else None))
+
+
+def _situational_worth(facts, side, opponent, demand, ctx, deck_counts, board):
+    trace = _Trace(ctx)
+    _situational_functions(
+        trace, "portfolio", facts, side, opponent, demand, ctx, deck_counts,
+        board, sign=1.0)
+    return trace.finish().total
 
 
 def _slot_option(open_slots) -> float:
@@ -249,8 +525,8 @@ def _public_group(board, ctx) -> tuple[Valuation, PrizeMap]:
 
 
 def _combine_groups(groups, ctx, prize_map) -> Valuation:
-    activations = {}
     provenance = {}
+    owned = {}
     parts = {}
     gaps = []
     for _name, valuation in groups:
@@ -258,15 +534,21 @@ def _combine_groups(groups, ctx, prize_map) -> Valuation:
         for label, value in valuation.parts:
             parts[label] = parts.get(label, 0.0) + value
         for item in valuation.activations:
-            activations[item.feature] = activations.get(item.feature, 0.0) + item.value
             provenance.setdefault(item.feature, set()).update(item.provenance)
-    compiled = tuple(FeatureActivation(
-        feature, value, tuple(sorted(provenance[feature])))
-        for feature, value in sorted(activations.items()) if value)
+        for item in valuation.contributions:
+            key = (item.feature, item.provenance)
+            owned.setdefault(key, []).append(item.activation)
     contributions = tuple(FeatureContribution(
-        item.feature, item.value, ctx.configuration[item.feature],
-        item.value * ctx.configuration[item.feature], item.provenance)
-        for item in compiled)
+        feature, activation, ctx.configuration[feature],
+        activation * ctx.configuration[feature], owner)
+        for (feature, owner), values in sorted(owned.items())
+        if (activation := math.fsum(values)))
+    compiled_values = {}
+    for item in contributions:
+        compiled_values.setdefault(item.feature, []).append(item.activation)
+    compiled = tuple(FeatureActivation(
+        feature, math.fsum(values), tuple(sorted(provenance[feature])))
+        for feature, values in sorted(compiled_values.items()) if math.fsum(values))
     return Valuation(sum(item.value for item in contributions), tuple(sorted(parts.items())),
                      tuple(gaps), compiled, contributions, prize_map)
 
@@ -348,9 +630,14 @@ def _side(trace: _Trace, label: str, side: Side, sign: float, ctx: EvaluationMod
                        else active_capability.attack_potential))
     trace.emit(f"{label}.combat", "observation", ("attack_progress",), sign * _sequenced_portfolio(
         value.attack_progress for _body_node, value in capabilities))
-    trace.emit(f"{label}.combat", "observation", ("attack_future",), sign * _sequenced_portfolio(
-        max(value.attack_future, value.attack_now if body is not side.active else 0.0)
-        for body, value in capabilities))
+    future_attack, future_ability = _feasible_development_portfolio((
+        (body, value, body_reaches.get(body.card.serial))
+        for body, value in capabilities), side, deck_counts, ctx,
+        board=board, opposing_side=opposing_side)
+    trace.emit(f"{label}.combat", "observation", ("attack_future",),
+               sign * future_attack)
+    trace.emit(f"{label}.abilities", "observation", ("ability_future",),
+               sign * future_ability)
     trace.emit(f"{label}.combat", "observation", ("line_potential",), sign * _sequenced_portfolio(
         value.line_potential for _body_node, value in capabilities))
     trace.emit(f"{label}.combat", "observation", ("prize_phase_fit",), sign * _sequenced_portfolio(
@@ -394,6 +681,8 @@ def _side(trace: _Trace, label: str, side: Side, sign: float, ctx: EvaluationMod
         copies = Counter(demand.body_id_counts)
         basic_energy = Counter()
         portfolio_entries = []
+        portfolio_functions = []
+        portfolio_sources = []
         for card in side.hand:
             facts = ctx.facts(card.card_id)
             claim, capacity = _hand_claim(
@@ -407,12 +696,14 @@ def _side(trace: _Trace, label: str, side: Side, sign: float, ctx: EvaluationMod
             }[claim]
             _card(trace, f"{label}.hand", card.card_id, facts, sign, ctx, own=True,
                   placement=placement, opponent=opponent)
-            _situational_functions(
-                trace, f"{label}.hand", facts, side, board.them, demand, ctx,
-                deck_counts, board, sign=sign)
             trace.emit(f"{label}.hand", "observation", (claim,), sign)
             if claim != "dead_hand_card":
-                portfolio_entries.append((facts, option_units(facts)))
+                portfolio_entries.append((
+                    facts, option_units(facts),
+                    _situational_worth(
+                        facts, side, board.them, demand, ctx, deck_counts, board)))
+                portfolio_functions.append(facts)
+                portfolio_sources.append(card)
             if (isinstance(facts, EnergyCard) and facts.kind != SPECIAL_ENERGY
                     and basic_energy[facts.provides]):
                 trace.emit(f"{label}.hand", "observation", ("surplus_basic_energy",), sign)
@@ -429,10 +720,18 @@ def _side(trace: _Trace, label: str, side: Side, sign: float, ctx: EvaluationMod
                 basic_energy[facts.provides] += 1
         portfolio = feasible_option_portfolio_result(
             portfolio_entries, side, board, ctx, hand_size=len(side.hand))
-        _emit_option(
-            trace, f"{label}.hand", portfolio.units, sign,
-            provenance="feasible_option_portfolio",
-            provenance_features=portfolio.binding_features)
+        for index, units in portfolio.selected_units:
+            source = portfolio_sources[index]
+            provenance = (f"feasible_option_portfolio:serial:{source.serial}"
+                          if source.serial is not None else
+                          f"feasible_option_portfolio:card:{source.card_id}")
+            _emit_option(
+                trace, f"{label}.hand", units, sign, provenance=provenance,
+                provenance_features=tuple(
+                    feature for feature, _value in units.activations()))
+            _situational_functions(
+                trace, f"{label}.hand", portfolio_functions[index], side, board.them,
+                demand, ctx, deck_counts, board, sign=sign, provenance=provenance)
     else:
         trace.emit(f"{label}.hand", "observation", ("unknown_opponent_hand_card",),
                    sign * side.hand_count)
@@ -527,7 +826,6 @@ def _body(trace: _Trace, part: str, body: Body, sign: float, ctx: EvaluationMode
             ("ability_denial", capability.denial),
             ("ability_resource_cost", capability.resource_cost),
             ("ability_self_cost", capability.self_cost),
-            ("ability_future", capability.ability_future),
             ("retreat_progress", capability.retreat_progress)):
         trace.emit(part, "observation", (claim,), sign * value)
     _situational_functions(
@@ -545,7 +843,7 @@ def _body(trace: _Trace, part: str, body: Body, sign: float, ctx: EvaluationMode
         facts = ctx.facts(card.card_id)
         riders = tuple(clause.rider for clause in card_clauses(facts)
                        if clause.rider is not None)
-        rental = not active and "discard_eot" in riders
+        rental = "discard_eot" in riders
         energy_rows.append((card, facts, rental))
     priced_energy_cards = [card for card, _facts, rental in energy_rows if not rental]
     interaction_amount = (sign * min(1.0, usable / len(priced_energy_cards))
@@ -562,7 +860,10 @@ def _body(trace: _Trace, part: str, body: Body, sign: float, ctx: EvaluationMode
             board.deck_counts if own else None, board, sign=sign, body=body)
     if body.energies and not body.energy_cards:
         trace.emit(part, "card", ("kind:energy",), sign * len(body.energies))
-    usable = max(0, usable - rentals)
+    rental_units = sum(provision_units(
+        facts, evolved=bool(getattr(body_facts, "evolves_from", None)))
+                       for _card, facts, rental in energy_rows if rental)
+    usable = max(0, usable - rental_units)
     trace.emit(part, "observation", ("usable_attached_energy",), sign * usable)
     trace.emit(part, "observation", ("visible_development_reach",),
                sign * visible_reach)
@@ -623,7 +924,8 @@ def _hand_claim(card_id, facts, demand: Demand, copies_before: int,
 
 def _situational_functions(trace: _Trace, part: str, facts, side: Side, opponent: Side,
                            demand: Demand, ctx: EvaluationModel, deck_counts,
-                           board: ObservationState, *, sign: float, body=None) -> None:
+                           board: ObservationState, *, sign: float, body=None,
+                           provenance: str | None = None) -> None:
     clauses = card_clauses(facts)
     compiler = ActivationCompiler()
     for clause in clauses:
@@ -634,7 +936,7 @@ def _situational_functions(trace: _Trace, part: str, facts, side: Side, opponent
             opponent=opponent, demand=demand, facts=facts,
             deck_counts=deck_counts, clause=clause, body=body)
         for activation in compiler.compile("function", (clause.kind,), environment):
-            trace.record(part, activation)
+            trace.record(part, activation, provenance=provenance)
         for parameter, value in clause.params.items():
             parameter_environment = ActivationEnvironment(
                 scale=sign, board=board, evaluation_model=ctx, side=side,
@@ -642,7 +944,7 @@ def _situational_functions(trace: _Trace, part: str, facts, side: Side, opponent
                 deck_counts=deck_counts, claim_value=value, clause=clause, body=body)
             for activation in compiler.compile(
                     "clause_parameter", (parameter,), parameter_environment):
-                trace.record(part, activation)
+                trace.record(part, activation, provenance=provenance)
         if clause.kind == "draw":
             _mine, theirs = expected_draw_counts(
                 clause, side, opponent, ctx,
@@ -652,7 +954,7 @@ def _situational_functions(trace: _Trace, part: str, facts, side: Side, opponent
                 side=side, opponent=opponent, facts=facts, clause=clause, body=body)
             for activation in compiler.compile(
                     "draw_effect", ("opponent_cards",), opponent_draw):
-                trace.record(part, activation)
+                trace.record(part, activation, provenance=provenance)
         if clause.rider == "shuffle_both_hands":
             rider = ActivationEnvironment(
                 scale=sign, board=board, evaluation_model=ctx, side=side,
@@ -660,7 +962,7 @@ def _situational_functions(trace: _Trace, part: str, facts, side: Side, opponent
                 deck_counts=deck_counts, clause=clause, body=body)
             for activation in compiler.compile(
                     "function", ("opp_hand_to_deck",), rider):
-                trace.record(part, activation)
+                trace.record(part, activation, provenance=provenance)
 
 
 def _active_doomed(attacker: Side, defender: Side, ctx: EvaluationModel,

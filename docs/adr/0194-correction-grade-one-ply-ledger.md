@@ -29,3 +29,11 @@ Ultra Ball may be corrected at play, discard, or fetch, with each locus receivin
 Incomplete candidates remain visible but cannot become training examples. Value audits expose
 feature contribution differences, coverage gaps, break-even proposals, conflicts, and prior
 preference violations. Weight adoption is rejected whenever an accepted preference regresses.
+
+## Addendum 2026-08-28
+
+Correction grading uses the Turn-End Counterfactual for terminal candidates. Hand opportunity value
+is credited on use only when that action realizes its selected Feasible Option Portfolio entry;
+discarded payment receives no credit. Pokémon development uses shared-resource feasibility rather
+than independent line sums. Corrections must obey the Anchor prompt's selection cardinality;
+multi-MAIN sequences belong in turn-scope evidence.

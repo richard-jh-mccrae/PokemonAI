@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import math
+
 import ast
 import hashlib
 import os
@@ -85,8 +87,14 @@ def state_valuation_from_ledger(board, valuation: Valuation,
 
 
 def ledger_valuation_from_state(valuation: StateValuation) -> Valuation:
+    totals = {}
+    provenance = {}
+    for item in valuation.components:
+        totals.setdefault(item.key, []).append(item.activation)
+        provenance.setdefault(item.key, set()).update(item.provenance)
     activations = tuple(FeatureActivation(
-        item.key, item.activation, item.provenance) for item in valuation.components)
+        key, math.fsum(values), tuple(sorted(provenance[key])))
+        for key, values in sorted(totals.items()) if math.fsum(values))
     contributions = tuple(FeatureContribution(
         item.key, item.activation, item.coefficient, item.value, item.provenance)
         for item in valuation.components)

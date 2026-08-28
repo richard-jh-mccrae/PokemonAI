@@ -7,6 +7,7 @@ the same scripts, never recomputed by hand, so the assertions read pure arithmet
 from __future__ import annotations
 
 import math
+from types import SimpleNamespace
 import pytest
 
 from ledger_helpers import (DRAGAPULT, FIRE_E, ScriptedProvider, action, body, player,
@@ -15,6 +16,8 @@ from ledger_helpers import (DRAGAPULT, FIRE_E, ScriptedProvider, action, body, p
 from common.algebra import (Actor, Chance, Choice, Deterministic, Edge, RevealChoice,
                             RevealOutcome, Terminal, WeightedEdge)
 from common.ledger import DeckOverlay, EvaluationModel, LedgerDecider
+from common.ledger.evaluate import FeatureContribution, Valuation, evaluate
+from common.ledger.preview import _realized_portfolio_contributions
 from common.observation import ObservationStateBuilder
 from deprecated.bellman.state import DecisionState
 
@@ -55,6 +58,32 @@ def test_chance_weights_its_legs_by_probability():
     mixed, _, _ = price_of(Chance((WeightedEdge(0.25, "good", Deterministic(GOOD)),
                                    WeightedEdge(0.75, "bad", Deterministic(BAD)))))
     assert mixed == pytest.approx(0.25 * good_swing + 0.75 * bad_swing, abs=1e-9)
+
+
+def test_terminal_action_is_priced_against_the_legal_end_successor():
+    play, end = action("play", (0,)), action("end", (1,))
+    pass_good = state_of(printout(
+        me=player(active=body(DRAGAPULT, 1), hand=[FIRE_E]),
+        them=player(own=False, active=body(DRAGAPULT, 2, hp=80)), turn=3))
+    providers = tuple(ScriptedProvider(
+        menus={"root": (play, end)},
+        nodes={("root", play.identity): Terminal(GOOD, "done"),
+               ("root", end.identity): Terminal(pass_state, "passed")})
+        for pass_state in (BAD, pass_good))
+
+    swings = []
+    for provider in providers:
+        decision = LedgerDecider(
+            DECK, "test", EvaluationModel.build(),
+            provider_factory=lambda _s, **_kw: provider).decide(ROOT_OBS)
+        swings.append(next(row["swing"] for row in decision.diagnostics["prices"]
+                           if row["action"] == str(play.identity)))
+
+    ctx = EvaluationModel.build()
+    builder = ObservationStateBuilder(DECK)
+    expected_shift = evaluate(builder.root(BAD.observation), ctx).total - evaluate(
+        builder.root(pass_good.observation), ctx).total
+    assert swings[1] == pytest.approx(swings[0] + expected_shift)
 
 
 def test_chance_activations_are_independent_of_valuation_coefficients():
@@ -298,3 +327,25 @@ def test_an_empty_forced_menu_logs_its_gap_and_scores_the_mid_board():
                              provider_factory=lambda _s, **_kw: provider).decide(ROOT_OBS)
     assert any("forced menu offered no actions" in gap
                for gap in decision.diagnostics["gaps"])
+
+
+@pytest.mark.parametrize("kind", ("play", "attach", "evolve"))
+def test_realization_credits_only_the_selected_portfolio_source(kind):
+    first = "feasible_option_portfolio:serial:11"
+    second = "feasible_option_portfolio:serial:12"
+    baseline = Valuation(0.5, (), (), contributions=(
+        FeatureContribution("option.draw", 1.0, 0.2, 0.2, (first,)),
+        FeatureContribution("option.draw", 1.5, 0.2, 0.3, (second,)),
+    ))
+    board = SimpleNamespace(select=SimpleNamespace(options=(
+        SimpleNamespace(serial=11, cardId=100),
+        SimpleNamespace(serial=12, cardId=100),
+    )))
+    selected = SimpleNamespace(
+        identity=SimpleNamespace(kind=kind), selection=(0,))
+
+    realized = _realized_portfolio_contributions(baseline, board, selected)
+
+    assert [(item.activation, item.value) for item in realized] == [(1.0, 0.2)]
+    assert first in realized[0].provenance
+    assert second not in realized[0].provenance

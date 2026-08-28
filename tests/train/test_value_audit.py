@@ -73,7 +73,26 @@ def test_successor_coverage_gap_precedes_search_completeness():
     row["candidates"][1]["successors"][0]["gaps"] = [
         "me.hand: incomplete card coverage 99"]
 
-    assert build_value_audit([row])["audits"][0]["cause"] == "coverage"
+    audit = build_value_audit([row])["audits"][0]
+    assert audit["cause"] == "coverage"
+    assert audit["calibration_proposal"]["changes"] == []
+
+
+def test_structural_causes_cannot_emit_coefficient_proposals():
+    for cause_setup in ("transition", "activation_equation", "portfolio_constraint"):
+        row = _row()
+        row["candidates"][1] = _candidate([1], 0.0, 2.0)
+        if cause_setup == "transition":
+            row["candidates"][1]["gaps"] = ["unsupported transition"]
+        elif cause_setup == "activation_equation":
+            row["candidates"][1]["components"] = row["candidates"][0]["components"]
+        else:
+            row["candidates"][1]["components"][0]["provenance"] = [
+                "feasible_option_portfolio"]
+        audit = build_value_audit([row])["audits"][0]
+        assert audit["cause"] == cause_setup
+        assert audit["calibration_proposal"]["required"] is False
+        assert audit["calibration_proposal"]["changes"] == []
 
 
 def test_portfolio_provenance_classifies_shared_resource_failures():

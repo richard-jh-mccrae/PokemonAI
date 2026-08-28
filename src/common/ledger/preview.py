@@ -77,6 +77,30 @@ def price_actions(state, board: ObservationState, baseline: float, provider,
     prices = []
     baseline_valuation = valuation_fn(board)
     original_actions = tuple(provider.actions(state))
+    end_action = next((action for action in original_actions
+                       if action.identity.kind == "end"), None)
+    end_valuation = baseline_valuation
+    end_board = board
+    end_gaps: list[str] = []
+    end_unavailable = False
+    if end_action is not None:
+        end_walk = _Walk(provider, ctx, board.decklist, compute, budget, valuation_fn)
+        try:
+            end_node = provider.transition(state, end_action)
+            end_valuation, _end_probability, end_landings = end_walk.node(
+                state, board, end_node, compute.depth_budget)
+            end_landings = _coalesce_landings(end_landings)
+            if len(end_landings) == 1:
+                _probability, _state, end_board, _ended, _path = end_landings[0]
+            else:
+                end_gaps.append("end counterfactual has multiple successors")
+                end_unavailable = True
+        except (KeyError, LookupError) as exc:
+            end_gaps.append(
+                f"end counterfactual unavailable: {type(exc).__name__}")
+            end_unavailable = True
+        end_gaps.extend(end_walk.gaps)
+        end_unavailable = end_unavailable or end_walk.unavailable
     action_order = {_action_roster_key(action): index
                     for index, action in enumerate(original_actions)}
     actions = tuple(sorted(
@@ -84,13 +108,16 @@ def price_actions(state, board: ObservationState, baseline: float, provider,
         key=lambda action: bool(_local_action_events(board, action))))
     for action in actions:
         if action.identity.kind == "end":
-            # The one free action: ending the turn is the zero every other option must beat.
             successor = _successor_result(
-                1.0, board, True, valuation_fn, state_valuation_fn,
+                1.0, end_board, True, valuation_fn, state_valuation_fn,
                 board.position_key, (action.identity,))
             prices.append(OptionPrice(
-                action, 0.0, True, (), ContinuationFootprint(0.0, 0.0, False),
-                successors=(successor,), prize_map=baseline_valuation.prize_map))
+                action, 0.0, True, tuple(end_gaps),
+                ContinuationFootprint(0.0, 0.0, False),
+                status=(EvaluationStatus.UNAVAILABLE if end_unavailable else
+                        EvaluationStatus.ESTIMATED if end_gaps
+                        else EvaluationStatus.COMPLETE),
+                successors=(successor,), prize_map=end_valuation.prize_map))
             continue
         local_action_contribution = _event_contributions(
             "action", _local_action_events(board, action, ctx), ctx, "action")
@@ -123,28 +150,39 @@ def price_actions(state, board: ObservationState, baseline: float, provider,
             state, board, node, compute.depth_budget)
         landings = _coalesce_landings(landings)
         ends_turn = end_probability >= 1.0
-        state_delta = successor.total - baseline
+        phase_reference = (_expected_valuation(
+            ((1.0 - end_probability, baseline_valuation),
+             (end_probability, end_valuation)), ctx)
+            if end_action is not None and end_probability > 0.0
+            else baseline_valuation)
+        state_delta = successor.total - phase_reference.total
         activation = -(1.0 - end_probability)
         action_events = [("continued_action", activation)]
         action_contribution = _event_contributions(
             "continuation", action_events, ctx, "continuation")
         opportunity_cost = sum(item.value for item in action_contribution)
         opportunity_cost += sum(item.value for item in local_action_contribution)
-        state_contributions = _state_contributions(baseline_valuation, successor, ctx)
+        state_contributions = _state_contributions(phase_reference, successor, ctx)
+        realization_contributions = _realized_portfolio_contributions(
+            baseline_valuation, board, action)
         track_opportunities = not isinstance(node, (Chance, Refresh, RevealChoice))
         footprint_landings = landings
         footprint_values = _root_footprint(
             board, provider, state, action, footprint_landings, walk.gaps,
             track_opportunities=track_opportunities)
+        footprint_values = _with_portfolio_opportunity_losses(
+            footprint_values, state_contributions, original_actions)
         footprint_contributions = _footprint_contributions(footprint_values, ctx)
         information_contributions = _event_contributions(
             "continuation", (("information_value", information_value),),
             ctx, "continuation.information")
         opportunity_cost += sum(item.value for item in footprint_contributions)
         opportunity_cost += sum(item.value for item in information_contributions)
+        opportunity_cost += sum(item.value for item in realization_contributions)
         contributions = (*state_contributions, *action_contribution,
                          *local_action_contribution,
-                         *footprint_contributions, *information_contributions)
+                         *footprint_contributions, *information_contributions,
+                         *realization_contributions)
         activations = tuple(FeatureActivation(
             item.feature, item.activation, item.provenance) for item in contributions)
         footprint = ContinuationFootprint(
@@ -162,15 +200,18 @@ def price_actions(state, board: ObservationState, baseline: float, provider,
             walk.gaps.append(f"non-finite price for {action.identity}; unavailable")
             walk.unavailable = True
             swing = 0.0
-        status = (EvaluationStatus.UNAVAILABLE if walk.unavailable else
-                  EvaluationStatus.ESTIMATED if walk.gaps or successor.gaps else
+        comparison_gaps = tuple(end_gaps) if end_probability > 0.0 else ()
+        status = (EvaluationStatus.UNAVAILABLE if walk.unavailable
+                  or (end_probability > 0.0 and end_unavailable) else
+                  EvaluationStatus.ESTIMATED if walk.gaps or successor.gaps
+                  or comparison_gaps else
                   EvaluationStatus.COMPLETE)
         explicit_successors = (() if walk.unavailable else tuple(_successor_result(
             probability, landing_board, ended, valuation_fn, state_valuation_fn,
             board.position_key, (action.identity, *path))
             for probability, _landing_state, landing_board, ended, path in landings))
         prices.append(OptionPrice(
-            action, swing, ends_turn, tuple(walk.gaps), footprint, status,
+            action, swing, ends_turn, (*walk.gaps, *comparison_gaps), footprint, status,
             explicit_successors, successor.prize_map))
     return tuple(sorted(
         prices, key=lambda price: action_order[_action_roster_key(price.action)]))
@@ -309,7 +350,9 @@ class _Walk:
         if context == _DAMAGE_COUNTER_ANY:
             return self.damage_counter_rollout(state, board, depth)
         if context == _MAIN:
-            return self.valuation(board), 0.0, ((1.0, state, board, False, ()),)
+            ended = self.provider.actor(state) is Actor.OPPONENT
+            return (self.valuation(board), float(ended),
+                    ((1.0, state, board, ended, ()),))
         actions = self.provider.actions(state)
         if not actions:
             self.gaps.append("forced menu offered no actions; unavailable")
@@ -593,6 +636,25 @@ def _footprint_contributions(values, ctx):
         "continuation", values.activations, ctx, "continuation.footprint")
 
 
+def _with_portfolio_opportunity_losses(values, contributions, root_actions):
+    contracts = {"option.energy": "attach"}
+    root_kinds = {_action_key(action) for action in root_actions}
+    consumed = set(values.opportunities_consumed)
+    for feature, kind in contracts.items():
+        if kind in root_kinds and sum(
+                item.activation for item in contributions if item.feature == feature) < 0:
+            consumed.add(kind)
+    added = len(consumed) - len(values.opportunities_consumed)
+    if not added:
+        return values
+    activations = dict(values.activations)
+    activations["opportunity_consumed"] = (
+        activations.get("opportunity_consumed", 0.0) + added)
+    return replace(
+        values, opportunities_consumed=tuple(sorted(consumed)),
+        activations=tuple(sorted(activations.items())))
+
+
 def _event_contributions(source, events, ctx, provenance):
     contributions = []
     compiler = ActivationCompiler()
@@ -623,24 +685,49 @@ def _state_contributions(baseline, successor, ctx):
     return tuple(contributions)
 
 
+def _realized_portfolio_contributions(baseline, board, action):
+    if action.identity.kind not in {"play", "attach", "evolve"} or board.select is None:
+        return ()
+    options = board.select.options
+    selected = tuple(index for index in action.selection
+                     if isinstance(index, int) and 0 <= index < len(options))
+    if len(selected) != 1:
+        return ()
+    option = options[selected[0]]
+    token = (f"feasible_option_portfolio:serial:{option.serial}"
+             if option.serial is not None else
+             f"feasible_option_portfolio:card:{option.cardId}")
+    return tuple(FeatureContribution(
+        item.feature, item.activation, item.coefficient, item.value,
+        ("action.realized_portfolio", *item.provenance))
+        for item in baseline.contributions if token in item.provenance)
+
+
 def _expected_valuation(weighted, ctx) -> Valuation:
-    values = {}
     provenance = {}
+    owned = {}
     gaps = []
     prize_maps = set()
     for probability, valuation in weighted:
         gaps.extend(valuation.gaps)
         prize_maps.add(valuation.prize_map)
         for item in valuation.activations:
-            values[item.feature] = values.get(item.feature, 0.0) + probability * item.value
             provenance.setdefault(item.feature, set()).update(item.provenance)
-    activations = tuple(FeatureActivation(
-        feature, value, tuple(sorted(provenance[feature])))
-        for feature, value in sorted(values.items()) if value)
+        for item in valuation.contributions:
+            key = (item.feature, item.provenance)
+            owned.setdefault(key, []).append(probability * item.activation)
     contributions = tuple(FeatureContribution(
-        item.feature, item.value, ctx.configuration[item.feature],
-        item.value * ctx.configuration[item.feature], item.provenance)
-        for item in activations)
+        feature, activation, ctx.configuration[feature],
+        activation * ctx.configuration[feature], owner)
+        for (feature, owner), owner_values in sorted(owned.items())
+        if (activation := math.fsum(owner_values)))
+    activation_values = {}
+    for item in contributions:
+        activation_values.setdefault(item.feature, []).append(item.activation)
+    activations = tuple(FeatureActivation(
+        feature, math.fsum(feature_values), tuple(sorted(provenance[feature])))
+        for feature, feature_values in sorted(activation_values.items())
+        if math.fsum(feature_values))
     prize_map = next(iter(prize_maps)) if len(prize_maps) == 1 else None
     return Valuation(sum(item.value for item in contributions), (), tuple(gaps),
                      activations, contributions, prize_map)

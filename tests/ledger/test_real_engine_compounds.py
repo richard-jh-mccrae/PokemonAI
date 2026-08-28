@@ -14,6 +14,24 @@ def _chosen_card_ids(engine, decision):
     return tuple(option_card_id(engine, options[index]) for index in decision.chosen)
 
 
+def test_attack_is_priced_against_real_engine_end_after_phase_advance():
+    engine, agent = scenario(
+        "mega_starmie", me_active=BodySpec((1030, 1031), energies=(3,)),
+        them_active=BodySpec((1030, 1031)))
+    lock_main_allowances(engine)
+
+    decision = agent.decide(observation(engine))
+    options = engine.gs.pending.options
+    chosen = options[decision.chosen[0]]
+    candidates = decision.decision_result.roster.candidates
+    attack = next(row for row in candidates if row.action.identity.kind == "attack")
+    end = next(row for row in candidates if row.action.identity.kind == "end")
+
+    assert chosen["type"] == int(OptionType.ATTACK)
+    assert attack.disposition.value == "ends_turn"
+    assert attack.delta.total > end.delta.total == 0.0
+
+
 def test_ultra_ball_prices_play_two_discards_and_fetch_as_one_real_engine_chain():
     engine, agent = scenario(
         "dragapult_ex", me_active=BodySpec((119,)), me_hand=(1121, 2, 5, 121),

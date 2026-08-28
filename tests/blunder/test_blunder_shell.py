@@ -36,6 +36,7 @@ def test_shell_defaults_to_local_viewer_and_sends_replay_and_selected_step():
     assert "player.hand=Array.from" in _SHELL_HTML
     assert "card.name='Hidden'" in _SHELL_HTML
     assert "...player.prize" in _SHELL_HTML
+    assert "if(correct.length&&(correct.length<f.min_count||correct.length>f.max_count))" in _SHELL_HTML
     assert "!holder.querySelector('canvas')" in _SHELL_HTML
     assert 'select[aria-label="Playback speed"]' in _SHELL_HTML
     assert "doc.defaultView.MutationObserver" in _SHELL_HTML

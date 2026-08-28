@@ -47,6 +47,18 @@ def test_correct_must_be_legal_option_positions():
                          category="missed_win", rationale="r")          # empty
 
 
+def test_correct_must_obey_the_anchor_selection_cardinality():
+    d = _a_main_decision()
+    assert d.obs["select"]["maxCount"] == 1
+
+    with pytest.raises(ValueError, match="requires 1..1 option"):
+        build_correction(d, source="own", agent="x", correct=[0, 4],
+                         category="missed_win", rationale="sequence is not one decision")
+    with pytest.raises(ValueError, match="duplicate"):
+        build_correction(d, source="own", agent="x", correct=[4, 4],
+                         category="missed_win", rationale="same option twice")
+
+
 def test_category_must_be_in_vocab():
     """REQ-BLUNDER-0004: category is validated against the closed vocabulary."""
     d = _a_main_decision()

@@ -45,6 +45,7 @@ from common.ledger import (EvaluationModel, LedgerDecider, OpponentProfile,
 from common.opponent import OpponentMechanic, OpponentTrait  # noqa: E402
 from common.strategy import PrizePlan  # noqa: E402
 from train.blunder.store import dedup_corrections, jsonl_files, load_corrections  # noqa: E402
+from train.blunder.correction import correction_selection_error  # noqa: E402
 from train.blunder.decode import option_label  # noqa: E402
 from train.blunder.reviewed import load_reviewed, partition_reviewed  # noqa: E402
 from train.ledger_parity import assert_runtime_parity  # noqa: E402
@@ -213,7 +214,10 @@ def _training_candidates(decision) -> list[dict]:
     return rows
 
 
-def _grading_eligibility(has_ruling: bool, candidates) -> tuple[bool, str | None]:
+def _grading_eligibility(has_ruling: bool, candidates,
+                         structural_error: str | None = None) -> tuple[bool, str | None]:
+    if structural_error is not None:
+        return False, structural_error
     if not has_ruling:
         return False, "no_ruling"
     candidates = tuple(candidates)
@@ -249,7 +253,8 @@ def _replay_one(deck_name: str, correction, weight_overrides=None) -> dict:
     equivalence = (_runtime_equivalence(decision) or
                    option_equivalence(((obs.get("select") or {}).get("option") or []), obs))
     candidates = _training_candidates(decision)
-    graded, excluded_reason = _grading_eligibility(has_ruling, candidates)
+    graded, excluded_reason = _grading_eligibility(
+        has_ruling, candidates, correction_selection_error(correction))
     agrees = _satisfies_human(chosen, correction, equivalence) if graded else None
     diagnostics = decision.diagnostics or {}
     row = {

@@ -178,13 +178,20 @@ def card_probe_contribution(card_id: int, ctx: EvaluationModel) -> float:
         after = replace(board, me=replace(
             board.me, bench=(*board.me.bench[:-1], body)))
     else:
-        cards = (*tuple(board.me.hand), Card(card_id, 7400, board.seat))
+        cards = _probe_hand(facts, board.seat, 7400)
+        before_cards = cards[1:]
+        before = replace(board, me=replace(
+            board.me, hand=VisibleHand(card_bag([
+                {"id": card.card_id, "serial": card.serial,
+                 "playerIndex": card.owner} for card in before_cards])),
+            hand_count=len(before_cards)))
         after = replace(board, me=replace(
             board.me, hand=VisibleHand(card_bag([
                 {"id": card.card_id, "serial": card.serial,
                  "playerIndex": card.owner} for card in cards])),
             hand_count=len(cards)))
-    return evaluate(after, ctx).total - evaluate(board, ctx).total
+    return evaluate(after, ctx).total - evaluate(
+        board if isinstance(facts, PokemonCard) else before, ctx).total
 
 
 def run_observation_sensitivity(identity: str, features, ctx: EvaluationModel,
@@ -373,13 +380,19 @@ def _direct_clause_valuations(contract, facts, ctx, *, transform=None,
         probe_board = replace(board, me=replace(
             board.me, bench=(attached, *board.me.bench[1:])))
     else:
-        cards = (*tuple(board.me.hand), Card(facts.card_id, 7500, board.seat))
+        cards = _probe_hand(facts, board.seat, 7500)
         probe_board = replace(board, me=replace(
             board.me, hand=VisibleHand(card_bag([
                 {"id": card.card_id, "serial": card.serial,
                  "playerIndex": card.owner} for card in cards])),
             hand_count=max(len(cards), board.me.hand_count)))
     return evaluate(probe_board, ctx), evaluate(probe_board, stripped_ctx)
+
+
+def _probe_hand(facts, owner, serial):
+    materials = 3 if any(clause.cost for clause in card_clauses(facts)) else 0
+    return (Card(facts.card_id, serial, owner), *(Card(
+        9_999_999, serial + index + 1, owner) for index in range(materials)))
 
 
 def _located_clause(facts, locator):
@@ -947,10 +960,20 @@ def _direct_clause_contribution(contract, facts, ctx, *, transform=None):
         contract, facts, ctx, transform=transform)
     valued_features = {item.feature: item.value for item in valued.activations}
     stripped_features = {item.feature: item.value for item in stripped_value.activations}
-    return sum(
+    contribution = sum(
         (valued_features.get(feature, 0.0) - stripped_features.get(feature, 0.0))
         * ctx.configuration[feature]
         for feature in contract.features)
+    if contribution == 0.0 and isinstance(facts, TrainerCard):
+        stripped = (_without_clause(facts, contract.kind) if transform is None
+                    else transform(facts))
+        valued_direct = _trainer_direct_valuation(facts, ctx, contract.kind)
+        stripped_direct = _trainer_direct_valuation(
+            stripped, ctx, contract.kind, probe_facts=facts)
+        contribution = sum(
+            (valued_direct.get(feature, 0.0) - stripped_direct.get(feature, 0.0))
+            * ctx.configuration[feature] for feature in contract.features)
+    return contribution
 
 
 def _direct_parameter_contributions(contract, facts, ctx, *, transform, parameter,
@@ -958,14 +981,56 @@ def _direct_parameter_contributions(contract, facts, ctx, *, transform, paramete
     valued, perturbed = _direct_clause_valuations(
         contract, facts, ctx, transform=transform,
         parameter=parameter, locator=locator)
+    contribution = valued.total - perturbed.total
+    direct_feature_delta = None
+    if isinstance(facts, TrainerCard):
+        perturbed_facts = transform(facts)
+        valued_direct = _trainer_direct_valuation(
+            facts, ctx, contract.kind, parameter, locator)
+        perturbed_direct = _trainer_direct_valuation(
+            perturbed_facts, ctx, contract.kind, parameter, locator,
+            probe_facts=facts)
+        direct_total = sum(
+            (valued_direct.get(name, 0.0) - perturbed_direct.get(name, 0.0))
+            * ctx.configuration[name]
+            for name in set(valued_direct) | set(perturbed_direct))
+        if contribution == 0.0:
+            contribution = direct_total
+        if feature is not None and (feature in valued_direct
+                                    or feature in perturbed_direct):
+            direct_feature_delta = (
+                valued_direct.get(feature, 0.0) - perturbed_direct.get(feature, 0.0)
+            ) * ctx.configuration[feature]
     if feature is None:
-        return valued.total - perturbed.total, None
+        return contribution, None
     valued_features = {item.feature: item.value for item in valued.activations}
     perturbed_features = {item.feature: item.value for item in perturbed.activations}
     feature_delta = (
         valued_features.get(feature, 0.0) - perturbed_features.get(feature, 0.0)
     ) * ctx.configuration[feature]
-    return valued.total - perturbed.total, feature_delta
+    if direct_feature_delta is not None:
+        feature_delta = direct_feature_delta
+    return contribution, feature_delta
+
+
+def _trainer_direct_valuation(facts, ctx, kind, parameter=None, locator=None,
+                              probe_facts=None):
+    from .evaluate import _Trace, _situational_functions
+
+    witness_facts = facts if probe_facts is None else probe_facts
+    ctx = _clause_probe_context(ctx, witness_facts, kind, locator=locator)
+    store = dict(ctx.store)
+    store[facts.card_id] = facts
+    probe_ctx = _derived_probe_context(ctx, store, {facts.card_id: facts})
+    board = _clause_probe_board(
+        _rich_board(), witness_facts, kind, probe_ctx,
+        parameter=parameter, locator=locator)
+    demand = Demand.read(board.me, probe_ctx, board.turn)
+    trace = _Trace(probe_ctx)
+    _situational_functions(
+        trace, "probe", facts, board.me, board.them, demand, probe_ctx,
+        board.deck_counts, board, sign=1.0)
+    return {item.feature: item.value for item in trace.finish().activations}
 
 
 def card_clause_contribution(card_id: int, kind: str, ctx: EvaluationModel) -> float:

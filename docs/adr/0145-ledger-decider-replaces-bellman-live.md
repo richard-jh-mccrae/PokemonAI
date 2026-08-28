@@ -61,3 +61,10 @@ re-pointed case by case (`brain="bellman"` for teacher pins; the live-path legal
 asserts `backend == "ledger"`). Phase 2 migrates this same evaluator into search as the
 branch-ordering prior; the preview's chance seam is where a short search replaces the static
 read.
+
+## Addendum 2026-08-28
+
+End remains the policy zero, but its real successor is the Turn-End Counterfactual. Every
+turn-ending candidate is differenced against that same-phase successor; continuing actions remain
+differenced against the root. This prevents ordinary phase advancement from counting only against
+attacks while preserving strict one-ply search.

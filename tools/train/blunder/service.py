@@ -12,7 +12,8 @@ from dataclasses import replace
 from pathlib import Path
 
 from .correction import (
-    Correction, build_correction, identity_key, select_min_count, subject_of,
+    Correction, build_correction, identity_key, select_max_count, select_min_count,
+    subject_of,
 )
 from .decisions import Decision, iter_decisions
 from .decode import _known_card_name, option_label
@@ -398,6 +399,7 @@ def frames_payload(replay: dict, our_team: str | None = None,
             # Read through the SAME derivation `build_correction` validates with, so the pane and
             # the validator cannot disagree; `None` keeps the pane refusing where the validator would.
             "min_count": select_min_count(decision.obs) if decision is not None else None,
+            "max_count": select_max_count(decision.obs) if decision is not None else None,
             "live": None if ledger is not None else wire,
             "ledger": ledger,
         })

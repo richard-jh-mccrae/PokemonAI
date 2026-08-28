@@ -5,6 +5,7 @@ from types import SimpleNamespace
 
 from train.ledger_corpus import (_runtime_equivalence, _satisfies_human, payload,
                                  render_markdown, _grading_eligibility)
+from train.blunder.correction import correction_selection_error
 
 
 def row(deck, row_id, *, agrees, graded=True, gaps=(), chosen=(0,), correct=(1,)):
@@ -36,6 +37,30 @@ def test_incomplete_search_is_excluded_from_correction_grading():
             False, "search_incomplete")
     assert _grading_eligibility(True, [
         {"status": "complete"}, {"status": "complete"}]) == (True, None)
+
+
+def test_historical_over_cardinality_correction_is_structurally_excluded():
+    correction = SimpleNamespace(correct=[0, 2], obs={
+        "select": {"minCount": 1, "maxCount": 1, "option": [{}, {}, {}]},
+    })
+
+    assert correction_selection_error(correction) == "invalid_correction_cardinality"
+
+
+def test_historical_empty_required_selection_is_structurally_excluded():
+    correction = SimpleNamespace(correct=[], scope="decision", obs={
+        "select": {"minCount": 1, "maxCount": 1, "option": [{}, {}]},
+    })
+
+    assert correction_selection_error(correction) == "invalid_correction_cardinality"
+
+
+def test_empty_turn_scope_evidence_is_not_anchor_cardinality():
+    correction = SimpleNamespace(correct=[], scope="turn", obs={
+        "select": {"minCount": 1, "maxCount": 1, "option": [{}, {}]},
+    })
+
+    assert correction_selection_error(correction) is None
 
 
 def test_gap_census_counts_decisions_affected_not_mentions():
@@ -125,6 +150,23 @@ def test_the_real_producer_feeds_the_dashboard_shape():
 
     rendered = render_markdown(payload([produced]))
     assert "Generality floor" in rendered
+
+
+def test_issue_626_structurally_valid_named_run_decisions_do_not_regress():
+    from pathlib import Path
+
+    from train.blunder.store import load_corrections
+    from train.ledger_corpus import _replay_one
+
+    store = (Path(__file__).resolve().parents[2] / "data" / "corrections"
+             / "20260828-111914_ad58ab7d_mega_starmie")
+    corrections = {record.decision.get("frame"): record
+                   for record in load_corrections(store)}
+
+    rows = [_replay_one("mega_starmie", corrections[frame])
+            for frame in (14, 28, 43)]
+
+    assert all(row["graded"] and row["agrees"] for row in rows)
 
 
 def _archived_frame(deck_dir="mega_starmie_20260813_c9991b12"):

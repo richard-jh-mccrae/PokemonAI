@@ -119,6 +119,11 @@ def test_feasible_portfolio_optimizes_weighted_ledger_worth():
     assert chosen.search == 1.0
     assert chosen.draw == 0.0
 
+    result = feasible_option_portfolio_result(
+        entries, state.me, state, context, hand_size=2)
+    assert result.selected_indices == (1,)
+    assert result.selected_units == ((1, OptionUnits(search=1.0)),)
+
 
 def test_feasible_portfolio_does_not_reuse_fetch_targets_or_bench_slots():
     context = EvaluationModel.build()

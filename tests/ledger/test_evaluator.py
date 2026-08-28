@@ -5,6 +5,8 @@ judgments the plan names (docs/plans/PokemonAI_Ledger_Plan.md §1): a useless at
 negative, overkill counters add nothing, a dead fetch waits, bench slots are scarce goods."""
 from __future__ import annotations
 
+from types import SimpleNamespace
+
 from ledger_helpers import (AIR_BALLOON, DARK_E, DARKNESS, DRAGAPULT, DRAKLOAK, DREEPY, FIRE,
                             FIRE_E, IGNITION, LILLIES, LUNATONE, MAKUHITA, MEGA_STARMIE, PSYCHIC,
                             PSYCHIC_E, STARYU, ULTRA_BALL, UNKNOWN, WATER, WATER_E, body,
@@ -14,6 +16,8 @@ import pytest
 
 from common.observation import ObservationStateBuilder
 from common.ledger import DeckOverlay, EvaluationModel, evaluate
+from common.ledger.evaluate import _feasible_development_portfolio
+from common.ledger.worth import Reach
 
 
 def board(**kwargs):
@@ -466,6 +470,52 @@ def test_body_played_this_turn_retains_next_turn_but_not_current_reach():
     assert activations["development.next_turn_reach"] > 0
 
 
+def test_one_held_evolution_is_allocated_to_only_one_compatible_body():
+    def future(bench):
+        valuation = evaluate(board(me=player(
+            active=body(DREEPY, 1, energies=(PSYCHIC,)), bench=bench,
+            hand=[DRAKLOAK])), ctx())
+        return sum(item.value for item in valuation.activations
+                   if item.feature == "combat.attack_future")
+
+    assert future([]) > 0
+    assert future([body(DREEPY, 2, energies=(PSYCHIC,))]) == pytest.approx(future([]))
+
+
+def test_future_lines_cannot_double_claim_typed_energy_or_attach_turns():
+    state = board(
+        me=player(active=body(DREEPY, 1), bench=[body(DREEPY, 2)],
+                  hand=[DRAKLOAK, DRAKLOAK, FIRE_E, PSYCHIC_E]),
+        decklist=[DREEPY, DREEPY, DRAKLOAK, DRAKLOAK, FIRE_E, PSYCHIC_E])
+    capability = SimpleNamespace(
+        attack_future=1.0, attack_now=0.0, ability_future=0.0, acceleration=0.0)
+    reach = {DRAKLOAK: Reach.HAND}
+    context = ctx()
+
+    one = _feasible_development_portfolio(
+        [(state.me.active, capability, reach)], state.me, state.deck_counts, context,
+        board=state, opposing_side=state.them)
+    two = _feasible_development_portfolio(
+        [(body_node, capability, reach) for body_node in state.me.bodies],
+        state.me, state.deck_counts, context, board=state, opposing_side=state.them)
+
+    assert one[0] > 0
+    assert two[0] == pytest.approx(one[0])
+
+
+def test_held_basic_development_cannot_claim_a_full_bench():
+    def projected(bench):
+        state = board(me=player(
+            active=body(DREEPY, 1), bench=bench,
+            hand=[DREEPY, FIRE_E, PSYCHIC_E]))
+        return _feasible_development_portfolio(
+            [], state.me, state.deck_counts, ctx(),
+            board=state, opposing_side=state.them)[0]
+
+    assert projected([]) > 0
+    assert projected([body(MAKUHITA, serial) for serial in range(2, 7)]) == 0
+
+
 # --- Ignition: the multi-unit provision clause read at the demand seam ---
 
 def test_ignition_reads_fully_live_beside_a_multi_slot_evolution():
@@ -504,7 +554,7 @@ def test_rental_energy_on_the_bench_prices_zero():
     body can attack — worth zero there, priced normally on the Active."""
     def ignition_body(serial):
         shell = body(MEGA_STARMIE, serial)
-        shell["energies"] = [0]
+        shell["energies"] = [0, 0, 0]
         shell["energyCards"] = [{"id": IGNITION, "serial": 701}]
         return shell
 
@@ -517,7 +567,7 @@ def test_rental_energy_on_the_bench_prices_zero():
 
     bare_active = evaluate(board(me=player(active=body(MEGA_STARMIE, 1))), context)
     rental_active = evaluate(board(me=player(active=ignition_body(1))), context)
-    assert rental_active.part("me.bodies") > bare_active.part("me.bodies")
+    assert rental_active.total > bare_active.total
 
 
 def test_hp_value_makes_the_evolve_pay_for_its_hand_card():
