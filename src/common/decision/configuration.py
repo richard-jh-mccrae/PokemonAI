@@ -94,18 +94,23 @@ class BudgetController:
         self.stop_reason = "complete"
         self.frontier: list[object] = []
 
-    def visit(self, frontier=None) -> bool:
+    def check(self, frontier=None) -> bool:
         elapsed_ms = (self.clock() - self.started) * 1000
         if self.nodes >= self.configuration.node_budget:
             self.stop_reason = "node_budget"
         elif elapsed_ms >= self.configuration.time_budget_ms:
             self.stop_reason = "time_budget"
         else:
-            self.nodes += 1
-            return True
+            return False
         if frontier is not None:
             self.frontier.append(frontier)
-        return False
+        return True
+
+    def visit(self, frontier=None) -> bool:
+        if self.check(frontier):
+            return False
+        self.nodes += 1
+        return True
 
 
 def _identity(value) -> str:

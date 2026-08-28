@@ -3,7 +3,8 @@ from __future__ import annotations
 
 import hashlib
 from collections import Counter
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
+from functools import cached_property
 
 from common.cards.functions.attack_lock import fold_attack_locks
 from common.options import enumerate_legal_actions
@@ -116,6 +117,31 @@ class ObservationStateBuilder:
         except (KeyError, TypeError, ValueError) as exc:
             raise ObservationConstructionError(str(exc)) from exc
 
+    def rebind_knowledge(self, state: "ObservationState",
+                         knowledge: LegalKnowledge) -> tuple["ObservationState", ObservationDelta]:
+        if not isinstance(knowledge, LegalKnowledge):
+            raise TypeError("knowledge must be LegalKnowledge")
+        if any(not event.recognized for event in state.events):
+            knowledge = LegalKnowledge(opponent=knowledge.opponent)
+        if state.knowledge == knowledge:
+            return state, ObservationDelta(())
+        deck_counts = state.deck_counts
+        if state.knowledge.own_prizes != knowledge.own_prizes:
+            own_prizes = (knowledge.own_prizes.cards
+                          if isinstance(knowledge.own_prizes, KnownOwnPrizes) else None)
+            deck_counts = _remaining_deck_counts(
+                state.decklist, state.seat, state.me, state.stadium, own_prizes)
+        rebound = replace(state, deck_counts=deck_counts, knowledge=knowledge)
+        parts = []
+        for field_name, path_name in (
+                ("own_prizes", "own_prizes"),
+                ("known_top", "deck_top"),
+                ("attack_locks", "attack_locks"),
+                ("opponent", "opponent_belief")):
+            if getattr(state.knowledge, field_name) != getattr(knowledge, field_name):
+                parts.append(("knowledge", path_name))
+        return rebound, ObservationDelta(tuple(sorted(parts)))
+
 
 @dataclass(frozen=True)
 class ObservationState:
@@ -139,7 +165,7 @@ class ObservationState:
     def side(self, name: str) -> Side:
         return self.me if name == ME else self.them
 
-    @property
+    @cached_property
     def position_key(self) -> str:
         hasher = hashlib.blake2b(digest_size=KEY_BYTES)
         feed(hasher.update, SCHEMA_VERSION)
@@ -157,7 +183,7 @@ class ObservationState:
                              _looking_identity(self.looking)))
         return hasher.hexdigest()
 
-    @property
+    @cached_property
     def decision_key(self) -> str:
         hasher = hashlib.blake2b(digest_size=KEY_BYTES)
         feed(hasher.update, 1)
@@ -167,7 +193,7 @@ class ObservationState:
                                   for action in self.legal_actions))
         return hasher.hexdigest()
 
-    @property
+    @cached_property
     def valuation_key(self) -> str:
         hasher = hashlib.blake2b(digest_size=KEY_BYTES)
         feed(hasher.update, 1)
@@ -193,6 +219,7 @@ class _Build:
     def __init__(self, printout, seat, parent, knowledge):
         self.printout, self.seat, self.parent = printout, seat, parent
         self.knowledge = knowledge
+        self.parent_pieces = {} if parent is None else dict(parent._pieces)
         self.pieces: dict = {}
         self.changed: set = set()
 
@@ -200,9 +227,7 @@ class _Build:
         """Record the piece's new raw subtree; True when the parent's piece survives as-is."""
         normalized = _legal_raw(raw_value)
         self.pieces[label] = normalized
-        parent = self.parent
-        parent_pieces = {} if parent is None else dict(parent._pieces)
-        if label in parent_pieces and parent_pieces[label] == normalized:
+        if label in self.parent_pieces and self.parent_pieces[label] == normalized:
             return True
         self.changed.add(label)
         return False
@@ -276,9 +301,8 @@ def _build(cls, printout, seat, decklist, parent, knowledge=None):
     looking = _looking(build, current)
     select = _select(build, printout)
     own_prizes, known_top, attack_locks = _extras(build, printout)
-    deck_counts = _deck_counts(build, decklist, seat, me, stadium, own_prizes)
     legal_actions = enumerate_legal_actions(printout)
-    events = _events(printout.get("logs"))
+    events = _observation_events(build, printout.get("logs"))
     resolved_knowledge = (LegalKnowledge(
                               own_prizes=(KnownOwnPrizes(own_prizes)
                                           if "own_prizes" in printout else UnknownOwnPrizes()),
@@ -440,6 +464,12 @@ def _deck_counts(build: _Build, decklist, seat, me: Side, stadium, own_prizes):
     if (parent is not None and parent.decklist == decklist
             and not (build.changed & _DECK_PIECES)):
         return parent.deck_counts
+    return _remaining_deck_counts(decklist, seat, me, stadium, own_prizes)
+
+
+def _remaining_deck_counts(decklist, seat, me: Side, stadium, own_prizes):
+    if decklist is None:
+        return None
     remaining = Counter(decklist)
     visible_hand = me.hand if isinstance(me.hand, VisibleHand) else ()
     for card in tuple(visible_hand) + tuple(me.discard):
@@ -474,6 +504,14 @@ def _events(logs) -> tuple[ObservationEvent, ...]:
             kind, KnownObservationEvent) if recognized else UnknownObservationEvent)
         events.append(event_type(kind, fields, recognized))
     return tuple(events)
+
+
+def _observation_events(build: _Build, logs) -> tuple[ObservationEvent, ...]:
+    events = _events(logs)
+    identity = tuple((event.kind, event.public_fields, event.recognized) for event in events)
+    if build.reuse(("events",), identity):
+        return build.parent.events
+    return events
 
 
 def _known_top_ids(known_top) -> tuple:
@@ -546,8 +584,8 @@ def _delta_parts(changed, parent, state: ObservationState) -> tuple[tuple[str, .
                 parts.add(("knowledge", "deck_top"))
             if parent.knowledge.attack_locks != state.knowledge.attack_locks:
                 parts.add(("knowledge", "attack_locks"))
-            if parent.knowledge.opponent != state.knowledge.opponent:
-                parts.add(("knowledge", "opponent_belief"))
+        if parent.knowledge.opponent != state.knowledge.opponent:
+            parts.add(("knowledge", "opponent_belief"))
         if parent.legal_actions != state.legal_actions:
             parts.add(("legal_actions",))
     return tuple(sorted(parts))

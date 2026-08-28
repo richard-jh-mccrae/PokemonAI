@@ -7,8 +7,10 @@ from ledger_helpers import DARKNESS, DRAGAPULT, body, player, printout
 
 from common.ledger import EvaluationModel
 from common.ledger.certification import certify_contract, certify_incremental
-from common.observation import ObservationDelta, ObservationStateBuilder
-from common.observation.knowledge import KnownDeckTop
+from common.observation import (LegalKnowledge, ObservationDelta, ObservationStateBuilder,
+                                OpponentBelief)
+from common.observation.knowledge import (KnownDeckTop, OpponentCandidatePosterior,
+                                          OpponentDecisionEvidence)
 from common.observation.nodes import Card
 
 
@@ -51,3 +53,33 @@ def test_incremental_shadow_invalidates_valued_legal_action_count():
 
     assert certify_incremental(
         parent, child, delta, EvaluationModel.build()).incremental_parity is True
+
+
+def test_incremental_shadow_invalidates_public_events():
+    builder = ObservationStateBuilder()
+    parent_raw = printout(me=player(active=body(226, 1)))
+    child_raw = printout(me=player(active=body(226, 1)))
+    child_raw["logs"] = [{"type": 15, "cardId": 62, "playerIndex": 0}]
+    parent = builder.root(parent_raw)
+    child, delta = builder.advance(parent, child_raw)
+
+    report = certify_incremental(parent, child, delta, EvaluationModel.build())
+
+    assert ("events",) in delta.parts
+    assert report.incremental_parity is True
+
+
+def test_incremental_shadow_invalidates_opponent_belief():
+    builder = ObservationStateBuilder()
+    raw = printout(me=player(active=body(DRAGAPULT, 1)))
+    parent = builder.root(raw)
+    evidence = OpponentDecisionEvidence(
+        "probe", (OpponentCandidatePosterior("missing", "1.0"),), (), (),
+        (0, 0, 0, 0, 0, 0), "0.0")
+    knowledge = LegalKnowledge(opponent=OpponentBelief(decision_evidence=evidence))
+    child, delta = builder.advance(parent, raw, knowledge=knowledge)
+
+    report = certify_incremental(parent, child, delta, EvaluationModel.build())
+
+    assert ("knowledge", "opponent_belief") in delta.parts
+    assert report.incremental_parity is True

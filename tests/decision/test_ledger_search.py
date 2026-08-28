@@ -125,6 +125,9 @@ def test_exhausted_budget_keeps_every_root_action_comparable(monkeypatch):
         frontier = []
         nodes = 0
 
+        def check(self):
+            return True
+
     monkeypatch.setattr(
         "common.ledger.search.BudgetController", lambda _configuration: StoppedBudget())
     observation = printout(me=player(active=body(DRAGAPULT, 1)))
@@ -142,6 +145,88 @@ def test_exhausted_budget_keeps_every_root_action_comparable(monkeypatch):
         EvaluationStatus.ESTIMATED}
     assert GreedyDecisionPolicy().choose(
         result.roster, PolicyConfiguration()).action in {first, second}
+
+
+def test_root_evaluation_time_is_inside_the_search_deadline(monkeypatch):
+    evaluated = False
+
+    class Deadline:
+        def __init__(self):
+            self.stop_reason = "complete"
+            self.frontier = []
+            self.nodes = 0
+
+        def check(self):
+            if evaluated:
+                self.stop_reason = "time_budget"
+                return True
+            return False
+
+    class MarkingEvaluator(LedgerValueEvaluator):
+        def evaluate_with_state(self, request, parent_state=None):
+            nonlocal evaluated
+            value = super().evaluate_with_state(request, parent_state)
+            evaluated = True
+            return value
+
+    monkeypatch.setattr(
+        "common.ledger.search.BudgetController", lambda _configuration: Deadline())
+    observation = printout(me=player(active=body(DRAGAPULT, 1)))
+    board = ObservationStateBuilder(DECK).root(observation)
+    root = PreviewState(observation, board, "root", deck=DECK,
+                        deck_counts=board.deck_counts or ())
+    first, second = action("card", (0,)), action("card", (1,))
+    provider = ScriptedProvider(menus={"root": (first, second)}, nodes={})
+
+    result = LedgerOnePlySearch().search(
+        EvaluationRequest(root, EvaluationModel.build()), MarkingEvaluator(),
+        UniformPolicyModel(), provider, SearchConfiguration())
+
+    assert result.stop_reason == "time_budget"
+    assert all(candidate.status is EvaluationStatus.ESTIMATED
+               for candidate in result.roster.candidates)
+
+
+def test_forced_action_reports_a_deadline_crossed_during_root_evaluation(monkeypatch):
+    evaluated = False
+
+    class Deadline:
+        stop_reason = "complete"
+        frontier = []
+        nodes = 0
+
+        def check(self):
+            if evaluated:
+                self.stop_reason = "time_budget"
+                return True
+            return False
+
+    class MarkingEvaluator(LedgerValueEvaluator):
+        def evaluate_with_state(self, request, parent_state=None):
+            nonlocal evaluated
+            value = super().evaluate_with_state(request, parent_state)
+            evaluated = True
+            return value
+
+    monkeypatch.setattr(
+        "common.ledger.search.BudgetController", lambda _configuration: Deadline())
+    select = {"type": 1, "context": 7, "minCount": 1, "maxCount": 1,
+              "option": [{"type": 3, "index": 0}], "deck": None,
+              "contextCard": None, "effect": None, "remainDamageCounter": 0,
+              "remainEnergyCost": 0}
+    observation = printout(me=player(active=body(DRAGAPULT, 1)), select=select)
+    board = ObservationStateBuilder(DECK).root(observation)
+    root = PreviewState(observation, board, "root", deck=DECK,
+                        deck_counts=board.deck_counts or ())
+    ending = action("end", (0,))
+    provider = ScriptedProvider(menus={"root": (ending,)}, nodes={})
+
+    result = LedgerOnePlySearch().search(
+        EvaluationRequest(root, EvaluationModel.build()), MarkingEvaluator(),
+        UniformPolicyModel(), provider, SearchConfiguration())
+
+    assert result.stop_reason == "time_budget"
+    assert result.roster.candidates[0].status is EvaluationStatus.ESTIMATED
 
 
 def test_search_owns_and_reuses_the_previous_turn_snapshot():

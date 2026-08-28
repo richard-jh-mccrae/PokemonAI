@@ -17,7 +17,9 @@ from __future__ import annotations
 
 import re
 import ast
+import os
 import subprocess
+import sys
 from pathlib import Path
 
 import pytest
@@ -163,6 +165,31 @@ def test_live_runtime_has_no_retired_bellman_or_latch_state():
     )
 
     assert all(name not in text for name in retired)
+
+
+def _audit_import_process(*, import_readiness=False):
+    environment = dict(os.environ)
+    environment["PYTHONPATH"] = str(REPO / "src")
+    imports = "import sys, common.runtime"
+    if import_readiness:
+        imports += ", common.ledger.readiness"
+    return subprocess.run(
+        [sys.executable, "-O", "-c", imports + "; "
+         "offline={'common.ledger.readiness','common.ledger.sensitivity'}; "
+         "raise SystemExit(bool(offline.intersection(sys.modules)))"],
+        cwd=REPO, env=environment, capture_output=True, text=True)
+
+
+def test_live_runtime_does_not_import_offline_readiness_audits():
+    process = _audit_import_process()
+
+    assert process.returncode == 0, process.stderr
+
+
+def test_offline_audit_import_probe_survives_python_optimization():
+    process = _audit_import_process(import_readiness=True)
+
+    assert process.returncode != 0
 
 
 def test_policy_consumers_cannot_walk_raw_observations():

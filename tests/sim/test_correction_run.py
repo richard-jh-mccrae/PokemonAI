@@ -495,6 +495,39 @@ def test_reconcile_rejects_a_missing_completed_bundle(tmp_path):
             episode_timeout=1, max_bytes=0)
 
 
+def test_correction_worker_passes_its_decision_limit_to_the_agent(monkeypatch, tmp_path):
+    import sim.battle as battle
+    import sim.correction_run as correction_run
+
+    calls = []
+
+    class Server:
+        def __init__(self, *_args, **kwargs):
+            calls.append(kwargs)
+
+        def alive(self):
+            return True
+
+        def close(self):
+            pass
+
+    monkeypatch.setattr(battle, "AgentServer", Server)
+    monkeypatch.setattr(battle, "read_deck", lambda _directory: [1] * 60)
+    monkeypatch.setattr(correction_run, "_WORKER_STATE", {
+        "config": {
+            "agents_root": str(tmp_path), "extra_syspath": (),
+            "source_identity": {"commit": "abc", "dirty": False},
+            "contestants": {"agent": {"deck_sha256": "deck"}},
+            "run_id": "run", "decision_timeout": 20.0,
+        },
+        "servers": {}, "decks": {},
+    })
+
+    correction_run._worker_agent("focal", "agent")
+
+    assert calls[0]["decision_seconds"] == 20.0
+
+
 def test_correction_run_process_worker_builds_a_strict_episode_bundle(tmp_path):
     from sim.correction_run import (
         ExecutionConfig, _agent_identity, _git_source_identity, create_correction_run,

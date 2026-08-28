@@ -302,7 +302,6 @@ class NativeCgTransitionProvider:
     def _group_children(self, parent, action: LegalAction, children):
         if len(children) == 1:
             probability, search_id, committed, observation = children[0]
-            observation = dict(observation)
             successor = self._bind(parent, observation)
             successor_key = self._key(successor)
             self._worlds[successor_key] = (
@@ -315,24 +314,23 @@ class NativeCgTransitionProvider:
 
         # Grouping merges worlds whose PUBLIC successor is identical. Under the preview seam's
         # identity keys nothing merges — each world keeps its own edge, same expected value.
-        grouped: dict[str, list[tuple[float, int, bool, dict]]] = {}
+        grouped: dict[str, list[tuple[float, int, bool, dict, object]]] = {}
         for probability, search_id, committed, observation in children:
             public = self._bind(parent, observation)
             group_key = self._key(public)
             grouped.setdefault(group_key, []).append(
-                (float(probability), int(search_id), bool(committed), observation))
+                (float(probability), int(search_id), bool(committed), observation, public))
         if not grouped:
             return Unknown("native cg returned no successor", str(action.identity))
 
         edges = []
         for index, (group_key, rows) in enumerate(sorted(grouped.items())):
             mass = sum(row[0] for row in rows)
-            observation = dict(rows[0][3])
-            successor = self._bind(parent, observation)
+            successor = rows[0][4]
             successor_key = self._key(successor)
             self._worlds[successor_key] = tuple(
                 _NativeWorld(probability / mass, search_id, committed)
-                for probability, search_id, committed, _observation in rows
+                for probability, search_id, committed, _observation, _successor in rows
             )
             node = self._node(parent, successor, rows)
             edges.append(WeightedEdge(mass, f"native outcome {index + 1}", node))

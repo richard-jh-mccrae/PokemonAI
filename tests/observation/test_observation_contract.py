@@ -116,6 +116,19 @@ def test_position_key_excludes_question_while_decision_key_includes_canonical_me
         sorted(action.identity for action in a.legal_actions))
 
 
+def test_immutable_state_keys_are_computed_once():
+    state = ObservationStateBuilder(DECK).root(printout(
+        select=_prompt([{"type": 7, "index": 0}])))
+
+    position = state.position_key
+    decision = state.decision_key
+    valuation = state.valuation_key
+
+    assert state.position_key is position
+    assert state.decision_key is decision
+    assert state.valuation_key is valuation
+
+
 def test_valuation_key_covers_events_and_stadium_ownership():
     raw = printout()
     raw["current"]["stadium"] = [{

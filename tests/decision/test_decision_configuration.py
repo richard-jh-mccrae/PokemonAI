@@ -61,6 +61,18 @@ def test_budget_stops_only_at_recorded_node_boundaries():
     assert budget.frontier == ["third"]
 
 
+def test_budget_checks_elapsed_time_without_spending_a_node():
+    times = iter((0.0, 0.051))
+    budget = BudgetController(
+        SearchConfiguration(node_budget=2, time_budget_ms=50),
+        clock=lambda: next(times),
+    )
+
+    assert budget.check()
+    assert budget.nodes == 0
+    assert budget.stop_reason == "time_budget"
+
+
 def test_policy_configuration_rejects_unknown_status_names():
     with pytest.raises(ValueError, match="unknown evaluation status"):
         PolicyConfiguration(accepted_statuses=("complete", "invented"))

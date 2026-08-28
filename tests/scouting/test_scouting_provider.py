@@ -45,6 +45,18 @@ def test_engine_provider_warm_prebuilds_and_is_idempotent():
     assert p.attack(1488) is not None
 
 
+@pytest.mark.req("REQ-STAT-0002")
+def test_engine_provider_reuses_its_warmed_content_identity():
+    pytest.importorskip("cg")
+    from common.scouting.provider import EngineCardStatProvider
+    provider = EngineCardStatProvider()
+    provider.warm()
+
+    identity = provider.identity
+
+    assert provider.identity is identity
+
+
 @pytest.mark.req("REQ-SCOUT-0008")
 def test_dict_provider_returns_stats_or_none():
     p = DictCardStatProvider({1: CardStat(1, synthetic=True, name="x", hp=70)})
