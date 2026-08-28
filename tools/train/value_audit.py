@@ -3,6 +3,7 @@ from __future__ import annotations
 import hashlib
 from itertools import combinations
 import json
+import math
 
 from common.ledger.training import parameter_manifest
 from train.blunder.correction import is_critical
@@ -32,7 +33,19 @@ def _gaps(candidate) -> tuple[str, ...]:
 
 
 def _components(candidate) -> dict[str, dict]:
-    return {str(item["feature"]): item for item in candidate.get("components", ())}
+    grouped = {}
+    for item in candidate.get("components", ()):
+        grouped.setdefault(str(item["feature"]), []).append(item)
+    return {feature: {
+        "feature": feature,
+        "activation": math.fsum(float(item.get("activation", 0.0)) for item in items),
+        "coefficient": next((item.get("coefficient") for item in items
+                             if item.get("coefficient") is not None), None),
+        "contribution": math.fsum(
+            float(item.get("contribution", 0.0)) for item in items),
+        "provenance": sorted({owner for item in items
+                              for owner in item.get("provenance", ())}),
+    } for feature, items in grouped.items()}
 
 
 def _component_differences(ruled, committed) -> list[dict]:

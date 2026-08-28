@@ -66,10 +66,12 @@ def correction_selection_error(correction) -> str | None:
     obs = getattr(correction, "obs", None) or {}
     options = ((obs.get("select") or {}).get("option") or ())
     minimum, maximum = select_min_count(obs), select_max_count(obs)
+    if correct and (minimum is None or maximum is None):
+        return "invalid_correction_cardinality"
     if not correct:
         return ("invalid_correction_cardinality"
                 if getattr(correction, "scope", "decision") == "decision"
-                and minimum is not None and minimum > 0 else None)
+                and minimum != 0 else None)
     if len(set(correct)) != len(correct) or any(
             not isinstance(index, int) or index < 0 or index >= len(options)
             for index in correct):
@@ -281,8 +283,8 @@ def build_correction(
         if len(set(correct)) != len(correct):
             raise ValueError(f"correct {correct!r} contains a duplicate option")
         minimum, maximum = select_min_count(obs), select_max_count(obs)
-        if ((minimum is not None and len(correct) < minimum)
-                or (maximum is not None and len(correct) > maximum)):
+        if (minimum is None or maximum is None
+                or len(correct) < minimum or len(correct) > maximum):
             raise ValueError(
                 f"correct {correct!r} requires {minimum if minimum is not None else '?'}.."
                 f"{maximum if maximum is not None else '?'} option(s)")

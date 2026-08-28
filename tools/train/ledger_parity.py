@@ -14,12 +14,13 @@ def legacy_choose(prices, *, forced, configuration):
                        if not price.ends_turn
                        and price.swing > configuration.noise_tolerance)
     if continuing:
-        return _legacy_ranked(_legacy_preservation_frontier(continuing), configuration)[0]
+        return _legacy_ranked(_legacy_preservation_frontier(
+            continuing, configuration.noise_tolerance), configuration)[0]
     enders = tuple(price for price in prices if price.ends_turn)
     return _legacy_ranked(enders or prices, configuration)[0]
 
 
-def _legacy_preservation_frontier(candidates):
+def _legacy_preservation_frontier(candidates, noise_tolerance=0.0):
     deferred = set()
     for candidate in candidates:
         consumed = set(candidate.footprint.opportunities_consumed)
@@ -29,6 +30,13 @@ def _legacy_preservation_frontier(candidates):
             if other is candidate:
                 continue
             preserved = set(other.footprint.opportunities_preserved)
+            use_expiring_ability = (
+                other.action.identity.kind == "ability"
+                and candidate.action.identity.kind == "evolve"
+                and other.swing > noise_tolerance)
+            if (not use_expiring_ability
+                    and other.swing + noise_tolerance < candidate.swing):
+                continue
             if (other.action.identity.kind in consumed
                     and candidate.action.identity.kind in preserved):
                 deferred.add(candidate.action.identity)

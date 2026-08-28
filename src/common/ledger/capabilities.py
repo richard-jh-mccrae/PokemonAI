@@ -1730,7 +1730,8 @@ def recoverable_discard_ids(side, ctx) -> frozenset[int]:
     return frozenset(recoverable)
 
 
-def card_option_units(facts, side, opponent, board, ctx, *, reaches=None) -> OptionUnits:
+def card_option_units(facts, side, opponent, board, ctx, *, reaches=None,
+                      _price_shuffle_loss=True) -> OptionUnits:
     if isinstance(facts, EnergyCard):
         hand = tuple(side.hand)
         copies = sum(
@@ -1817,15 +1818,19 @@ def card_option_units(facts, side, opponent, board, ctx, *, reaches=None) -> Opt
                 if clause.rider == "shuffle_own_hand_in":
                     target = max(0.0, target - max(0, side.hand_count - 1))
                 values["draw"] += gate * target
-                if clause.rider == "shuffle_own_hand_in":
+                if clause.rider == "shuffle_own_hand_in" and _price_shuffle_loss:
+                    skipped_played_copy = False
                     for card in tuple(side.hand):
                         held = ctx.facts(card.card_id)
-                        if isinstance(held, TrainerCard):
+                        if card.card_id == facts.card_id and not skipped_played_copy:
+                            skipped_played_copy = True
                             continue
                         units = card_option_units(
-                            held, side, opponent, board, ctx, reaches=reaches)
+                            held, side, opponent, board, ctx, reaches=reaches,
+                            _price_shuffle_loss=False)
                         for field in OptionUnits.__dataclass_fields__:
-                            values[field] -= gate * getattr(units, field)
+                            if field != "cost":
+                                values[field] -= gate * max(0.0, getattr(units, field))
             elif clause.kind == "fetch":
                 values["search"] += gate * _quantity(clause.amount, 1)
             elif clause.kind in {"accel", "energy_recur", "move_energy"}:

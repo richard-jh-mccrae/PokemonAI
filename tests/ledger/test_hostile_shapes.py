@@ -47,11 +47,18 @@ def test_refresh_tolerates_idless_hand_rows():
     obs = printout(me=player(active=body(DRAGAPULT, 1), hand=[LILLIES, FIRE_E]))
     obs["current"]["players"][0]["hand"].extend([{"id": None, "serial": 9}, {"serial": 10}])
     board = ObservationStateBuilder((DRAGAPULT,) * 30).root(obs)
-    valuation, _gaps, _outcomes = refresh_outcomes(
+    calls = []
+    def valued(synthetic):
+        calls.append(synthetic.position_key)
+        return evaluate(synthetic, EvaluationModel.build())
+
+    valuation, _gaps, summary = refresh_outcomes(
         obs, board, LILLIES, ((6, 0),), False,
-        lambda synthetic: evaluate(synthetic, EvaluationModel.build()),
+        valued,
         ComputeConfiguration())
     assert math.isfinite(valuation.total)
+    assert len(calls) == summary.sample_count == 12
+    assert summary.variance >= 0.0
 
 
 def test_observation_boundary_rejects_a_single_entry_players_list():

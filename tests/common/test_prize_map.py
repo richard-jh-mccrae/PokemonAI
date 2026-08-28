@@ -42,7 +42,7 @@ def test_runtime_prefers_forcing_the_opponent_to_overrun_its_last_three_prizes(m
         nodes={("root", offer.identity): Deterministic(forced_four),
                ("root", protect.identity): Deterministic(exact_three)})
     general = ValuationConfiguration.general()
-    prize_only = general.with_values({key: (1.0 if key == "prize.race" else 0.0)
+    prize_only = general.with_values({key: (1.0 if key == "prize.overrun" else 0.0)
                                       for key in general})
     strategy = Strategy(
         name="prize-map-test", roles=Roles({MEGA_STARMIE: ["primary_attacker"]}),
@@ -68,7 +68,7 @@ def test_runtime_prefers_forcing_the_opponent_to_overrun_its_last_three_prizes(m
         if row["action"] == str(offer.identity)
         for item in row["continuation"]["contributions"]
     }
-    assert activations["prize.race"] == 1.0
+    assert activations["prize.overrun"] == 1.0
 
 
 def test_prize_plan_breaks_only_an_equal_structural_tie(monkeypatch):

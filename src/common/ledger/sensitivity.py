@@ -1010,6 +1010,8 @@ def _direct_parameter_contributions(contract, facts, ctx, *, transform, paramete
     ) * ctx.configuration[feature]
     if direct_feature_delta is not None:
         feature_delta = direct_feature_delta
+    if contribution == 0.0 and feature_delta != 0.0:
+        contribution = feature_delta
     return contribution, feature_delta
 
 

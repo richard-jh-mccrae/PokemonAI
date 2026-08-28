@@ -1,4 +1,4 @@
-from train.value_audit import build_value_audit
+from train.value_audit import _component_differences, build_value_audit
 import json
 from pathlib import Path
 import subprocess
@@ -41,6 +41,25 @@ def _row(*, ruled_status="complete"):
             _candidate([2], 1.2, 1.4),
         ],
     }
+
+
+def test_audit_sums_owner_split_components_before_comparison():
+    ruled = {"components": [
+        {"feature": "option.draw", "activation": 1.0, "coefficient": 0.5,
+         "contribution": 0.5, "provenance": ["first"]},
+        {"feature": "option.draw", "activation": 2.0, "coefficient": 0.5,
+         "contribution": 1.0, "provenance": ["second"]},
+    ]}
+    committed = {"components": [
+        {"feature": "option.draw", "activation": 1.0, "coefficient": 0.5,
+         "contribution": 0.5, "provenance": ["base"]},
+    ]}
+
+    assert _component_differences(ruled, committed) == [{
+        "feature": "option.draw", "activation_delta": 2.0,
+        "coefficient": 0.5, "contribution_delta": 1.0,
+        "provenance": ["base", "first", "second"],
+    }]
 
 
 def test_value_audit_compares_the_ruled_and_original_committed_paths_at_the_locus():

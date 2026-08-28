@@ -46,10 +46,11 @@ def player(*, active=None, bench=(), hand=(), discard=(), deck_count=30, prizes=
             "paralyzed": paralyzed, "confused": confused}
 
 
-def printout(*, me=None, them=None, turn=2, select=None):
+def printout(*, me=None, them=None, turn=2, select=None, energy_attached=False):
     return {"select": select, "logs": [], "current": {
         "turn": turn, "yourIndex": 0, "firstPlayer": 0, "supporterPlayed": False,
-        "stadiumPlayed": False, "energyAttached": False, "retreated": False, "result": None,
+        "stadiumPlayed": False, "energyAttached": energy_attached, "retreated": False,
+        "result": None,
         "stadium": [], "looking": None,
         "players": [me if me is not None else player(),
                     them if them is not None else player(own=False)]}}

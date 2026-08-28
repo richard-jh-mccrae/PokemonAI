@@ -11,7 +11,8 @@ RANKING_MODULES = tuple(path for path in sorted(
 APPROVED_DECLARATIONS = {
     "src/common/decision/coordinator.py": {"LOTTERY_DIGEST_BYTES"},
     "src/common/ledger/activation.py": {"DAMAGE_UNIT_HP"},
-    "src/common/ledger/chance.py": {"PLAYER_COUNT", "SEED_DIGEST_BYTES"},
+    "src/common/ledger/chance.py": {
+        "DIRECT_REFRESH_CARD_GAIN", "PLAYER_COUNT", "SEED_DIGEST_BYTES"},
     "src/common/ledger/capabilities.py": {
         "ACTIVE_AREA", "ANCIENT_POKEMON_IDS", "ATTACHED_ENERGY_MATERIAL_UNIT",
         "ATTACK_EVENT_KIND", "BOUNCE_ENERGY_HAND_UNIT", "CLAUSE_COST_UNITS",

@@ -107,11 +107,6 @@ The state value of compatible opportunities remaining in the current turn under 
 costs, and targets. It is derived without traversing actions and never sums conflicting plays.
 _Avoid_: hand-value sum, Action Path, committed turn plan
 
-**Feasible Development Portfolio**:
-The compatible Pokémon lines reachable under shared evolution, Energy, bench, ability, and turn
-capacity. It values marginal distinct development rather than independently summing every body.
-_Avoid_: attacker Role, independent line sum, committed turn plan
-
 **Decision Delta**:
 One candidate's decomposed marginal value against the root State Valuation.
 _Avoid_: State Valuation, reward, Swing outside the one-ply adapter

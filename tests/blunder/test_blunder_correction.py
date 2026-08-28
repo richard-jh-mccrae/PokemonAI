@@ -1,4 +1,6 @@
 """Building and validating a Correction from a Decision."""
+from copy import deepcopy
+
 import pytest
 from conftest import FIXTURES
 
@@ -57,6 +59,18 @@ def test_correct_must_obey_the_anchor_selection_cardinality():
     with pytest.raises(ValueError, match="duplicate"):
         build_correction(d, source="own", agent="x", correct=[4, 4],
                          category="missed_win", rationale="same option twice")
+
+
+@pytest.mark.parametrize("missing", ("minCount", "maxCount"))
+def test_nonempty_correction_write_requires_both_cardinality_bounds(missing):
+    d = _a_main_decision()
+    obs = deepcopy(d.obs)
+    obs["select"].pop(missing)
+
+    with pytest.raises(ValueError, match=r"requires \?\.\.|\.\.\?"):
+        build_correction(
+            d, source="own", agent="x", correct=[4], obs=obs,
+            category="missed_win", rationale="unknown cardinality")
 
 
 def test_category_must_be_in_vocab():

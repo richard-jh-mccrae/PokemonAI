@@ -21,8 +21,8 @@ BASELINE = json.loads((
 ).read_text(encoding="utf-8"))
 EXPECTED_BEHAVIOR = {
     "mega_starmie": {
-        "choices": ((0,), (0, 1), (5,)),
-        "discarded_card_ids": (3, 17),
+        "choices": ((0,), (1, 2), (5,)),
+        "discarded_card_ids": (17, 666),
         "fetched_card_id": 1031,
     },
 }
@@ -108,7 +108,8 @@ def test_ultra_ball_match_chain_is_exact_repeatable_and_timed(
         assert result.contexts == (
             int(SelectContext.MAIN), int(SelectContext.DISCARD), int(SelectContext.TO_HAND))
         assert result.complete == (True, True, True)
-        assert result.stop_reasons == ("complete", "complete", "complete")
+        assert result.stop_reasons == (
+            "complete", "cached_continuation", "cached_continuation")
         assert result.played_card_id == 1121
         assert result.discarded_card_ids == expected_discards
         assert result.fetched_card_id == expected_fetch

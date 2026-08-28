@@ -17,6 +17,7 @@ in `reviewed.json` are RETIRED — listed in their own section, never graded.
 from __future__ import annotations
 
 import argparse
+import math
 from collections import Counter
 from concurrent.futures import ProcessPoolExecutor, as_completed
 from datetime import datetime, timezone
@@ -185,6 +186,10 @@ def _training_candidates(decision) -> list[dict]:
     rows = []
     for candidate in getattr(roster, "candidates", ()):
         delta = getattr(candidate, "delta", None)
+        components = (() if delta is None else delta.components)
+        feature_values = {}
+        for component in components:
+            feature_values.setdefault(component.key, []).append(component.activation)
         rows.append({
             "action": str(candidate.action.identity),
             "selection": list(candidate.action.selection),
@@ -192,15 +197,15 @@ def _training_candidates(decision) -> list[dict]:
             "decision_delta": None if delta is None else delta.total,
             "search_value": (None if candidate.search_value is None
                              else candidate.search_value.total),
-            "features": {component.key: component.activation
-                         for component in (() if delta is None else delta.components)},
+            "features": {feature: math.fsum(values)
+                         for feature, values in feature_values.items()},
             "components": [{
                 "feature": component.key,
                 "activation": component.activation,
                 "coefficient": component.coefficient,
                 "contribution": component.value,
                 "provenance": list(component.provenance),
-            } for component in (() if delta is None else delta.components)],
+            } for component in components],
             "successors": [{
                 "probability": successor.probability,
                 "ended": successor.ended,

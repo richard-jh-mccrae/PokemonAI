@@ -8,7 +8,7 @@ from common.cards import card_clauses
 from common.cards.card_facts import EnergyCard, PokemonCard, TrainerCard, STADIUM, SUPPORTER, TOOL
 from common.cards.functions.fetch import DEADNESS, WINDOW, fetch_target_matches
 
-from .capabilities import (DAMAGE_UNIT_HP, OptionUnits, _heal_rider_cost,
+from .capabilities import (DAMAGE_UNIT_HP, FUTURE_TURN_DISCOUNT, OptionUnits, _heal_rider_cost,
                            _heal_targets, _healed_hp, clause_cost_units)
 
 
@@ -48,9 +48,10 @@ class PortfolioResult:
 
 def _requirements(facts, side, board, ctx) -> tuple[tuple[str, float], ...] | None:
     if isinstance(facts, EnergyCard):
-        if board.turn.energy_attached or not side.bodies:
+        if not side.bodies:
             return None
-        return (("energy", 1.0), (f"hand:{facts.card_id}", 1.0))
+        allowance = "future_energy" if board.turn.energy_attached else "energy"
+        return ((allowance, 1.0), (f"hand:{facts.card_id}", 1.0))
     if isinstance(facts, PokemonCard):
         if facts.evolves_from is None:
             return (("bench", 1.0), (f"hand:{facts.card_id}", 1.0)) \
@@ -80,6 +81,7 @@ def _capacities(side, board, ctx) -> dict[str, float]:
     capacities = {
         "supporter": 1,
         "energy": int(not board.turn.energy_attached),
+        "future_energy": int(board.turn.energy_attached),
         "stadium": int(not board.turn.stadium_played),
         "bench": max(0, side.bench_max - len(side.bench)),
         "tool": sum(not body.tools for body in side.bodies),
@@ -430,6 +432,8 @@ def feasible_option_portfolio_result(entries, side, board, ctx, *, hand_size: in
         units = _with_unit(units, "cost", units.cost - raw_cost + shared_cost)
         if isinstance(facts, PokemonCard):
             units = _scale(units, HAND_POKEMON_REALIZATION_DISCOUNT)
+        elif isinstance(facts, EnergyCard) and board.turn.energy_attached:
+            units = _scale(units, FUTURE_TURN_DISCOUNT)
         variants = _fetch_variants(facts, units, requirements, side, board, ctx)
         if any(clause.kind == "heal" for clause in card_clauses(facts)):
             variants = _heal_variants(facts, units, requirements, side, board, ctx)
