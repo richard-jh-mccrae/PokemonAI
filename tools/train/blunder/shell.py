@@ -815,6 +815,7 @@ function ledgerDecision(L,f){
 async function show(n,withDetails=true){
   if(FR.length) resetCF();
   i=Math.max(0,Math.min(FR.length-1,n)); const f=FR[i];
+  renderFrame(f,true);
   if(withDetails&&f.has_details&&!f.details_loaded){
     if(!f.details_promise) f.details_promise=(async()=>{
       const response=await fetch('/frame.json?frame='+f.frame), details=await response.json();
@@ -825,7 +826,10 @@ async function show(n,withDetails=true){
       f.details_loaded=true; f.details_error=String(error);
     }
     if(FR[i]!==f) return;
+    renderFrame(f,false);
   }
+}
+function renderFrame(f,resetForm){
   const own=isOwn(f.seat);
   $('pick').value=i; $('step').value=f.step; $('source').value=own?'own':'peer';
   let h=`<div class="big">Step ${f.step}/${total} &nbsp;·&nbsp; Turn ${f.turn}</div>`+
@@ -895,6 +899,7 @@ async function show(n,withDetails=true){
     }
   }
   $('now').innerHTML=h;
+  if(!resetForm) return;
   const sel=$('correct'); sel.innerHTML=''; f.options.forEach(op=>sel.add(new Option(op.label,op.pos)));
   FORM.forEach(id=>$(id).disabled=!f.taggable);
   $('posture_wrong').checked=false;    // fresh frame -> unflagged (editItem re-checks it after)
