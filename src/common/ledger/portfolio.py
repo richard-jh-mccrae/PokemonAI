@@ -25,6 +25,8 @@ class _Fetch:
     distinct_groups: tuple[tuple[int, int], ...] = ()
     consumes: bool = True
     target_resources: tuple[tuple[int, str], ...] = ()
+    target_reservations: tuple[tuple[int, str], ...] = ()
+    target_values: tuple[tuple[int, float], ...] = ()
 
 
 @dataclass(frozen=True, slots=True)
@@ -36,6 +38,7 @@ class _Opportunity:
     discards_hand: bool = False
     entry_index: int = -1
     direct_worth: float = 0.0
+    reservations: tuple[tuple[str, float], ...] = ()
 
 
 @dataclass(frozen=True, slots=True)
@@ -56,10 +59,11 @@ def _requirements(facts, side, board, ctx) -> tuple[tuple[str, float], ...] | No
         if facts.evolves_from is None:
             return (("bench", 1.0), (f"hand:{facts.card_id}", 1.0)) \
                 if len(side.bench) < side.bench_max else None
-        if not any(
-                not body.appeared_this_turn
-                and getattr(ctx.facts(body.card.card_id), "name", None) == facts.evolves_from
-                for body in side.bodies):
+        mature_predecessor = any(
+            not body.appeared_this_turn
+            and getattr(ctx.facts(body.card.card_id), "name", None) == facts.evolves_from
+            for body in side.bodies)
+        if not mature_predecessor:
             return ((f"evolve:future:{facts.evolves_from}", 1.0),
                     (f"hand:{facts.card_id}", 1.0))
         return ((f"evolve:any:{facts.evolves_from}", 1.0),
@@ -98,6 +102,11 @@ def _capacities(side, board, ctx) -> dict[str, float]:
                 mature_key = f"evolve:mature:{name}"
                 capacities[mature_key] = capacities.get(mature_key, 0) + 1
     future_bases = Counter()
+    for body in side.bodies:
+        if body.appeared_this_turn:
+            name = getattr(ctx.facts(body.card.card_id), "name", None)
+            if name:
+                future_bases[name] += 1
     for card in tuple(side.hand):
         name = getattr(ctx.facts(card.card_id), "name", None)
         if name:
@@ -155,6 +164,40 @@ def _source_counts(zone, side, board):
     return Counter(card.card_id for card in cards)
 
 
+def _preserved_hand_resources(facts, side, ctx):
+    reservations = []
+    required_energy = {
+        clause.condition_energy_type for clause in card_clauses(facts)
+        if clause.condition_energy_type is not None}
+    for energy_type in required_energy:
+        card_id = next((
+            card.card_id for card in side.hand
+            if isinstance((held := ctx.facts(card.card_id)), EnergyCard)
+            and held.provides == energy_type), None)
+        if card_id is not None:
+            reservations.append((f"hand:{card_id}", 1.0))
+    evolves_from = getattr(facts, "evolves_from", None)
+    predecessor_in_play = any(
+        getattr(ctx.facts(body.card.card_id), "name", None) == evolves_from
+        for body in side.bodies)
+    if evolves_from and not predecessor_in_play:
+        card_id = next((
+            card.card_id for card in side.hand
+            if getattr(ctx.facts(card.card_id), "name", None) == evolves_from), None)
+        if card_id is not None:
+            reservations.append((f"hand:{card_id}", 1.0))
+    return tuple(dict.fromkeys(reservations))
+
+
+def _fetch_target_value(facts, side, ctx):
+    if not isinstance(facts, PokemonCard):
+        return 1.0
+    develops_held = any(
+        getattr(ctx.facts(card.card_id), "evolves_from", None) == facts.name
+        for card in side.hand)
+    return 1.0 + HAND_POKEMON_REALIZATION_DISCOUNT * develops_held
+
+
 def _fetch_variants(facts, units, requirements, side, board, ctx):
     clauses = tuple(clause for clause in card_clauses(facts)
                     if clause.kind == "fetch"
@@ -205,6 +248,14 @@ def _fetch_variants(facts, units, requirements, side, board, ctx):
             for key in ((f"evolve:any:{base}",)
                         if not clause.target_condition else (
                 f"evolve:any:{base}", f"evolve:mature:{base}")))
+        target_reservations = tuple(
+            (card_id, key)
+            for card_id in eligible
+            for key, _amount in _preserved_hand_resources(
+                ctx.facts(card_id), side, ctx))
+        target_values = tuple(
+            (card_id, _fetch_target_value(ctx.facts(card_id), side, ctx))
+            for card_id in eligible)
         if distinct:
             cap = min(cap, len({group for _card_id, group in distinct}))
         amount = min(cap, copies)
@@ -213,7 +264,7 @@ def _fetch_variants(facts, units, requirements, side, board, ctx):
                 sum(source_counts.values()), copies, int(clause.dig), int(cap))
         return _Fetch(eligible, float(amount), clause.dest == "bench",
                       str(clause.zone), "search", distinct, clause.dest != "deck_top",
-                      target_resources)
+                      target_resources, target_reservations, target_values)
 
     fetches = tuple(fetch(clause) for clause in clauses)
     if any(clause.choice for clause in clauses):
@@ -235,23 +286,33 @@ def _fetch_variants(facts, units, requirements, side, board, ctx):
                               for pair in item.distinct_groups})),
                 all(item.consumes for item in fetches),
                 tuple(sorted({pair for item in fetches
-                              for pair in item.target_resources})))
+                              for pair in item.target_resources})),
+                tuple(sorted({pair for item in fetches
+                              for pair in item.target_reservations})),
+                tuple(sorted({pair for item in fetches
+                              for pair in item.target_values})))
+            quality = max((value for _card_id, value in merged.target_values), default=1.0)
             realized = (float(merged.amount) if isinstance(facts, EnergyCard)
-                        else min(units.search, float(merged.amount)))
+                        else min(units.search, float(merged.amount)) * quality)
             return (_Opportunity(
                 _with_unit(units, "search", realized),
                 requirements, 0, (merged,)),)
         return tuple(_Opportunity(
-            _with_unit(units, "search", min(units.search, float(item.amount))),
+            _with_unit(units, "search", min(units.search, float(item.amount)) * max(
+                (value for _card_id, value in item.target_values), default=1.0)),
             requirements, 0, (item,))
                      for item in fetches if item.amount)
     amount = sum(item.amount for item in fetches)
+    weighted_amount = sum(
+        item.amount * max(
+            (value for _card_id, value in item.target_values), default=1.0)
+        for item in fetches)
     realized = (float(amount) if isinstance(facts, EnergyCard)
                 and any(getattr(ctx.facts(body.card.card_id), "energy_type", None)
                         == next((clause.target_type for clause in clauses
                                  if clause.target_type is not None), None)
                         for body in side.bodies)
-                else min(units.search, float(amount)))
+                else min(units.search, float(weighted_amount)))
     return (_Opportunity(_with_unit(units, "search", realized),
                          requirements, 0, fetches),)
 
@@ -367,8 +428,9 @@ def _heal_variants(facts, units, requirements, side, board, ctx):
 
 def _realize_fetches(opportunity, usage, capacities):
     if not opportunity.fetches:
-        return (), opportunity.units
+        return (), (), opportunity.units
     requirements = []
+    reservations = []
     claimed = Counter()
     bench_claim = 0
     local_usage = dict(usage)
@@ -376,7 +438,10 @@ def _realize_fetches(opportunity, usage, capacities):
     bench_available = capacities.get("bench", 0.0) - usage.get("bench", 0.0)
     for fetch in sorted(opportunity.fetches, key=lambda item: len(item.eligible)):
         wanted = min(fetch.amount, int(bench_available) if fetch.to_bench else fetch.amount)
-        for card_id in fetch.eligible:
+        target_values = dict(fetch.target_values)
+        for card_id in sorted(
+                fetch.eligible, key=lambda target: target_values.get(target, 1.0),
+                reverse=True):
             group = next((value for target, value in fetch.distinct_groups
                           if target == card_id), None)
             if group is not None and group in used_groups:
@@ -385,10 +450,15 @@ def _realize_fetches(opportunity, usage, capacities):
             available = capacities.get(source_key, 0.0) - local_usage.get(source_key, 0.0)
             target_keys = tuple(key for target, key in fetch.target_resources
                                 if target == card_id)
+            reservation_keys = tuple(
+                key for target, key in fetch.target_reservations
+                if target == card_id)
             for target_key in target_keys:
                 available = min(
                     available,
                     capacities.get(target_key, 0.0) - local_usage.get(target_key, 0.0))
+            for reservation_key in reservation_keys:
+                available = min(available, capacities.get(reservation_key, 0.0))
             take = min(wanted, available)
             if group is not None:
                 take = min(take, 1.0)
@@ -399,8 +469,11 @@ def _realize_fetches(opportunity, usage, capacities):
                 for target_key in target_keys:
                     requirements.append((target_key, float(take)))
                     local_usage[target_key] = local_usage.get(target_key, 0.0) + take
+                reservations.extend(
+                    (reservation_key, float(take))
+                    for reservation_key in reservation_keys)
                 wanted -= take
-                claimed[fetch.field] += take
+                claimed[fetch.field] += take * target_values.get(card_id, 1.0)
                 if group is not None:
                     used_groups.add(group)
                 if fetch.to_bench:
@@ -415,7 +488,7 @@ def _realize_fetches(opportunity, usage, capacities):
         amount = claimed.get(field, 0.0)
         realized = _with_unit(
             realized, field, min(getattr(realized, field), float(amount)))
-    return tuple(requirements), realized
+    return tuple(requirements), tuple(reservations), realized
 
 
 def feasible_option_portfolio_result(entries, side, board, ctx, *, hand_size: int
@@ -455,7 +528,8 @@ def feasible_option_portfolio_result(entries, side, board, ctx, *, hand_size: in
             _with_energy_ceiling(facts, opportunity.units, energy_claims),
             opportunity.requirements, discard_cost,
             (*opportunity.fetches, *energy_claims), discards_hand),
-            entry_index=index, direct_worth=direct_worth)
+            entry_index=index, direct_worth=direct_worth,
+            reservations=_preserved_hand_resources(facts, side, ctx))
             for opportunity in variants)
         opportunities.extend(realized_opportunities)
         if realized_opportunities:
@@ -476,17 +550,19 @@ def feasible_option_portfolio_result(entries, side, board, ctx, *, hand_size: in
 
     keys = tuple(sorted(capacities))
     initial = tuple(0 for _key in keys)
-    states = {(initial, 0, 0, False): (OptionUnits(), (), 0.0)}
+    states = {(initial, initial, 0, 0, False): (OptionUnits(), (), 0.0)}
     opportunities.sort(key=lambda opportunity: (opportunity.discards_hand, sum(
         len(fetch.eligible) for fetch in opportunity.fetches) or side.deck_count + 1))
     for opportunity in opportunities:
         expanded = dict(states)
-        for (used, plays, discards, exhausted), (units, selected, direct_worth) in states.items():
+        for ((used, reserved, plays, discards, exhausted),
+             (units, selected, direct_worth)) in states.items():
             if exhausted:
                 continue
             usage = dict(zip(keys, used))
+            reservation = dict(zip(keys, reserved))
             feasible = True
-            fetch_requirements, realized_units = _realize_fetches(
+            fetch_requirements, fetch_reservations, realized_units = _realize_fetches(
                 opportunity, usage, capacities)
             for requirement, amount in (*opportunity.requirements, *fetch_requirements):
                 if usage.get(requirement, 0.0) + amount > capacities.get(
@@ -496,15 +572,25 @@ def feasible_option_portfolio_result(entries, side, board, ctx, *, hand_size: in
                 usage[requirement] = usage.get(requirement, 0.0) + amount
             if not feasible:
                 continue
+            for requirement, amount in (*opportunity.reservations, *fetch_reservations):
+                reserved_amount = reservation.get(requirement, 0.0) + amount
+                if reserved_amount > capacities.get(requirement, 0.0):
+                    feasible = False
+                    break
+                reservation[requirement] = reserved_amount
+            if not feasible:
+                continue
             next_plays = plays + 1
             hand_resources_used = sum(
-                amount for name, amount in usage.items() if name.startswith("hand:"))
+                max(amount, reservation.get(name, 0.0))
+                for name, amount in usage.items() if name.startswith("hand:"))
             next_discards = (max(discards, hand_size - hand_resources_used)
                              if opportunity.discards_hand else
                              discards + opportunity.discard_cost)
             if hand_resources_used + next_discards > hand_size:
                 continue
-            key = (tuple(usage.get(name, 0) for name in keys), next_plays,
+            key = (tuple(usage.get(name, 0) for name in keys),
+                   tuple(reservation.get(name, 0) for name in keys), next_plays,
                    next_discards, opportunity.discards_hand)
             candidate = _add(units, realized_units)
             candidate_direct_worth = direct_worth + opportunity.direct_worth

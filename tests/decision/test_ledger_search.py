@@ -1,9 +1,10 @@
 from dataclasses import replace
+import math
 from types import SimpleNamespace
 
 import pytest
 
-from common.algebra import Deterministic
+from common.algebra import Chance, Deterministic, WeightedEdge
 from common.decision import (
     CandidateDisposition,
     CandidateRoster,
@@ -12,6 +13,7 @@ from common.decision import (
     EvaluationStatus,
     PolicyConfiguration,
     SearchConfiguration,
+    ValueComponent,
     ValuedCandidate,
 )
 from common.ledger import EvaluationModel
@@ -97,6 +99,41 @@ def test_one_ply_search_retains_every_candidate_and_explicit_successor():
     assert_decision_parity(
         legacy_prices, result, choice, forced=False,
         configuration=PolicyConfiguration())
+
+
+def test_every_candidate_delta_is_expected_successor_ledger_minus_root_ledger():
+    observation = printout(me=player(active=body(DRAGAPULT, 1), hand=[DARK_E]))
+    board = ObservationStateBuilder(DECK).root(observation)
+    root = PreviewState(observation, board, "root", deck=DECK,
+                        deck_counts=board.deck_counts or ())
+    stronger = DecisionState.from_observation(
+        printout(me=player(active=body(DRAGAPULT, 1, energies=(8,)), hand=[])),
+        deck=DECK, deck_name="test", value_registry_identity="test")
+    unchanged = DecisionState.from_observation(
+        observation, deck=DECK, deck_name="test", value_registry_identity="test")
+    attach, end = action("attach", (0,)), action("end", (1,))
+    provider = ScriptedProvider(
+        menus={"root": (attach, end)},
+        nodes={("root", attach.identity): Chance((
+            WeightedEdge(0.25, "stronger", Deterministic(stronger)),
+            WeightedEdge(0.75, "unchanged", Deterministic(unchanged)),
+        ))},
+    )
+
+    result = LedgerOnePlySearch().search(
+        EvaluationRequest(root, EvaluationModel.build()), LedgerValueEvaluator(),
+        UniformPolicyModel(), provider, SearchConfiguration())
+
+    for candidate in result.roster.candidates:
+        expected = math.fsum(
+            successor.probability * successor.valuation.total
+            for successor in candidate.successors) - result.baseline.total
+        assert candidate.delta.total == pytest.approx(expected)
+        assert candidate.search_value.total == pytest.approx(
+            result.baseline.total + candidate.delta.total)
+        assert {successor.valuation.evaluator_identity
+                for successor in candidate.successors} == {
+                    LedgerValueEvaluator.identity}
 
 
 def test_search_rejects_non_distribution_policy_priors():
@@ -283,6 +320,44 @@ def test_search_rejects_a_same_position_snapshot_from_a_different_menu():
     assert evaluator.parent_states[-1] is None
 
 
+def test_search_never_reuses_incremental_state_across_evaluator_identities():
+    class FirstEvaluator(CountingLedgerEvaluator):
+        identity = "first-ledger-semantics"
+
+    class SecondEvaluator(CountingLedgerEvaluator):
+        identity = "second-ledger-semantics"
+
+    builder = ObservationStateBuilder(DECK)
+    first_observation = printout(
+        me=player(active=body(DRAGAPULT, 1), hand=[DARK_E]))
+    first_board = builder.root(first_observation)
+    second_observation = printout(
+        me=player(active=body(DRAGAPULT, 1, energies=(8,)), hand=[]))
+    second_board, delta = builder.advance(first_board, second_observation)
+    ending = action("end", (0,))
+    search = LedgerOnePlySearch()
+    model = EvaluationModel.build()
+    first_evaluator = FirstEvaluator()
+    second_evaluator = SecondEvaluator()
+
+    first = search.search(
+        EvaluationRequest(PreviewState(
+            first_observation, first_board, "first", deck=DECK,
+            deck_counts=first_board.deck_counts or ()), model),
+        first_evaluator, UniformPolicyModel(), ScriptedProvider(
+            menus={"first": (ending,)}, nodes={}), SearchConfiguration())
+    assert first.baseline.evaluator_identity == FirstEvaluator.identity
+    search.search(
+        EvaluationRequest(PreviewState(
+            second_observation, second_board, "second", deck=DECK,
+            deck_counts=second_board.deck_counts or ()), model,
+            first.baseline, delta),
+        second_evaluator, UniformPolicyModel(), ScriptedProvider(
+            menus={"second": (ending,)}, nodes={}), SearchConfiguration())
+
+    assert second_evaluator.parent_states[0] is None
+
+
 def test_forced_roster_marks_each_candidate_forced():
     select = {"type": 1, "context": 7, "minCount": 1, "maxCount": 1,
               "option": [{"type": 3, "index": 0}, {"type": 3, "index": 1}],
@@ -325,3 +400,35 @@ def test_greedy_policy_ignores_unavailable_candidate_instead_of_scoring_it_zero(
 
     assert chosen.action is ending.action
     assert chosen.reason == "best_turn_ender"
+
+
+def test_greedy_policy_recognizes_knockout_only_from_observable_state_change():
+    ending = ValuedCandidate(
+        action("end", (0,)), DecisionDelta(0.0, LEDGER_VALUE_SCALE),
+        CandidateDisposition.ENDS_TURN, EvaluationStatus.COMPLETE)
+    knockout = ValuedCandidate(
+        action("attack", (1,)), DecisionDelta(
+            -1.0, LEDGER_VALUE_SCALE,
+            (ValueComponent("prize.race", 1.0, -1.0, -1.0),)),
+        CandidateDisposition.ENDS_TURN, EvaluationStatus.COMPLETE)
+
+    chosen = GreedyDecisionPolicy().choose(
+        CandidateRoster((ending, knockout)), PolicyConfiguration())
+
+    assert chosen.action is knockout.action
+
+
+def test_greedy_policy_ignores_legacy_action_only_knockout_signal():
+    ending = ValuedCandidate(
+        action("end", (0,)), DecisionDelta(0.0, LEDGER_VALUE_SCALE),
+        CandidateDisposition.ENDS_TURN, EvaluationStatus.COMPLETE)
+    alleged_knockout = ValuedCandidate(
+        action("attack", (1,)), DecisionDelta(
+            -1.0, LEDGER_VALUE_SCALE,
+            (ValueComponent("combat.realized_ko", 1.0, -1.0, -1.0),)),
+        CandidateDisposition.ENDS_TURN, EvaluationStatus.COMPLETE)
+
+    chosen = GreedyDecisionPolicy().choose(
+        CandidateRoster((ending, alleged_knockout)), PolicyConfiguration())
+
+    assert chosen.action is ending.action

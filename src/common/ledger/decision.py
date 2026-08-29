@@ -59,12 +59,10 @@ class LedgerValueEvaluator:
             board, model, parent=parent, delta=request.observation_delta)
         if parent is not None and os.environ.get("LEDGER_INCREMENTAL_PARITY") == "1":
             full = evaluate(board, model)
-            if (snapshot.valuation.total != full.total
-                    or snapshot.valuation.activations != full.activations
-                    or snapshot.valuation.gaps != full.gaps
-                    or snapshot.valuation.prize_map != full.prize_map):
+            if snapshot.valuation != full:
                 raise AssertionError("incremental Ledger valuation differs from full valuation")
-        return state_valuation_from_ledger(board, snapshot.valuation), snapshot
+        return state_valuation_from_ledger(
+            board, snapshot.valuation, self.identity), snapshot
 
     def evaluate(self, request) -> StateValuation:
         return self.evaluate_with_state(request)[0]

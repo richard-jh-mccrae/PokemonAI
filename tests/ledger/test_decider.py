@@ -535,7 +535,7 @@ def test_price_actions_has_no_mechanic_specific_ordering_flags():
                == pytest.approx(price.swing) for price in prices)
 
 
-def test_action_opportunity_cost_hands_a_small_positive_turn_to_the_ender():
+def test_action_opportunity_cost_cannot_change_canonical_delta_or_choice():
     root_obs = printout(me=player(active=body(DRAGAPULT, 1), hand=[FIRE_E]),
                         them=player(own=False, active=body(DRAGAPULT, 2)))
     attached = state_of(printout(
@@ -549,12 +549,18 @@ def test_action_opportunity_cost_hands_a_small_positive_turn_to_the_ender():
     lifted = LedgerDecider(DECK, "test", EvaluationModel.build(
         overlay=DeckOverlay({"action.opportunity_cost": 5.0})),
                            provider_factory=lambda _s, **_kw: provider).decide(root_obs)
-    assert lifted.action.kind == "end"
     default = make_decider(provider).decide(root_obs)
+    lifted_price = next(row for row in lifted.diagnostics["prices"]
+                        if row["action"] == str(attach.identity))
+    default_price = next(row for row in default.diagnostics["prices"]
+                         if row["action"] == str(attach.identity))
+
+    assert lifted.action.kind == "attach"
     assert default.action.kind == "attach"
+    assert lifted_price["swing"] == pytest.approx(default_price["swing"])
 
 
-def test_continuation_footprint_contributes_seeded_board_accounting():
+def test_continuation_footprint_is_policy_telemetry_not_ledger_delta():
     root_obs = printout(me=player(active=body(DRAGAPULT, 1), hand=[FIRE_E]))
     successor = state_of(printout(
         me=player(active=body(DRAGAPULT, 1, energies=(FIRE,)), hand=[])), DECK)
@@ -571,8 +577,10 @@ def test_continuation_footprint_contributes_seeded_board_accounting():
                  if item["feature"].startswith("continuation.")
                  or item["feature"] == "action.opportunity_cost"]
     assert footprint["action_opportunity"] != 0.0
-    assert accounted
-    assert all(item["value"] != 0.0 for item in accounted)
+    assert accounted == []
+    assert footprint["state_delta"] == pytest.approx(price["swing"])
+    assert sum(item["value"] for item in footprint["contributions"]) == pytest.approx(
+        price["swing"])
 
 
 def test_no_card_or_mechanic_specific_ordering_branch_remains():

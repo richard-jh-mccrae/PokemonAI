@@ -63,7 +63,7 @@ def test_chance_weights_its_legs_by_probability():
     assert mixed == pytest.approx(0.25 * good_swing + 0.75 * bad_swing, abs=1e-9)
 
 
-def test_prize_transition_emits_realized_knockout_value():
+def test_prize_transition_is_valued_only_as_successor_state_delta():
     root_observation = printout(
         me=player(active=body(DRAGAPULT, 1), prizes=6),
         them=player(own=False, active=body(DRAGAPULT, 2), prizes=6))
@@ -81,11 +81,14 @@ def test_prize_transition_emits_realized_knockout_value():
     price = next(item for item in price_actions(
         root, board, evaluate(board, context).total, provider, context)
                  if item.action is attack)
-    realized = [item for item in price.footprint.contributions
-                if item.feature == "combat.realized_ko"
-                and "continuation.prize_transition" in item.provenance]
+    landing_board = ObservationStateBuilder(DECK).root(landing.observation)
+    expected = evaluate(landing_board, context).total - evaluate(board, context).total
 
-    assert [(item.activation, item.value) for item in realized] == [(1.0, 1.0)]
+    assert price.swing == pytest.approx(expected)
+    assert price.footprint.state_delta == pytest.approx(expected)
+    assert sum(item.value for item in price.footprint.contributions) == pytest.approx(expected)
+    assert all(item.feature != "combat.realized_ko"
+               for item in price.footprint.contributions)
 
 
 def test_body_ability_readiness_stops_after_the_line_is_fully_developed():
@@ -134,7 +137,7 @@ def test_forced_singleton_fetch_does_not_price_unavailable_body_alternatives():
     assert _body_copy_overflow(board, action("card", (0,)), EvaluationModel.build()) == 0
 
 
-def test_terminal_action_is_priced_against_the_legal_end_successor():
+def test_terminal_action_delta_is_independent_of_the_end_counterfactual():
     play, end = action("play", (0,)), action("end", (1,))
     pass_good = state_of(printout(
         me=player(active=body(DRAGAPULT, 1), hand=[FIRE_E]),
@@ -153,11 +156,7 @@ def test_terminal_action_is_priced_against_the_legal_end_successor():
         swings.append(next(row["swing"] for row in decision.diagnostics["prices"]
                            if row["action"] == str(play.identity)))
 
-    ctx = EvaluationModel.build()
-    builder = ObservationStateBuilder(DECK)
-    expected_shift = evaluate(builder.root(BAD.observation), ctx).total - evaluate(
-        builder.root(pass_good.observation), ctx).total
-    assert swings[1] == pytest.approx(swings[0] + expected_shift)
+    assert swings[1] == pytest.approx(swings[0])
 
 
 def _end_price(end_node, *, compute=None, valuation_fn=None):
@@ -192,6 +191,18 @@ def test_end_counterfactual_reports_complete_estimated_and_unavailable():
     assert estimated.gaps == ("chain capped; scored mid-effect board",)
     assert unavailable.status is EvaluationStatus.UNAVAILABLE
     assert unavailable.gaps == ("end counterfactual unavailable: KeyError",)
+
+
+def test_end_action_delta_is_its_successor_value_minus_the_root_value():
+    price = _end_price(Terminal(BAD, "passed"))
+    context = EvaluationModel.build()
+    builder = ObservationStateBuilder(DECK)
+    expected = (evaluate(builder.root(BAD.observation), context).total
+                - evaluate(builder.root(ROOT_OBS), context).total)
+
+    assert price.swing == pytest.approx(expected)
+    assert price.footprint.state_delta == pytest.approx(expected)
+    assert sum(item.value for item in price.footprint.contributions) == pytest.approx(expected)
 
 
 def test_unavailable_end_counterfactual_still_returns_the_legal_failsafe():
@@ -308,8 +319,10 @@ def test_mixed_chance_prices_continuation_and_allowances_by_probability():
     activations = {item["feature"]: item["activation"]
                    for item in price["continuation"]["contributions"]}
 
-    assert activations["action.opportunity_cost"] == pytest.approx(-0.25)
-    assert activations["continuation.allowance_consumed"] == pytest.approx(0.25)
+    assert "action.opportunity_cost" not in activations
+    assert "continuation.allowance_consumed" not in activations
+    assert price["continuation"]["action_opportunity"] != 0.0
+    assert price["continuation"]["state_delta"] == pytest.approx(price["swing"])
 
 
 def test_choice_takes_the_best_leg_for_us_and_the_worst_when_theirs():
@@ -330,8 +343,8 @@ def test_reveal_choice_honors_its_actor_in_both_directions():
     outcomes = (RevealOutcome(1.0, ("good", "bad")),)
     ours, _, _ = price_of(RevealChoice(Actor.OURS, choices, outcomes))
     theirs, _, _ = price_of(RevealChoice(Actor.OPPONENT, choices, outcomes))
-    assert ours == pytest.approx(good_swing + INFORMATION_VALUE, abs=1e-9)
-    assert theirs == pytest.approx(bad_swing + INFORMATION_VALUE, abs=1e-9)
+    assert ours == pytest.approx(good_swing, abs=1e-9)
+    assert theirs == pytest.approx(bad_swing, abs=1e-9)
 
 
 def test_reveal_choice_weights_outcomes_and_chooses_within_each():
@@ -341,8 +354,7 @@ def test_reveal_choice_weights_outcomes_and_chooses_within_each():
     outcomes = (RevealOutcome(0.5, ("bad",)),            # the reveal offered only the bad leg
                 RevealOutcome(0.5, ("good", "bad")))     # both on offer: we take the good one
     swing, _, _ = price_of(RevealChoice(Actor.OURS, choices, outcomes))
-    assert swing == pytest.approx(
-        0.5 * bad_swing + 0.5 * good_swing + 0.5 * INFORMATION_VALUE, abs=1e-9)
+    assert swing == pytest.approx(0.5 * bad_swing + 0.5 * good_swing, abs=1e-9)
 
 
 def test_a_reveal_whose_chosen_leg_resolves_the_turn_counts_as_an_ender():

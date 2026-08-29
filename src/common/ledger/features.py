@@ -396,15 +396,15 @@ _KIND_DEFAULTS = {
 
 _PLACEMENT_FACTORS = {
     "in_play": 1.0,
-    "in_hand_live": 0.65,
-    "in_hand_dead": 0.65 * 0.25,
-    "in_hand_setup": 0.65 * 0.70,
-    "in_hand_colorless": 0.65 * 0.70,
-    "in_hand_surplus": 0.65 * 0.60,
+    "in_hand_live": 0.80,
+    "in_hand_dead": 0.80 * 0.20,
+    "in_hand_setup": 0.80 * 0.60,
+    "in_hand_colorless": 0.80 * 0.60,
+    "in_hand_surplus": 0.80 * 0.40,
     "in_deck": 0.15,
     "in_discard": 0.10,
     "under_body": 0.65,
-    "tool_attached": 0.90,
+    "tool_attached": 0.50,
     "attached_usable": 1.0,
 }
 
@@ -447,7 +447,7 @@ _SCALAR_DEFAULTS = {
     "demand.colorless_only": -0.02,
     "demand.setup": -0.01,
     "development.ready_evolution": 0.50,
-    "development.hand_line": 0.15,
+    "development.hand_line": 0.20,
     "development.visible_reach": 0.50,
     "development.next_turn_reach": 0.40,
     "copy.surplus": -0.03,
@@ -596,7 +596,7 @@ OPTION_DEFAULTS = MappingProxyType({
     "option.denial": 0.30,
     "option.healing": 0.25,
     "option.mobility": 0.10,
-    "option.energy": 0.17,
+    "option.energy": 0.30,
     "option.cost": -0.10,
 })
 

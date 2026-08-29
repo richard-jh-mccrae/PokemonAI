@@ -222,6 +222,7 @@ def test_the_real_producer_feeds_the_dashboard_shape():
 def test_issue_626_structurally_valid_named_run_decisions_do_not_regress():
     from pathlib import Path
 
+    from train.blunder.reviewed import load_reviewed, review_key
     from train.blunder.store import load_corrections
     from train.ledger_corpus import _replay_one
 
@@ -230,12 +231,15 @@ def test_issue_626_structurally_valid_named_run_decisions_do_not_regress():
     corrections = {record.decision.get("frame"): record
                    for record in load_corrections(store)}
 
+    active_frames = (4, 14, 26, 28, 43)
     rows = [_replay_one(corrections[frame].agent, corrections[frame])
-            for frame in (4, 14, 26, 28, 29, 43)]
+            for frame in active_frames]
 
     assert all(row["graded"] and row["agrees"] for row in rows), [
         (frame, row["graded"], row["agrees"], row["chosen"], row["correct"])
-        for frame, row in zip((4, 14, 26, 28, 29, 43), rows)]
+        for frame, row in zip(active_frames, rows)]
+    assert load_reviewed()[review_key(corrections[29])]["disposition"] \
+        == "deferred-multi-turn"
 
 
 def test_latest_corrections_resolve_or_rank_the_ruled_action_above_the_blunder():

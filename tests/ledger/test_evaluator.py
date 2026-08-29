@@ -16,7 +16,7 @@ import pytest
 
 from common.observation import ObservationStateBuilder
 from common.ledger import DeckOverlay, EvaluationModel, evaluate
-from common.ledger.capabilities import body_capability
+from common.ledger.capabilities import ITEM_LOCK_BASE_UNITS, body_capability
 from common.ledger.evaluate import KNOWN_BLOCKED_BASIC_PRESSURE, _slot_option
 
 
@@ -452,7 +452,7 @@ def test_payable_attack_effect_counts_in_active_realization():
     damage_only = body_capability(
         state.me.active, state.me, state.them, state, stripped_context)
 
-    assert valued.attack_now == damage_only.attack_now + 2.0
+    assert valued.attack_now == damage_only.attack_now + ITEM_LOCK_BASE_UNITS
 
 
 def test_retained_attack_modifiers_cross_the_knockout_threshold():
@@ -757,6 +757,22 @@ def test_concentration_prefers_finishing_the_started_twin():
                           "combat.realization": 0.0})
     assert evaluate(split(2, 0), flat).total == pytest.approx(
         evaluate(split(1, 1), flat).total)
+
+
+def test_acceleration_open_slots_include_reachable_evolution_costs():
+    def activation(first_units, second_units):
+        first = body(STARYU, 1, energies=(WATER,) * first_units)
+        second = body(STARYU, 2, energies=(WATER,) * second_units)
+        first["appearThisTurn"] = True
+        second["appearThisTurn"] = True
+        state = board(me=player(
+            active=body(666, 9, energies=(WATER,)),
+            bench=[first, second],
+            hand=[MEGA_STARMIE, WATER_E, IGNITION]))
+        return sum(item.activation for item in evaluate(state, ctx()).contributions
+                   if item.feature == "function.accel.open_energy_slot")
+
+    assert activation(2, 1) >= activation(3, 0)
 
 
 def test_rental_energy_on_the_bench_prices_zero():

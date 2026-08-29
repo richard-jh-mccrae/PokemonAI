@@ -377,5 +377,25 @@
     "disposition": "deferred",
     "reason": "the rationale condemns an Ultra Ball line that discards Premium Power Pro and fetches an unplayable Mega Lucario, but current replay discards Lillie's Determination plus Energy and fetches playable Hariyama; held for re-adjudication rather than grading a mismatched forced resolution",
     "round": "2026-08-29"
+  },
+  "6575957874814887-29": {
+    "disposition": "deferred-multi-turn",
+    "reason": "the ruling orders Ultra Ball before Lillie's Determination so the fetched Drakloak survives the later hand shuffle; both independent MAIN actions require full-turn PUCT sequencing",
+    "round": "2026-08-29"
+  },
+  "68295020259321141-75": {
+    "disposition": "deferred-multi-turn",
+    "reason": "the ruling orders evolve -> draw Ability before deciding whether to spend Ultra Ball; the information and action order are invisible to one-ply state differencing and return with PUCT",
+    "round": "2026-08-29"
+  },
+  "68295020259321141-21": {
+    "disposition": "deferred-multi-turn",
+    "reason": "the ruling saves an Item because the following attack already takes the Knock Out; proving the Item redundant requires comparing the complete play-then-attack and attack-now turn sequences",
+    "round": "2026-08-29"
+  },
+  "6575957874814887-45": {
+    "disposition": "deferred-multi-turn",
+    "reason": "the ruling orders Crushing Hammer before Lillie's Determination shuffles the hand; independent MAIN action ordering returns when PUCT grades the complete turn",
+    "round": "2026-08-29"
   }
 }

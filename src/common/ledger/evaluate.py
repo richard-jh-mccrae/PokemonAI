@@ -18,7 +18,9 @@ from .activation import (DAMAGE_UNIT_HP, ActivationCompiler, ActivationEnvironme
 from .capabilities import (Capability, best_current_damage, body_capability, card_option_units,
                            card_option_value, clause_value_units, hidden_zone_expectation,
                            expected_draw_counts, recoverable_discard_ids,
-                           without_end_turn_energy, FUTURE_TURN_DISCOUNT)
+                           knockout_exposure_units, retreat_payment_progress,
+                           without_end_turn_energy,
+                           FUTURE_TURN_DISCOUNT)
 from .coverage import card_coverage_gap
 from .features import FEATURE_CATALOG
 from .prizes import PrizeMap, derive_prize_map
@@ -223,6 +225,25 @@ def _sequenced_portfolio(values) -> float:
                for index, value in enumerate(ordered))
 
 
+def _hand_line_units(rows, demand) -> int:
+    viable = tuple(
+        facts for facts, claim in rows
+        if isinstance(facts, PokemonCard)
+        and claim not in {"dead_hand_card", "surplus_hand_copy"})
+    hand_names = Counter(facts.name for facts in viable)
+    children = Counter(
+        facts.evolves_from for facts in viable if facts.evolves_from)
+    child_stages = {
+        facts.evolves_from: facts.stage for facts in viable if facts.evolves_from}
+    units = 0
+    for parent, count in children.items():
+        available = count
+        if child_stages[parent] == "stage1":
+            available = max(0, available - demand.body_name_counts.get(parent, 0))
+        units += min(hand_names[parent], available)
+    return units
+
+
 def _emit_option(trace, part, units, scale, *, provenance=None,
                  provenance_features=()) -> None:
     for feature, value in units.activations():
@@ -242,15 +263,23 @@ def _slot_option(open_slots) -> float:
     return sum(1.0 / index for index in range(1, int(open_slots) + 1))
 
 
-def _full_bench_pressure(side, deck_counts, ctx) -> float:
+def _full_bench_pressure(side, opposing_side, board, deck_counts, ctx) -> float:
     if len(side.bench) < side.bench_max:
         return 0.0
-    blocked = any(
-        count > 0
-        and isinstance((facts := ctx.facts(card_id)), PokemonCard)
-        and facts.evolves_from is None
-        for card_id, count in (deck_counts or ()))
-    return 1.0 + KNOWN_BLOCKED_BASIC_PRESSURE * float(blocked)
+    candidate_ids = {card.card_id for card in side.hand}
+    candidate_ids.update(
+        card_id for card_id, count in (deck_counts or ()) if count > 0)
+    available_side = replace(side, bench_max=side.bench_max + 1)
+    available_board = (replace(board, me=available_side)
+                       if side is board.me else replace(board, them=available_side))
+    blocked_development = max((
+        card_option_value(
+            facts, available_side, opposing_side, available_board, ctx)
+        for card_id in candidate_ids
+        if isinstance((facts := ctx.facts(card_id)), PokemonCard)
+        and facts.evolves_from is None), default=0.0)
+    quality = blocked_development / (1.0 + BODY_DEVELOPMENT_SCALE)
+    return 1.0 + KNOWN_BLOCKED_BASIC_PRESSURE * quality
 
 
 def _public_group(board, ctx) -> tuple[Valuation, PrizeMap]:
@@ -406,8 +435,7 @@ def _side(trace: _Trace, label: str, side: Side, sign: float, ctx: EvaluationMod
         active_facts = ctx.facts(side.active.card.card_id)
         if not any_attack_payable(active_facts, side.active.energies):
             trace.emit(f"{label}.active", "observation", ("unready_active",), -sign)
-        retreat_cost = int(getattr(active_facts, "retreat_cost", 0) or 0)
-        if side.bench and retreat_cost and len(side.active.energies) >= retreat_cost:
+        if retreat_payment_progress(side.active, side, board, ctx) >= 1.0:
             trace.emit(f"{label}.active", "observation", ("retreat_ready_active",), sign)
         trace.emit(f"{label}.active", "observation", ("active_damage_pressure",),
                    sign * _damage_pressure(active_facts) / DAMAGE_UNIT_HP)
@@ -417,7 +445,8 @@ def _side(trace: _Trace, label: str, side: Side, sign: float, ctx: EvaluationMod
                sign * sum(1.0 + BODY_DEVELOPMENT_SCALE * capability.development
                           for _body_node, capability in capabilities))
     trace.emit(f"{label}.bench_slots", "observation", ("full_bench",),
-               sign * _full_bench_pressure(side, deck_counts, ctx))
+               sign * _full_bench_pressure(
+                   side, opposing_side, board, deck_counts, ctx))
     trace.emit(f"{label}.liability", "observation", ("extra_prize_liability",),
                -sign * sum(max(0, _prize_value(body, ctx) - 1)
                            for body in side.bodies
@@ -438,10 +467,7 @@ def _side(trace: _Trace, label: str, side: Side, sign: float, ctx: EvaluationMod
     if sign > 0 and side.hand is not None:
         copies = Counter(demand.body_id_counts)
         basic_energy = Counter()
-        hand_evolves_from = Counter(
-            held.evolves_from for card in side.hand
-            if isinstance((held := ctx.facts(card.card_id)), PokemonCard)
-            and held.evolves_from)
+        hand_rows = []
         portfolio_entries = []
         portfolio_functions = []
         portfolio_sources = []
@@ -449,6 +475,7 @@ def _side(trace: _Trace, label: str, side: Side, sign: float, ctx: EvaluationMod
             facts = ctx.facts(card.card_id)
             claim, capacity = _hand_claim(
                 card.card_id, facts, demand, copies[card.card_id], ctx, deck_counts)
+            hand_rows.append((facts, claim))
             placement = {
                 "card_in_hand": "in_hand_live",
                 "dead_hand_card": "in_hand_dead",
@@ -473,21 +500,15 @@ def _side(trace: _Trace, label: str, side: Side, sign: float, ctx: EvaluationMod
                     and claim != "surplus_hand_copy"
                     and any(demand.body_name_counts.get(name, 0) for name in facts.synergy)):
                 trace.emit(f"{label}.hand", "observation", ("synergy_in_hand",), sign)
-            if isinstance(facts, PokemonCard) and hand_evolves_from[facts.name]:
-                trace.emit(f"{label}.hand", "observation", ("hand_line",), sign)
             if (isinstance(facts, PokemonCard) and facts.evolves_from
-                    and claim != "surplus_hand_copy"):
-                immediate_base = any(
-                    not body.appeared_this_turn
-                    and getattr(ctx.facts(body.card.card_id), "name", None)
-                    == facts.evolves_from
-                    for body in side.bodies)
-                if immediate_base:
-                    trace.emit(f"{label}.hand", "observation",
-                               ("evolution_access",), sign)
+                    and claim == "card_in_hand"):
+                trace.emit(f"{label}.hand", "observation",
+                           ("evolution_access",), sign)
             copies[card.card_id] += 1
             if isinstance(facts, EnergyCard) and facts.kind != SPECIAL_ENERGY:
                 basic_energy[facts.provides] += 1
+        trace.emit(f"{label}.hand", "observation", ("hand_line",),
+                   sign * _hand_line_units(hand_rows, demand))
         portfolio = feasible_option_portfolio_result(
             portfolio_entries, side, board, ctx, hand_size=len(side.hand))
         for index, units in portfolio.selected_units:
@@ -597,7 +618,8 @@ def _body(trace: _Trace, part: str, body: Body, sign: float, ctx: EvaluationMode
         missing = max(0.0, min(1.0, (body.max_hp - max(0, body.hp)) / body.max_hp))
         trace.emit(part, "observation", ("body_damage_fraction",), -sign * missing)
     if doomed:
-        trace.emit(part, "observation", ("doomed_active",), -sign)
+        trace.emit(part, "observation", ("doomed_active",),
+                   -sign * knockout_exposure_units(body, ctx))
     if terminal:
         trace.emit(part, "observation", ("terminal_active_liability",), -sign)
 
