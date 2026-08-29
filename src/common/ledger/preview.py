@@ -704,6 +704,10 @@ def _body_copy_overflow(board, action, ctx):
 
     if board.select is None or board.select.context not in {_TO_BENCH, _TO_HAND}:
         return 0
+    selectable = {_option_card_id(board, option) for option in board.select.options}
+    selectable.discard(None)
+    if board.select.max_count == 1 and len(selectable) <= 1:
+        return 0
     selected = Counter(card_id for _serial, card_id in _selected_cards(board, action)
                        if card_id is not None
                        and pokemon_copy_capacity(ctx.facts(card_id)) != 1)
@@ -721,6 +725,18 @@ def _body_copy_overflow(board, action, ctx):
             capacity = min(capacity, 1)
         overflow += max(0, owned[card_id] + count - capacity)
     return overflow
+
+
+def _option_card_id(board, option):
+    if option.cardId is not None:
+        return option.cardId
+    if option.serial is not None or not isinstance(option.index, int):
+        return None
+    if board.select.deck and 0 <= option.index < len(board.select.deck):
+        return board.select.deck[option.index].card_id
+    if 0 <= option.index < len(board.me.hand):
+        return tuple(board.me.hand)[option.index].card_id
+    return None
 
 
 def _body_ability_ready(board, action, ctx):

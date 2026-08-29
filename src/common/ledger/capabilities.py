@@ -36,7 +36,10 @@ TERMINAL_LOSS_UNITS = 100.0
 BOUNCE_ENERGY_HAND_UNIT = 0.5
 ATTACHED_ENERGY_MATERIAL_UNIT = 0.25
 ATTACK_EVENT_KIND = 15
+CARD_PLAY_EVENT_KIND = 10
 SWITCH_EVENT_KIND = 8
+ITEM_LOCK_BASE_UNITS = 2.0
+ITEM_LOCK_HAND_UNIT = 0.05
 DAMAGE_PROTECTION_THRESHOLD_HP = 200
 ENERGY_COUNT_THRESHOLD = 3
 LOW_REMAINING_HP_THRESHOLD = 30
@@ -1319,6 +1322,65 @@ def _damage_boost(clause, body, attacker, defender, ctx, board) -> float:
     return gate * _quantity(clause.amount) * units
 
 
+def _body_matches_applies_to(value, clause, body, facts) -> bool:
+    value = str(value or "self")
+    name = getattr(facts, "name", "").casefold()
+    energy_type = getattr(facts, "energy_type", None)
+    return bool(
+        value in {"self", "attached_body", "own_pokemon"}
+        or (value in {"basic", "own_basic"} and facts.evolves_from is None)
+        or (value == "basic_non_dark" and facts.evolves_from is None
+            and energy_type != DARKNESS)
+        or (value == "fighting" and energy_type == FIGHTING)
+        or (value == "grass" and energy_type == GRASS)
+        or (value == "metal" and energy_type == METAL)
+        or (value == "has_ability" and bool(facts.abilities))
+        or (value == "has_energy_attached" and bool(body.energies))
+        or (value == "name_family"
+            and bool(family := str(clause.name_family or "").casefold())
+            and family in name)
+        or (value == "no_rule_box" and not facts.is_rule_box)
+        or (value == "own_evolved" and facts.evolves_from is not None)
+        or (value == "stage2" and facts.stage == "stage2"))
+
+
+def _hand_damage_boost(body, facts, attacker, defender, ctx, board) -> float:
+    defender_facts = (None if defender.active is None else
+                      ctx.facts(defender.active.card.card_id))
+    total = 0.0
+    played = tuple(
+        ctx.facts(fields["cardId"])
+        for event in board.events
+        for fields in (dict(event.public_fields),)
+        if event.recognized and event.kind == CARD_PLAY_EVENT_KIND
+        and fields.get("playerIndex") == body.card.owner
+        and "cardId" in fields)
+    trainers = (
+        *(ctx.facts(card.card_id) for card in attacker.hand),
+        *played,
+    )
+    for trainer in trainers:
+        if not isinstance(trainer, TrainerCard):
+            continue
+        if trainer.kind == SUPPORTER and board.turn.supporter_played:
+            continue
+        for clause in trainer.clauses:
+            if clause.kind != "damage_boost":
+                continue
+            if trainer.kind == "tool" and body.tools:
+                continue
+            if not _body_matches_applies_to(clause.applies_to, clause, body, facts):
+                continue
+            if clause.no_rule_box and facts.is_rule_box:
+                continue
+            if (clause.target_class == "ex"
+                    and not getattr(defender_facts, "is_rule_box", False)):
+                continue
+            total += _damage_boost(
+                clause, body, attacker, defender, ctx, board)
+    return total
+
+
 def _knockout_visible(board) -> bool:
     for event in board.events:
         fields = dict(event.public_fields)
@@ -1370,6 +1432,8 @@ def attack_damage(attack, attacker_facts, defender_facts, attacker_body,
     if attack.clause("requires_stadium") is not None and not getattr(board, "stadium", ()):
         return 0.0
     damage = float(attack.damage_fix if attack.damage_fix is not None else attack.damage or 0)
+    damage += _hand_damage_boost(
+        attacker_body, attacker_facts, attacker, defender, ctx, board)
     copy = attack.clause("copy_attack")
     if copy is not None:
         family = str(copy.name_family or "").casefold()
@@ -1442,12 +1506,30 @@ def self_ko_liability_units(body, side, opponent, ctx):
     return material + terminal
 
 
+ATTACK_EFFECT_UNITS = frozenset({
+    "ability_suppression", "attack_lock", "confuse", "item_lock", "no_retreat",
+    "retreat_lock", "sleep",
+})
+
+
+def _attack_effect_units(attack, facts, body, side, opponent, ctx, board) -> float:
+    if payment_fraction(body.energies, attack.cost) < 1.0:
+        return 0.0
+    return sum(
+        max(0.0, float(_clause_gate(
+            clause, body, facts, side, opponent, board, ctx) or 0.0))
+        * (ITEM_LOCK_BASE_UNITS + ITEM_LOCK_HAND_UNIT * opponent.hand_count
+           if clause.kind == "item_lock" else 1.0)
+        for clause in attack.clauses if clause.kind in ATTACK_EFFECT_UNITS)
+
+
 def _attack_impact(attack, facts, body, side, opponent, ctx, board) -> tuple[float, float]:
     defender_facts = (None if opponent.active is None else
                       ctx.facts(opponent.active.card.card_id))
     active = _target_impact(
         attack_damage(attack, facts, defender_facts, body, side, opponent, ctx, board),
-        opponent.active, ctx)
+        opponent.active, ctx) + _attack_effect_units(
+            attack, facts, body, side, opponent, ctx, board)
     reach = float(bench_reach(attack))
     any_target = attack.clause("bench_snipe")
     bench_targets = tuple(opponent.bench)

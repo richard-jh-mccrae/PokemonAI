@@ -416,13 +416,15 @@ def development_reach_units(body_facts, attached, ctx: EvaluationModel, reach=No
     total = sum(counts.values())
     visible = future = 0.0
     for attack, evo_id in _line_entries(body_facts, ctx):
-        if evo_id is None:
-            continue
-        status = (reach or {}).get(evo_id, Reach.ABSENT)
         typed = sum(min(count, counts.get(unit, 0))
                     for unit, count in Counter(u for u in attack.cost if u != COLORLESS).items())
         colorless = min(sum(1 for unit in attack.cost if unit == COLORLESS), total - typed)
         units = typed + colorless
+        if evo_id is None:
+            if body_facts.evolves_from:
+                visible = max(visible, units)
+            continue
+        status = (reach or {}).get(evo_id, Reach.ABSENT)
         if status in {Reach.HAND, Reach.FETCHABLE}:
             visible = max(visible, units)
         elif status is Reach.NEXT_TURN:

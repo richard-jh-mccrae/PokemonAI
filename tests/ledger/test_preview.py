@@ -125,6 +125,15 @@ def test_compound_fetch_prices_only_copies_above_total_body_capacity():
     assert _body_copy_overflow(board, action("card", (0, 1)), EvaluationModel.build()) == 1
 
 
+def test_forced_singleton_fetch_does_not_price_unavailable_body_alternatives():
+    select = {"context": 5, "minCount": 0, "maxCount": 1,
+              "option": [{"cardId": DREEPY, "serial": 800, "type": 3}]}
+    board = ObservationStateBuilder(DECK).root(printout(
+        me=player(active=body(DRAGAPULT, 1), hand=[DREEPY, DREEPY]), select=select))
+
+    assert _body_copy_overflow(board, action("card", (0,)), EvaluationModel.build()) == 0
+
+
 def test_terminal_action_is_priced_against_the_legal_end_successor():
     play, end = action("play", (0,)), action("end", (1,))
     pass_good = state_of(printout(

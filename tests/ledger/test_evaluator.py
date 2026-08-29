@@ -5,6 +5,8 @@ judgments the plan names (docs/plans/PokemonAI_Ledger_Plan.md §1): a useless at
 negative, overkill counters add nothing, a dead fetch waits, bench slots are scarce goods."""
 from __future__ import annotations
 
+from dataclasses import replace
+
 from ledger_helpers import (AIR_BALLOON, DARK_E, DARKNESS, DRAGAPULT, DRAKLOAK, DREEPY, FIRE,
                             FIRE_E, IGNITION, LILLIES, LUNATONE, MAKUHITA, MEGA_STARMIE, PSYCHIC,
                             PSYCHIC_E, STARYU, ULTRA_BALL, UNKNOWN, WATER, WATER_E, body,
@@ -15,7 +17,7 @@ import pytest
 from common.observation import ObservationStateBuilder
 from common.ledger import DeckOverlay, EvaluationModel, evaluate
 from common.ledger.capabilities import body_capability
-from common.ledger.evaluate import _slot_option
+from common.ledger.evaluate import KNOWN_BLOCKED_BASIC_PRESSURE, _slot_option
 
 
 def board(**kwargs):
@@ -180,6 +182,20 @@ def test_benching_a_filler_on_an_empty_bench_is_positive():
     assert swing(before, after) > 0
 
 
+def test_full_bench_pressure_includes_known_blocked_basic_development():
+    full = [body(MAKUHITA, 10 + index) for index in range(5)]
+    unknown = board(me=player(active=body(DRAGAPULT, 1), bench=full))
+    known = board(
+        me=player(active=body(DRAGAPULT, 1), bench=full, deck_count=1),
+        decklist=[DREEPY])
+
+    def pressure(state):
+        return next(item.value for item in evaluate(state, ctx()).activations
+                    if item.feature == "bench.full")
+
+    assert pressure(known) == pressure(unknown) + KNOWN_BLOCKED_BASIC_PRESSURE
+
+
 # --- evolution demand: a live target prices the card up ---
 
 def test_evolution_in_hand_prices_higher_with_its_base_in_play():
@@ -202,6 +218,33 @@ def test_the_pair_in_hand_outprices_either_alone():
     marginal_beside_base = value([DREEPY, DRAKLOAK]) - value([DREEPY])
     marginal_alone = value([DRAKLOAK]) - value([])
     assert marginal_beside_base > marginal_alone + 0.02
+
+
+def test_a_stage_one_and_stage_two_in_hand_form_a_development_line():
+    valuation = evaluate(
+        board(me=player(active=body(DREEPY, 1), hand=[DRAKLOAK, DRAGAPULT])), ctx())
+
+    assert next(item.value for item in valuation.activations
+                if item.feature == "development.hand_line") == 1.0
+
+
+def test_evolving_transfers_ready_and_energy_reach_into_completed_development():
+    before = evaluate(board(me=player(
+        active=body(DRAKLOAK, 1, energies=(FIRE, PSYCHIC), under=(DREEPY,)),
+        hand=[DRAGAPULT])), ctx())
+    after = evaluate(board(me=player(
+        active=body(DRAGAPULT, 1, energies=(FIRE, PSYCHIC),
+                    under=(DREEPY, DRAKLOAK)))), ctx())
+
+    def activation(valuation, feature):
+        return next(item.value for item in valuation.activations
+                    if item.feature == feature)
+
+    assert activation(after, "development.ready_evolution") == activation(
+        before, "development.ready_evolution")
+    assert activation(after, "development.visible_reach") == activation(
+        before, "development.visible_reach")
+    assert after.total > before.total
 
 
 def test_a_named_synergy_partner_in_play_makes_the_held_half_live():
@@ -392,6 +435,81 @@ def test_promotion_values_active_realization_over_discounted_backup_realization(
 
     assert evaluate(promoted_lucario, ctx()).total > evaluate(
         promoted_makuhita, ctx()).total
+
+
+def test_payable_attack_effect_counts_in_active_realization():
+    state = board(
+        me=player(active=body(235, 1)),
+        them=player(active=body(MAKUHITA, 2), own=False))
+    context = ctx()
+    budew = context.facts(235)
+    stripped = replace(
+        budew, attacks=tuple(replace(attack, clauses=()) for attack in budew.attacks))
+    stripped_context = replace(context, store={**context.store, 235: stripped})
+
+    valued = body_capability(
+        state.me.active, state.me, state.them, state, context)
+    damage_only = body_capability(
+        state.me.active, state.me, state.them, state, stripped_context)
+
+    assert valued.attack_now == damage_only.attack_now + 2.0
+
+
+def test_retained_attack_modifiers_cross_the_knockout_threshold():
+    one = board(
+        me=player(active=body(MAKUHITA, 1, energies=(6, 6)), hand=[1141]),
+        them=player(active=body(DRAKLOAK, 2, hp=90, max_hp=90), own=False))
+    two = board(
+        me=player(active=body(MAKUHITA, 1, energies=(6, 6)), hand=[1141, 1141]),
+        them=player(active=body(DRAKLOAK, 2, hp=90, max_hp=90), own=False))
+    context = ctx()
+
+    one_attack = body_capability(
+        one.me.active, one.me, one.them, one, context).attack_now
+    two_attack = body_capability(
+        two.me.active, two.me, two.them, two, context).attack_now
+
+    assert two_attack > one_attack + 1.0
+
+
+def test_played_attack_modifier_persists_for_the_turn():
+    held = board(
+        me=player(active=body(MAKUHITA, 1, energies=(6, 6)), hand=[1141]),
+        them=player(active=body(DRAKLOAK, 2, hp=90, max_hp=90), own=False))
+    printed = printout(
+        me=player(active=body(MAKUHITA, 1, energies=(6, 6)), discard=[1141]),
+        them=player(active=body(DRAKLOAK, 2, hp=90, max_hp=90), own=False))
+    printed["logs"] = [{"type": 10, "cardId": 1141, "playerIndex": 0, "serial": 99}]
+    played = ObservationStateBuilder().root(printed)
+    context = ctx()
+
+    held_attack = body_capability(
+        held.me.active, held.me, held.them, held, context).attack_now
+    played_attack = body_capability(
+        played.me.active, played.me, played.them, played, context).attack_now
+
+    assert played_attack == held_attack
+
+
+def test_self_shuffling_draw_exposes_the_body_cost():
+    valuation = evaluate(board(me=player(active=body(66, 1))), ctx())
+    contribution = next(item for item in valuation.contributions
+                        if item.feature == "function.self_cost.exposure")
+
+    assert contribution.activation == 3.0
+    assert contribution.coefficient == -0.04
+
+
+def test_symmetric_stadium_fit_does_not_scale_with_current_body_count():
+    printed = printout(
+        me=player(active=body(DREEPY, 1), bench=[body(MAKUHITA, 2)]),
+        them=player(active=body(DRAKLOAK, 3), own=False))
+    printed["current"]["stadium"] = [
+        {"id": 1260, "serial": 700, "playerIndex": 0}]
+    state = ObservationStateBuilder().root(printed)
+
+    assert sum(item.value for item in evaluate(state, ctx()).activations
+               if item.feature == "function.stadium.board_fit") == 0.2
 
 
 def test_confusion_reduces_expected_attack_and_retreat_cures_it():

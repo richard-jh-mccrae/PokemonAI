@@ -9,6 +9,8 @@ from common.cards import card_clauses
 from .features import (ACTIVATION_OPERATIONS, FEATURE_CATALOG, ActivationRule,
                        FeatureCatalog)
 
+SYMMETRIC_STADIUM_FIT = 0.1
+
 
 @dataclass(frozen=True, slots=True)
 class FeatureActivation:
@@ -245,6 +247,14 @@ def _board_body_count(environment, rule):
     return len(environment.side.bodies) + len(environment.opponent.bodies)
 
 
+def _stadium_board_fit(environment, rule):
+    if environment.clause is None:
+        return _board_body_count(environment, rule)
+    if bool(getattr(environment.clause, "symmetric", False)):
+        return SYMMETRIC_STADIUM_FIT
+    return _board_body_count(environment, rule)
+
+
 def _opponent_deck_count(environment, rule):
     return environment.board.them.deck_count
 
@@ -388,6 +398,7 @@ _OPERATIONS = {
     "own_max_attack_units": _own_max_attack_units,
     "side_status_count": _side_status_count,
     "self_ko_liability": _self_ko_liability,
+    "stadium_board_fit": _stadium_board_fit,
     "active_retreat_cost": _active_retreat_cost,
     "active_tool_count": _active_tool_count,
     "prize_difference": _prize_difference,

@@ -68,6 +68,7 @@ BODY_DEVELOPMENT_SCALE = 2.0
 BENCH_REALIZATION_DISCOUNT = 0.5
 BURN_STATUS_SEVERITY = 1.2
 POISON_STATUS_SEVERITY = 1.1
+KNOWN_BLOCKED_BASIC_PRESSURE = 2.25
 
 
 class _Trace:
@@ -241,6 +242,17 @@ def _slot_option(open_slots) -> float:
     return sum(1.0 / index for index in range(1, int(open_slots) + 1))
 
 
+def _full_bench_pressure(side, deck_counts, ctx) -> float:
+    if len(side.bench) < side.bench_max:
+        return 0.0
+    blocked = any(
+        count > 0
+        and isinstance((facts := ctx.facts(card_id)), PokemonCard)
+        and facts.evolves_from is None
+        for card_id, count in (deck_counts or ()))
+    return 1.0 + KNOWN_BLOCKED_BASIC_PRESSURE * float(blocked)
+
+
 def _public_group(board, ctx) -> tuple[Valuation, PrizeMap]:
     trace = _Trace(ctx)
     trace.emit("prize_race", "observation", ("prize_advantage",),
@@ -405,7 +417,7 @@ def _side(trace: _Trace, label: str, side: Side, sign: float, ctx: EvaluationMod
                sign * sum(1.0 + BODY_DEVELOPMENT_SCALE * capability.development
                           for _body_node, capability in capabilities))
     trace.emit(f"{label}.bench_slots", "observation", ("full_bench",),
-               sign * float(len(side.bench) >= side.bench_max))
+               sign * _full_bench_pressure(side, deck_counts, ctx))
     trace.emit(f"{label}.liability", "observation", ("extra_prize_liability",),
                -sign * sum(max(0, _prize_value(body, ctx) - 1)
                            for body in side.bodies
@@ -461,22 +473,18 @@ def _side(trace: _Trace, label: str, side: Side, sign: float, ctx: EvaluationMod
                     and claim != "surplus_hand_copy"
                     and any(demand.body_name_counts.get(name, 0) for name in facts.synergy)):
                 trace.emit(f"{label}.hand", "observation", ("synergy_in_hand",), sign)
-            if (isinstance(facts, PokemonCard) and facts.evolves_from is None
-                    and hand_evolves_from[facts.name]):
+            if isinstance(facts, PokemonCard) and hand_evolves_from[facts.name]:
                 trace.emit(f"{label}.hand", "observation", ("hand_line",), sign)
             if (isinstance(facts, PokemonCard) and facts.evolves_from
                     and claim != "surplus_hand_copy"):
-                immediate_base = (
-                    demand.body_name_counts.get(facts.evolves_from, 0)
-                    or demand.hand_name_counts.get(facts.evolves_from, 0))
-                deck_base = any(
-                    count and getattr(ctx.facts(candidate_id), "name", None)
+                immediate_base = any(
+                    not body.appeared_this_turn
+                    and getattr(ctx.facts(body.card.card_id), "name", None)
                     == facts.evolves_from
-                    for candidate_id, count in (deck_counts or ()))
-                if immediate_base or deck_base:
+                    for body in side.bodies)
+                if immediate_base:
                     trace.emit(f"{label}.hand", "observation",
-                               ("evolution_access",),
-                               sign * (1.0 if immediate_base else FUTURE_TURN_DISCOUNT))
+                               ("evolution_access",), sign)
             copies[card.card_id] += 1
             if isinstance(facts, EnergyCard) and facts.kind != SPECIAL_ENERGY:
                 basic_energy[facts.provides] += 1
@@ -582,7 +590,8 @@ def _body(trace: _Trace, part: str, body: Body, sign: float, ctx: EvaluationMode
     trace.emit(part, "observation", ("body_hp_units",),
                sign * body.max_hp / DAMAGE_UNIT_HP)
     if body_facts is not None and body_facts.evolves_from:
-        trace.emit(part, "observation", ("evolution_access",), sign)
+        trace.emit(part, "observation", ("evolution_access",),
+                   sign * max(1, len(body.pre_evolution)))
     missing = 0.0
     if body.max_hp > 0:
         missing = max(0.0, min(1.0, (body.max_hp - max(0, body.hp)) / body.max_hp))
@@ -611,7 +620,7 @@ def _body(trace: _Trace, part: str, body: Body, sign: float, ctx: EvaluationMode
     persistent_body = without_end_turn_energy(body, ctx)
     usable = usable_units(body_facts, persistent_body.energies, ctx, reach)
     visible_reach, next_reach = development_reach_units(
-        body_facts, body.energies, ctx, reach)
+        body_facts, persistent_body.energies, ctx, reach)
     useless = max(0, len(persistent_body.energies) - usable)
     rentals = 0
     energy_rows = []
@@ -715,6 +724,10 @@ def _situational_functions(trace: _Trace, part: str, facts, side: Side, opponent
             deck_counts=deck_counts, clause=clause, body=body)
         for activation in compiler.compile("function", (clause.kind,), environment):
             trace.record(part, activation, provenance=provenance)
+        if clause.rider in {"shuffle_self_in", "self_shuffle_in"}:
+            for activation in compiler.compile(
+                    "function", ("self_shuffle_in",), environment):
+                trace.record(part, activation, provenance=provenance)
         for parameter, value in clause.params.items():
             parameter_environment = ActivationEnvironment(
                 scale=sign, board=board, evaluation_model=ctx, side=side,
