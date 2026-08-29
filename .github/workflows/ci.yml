@@ -168,15 +168,10 @@ jobs:
           python-version: '3.12'
           cache: pip
       - run: python -m pip install --upgrade pip && pip install -r requirements.txt
-      - name: Run correction contracts
-        shell: bash
-        # The teacher-replay pins are deliberately outside CI; the archived suite currently
-        # fails collection and is not a valid local gate.
-        run: |
-          targets=(tests/blunder)
-          # tests/train reads a real correction record, so record changes must re-run it here.
-          targets+=(tests/train)
-          python -m pytest "${targets[@]}" -q --tb=short
+      - name: Replay every one-ply Ledger correction
+        run: >-
+          python tools/train/ledger_correction_gate.py --workers 2
+          --output ledger-correction-gate.json
 
   test-src:
     name: tests / src
@@ -199,7 +194,7 @@ jobs:
       - name: Run parallel source contracts
         run: >-
           python -m pytest tests/observation tests/cards tests/common
-          tests/ledger tests/parity tests/scouting tests/train
+          tests/ledger tests/parity tests/scouting tests/blunder tests/train
           tests/test_import_hygiene.py tests/test_source_reachability.py
           -q -n auto --tb=short
 
