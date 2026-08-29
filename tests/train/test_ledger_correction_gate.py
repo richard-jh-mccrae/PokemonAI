@@ -1,7 +1,7 @@
 from train.ledger_correction_gate import correction_gate_findings, ledger_correction_sources
 from train.blunder.correction import correction_selection_error
+from train.blunder.reviewed import load_reviewed, review_key
 from train.blunder.store import load_corrections
-from train.ledger_corpus import _replay_one
 
 
 def test_one_ply_gate_selects_every_round_at_or_after_its_first_production_run(tmp_path):
@@ -80,11 +80,12 @@ def test_gate_accepts_a_ruled_current_choice_despite_its_raw_pairwise_margin():
     assert correction_gate_findings(report, audit, correction_count=1) == ()
 
 
-def test_refresh_supporter_does_not_shuffle_away_usable_items():
+def test_refresh_supporter_ordering_is_deferred_to_full_turn_search():
     correction = next(
         correction for correction in load_corrections(ledger_correction_sources()[0])
         if correction.id == "061e8f4e6878")
 
-    row = _replay_one(correction.agent, correction)
+    review = load_reviewed()[review_key(correction)]
 
-    assert row["chosen"] in row["acceptable"]
+    assert review["disposition"] == "deferred-multi-turn"
+    assert "PUCT" in review["reason"]

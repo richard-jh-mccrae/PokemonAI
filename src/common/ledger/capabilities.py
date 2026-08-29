@@ -38,7 +38,7 @@ ATTACHED_ENERGY_MATERIAL_UNIT = 0.25
 ATTACK_EVENT_KIND = 15
 CARD_PLAY_EVENT_KIND = 10
 SWITCH_EVENT_KIND = 8
-ITEM_LOCK_BASE_UNITS = 2.0
+ITEM_LOCK_BASE_UNITS = 2.8
 ITEM_LOCK_HAND_UNIT = 0.05
 DAMAGE_PROTECTION_THRESHOLD_HP = 200
 ENERGY_COUNT_THRESHOLD = 3
@@ -259,8 +259,23 @@ def payment_fraction(provisions, requirements) -> float:
         / len(requirements)
 
 
+def _typed_first_payment_fraction(provisions, requirements, facts) -> float:
+    requirements = tuple(requirements)
+    fraction = payment_fraction(provisions, requirements)
+    unpaid = unmet_cost_slots(provisions, requirements)
+    unpaid_typed = sum(requirements[slot] != COLORLESS for slot in unpaid)
+    condition_types = {
+        clause.condition_energy_type for clause in card_clauses(facts)
+        if clause.condition_energy_type is not None}
+    if not unpaid_typed or condition_types.intersection(map(int, provisions)):
+        return fraction
+    paid_typed = sum(unit != COLORLESS for unit in requirements) - unpaid_typed
+    return paid_typed / max(1, len(requirements))
+
+
 def one_attach_fraction(body, attack, side, ctx, board) -> float:
-    best = payment_fraction(body.energies, attack.cost)
+    facts = ctx.facts(body.card.card_id)
+    best = _typed_first_payment_fraction(body.energies, attack.cost, facts)
     turn_player = (board.turn.first_player if board.turn.number % TURN_PARITY_COUNT == 1
                    else None if board.turn.first_player is None
                    else 1 - board.turn.first_player)
@@ -274,7 +289,8 @@ def one_attach_fraction(body, attack, side, ctx, board) -> float:
         units = provision_units(
             energy, evolved=bool(getattr(ctx.facts(body.card.card_id), "evolves_from", None)))
         provisions = (*body.energies, *((int(energy.provides),) * units))
-        best = max(best, payment_fraction(provisions, attack.cost))
+        best = max(best, _typed_first_payment_fraction(
+            provisions, attack.cost, facts))
     return best
 
 
@@ -1506,6 +1522,13 @@ def self_ko_liability_units(body, side, opponent, ctx):
     return material + terminal
 
 
+def knockout_exposure_units(body, ctx) -> float:
+    prize_value = float(getattr(ctx.facts(body.card.card_id), "prize_value", 1) or 1)
+    material = (max(0.0, body.hp) / DAMAGE_UNIT_HP
+                + max(0.0, prize_value - 1.0))
+    return max(prize_value, material)
+
+
 ATTACK_EFFECT_UNITS = frozenset({
     "ability_suppression", "attack_lock", "confuse", "item_lock", "no_retreat",
     "retreat_lock", "sleep",
@@ -1681,7 +1704,8 @@ def body_capability(body, side, opponent, board, ctx, *, reach=None,
         printed = max(float(attack.damage or attack.damage_fix or attack.damage_max or 0),
                       float(bench_reach(attack))) / DAMAGE_UNIT_HP
         potential = max(potential, max(impact, printed) / max(1, len(attack.cost)))
-        fraction = payment_fraction(body.energies, attack.cost)
+        fraction = _typed_first_payment_fraction(
+            body.energies, attack.cost, facts)
         attach_fraction = (one_attach_fraction(body, attack, side, ctx, board)
                            if include_hand_attach else fraction)
         permission = attack.clause("first_turn_attack_permission")
@@ -1727,7 +1751,8 @@ def body_capability(body, side, opponent, board, ctx, *, reach=None,
         for attack in evolved.attacks:
             impact, _attack_bench = _attack_impact(
                 attack, evolved, body, side, opponent, ctx, board)
-            fraction = payment_fraction(body.energies, attack.cost)
+            fraction = _typed_first_payment_fraction(
+                body.energies, attack.cost, evolved)
             attach_fraction = (one_attach_fraction(body, attack, side, ctx, board)
                                if include_hand_attach else fraction)
             current_future = scale * impact * fraction ** COMPLETION_EXPONENT
@@ -1782,9 +1807,7 @@ def body_capability(body, side, opponent, board, ctx, *, reach=None,
     weakness_override = max((
         1.0 for clause in card_clauses(facts)
         if clause.kind == "weakness_override" and opponent.active is not None), default=0.0)
-    retreat = ((1.0 if facts.retreat_cost <= 0 else
-                min(1.0, len(body.energies) / facts.retreat_cost))
-               if body is side.active and side.bench else 0.0)
+    retreat = retreat_payment_progress(body, side, board, ctx)
     ready_payoff = max((payoff for payoff, _fraction, ready in attack_profiles if ready),
                        default=0.0)
     stronger_payoff, stronger_fraction = max(
@@ -1926,8 +1949,7 @@ def recoverable_discard_ids(side, ctx) -> frozenset[int]:
     return frozenset(recoverable)
 
 
-def card_option_units(facts, side, opponent, board, ctx, *, reaches=None,
-                      _price_shuffle_loss=True) -> OptionUnits:
+def card_option_units(facts, side, opponent, board, ctx, *, reaches=None) -> OptionUnits:
     if isinstance(facts, EnergyCard):
         hand = tuple(side.hand)
         copies = sum(
@@ -2016,19 +2038,6 @@ def card_option_units(facts, side, opponent, board, ctx, *, reaches=None,
                 if clause.rider == "shuffle_own_hand_in":
                     target = max(0.0, target - max(0, side.hand_count - 1))
                 values["draw"] += gate * target
-                if clause.rider == "shuffle_own_hand_in" and _price_shuffle_loss:
-                    skipped_played_copy = False
-                    for card in tuple(side.hand):
-                        held = ctx.facts(card.card_id)
-                        if card.card_id == facts.card_id and not skipped_played_copy:
-                            skipped_played_copy = True
-                            continue
-                        units = card_option_units(
-                            held, side, opponent, board, ctx, reaches=reaches,
-                            _price_shuffle_loss=False)
-                        for field in OptionUnits.__dataclass_fields__:
-                            if field != "cost":
-                                values[field] -= gate * max(0.0, getattr(units, field))
             elif clause.kind == "fetch":
                 values["search"] += gate * _quantity(clause.amount, 1)
             elif clause.kind in {"accel", "energy_recur", "move_energy"}:
@@ -2054,20 +2063,29 @@ def card_option_units(facts, side, opponent, board, ctx, *, reaches=None,
     return OptionUnits()
 
 
-def switch_target_units(side, board, ctx) -> float:
-    if side.active is None or not side.bench:
-        return 0.0
-    blocked = any(bool(getattr(side, status)) for status in ("asleep", "paralyzed"))
-    facts = ctx.facts(side.active.card.card_id)
+def effective_retreat_cost(body, ctx) -> int:
+    facts = ctx.facts(body.card.card_id)
     retreat_cost = int(getattr(facts, "retreat_cost", 0) or 0)
     reduction = sum(
         int(clause.amount or 0)
-        for tool in side.active.tools
+        for tool in body.tools
         for clause in card_clauses(ctx.facts(tool.card_id))
         if clause.kind == "retreat_reduction")
-    payable = len(side.active.energies) >= max(0, retreat_cost - reduction)
-    retreat_available = not board.turn.retreated and not blocked and payable
-    return float(not retreat_available)
+    return max(0, retreat_cost - reduction)
+
+
+def retreat_payment_progress(body, side, board, ctx) -> float:
+    if (body is not side.active or not side.bench or board.turn.retreated
+            or side.asleep or side.paralyzed):
+        return 0.0
+    cost = effective_retreat_cost(body, ctx)
+    return 1.0 if cost <= 0 else min(1.0, len(body.energies) / cost)
+
+
+def switch_target_units(side, board, ctx) -> float:
+    if side.active is None or not side.bench:
+        return 0.0
+    return float(retreat_payment_progress(side.active, side, board, ctx) < 1.0)
 
 
 def card_option_value(facts, side, opponent, board, ctx, *, reaches=None) -> float:
@@ -2113,6 +2131,7 @@ def _prospective_condition(condition, side, board, ctx) -> float:
 __all__ = (
     "Capability", "OptionUnits", "attack_damage", "best_current_damage",
     "best_energy_marginal", "body_capability", "card_option_units",
+    "effective_retreat_cost", "knockout_exposure_units", "retreat_payment_progress",
     "switch_target_units",
     "card_option_value", "energy_marginal", "hidden_zone_expectation", "payment_fraction",
     "recoverable_discard_ids", "unmet_cost_slots",

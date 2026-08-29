@@ -93,12 +93,14 @@ class LedgerOnePlySearch:
 
     def __init__(self):
         self._previous_evaluation_state = None
+        self._previous_evaluator_identity = None
         self._active_continuation_policy = {}
         self._last_continuation_policies = {}
         self._served_cached_continuation = False
 
     def reset(self):
         self._previous_evaluation_state = None
+        self._previous_evaluator_identity = None
         self._active_continuation_policy = {}
         self._last_continuation_policies = {}
         self._served_cached_continuation = False
@@ -168,6 +170,10 @@ class LedgerOnePlySearch:
         state_values = {}
         evaluation_states = {}
 
+        def evaluation_key(observed):
+            return (evaluator.identity, request.evaluation_model.identity,
+                    observed.seat, observed.valuation_key)
+
         def state_value(state):
             parent = request.parent_valuation if state is board else None
             delta = request.observation_delta if state is board else None
@@ -175,6 +181,7 @@ class LedgerOnePlySearch:
                 self._previous_evaluation_state
                 if state is board and parent is not None
                 and self._previous_evaluation_state is not None
+                and self._previous_evaluator_identity == evaluator.identity
                 and getattr(parent, "cache_key", None)
                 == self._previous_evaluation_state.valuation_key
                 else None)
@@ -184,11 +191,10 @@ class LedgerOnePlySearch:
             if lineage is not None:
                 parent_board, delta = lineage
                 parent = state_value(parent_board)
-                reusable_parent = evaluation_states.get(
-                    (request.evaluation_model.identity, parent_board.valuation_key))
+                reusable_parent = evaluation_states.get(evaluation_key(parent_board))
             child_request = EvaluationRequest(
                 state, request.evaluation_model, parent, delta)
-            key = (request.evaluation_model.identity, observed.valuation_key)
+            key = evaluation_key(observed)
             if key not in state_values:
                 if hasattr(evaluator, "evaluate_with_state"):
                     value, evaluation_state = evaluator.evaluate_with_state(
@@ -207,8 +213,8 @@ class LedgerOnePlySearch:
         except Exception as exc:
             raise DecisionExecutionError(DecisionFailure.capture(
                 DecisionFailureStage.EVALUATION, exc)) from exc
-        self._previous_evaluation_state = evaluation_states.get(
-            (request.evaluation_model.identity, board.valuation_key))
+        self._previous_evaluation_state = evaluation_states.get(evaluation_key(board))
+        self._previous_evaluator_identity = evaluator.identity
         actions = tuple(root.legal_actions)
         cached = self._cached_continuation(actions, baseline)
         if cached is not None:
@@ -383,15 +389,12 @@ class GreedyDecisionPolicy:
         if not roster.forced:
             knockouts = tuple(candidate for candidate in candidates
                               if candidate.disposition is CandidateDisposition.ENDS_TURN
-                              and any(component.key == "combat.realized_ko"
+                              and any(component.key in {"prize.race", "result.win"}
                                       and component.activation > 0
                                       for component in candidate.delta.components))
             meaningful_continuation = any(
                 candidate.disposition is CandidateDisposition.CONTINUES_TURN
-                and candidate.delta.total > max(
-                    configuration.noise_tolerance,
-                    max((abs(component.value) for component in candidate.delta.components
-                         if component.key == "action.opportunity_cost"), default=0.0))
+                and candidate.delta.total > configuration.noise_tolerance
                 for candidate in candidates)
             if knockouts and not meaningful_continuation:
                 return DecisionChoice(

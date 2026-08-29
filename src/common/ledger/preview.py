@@ -115,17 +115,25 @@ def price_actions(state, board: ObservationState, baseline: float, provider,
         key=lambda action: bool(_local_action_events(board, action))))
     for action in actions:
         if action.identity.kind == "end":
-            successor = _successor_result(
+            state_delta = end_valuation.total - baseline_valuation.total
+            state_contributions = _state_contributions(
+                baseline_valuation, end_valuation, ctx)
+            activations = tuple(FeatureActivation(
+                item.feature, item.activation, item.provenance)
+                for item in state_contributions)
+            footprint = ContinuationFootprint(
+                state_delta, 0.0, False,
+                activations=activations, contributions=state_contributions)
+            successors = (() if end_unavailable else (_successor_result(
                 1.0, end_board, True, valuation_fn, state_valuation_fn,
                 board.position_key, (action.identity,),
-                precomputed_valuation=end_valuation)
+                precomputed_valuation=end_valuation),))
             prices.append(OptionPrice(
-                action, 0.0, True, tuple(end_gaps),
-                ContinuationFootprint(0.0, 0.0, False),
+                action, state_delta, True, tuple(end_gaps), footprint,
                 status=(EvaluationStatus.UNAVAILABLE if end_unavailable else
                         EvaluationStatus.ESTIMATED if end_gaps
                         else EvaluationStatus.COMPLETE),
-                successors=(successor,), prize_map=end_valuation.prize_map))
+                successors=successors, prize_map=end_valuation.prize_map))
             continue
         local_action_contribution = _event_contributions(
             "action", _local_action_events(board, action, ctx), ctx, "action")
@@ -134,15 +142,11 @@ def price_actions(state, board: ObservationState, baseline: float, provider,
                 and (budget.stop_reason != "complete"
                      or (hasattr(budget, "check") and budget.check()))):
             budget.frontier.append(action.identity)
-            activations = tuple(FeatureActivation(
-                item.feature, item.activation, item.provenance)
-                for item in local_action_contribution)
             footprint = ContinuationFootprint(
                 0.0, local_action_value, False,
-                activations=activations,
-                contributions=local_action_contribution)
+                activations=(), contributions=())
             prices.append(OptionPrice(
-                action, local_action_value, False,
+                action, 0.0, False,
                 (f"search stopped: {budget.stop_reason}",), footprint,
                 status=EvaluationStatus.ESTIMATED,
                 prize_map=baseline_valuation.prize_map))
@@ -158,19 +162,15 @@ def price_actions(state, board: ObservationState, baseline: float, provider,
             state, board, node, compute.depth_budget)
         landings = _coalesce_landings(landings)
         ends_turn = end_probability >= 1.0
-        phase_reference = (_expected_valuation(
-            ((1.0 - end_probability, baseline_valuation),
-             (end_probability, end_valuation)), ctx)
-            if end_action is not None and end_probability > 0.0
-            else baseline_valuation)
-        state_delta = successor.total - phase_reference.total
+        state_delta = successor.total - baseline_valuation.total
         activation = -(1.0 - end_probability)
         action_events = [("continued_action", activation)]
         action_contribution = _event_contributions(
             "continuation", action_events, ctx, "continuation")
         opportunity_cost = sum(item.value for item in action_contribution)
         opportunity_cost += sum(item.value for item in local_action_contribution)
-        state_contributions = _state_contributions(phase_reference, successor, ctx)
+        state_contributions = _state_contributions(
+            baseline_valuation, successor, ctx)
         realization_contributions = _realized_portfolio_contributions(
             baseline_valuation, board, action)
         discard_contributions = _discard_spend_contributions(
@@ -207,11 +207,7 @@ def price_actions(state, board: ObservationState, baseline: float, provider,
         opportunity_cost += sum(item.value for item in realization_contributions)
         opportunity_cost += sum(item.value for item in discard_contributions)
         opportunity_cost += sum(item.value for item in knockout_contributions)
-        contributions = (*state_contributions, *action_contribution,
-                         *local_action_contribution,
-                         *footprint_contributions, *information_contributions,
-                         *realization_contributions, *discard_contributions,
-                         *knockout_contributions)
+        contributions = state_contributions
         activations = tuple(FeatureActivation(
             item.feature, item.activation, item.provenance) for item in contributions)
         footprint = ContinuationFootprint(
@@ -222,16 +218,15 @@ def price_actions(state, board: ObservationState, baseline: float, provider,
             footprint_values.opportunities_created,
             footprint_values.opportunities_preserved,
             footprint_values.opportunities_consumed, activations, contributions)
-        swing = footprint.state_delta + footprint.action_opportunity
+        swing = footprint.state_delta
         if not math.isfinite(swing):
             # Belt behind configuration validation: a NaN/inf swing would make every price
             # unrankable. Score neutral, SAY SO — a visible gap, never a silent absorb.
             walk.gaps.append(f"non-finite price for {action.identity}; unavailable")
             walk.unavailable = True
             swing = 0.0
-        comparison_gaps = tuple(end_gaps) if end_probability > 0.0 else ()
-        status = (EvaluationStatus.UNAVAILABLE if walk.unavailable
-                  or (end_probability > 0.0 and end_unavailable) else
+        comparison_gaps = ()
+        status = (EvaluationStatus.UNAVAILABLE if walk.unavailable else
                   EvaluationStatus.ESTIMATED if walk.gaps or successor.gaps
                   or comparison_gaps else
                   EvaluationStatus.COMPLETE)

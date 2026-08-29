@@ -99,12 +99,28 @@ def _side_damage_units(environment, rule):
 
 
 def _open_energy_slot(environment, rule):
-    from .worth import _unfilled
+    from .worth import (Reach, _line_entries, _unfilled, legal_line_reach,
+                        line_reach)
 
-    open_slots = sum(any(_unfilled(attack.cost, Counter(body.energies)) != (Counter(), 0)
-                         for attack in getattr(environment.evaluation_model.facts(
-                             body.card.card_id), "attacks", ()) or ())
-                     for body in environment.side.bodies)
+    demand = environment.demand
+    reach = ({}
+             if demand is None else line_reach(
+                 demand.hand_name_counts, environment.deck_counts,
+                 environment.evaluation_model, hand=demand.hand,
+                 turn=demand.turn))
+    open_slots = 0
+    for body in environment.side.bodies:
+        facts = environment.evaluation_model.facts(body.card.card_id)
+        body_reach = legal_line_reach(
+            body, reach, environment.evaluation_model,
+            () if demand is None else demand.hand,
+            None if demand is None else demand.turn)
+        open_slots += any(
+            (evolution_id is None
+             or body_reach.get(evolution_id, Reach.ABSENT) is not Reach.ABSENT)
+            and _unfilled(attack.cost, Counter(body.energies)) != (Counter(), 0)
+            for attack, evolution_id in _line_entries(
+                facts, environment.evaluation_model))
     return open_slots
 
 

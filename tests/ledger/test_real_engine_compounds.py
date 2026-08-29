@@ -37,7 +37,9 @@ def test_attack_is_priced_against_real_engine_end_after_phase_advance():
 
     assert chosen["type"] == int(OptionType.ATTACK)
     assert attack.disposition.value == "ends_turn"
-    assert attack.delta.total > end.delta.total == 0.0
+    expected_end_delta = end.successors[0].valuation.total - decision.decision_result.baseline.total
+    assert attack.delta.total > end.delta.total
+    assert end.delta.total == expected_end_delta
 
 
 def test_ultra_ball_prices_play_two_discards_and_fetch_as_one_real_engine_chain():

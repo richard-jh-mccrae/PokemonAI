@@ -99,8 +99,7 @@ def refresh_outcomes(observation, board: ObservationState, card_id: int,
                     for own_draw, _opponent_draw in draws) >= DIRECT_REFRESH_CARD_GAIN):
         baseline = evaluate_fn(board)
         units = card_option_units(
-            ctx.facts(card_id), board.me, board.them, board, ctx,
-            _price_shuffle_loss=False)
+            ctx.facts(card_id), board.me, board.them, board, ctx)
         extra = tuple(FeatureContribution(
             feature, activation, ctx.configuration[feature],
             activation * ctx.configuration[feature], ("refresh.direct",))

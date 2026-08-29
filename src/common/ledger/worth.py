@@ -399,10 +399,17 @@ def usable_units(body_facts, attached, ctx: EvaluationModel, reach=None) -> floa
         return 0
     gates = reach or {}
     best = 0.0
+    condition_types = {
+        clause.condition_energy_type for clause in card_clauses(body_facts)
+        if clause.condition_energy_type is not None}
     for attack, evo_id in _line_entries(body_facts, ctx):
+        typed_cost = Counter(unit for unit in attack.cost if unit != COLORLESS)
         typed = sum(min(count, counts.get(unit, 0))
-                    for unit, count in Counter(u for u in attack.cost if u != COLORLESS).items())
-        colorless_slots = min(sum(1 for u in attack.cost if u == COLORLESS), total - typed)
+                    for unit, count in typed_cost.items())
+        colorless_slots = (
+            min(sum(1 for unit in attack.cost if unit == COLORLESS), total - typed)
+            if (typed == sum(typed_cost.values())
+                or condition_types.intersection(counts)) else 0)
         status = Reach.HAND if evo_id is None else gates.get(evo_id, Reach.ABSENT)
         scale = _reach_scale(status)
         best = max(best, (typed + colorless_slots) * scale)
@@ -476,20 +483,55 @@ def _liveness(card_id, facts, demand: Demand, ctx: EvaluationModel, deck_counts)
                 line_capacity = existing + max(0, demand.free_bench)
             capacity = min(existing + max(0, demand.free_bench), line_capacity)
             return (DemandState.LIVE if live else DemandState.DEAD), max(1, capacity)
-        field_targets = demand.body_name_counts.get(facts.evolves_from, 0)
-        pending_targets = min(
-            demand.hand_name_counts.get(facts.evolves_from, 0), demand.free_bench)
+        parent_stage = {"stage1": "basic", "stage2": "stage1"}.get(facts.stage)
+
+        def direct_parent(candidate):
+            return (isinstance(candidate, PokemonCard)
+                    and candidate.name == facts.evolves_from
+                    and candidate.stage == parent_stage)
+
+        field_targets = tuple(
+            body for body in demand.bodies
+            if direct_parent(ctx.facts(body.card.card_id)))
+        mature_targets = sum(not body.appeared_this_turn for body in field_targets)
         existing = demand.body_name_counts.get(facts.name, 0)
-        targets = existing + field_targets + pending_targets
-        if field_targets:
+        hand_parents = tuple(
+            candidate for card in demand.hand
+            if direct_parent(candidate := ctx.facts(card.card_id)))
+        deck_parents = tuple(
+            (candidate, count) for candidate_id, count in (deck_counts or ())
+            if count > 0 and direct_parent(candidate := ctx.facts(candidate_id)))
+        offboard_parents = len(hand_parents) + sum(
+            count for _candidate, count in deck_parents)
+        if parent_stage == "basic":
+            route_capacity = max(0, demand.free_bench)
+        else:
+            base_names = {
+                candidate.evolves_from
+                for candidate in (*hand_parents,
+                                  *(candidate for candidate, _count in deck_parents))
+                if candidate.evolves_from}
+            field_bases = sum(
+                getattr(ctx.facts(body.card.card_id), "name", None) in base_names
+                for body in demand.bodies)
+            hand_bases = sum(
+                isinstance(candidate := ctx.facts(card.card_id), PokemonCard)
+                and candidate.stage == "basic" and candidate.name in base_names
+                for card in demand.hand)
+            deck_bases = sum(
+                count for candidate_id, count in (deck_counts or ())
+                if isinstance(candidate := ctx.facts(candidate_id), PokemonCard)
+                and candidate.stage == "basic" and candidate.name in base_names)
+            route_capacity = field_bases + min(
+                hand_bases + deck_bases, max(0, demand.free_bench))
+        pending_targets = min(offboard_parents, route_capacity)
+        targets = existing + len(field_targets) + pending_targets
+        if mature_targets:
             return DemandState.LIVE, max(1, targets)
+        if field_targets:
+            return DemandState.SETUP, max(1, targets)
         if pending_targets:
             return DemandState.SETUP, max(1, targets)
-        deck_targets = sum(
-            count for candidate_id, count in (deck_counts or ())
-            if getattr(ctx.facts(candidate_id), "name", None) == facts.evolves_from)
-        if deck_targets:
-            return DemandState.SETUP, max(1, existing + deck_targets)
         return DemandState.DEAD, 1
     if isinstance(facts, EnergyCard):
         reach = line_reach(demand.hand_name_counts, deck_counts, ctx,
@@ -524,7 +566,7 @@ def pokemon_copy_capacity(facts, *, demand: Demand | None = None,
         return None
     if demand is not None and ctx is not None:
         descendants = tuple(_forward_lines().get(facts.name, ()))
-        if not descendants and deck_counts is None:
+        if not descendants and facts.evolves_from is None:
             return POKEMON_COPY_CAPACITY
         terminals = ({facts.card_id} if not descendants else {
             card_id for card_id in descendants
