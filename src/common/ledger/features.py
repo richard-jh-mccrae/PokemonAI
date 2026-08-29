@@ -188,6 +188,8 @@ _DECLARED_RULES = {
         "action", ("draw_before_refresh",), "constant"),
     "action.body_ability_ready": _rule(
         "action", ("body_ability_ready",), "constant"),
+    "action.body_copy_overflow": _rule(
+        "action", ("body_copy_overflow",), "constant"),
     "action.acceleration_phase_fit": _rule(
         "action", ("acceleration_phase_fit",), "constant"),
     "ability.resource_cost": _rule(
@@ -424,6 +426,7 @@ _SCALAR_DEFAULTS = {
     "action.overkill_counter": -100.0,
     "action.draw_before_refresh": -0.75,
     "action.body_ability_ready": 0.40,
+    "action.body_copy_overflow": -0.30,
     "zone.in_play": 0.002,
     "zone.in_hand": 0.01,
     "zone.in_deck": 0.001,

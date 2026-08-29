@@ -10,7 +10,7 @@ import math
 from types import SimpleNamespace
 import pytest
 
-from ledger_helpers import (DRAKLOAK, DRAGAPULT, FIRE_E, ScriptedProvider, action, body,
+from ledger_helpers import (DRAKLOAK, DRAGAPULT, DREEPY, FIRE_E, ScriptedProvider, action, body,
                             player, printout)
 
 from common.algebra import (Actor, Chance, Choice, Deterministic, Edge, RevealChoice,
@@ -18,7 +18,8 @@ from common.algebra import (Actor, Chance, Choice, Deterministic, Edge, RevealCh
 from common.decision import EvaluationStatus, SearchConfiguration
 from common.ledger import DeckOverlay, EvaluationModel, LedgerDecider
 from common.ledger.evaluate import FeatureActivation, FeatureContribution, Valuation, evaluate
-from common.ledger.preview import (_body_ability_ready, _discard_spend_contributions,
+from common.ledger.preview import (_body_ability_ready, _body_copy_overflow,
+                                   _discard_spend_contributions,
                                    _realized_portfolio_contributions, price_actions)
 from common.observation import ObservationStateBuilder
 from deprecated.bellman.state import DecisionState
@@ -100,6 +101,17 @@ def test_body_ability_readiness_stops_after_the_line_is_fully_developed():
 
     assert _body_ability_ready(developing, evolve, context)
     assert not _body_ability_ready(developed, evolve, context)
+
+
+def test_compound_fetch_prices_only_copies_above_total_body_capacity():
+    select = {"context": 5, "minCount": 1, "maxCount": 2,
+              "option": [{"cardId": DREEPY, "serial": 800, "type": 3},
+                         {"cardId": DREEPY, "serial": 801, "type": 3}]}
+    board = ObservationStateBuilder(DECK).root(printout(
+        me=player(active=body(DRAGAPULT, 1), hand=[DREEPY]), select=select))
+
+    assert _body_copy_overflow(board, action("card", (0,)), EvaluationModel.build()) == 0
+    assert _body_copy_overflow(board, action("card", (0, 1)), EvaluationModel.build()) == 1
 
 
 def test_terminal_action_is_priced_against_the_legal_end_successor():

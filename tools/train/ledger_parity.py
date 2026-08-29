@@ -10,6 +10,20 @@ from common.ledger.preview import price_actions
 def legacy_choose(prices, *, forced, configuration):
     if forced:
         return _legacy_ranked(prices, configuration)[0]
+    knockouts = tuple(price for price in prices
+                      if price.ends_turn
+                      and any(item.feature == "combat.realized_ko"
+                              and item.activation > 0
+                              for item in price.footprint.contributions))
+    meaningful_continuation = any(
+        not price.ends_turn
+        and price.swing > max(
+            configuration.noise_tolerance,
+            max((abs(item.value) for item in price.footprint.contributions
+                 if item.feature == "action.opportunity_cost"), default=0.0))
+        for price in prices)
+    if knockouts and not meaningful_continuation:
+        return _legacy_ranked(knockouts, configuration)[0]
     continuing = tuple(price for price in prices
                        if not price.ends_turn
                        and price.swing > configuration.noise_tolerance)
@@ -52,6 +66,14 @@ def _legacy_preservation_frontier(candidates, noise_tolerance=0.0):
                 and bool(opportunities_created)
                 and "retreat" in preserved)
             if prepare_before_retreat:
+                deferred.add(candidate.action.identity)
+                break
+            use_free_ability = (
+                other.action.identity.kind == "ability"
+                and other.swing > noise_tolerance
+                and candidate.action.identity.kind == "play"
+                and candidate.action.identity.kind in preserved)
+            if use_free_ability:
                 deferred.add(candidate.action.identity)
                 break
             if not consumed:

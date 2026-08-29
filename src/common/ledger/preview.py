@@ -9,17 +9,18 @@ from __future__ import annotations
 
 import math
 import hashlib
+import re
 from collections import Counter
 from dataclasses import dataclass, replace
 
 from common.algebra import (Actor, Chance, Choice, Deterministic, Refresh, RevealChoice,
                             Terminal, Unknown)
 from common.cards import card_clauses
-from common.cards.card_facts import SUPPORTER, TrainerCard
+from common.cards.card_facts import SUPPORTER, PokemonCard, TrainerCard
 from common.decision import EvaluationStatus, SearchConfiguration, SuccessorResult
 from common.observation import ObservationState, ObservationStateBuilder, TransitionTrace
 from common.strategy.context import (_ACTIVE, _BENCH, _DAMAGE_COUNTER_ANY, _DISCARD,
-                                     _EVOLVE, _MAIN, _ATTACH_FROM)
+                                     _EVOLVE, _MAIN, _ATTACH_FROM, _TO_BENCH, _TO_HAND)
 
 from .activation import ActivationCompiler, ActivationEnvironment
 from .capabilities import DAMAGE_COUNTER_HP, DAMAGE_UNIT_HP
@@ -623,6 +624,8 @@ def _local_action_events(board, action, ctx=None):
         return (("draw_before_refresh", draw_before_refresh),)
     if ctx is not None and _body_ability_ready(board, action, ctx):
         return (("body_ability_ready", 1.0),)
+    if ctx is not None and (overflow := _body_copy_overflow(board, action, ctx)):
+        return (("body_copy_overflow", overflow),)
     select = board.select
     if ctx is not None and select is not None and select.context == _ATTACH_FROM:
         return _acceleration_phase_events(board, action, ctx)
@@ -647,6 +650,30 @@ def _local_action_events(board, action, ctx=None):
                         / max(DAMAGE_COUNTER_HP, target.hp) * prize_value)
             return (("damage_counter_progress", progress),)
     return ()
+
+
+def _body_copy_overflow(board, action, ctx):
+    from .worth import pokemon_copy_capacity
+
+    if board.select is None or board.select.context not in {_TO_BENCH, _TO_HAND}:
+        return 0
+    selected = Counter(card_id for _serial, card_id in _selected_cards(board, action)
+                       if card_id is not None
+                       and pokemon_copy_capacity(ctx.facts(card_id)) != 1)
+    owned = Counter(body.card.card_id for body in board.me.bodies)
+    owned.update(card.card_id for card in board.me.hand)
+    overflow = 0
+    owned_names = Counter(ctx.facts(card_id).name for card_id in owned.elements())
+    for card_id, count in selected.items():
+        facts = ctx.facts(card_id)
+        capacity = pokemon_copy_capacity(facts)
+        if capacity is None:
+            continue
+        if (isinstance(facts, PokemonCard) and facts.evolves_from
+                and not owned_names[facts.evolves_from]):
+            capacity = min(capacity, 1)
+        overflow += max(0, owned[card_id] + count - capacity)
+    return overflow
 
 
 def _body_ability_ready(board, action, ctx):
@@ -819,6 +846,11 @@ def _selected_cards(board, action):
         resolved.append((
             option.serial if option.serial is not None else getattr(card, "serial", None),
             option.cardId if option.cardId is not None else getattr(card, "card_id", None)))
+    if any(card_id is None for _serial, card_id in resolved):
+        identity_ids = iter(int(value) for value in re.findall(
+            r'"id":(\d+)', "".join(map(str, action.identity.parts))))
+        resolved = [(serial, card_id if card_id is not None else next(identity_ids, None))
+                    for serial, card_id in resolved]
     return tuple(resolved)
 
 
