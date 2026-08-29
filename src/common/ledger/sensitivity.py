@@ -916,10 +916,15 @@ def _clause_probe_board(board, facts, kind, ctx, *, parameter=None, locator=None
             (candidate for candidate in ctx.store.values()
              if isinstance(candidate, PokemonCard) and candidate.attacks),
             key=lambda candidate: max(
-                (attack.damage or attack.damage_fix or attack.damage_max or 0)
+                (attack.damage or attack.damage_fix or 0)
                 for attack in candidate.attacks))
+        attack = max(
+            target.attacks,
+            key=lambda candidate: candidate.damage or candidate.damage_fix or 0)
+        target_body = _body_for_facts(board.them.active, target)
         board = replace(board, them=replace(
-            board.them, active=_body_for_facts(board.them.active, target)))
+            board.them, active=replace(target_body, energies=tuple(attack.cost)),
+            asleep=False, paralyzed=False, confused=False))
     if "remaining_hp_30_or_less" in conditions:
         board = replace(board, me=replace(
             board.me, active=replace(board.me.active, hp=20)))

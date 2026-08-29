@@ -468,11 +468,10 @@ def _liveness(card_id, facts, demand: Demand, ctx: EvaluationModel, deck_counts)
         if facts.evolves_from is None:
             live = demand.free_bench > 0
             existing = demand.body_name_counts.get(facts.name, 0)
-            next_stage = sum(
-                getattr(ctx.facts(card.card_id), "evolves_from", None) == facts.name
-                for card in demand.hand)
-            line_capacity = (max(1, next_stage) if _forward_lines().get(facts.name)
-                             else BACKUP_BODY_CAPACITY)
+            line_capacity = pokemon_copy_capacity(
+                facts, demand=demand, ctx=ctx, deck_counts=deck_counts)
+            if line_capacity is None:
+                line_capacity = existing + max(0, demand.free_bench)
             capacity = min(existing + max(0, demand.free_bench), line_capacity)
             return (DemandState.LIVE if live else DemandState.DEAD), max(1, capacity)
         field_targets = demand.body_name_counts.get(facts.evolves_from, 0)
@@ -514,11 +513,29 @@ def _liveness(card_id, facts, demand: Demand, ctx: EvaluationModel, deck_counts)
     return DemandState.LIVE, None
 
 
-def pokemon_copy_capacity(facts) -> int | None:
+def pokemon_copy_capacity(facts, *, demand: Demand | None = None,
+                          ctx: EvaluationModel | None = None,
+                          deck_counts=None) -> int | None:
     if not isinstance(facts, PokemonCard):
         return 1
     if any(clause.allowance == "body" for clause in card_clauses(facts)):
         return None
+    if demand is not None and ctx is not None:
+        descendants = tuple(_forward_lines().get(facts.name, ()))
+        if not descendants and deck_counts is None:
+            return POKEMON_COPY_CAPACITY
+        terminals = ({facts.card_id} if not descendants else {
+            card_id for card_id in descendants
+            if isinstance((candidate := ctx.facts(card_id)), PokemonCard)
+            and not _forward_lines().get(candidate.name)})
+        if terminals:
+            visible = sum(
+                body.card.card_id in terminals for body in demand.bodies)
+            visible += sum(card.card_id in terminals for card in demand.hand)
+            remaining = sum(
+                count for card_id, count in (deck_counts or ()) if card_id in terminals)
+            if capacity := visible + remaining:
+                return capacity
     return POKEMON_COPY_CAPACITY
 
 

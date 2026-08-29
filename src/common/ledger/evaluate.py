@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 from collections import Counter
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 import math
 
 from common.observation import ObservationState
@@ -15,10 +15,10 @@ from common.cards.functions.energy import provision_units
 
 from .activation import (DAMAGE_UNIT_HP, ActivationCompiler, ActivationEnvironment,
                          FeatureActivation)
-from .capabilities import (best_current_damage, body_capability, card_option_units,
+from .capabilities import (Capability, best_current_damage, body_capability, card_option_units,
                            card_option_value, clause_value_units, hidden_zone_expectation,
                            expected_draw_counts, recoverable_discard_ids,
-                           FUTURE_TURN_DISCOUNT)
+                           without_end_turn_energy, FUTURE_TURN_DISCOUNT)
 from .coverage import card_coverage_gap
 from .features import FEATURE_CATALOG
 from .prizes import PrizeMap, derive_prize_map
@@ -64,6 +64,10 @@ class EvaluationSnapshot:
 
 
 DRAW_RESULT_CODE = 2
+BODY_DEVELOPMENT_SCALE = 2.0
+BENCH_REALIZATION_DISCOUNT = 0.5
+BURN_STATUS_SEVERITY = 1.2
+POISON_STATUS_SEVERITY = 1.1
 
 
 class _Trace:
@@ -127,7 +131,6 @@ class _Trace:
 
 EVALUATION_GROUPS = ("context", "me", "them", "public")
 OPPONENT_BELIEF_PATH = ("knowledge", "opponent_belief")
-PRIZE_PHASE_PIVOT = 4
 
 
 def evaluate(board: ObservationState, ctx: EvaluationModel) -> Valuation:
@@ -235,7 +238,7 @@ def _situational_worth(facts, side, opponent, demand, ctx, deck_counts, board):
 
 
 def _slot_option(open_slots) -> float:
-    return float(open_slots)
+    return sum(1.0 / index for index in range(1, int(open_slots) + 1))
 
 
 def _public_group(board, ctx) -> tuple[Valuation, PrizeMap]:
@@ -345,12 +348,19 @@ def _side(trace: _Trace, label: str, side: Side, sign: float, ctx: EvaluationMod
     seen: dict[int, int] = {}
     body_reaches = {}
     capabilities = []
+    used_named_abilities = set()
     for body in side.bodies:
+        body_facts = ctx.facts(body.card.card_id)
+        named_abilities = {
+            ability.name for ability in getattr(body_facts, "abilities", ())
+            if any(clause.allowance == "card" for clause in ability.clauses)}
         body_reach = legal_line_reach(body, reach, ctx, demand.hand, board.turn)
         body_reaches[body.card.serial] = body_reach
         capability = body_capability(
             body, side, opposing_side, board, ctx,
-            reach=body_reach)
+            reach=body_reach,
+            used_named_abilities=used_named_abilities)
+        used_named_abilities.update(named_abilities)
         capabilities.append((body, capability))
         _body(trace, f"{label}.bodies", body, sign, ctx, own=sign > 0,
               active=body is side.active, doomed=doomed and body is side.active,
@@ -360,38 +370,24 @@ def _side(trace: _Trace, label: str, side: Side, sign: float, ctx: EvaluationMod
               opposing_side=opposing_side, board=board,
               capability=capability, demand=demand)
         copies = seen.get(body.card.card_id, 0)
-        copy_capacity = pokemon_copy_capacity(ctx.facts(body.card.card_id))
+        copy_capacity = pokemon_copy_capacity(
+            body_facts, demand=demand, ctx=ctx, deck_counts=deck_counts)
         if copy_capacity is not None and copies >= copy_capacity:
             trace.emit(f"{label}.bodies", "observation", ("surplus_in_play_copy",),
                        sign)
         seen[body.card.card_id] = copies + 1
 
-    active_capability = next((value for body, value in capabilities
-                              if body is side.active), None)
-    trace.emit(f"{label}.combat", "observation", ("attack_now",),
-               sign * (0.0 if active_capability is None
-                       else active_capability.attack_now))
-    trace.emit(f"{label}.combat", "observation", ("bench_reach",),
-               sign * (0.0 if active_capability is None
-                       else active_capability.bench_reach))
-    trace.emit(f"{label}.combat", "observation", ("active_threat",),
-               sign * (0.0 if active_capability is None
-                       else active_capability.attack_potential))
-    trace.emit(f"{label}.combat", "observation", ("attack_progress",), sign * _sequenced_portfolio(
-        value.attack_progress for _body_node, value in capabilities))
-    trace.emit(f"{label}.combat", "observation", ("attack_future",),
-               sign * _sequenced_portfolio(
-                   value.attack_future for _body_node, value in capabilities))
+    active_realization = next((max(value.realization, value.attachment_clock)
+                               for body, value in capabilities
+                               if body is side.active), 0.0)
+    bench_realization = max((value.realization for body, value in capabilities
+                             if body is not side.active), default=0.0)
+    trace.emit(f"{label}.combat", "observation", ("combat_realization",),
+               sign * (active_realization
+                       + BENCH_REALIZATION_DISCOUNT * bench_realization))
     trace.emit(f"{label}.abilities", "observation", ("ability_future",),
                sign * _sequenced_portfolio(
                    value.ability_future for _body_node, value in capabilities))
-    trace.emit(f"{label}.combat", "observation", ("line_potential",),
-               sign * _sequenced_portfolio(
-                   value.line_potential for _body_node, value in capabilities))
-    trace.emit(f"{label}.combat", "observation", ("prize_phase_fit",),
-               sign * _sequenced_portfolio(
-                   _prize_phase_fit(body, value, opposing_side.prize_count, ctx)
-                   for body, value in capabilities))
 
     if side.active is not None and (side.active.max_hp <= 0 or side.active.hp > 0):
         trace.emit(f"{label}.active", "observation", ("active_body",), sign)
@@ -405,8 +401,9 @@ def _side(trace: _Trace, label: str, side: Side, sign: float, ctx: EvaluationMod
                    sign * _damage_pressure(active_facts) / DAMAGE_UNIT_HP)
     trace.emit(f"{label}.bench_slots", "observation", ("open_bench_slot",),
                sign * _slot_option(max(0, side.bench_max - len(side.bench))))
-    trace.emit(f"{label}.bench_slots", "observation", ("developed_bench_body",),
-               sign * len(side.bench))
+    trace.emit(f"{label}.bench_slots", "observation", ("developed_body",),
+               sign * sum(1.0 + BODY_DEVELOPMENT_SCALE * capability.development
+                          for _body_node, capability in capabilities))
     trace.emit(f"{label}.bench_slots", "observation", ("full_bench",),
                sign * float(len(side.bench) >= side.bench_max))
     trace.emit(f"{label}.liability", "observation", ("extra_prize_liability",),
@@ -545,9 +542,22 @@ def _side(trace: _Trace, label: str, side: Side, sign: float, ctx: EvaluationMod
             trace.emit(f"{label}.discard", "observation",
                        ("recoverable_discard_card",), sign)
 
+    condition_realization_loss = 0.0
+    if side.active is not None and (side.asleep or side.paralyzed or side.confused):
+        healthy = body_capability(
+            side.active, replace(side, asleep=False, paralyzed=False, confused=False),
+            opposing_side, board, ctx,
+            reach=body_reaches.get(side.active.card.serial, {}))
+        current = next((value for body, value in capabilities
+                        if body is side.active), Capability())
+        condition_realization_loss = max(0.0, healthy.attack_now - current.attack_now)
     for status in ("asleep", "paralyzed", "confused", "poisoned", "burned"):
+        severity = (1.0 + condition_realization_loss
+                    if status in {"asleep", "paralyzed", "confused"}
+                    else BURN_STATUS_SEVERITY if status == "burned"
+                    else POISON_STATUS_SEVERITY)
         trace.emit(f"{label}.status", "observation", (f"{status}_status",),
-                   -sign * float(getattr(side, status, 0) or 0))
+                   -sign * severity * float(getattr(side, status, 0) or 0))
 
 
 def _body(trace: _Trace, part: str, body: Body, sign: float, ctx: EvaluationModel, *,
@@ -598,10 +608,11 @@ def _body(trace: _Trace, part: str, body: Body, sign: float, ctx: EvaluationMode
         board.deck_counts if own else None, board, sign=sign, body=body)
     trace.gaps.extend(f"{part}: {gap}" for gap in capability.gaps)
 
-    usable = usable_units(body_facts, body.energies, ctx, reach)
+    persistent_body = without_end_turn_energy(body, ctx)
+    usable = usable_units(body_facts, persistent_body.energies, ctx, reach)
     visible_reach, next_reach = development_reach_units(
         body_facts, body.energies, ctx, reach)
-    useless = max(0, len(body.energies) - usable)
+    useless = max(0, len(persistent_body.energies) - usable)
     rentals = 0
     energy_rows = []
     for card in body.energy_cards:
@@ -615,7 +626,8 @@ def _body(trace: _Trace, part: str, body: Body, sign: float, ctx: EvaluationMode
                           if priced_energy_cards else 0.0)
     for card, facts, rental in energy_rows:
         if rental:
-            rentals += 1
+            rentals += provision_units(
+                facts, evolved=bool(getattr(body_facts, "evolves_from", None)))
             continue
         _card(trace, part, card.card_id, facts, sign, ctx, own=own,
               placement="attached_usable", interaction_amount=interaction_amount,
@@ -625,12 +637,8 @@ def _body(trace: _Trace, part: str, body: Body, sign: float, ctx: EvaluationMode
             board.deck_counts if own else None, board, sign=sign, body=body)
     if body.energies and not body.energy_cards:
         trace.emit(part, "card", ("kind:energy",), sign * len(body.energies))
-    rental_units = sum(provision_units(
-        facts, evolved=bool(getattr(body_facts, "evolves_from", None)))
-                       for _card, facts, rental in energy_rows if rental)
     trace.emit(part, "observation", ("end_of_turn_rental",),
                sign * rentals if body is side.active else 0.0)
-    usable = max(0, usable - rental_units)
     trace.emit(part, "observation", ("usable_attached_energy",), sign * usable)
     trace.emit(part, "observation", ("visible_development_reach",),
                sign * visible_reach)
@@ -747,23 +755,6 @@ def _active_doomed(attacker: Side, defender: Side, ctx: EvaluationModel,
               if board is None else
               best_current_damage(attacker.active, attacker, defender, board, ctx))
     return 0 < defender.active.hp <= damage
-
-
-def _prize_phase_fit(body, capability, opposing_prizes, ctx) -> float:
-    facts = ctx.facts(body.card.card_id)
-    if facts is None:
-        return 0.0
-    from .worth import _forward_lines
-
-    line = (facts, *(ctx.facts(card_id)
-                     for card_id in _forward_lines().get(facts.name, ())))
-    route_prizes = max((int(getattr(card, "prize_value", 1) or 1)
-                        for card in line if card is not None), default=1)
-    matches_phase = ((route_prizes > 1)
-                     == (int(opposing_prizes) <= PRIZE_PHASE_PIVOT))
-    if not matches_phase:
-        return 0.0
-    return capability.attack_now + capability.attack_progress + capability.attack_future
 
 
 def _damage_pressure(facts) -> int:

@@ -12,6 +12,9 @@ from common.decision import ComputeConfiguration
 
 
 CONFIGURATION_ID_DIGEST_BYTES = 8
+LEGACY_COMBAT_SCHEMA_VERSION = 19
+COMBAT_REALIZATION_SCHEMA_VERSION = 20
+LEGACY_BODY_DEVELOPMENT_WEIGHT = 0.3
 
 
 def _finite(key, value) -> float:
@@ -81,6 +84,25 @@ class ValuationConfiguration(Mapping[str, float]):
     def general(cls, catalog: FeatureCatalog = FEATURE_CATALOG):
         return cls({key: catalog[key].default for key in catalog.priced_keys},
                    schema_version=catalog.schema_version)
+
+    @classmethod
+    def from_recorded(cls, values, *, schema_version: int,
+                      catalog: FeatureCatalog = FEATURE_CATALOG):
+        if int(schema_version) == catalog.schema_version:
+            return cls(values, schema_version=schema_version)
+        if (int(schema_version) != LEGACY_COMBAT_SCHEMA_VERSION
+                or catalog.schema_version != COMBAT_REALIZATION_SCHEMA_VERSION):
+            raise ValueError("unsupported recorded valuation schema version")
+        migrated = dict(_coefficient_pairs(values, "recorded valuation configuration"))
+        realization = migrated.pop("combat.prize_phase_fit", 1.0)
+        for key in (
+                "combat.attack_now", "combat.attack_progress", "combat.attack_future",
+                "combat.bench_reach", "combat.active_threat", "combat.line_potential"):
+            migrated.pop(key, None)
+        migrated["body.development"] = migrated.pop(
+            "bench.developed_body", LEGACY_BODY_DEVELOPMENT_WEIGHT)
+        migrated["combat.realization"] = realization
+        return cls(migrated, schema_version=catalog.schema_version)
 
     def resolve(self, overlay: DeckOverlay,
                 catalog: FeatureCatalog = FEATURE_CATALOG) -> "ValuationConfiguration":

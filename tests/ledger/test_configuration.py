@@ -43,11 +43,11 @@ def test_runtime_context_resolves_the_complete_catalog_with_a_deck_residual():
     general = ValuationConfiguration.general()
     context = EvaluationModel.build(
         configuration=general,
-        overlay=DeckOverlay({"combat.attack_now": 0.25}),
+        overlay=DeckOverlay({"combat.realization": 0.25}),
     )
 
     assert set(context.configuration) == set(FEATURE_CATALOG.priced_keys)
-    assert context.configuration["combat.attack_now"] == 0.60
+    assert context.configuration["combat.realization"] == 1.25
     assert context.configuration.identity != general.identity
 
 
@@ -491,3 +491,25 @@ def test_card_functions_compile_to_situational_feature_activations():
                for item in valuation.activations)
     assert any(item.feature == "function.energy.provision"
                for item in valuation.activations)
+
+
+def test_schema_19_recording_migrates_to_one_combat_realization_owner():
+    old = dict(ValuationConfiguration.general().values)
+    old.pop("combat.realization")
+    old.pop("body.development")
+    old.update({
+        "combat.attack_now": 0.35,
+        "combat.attack_progress": 0.20,
+        "combat.attack_future": 0.16,
+        "combat.bench_reach": 0.10,
+        "combat.active_threat": 0.12,
+        "combat.line_potential": 0.40,
+        "combat.prize_phase_fit": 1.0,
+        "bench.developed_body": 0.30,
+    })
+
+    migrated = ValuationConfiguration.from_recorded(old, schema_version=19)
+
+    assert migrated.schema_version == FEATURE_CATALOG.schema_version
+    assert migrated["combat.realization"] == 1.0
+    assert migrated["body.development"] == 0.30

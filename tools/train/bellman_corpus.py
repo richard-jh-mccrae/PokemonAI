@@ -66,9 +66,8 @@ def _satisfies_human(chosen, correct, equivalence) -> bool:
         return False
     if not correct:
         return not chosen
-    from common.option_equivalence import class_of
-    picked = frozenset(chosen)
-    return all(bool(class_of(equivalence, wanted) & picked) for wanted in correct)
+    from common.option_equivalence import selection_covers_equivalently
+    return selection_covers_equivalently(chosen, correct, equivalence)
 
 
 def _retest(correction, runtime) -> dict:

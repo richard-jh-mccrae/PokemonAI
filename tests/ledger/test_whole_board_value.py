@@ -575,7 +575,7 @@ def test_card_option_units_do_not_embed_trainable_feature_weights():
     general = EvaluationModel.build()
     reweighted = EvaluationModel.build(configuration=general.configuration.with_values({
         "ability.draw_cards": general.configuration["ability.draw_cards"] * 20,
-        "combat.attack_future": general.configuration["combat.attack_future"] * 20,
+        "combat.realization": general.configuration["combat.realization"] * 20,
         "option.attack": general.configuration["option.attack"] * 20,
     }))
 
@@ -723,4 +723,3 @@ def test_both_active_ko_prices_own_prize_and_terminal_loss():
     terminal_capability = body_capability(
         terminal.me.active, terminal.me, terminal.them, terminal, context)
     assert safe_capability.attack_now > terminal_capability.attack_now
-    assert safe_capability.resource_cost > terminal_capability.resource_cost

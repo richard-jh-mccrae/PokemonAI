@@ -158,3 +158,23 @@ def option_equivalence(options, frame: dict | None) -> dict:
 def class_of(equiv: dict, index: int) -> frozenset:
     """The class ``index`` belongs to — itself alone when it is in none."""
     return (equiv or {}).get(index) or frozenset({index})
+
+
+def selection_covers_equivalently(chosen, required, equivalence) -> bool:
+    """Whether distinct chosen slots can cover every required slot through equivalence."""
+    available = tuple(chosen or ())
+    needs = tuple(required or ())
+    if len(available) < len(needs):
+        return False
+
+    def assign(index: int, remaining: tuple) -> bool:
+        if index >= len(needs):
+            return True
+        accepted = class_of(equivalence, needs[index])
+        for position, picked in enumerate(remaining):
+            if picked in accepted and assign(
+                    index + 1, remaining[:position] + remaining[position + 1:]):
+                return True
+        return False
+
+    return assign(0, available)

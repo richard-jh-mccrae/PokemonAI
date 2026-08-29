@@ -620,6 +620,12 @@ def _action_roster_key(action):
 
 
 def _local_action_events(board, action, ctx=None):
+    dead_discard = _dead_discard(board, action, ctx)
+    if dead_discard:
+        return (("dead_discard", dead_discard),)
+    dead_play = _dead_play(board, action, ctx)
+    if dead_play:
+        return (("dead_play", dead_play),)
     draw_before_refresh = _draw_before_refresh(board, action, ctx)
     if draw_before_refresh:
         return (("draw_before_refresh", draw_before_refresh),)
@@ -658,6 +664,32 @@ def _local_action_events(board, action, ctx=None):
     return ()
 
 
+def _dead_discard(board, action, ctx):
+    if ctx is None or board.select is None or board.select.context != _DISCARD:
+        return 0.0
+    from .worth import Demand, DemandState, _liveness
+
+    demand = Demand.read(board.me, ctx, board.turn)
+    return float(sum(
+        _liveness(card_id, ctx.facts(card_id), demand, ctx, board.deck_counts)[0]
+        is DemandState.DEAD
+        for _serial, card_id in _selected_cards(board, action)
+        if card_id is not None))
+
+
+def _dead_play(board, action, ctx):
+    if ctx is None or action.identity.kind != "play":
+        return 0.0
+    from .worth import Demand, DemandState, _liveness
+
+    demand = Demand.read(board.me, ctx, board.turn)
+    return float(sum(
+        _liveness(card_id, ctx.facts(card_id), demand, ctx, board.deck_counts)[0]
+        is DemandState.DEAD
+        for _serial, card_id in _selected_cards(board, action)
+        if card_id is not None))
+
+
 def _retreats_doomed_denial(board, action, ctx):
     if action.identity.kind != "retreat" or board.me.active is None:
         return False
@@ -692,11 +724,22 @@ def _body_copy_overflow(board, action, ctx):
 
 
 def _body_ability_ready(board, action, ctx):
-    if action.identity.kind != "evolve" or board.select is None:
+    if board.select is None:
         return False
     selected = tuple(ctx.facts(card_id)
                      for _serial, card_id in _selected_cards(board, action)
                      if card_id is not None)
+    triggered_evolutions = tuple(
+        facts for facts in selected if isinstance(facts, PokemonCard)
+        and facts.evolves_from
+        and any(clause.trigger == "on_evolve" for clause in card_clauses(facts)))
+    if any(
+            ctx.facts(body.card.card_id).name == facts.evolves_from
+            and not body.appeared_this_turn
+            for facts in triggered_evolutions for body in board.me.bodies):
+        return True
+    if action.identity.kind != "evolve":
+        return False
     if not any(any(clause.allowance == "body" for clause in card_clauses(facts))
                for facts in selected):
         return False
@@ -879,9 +922,11 @@ def _selected_cards(board, action):
             continue
         option = options[index]
         card = None
-        if option.serial is None and option.cardId is None \
-                and isinstance(option.index, int) and 0 <= option.index < len(board.me.hand):
-            card = tuple(board.me.hand)[option.index]
+        if option.serial is None and option.cardId is None and isinstance(option.index, int):
+            if board.select.deck and 0 <= option.index < len(board.select.deck):
+                card = board.select.deck[option.index]
+            elif 0 <= option.index < len(board.me.hand):
+                card = tuple(board.me.hand)[option.index]
         resolved.append((
             option.serial if option.serial is not None else getattr(card, "serial", None),
             option.cardId if option.cardId is not None else getattr(card, "card_id", None)))
@@ -935,16 +980,28 @@ def _discard_spend_contributions(baseline, board, action, ctx=None):
     tokens = {
         token for token, _serial, card_id in sources
         if card_id is None or remaining[card_id] <= 0}
+    dead_tokens = set()
+    if ctx is not None:
+        from .worth import Demand, DemandState, _liveness
+
+        demand = Demand.read(board.me, ctx, board.turn)
+        dead_tokens = {
+            token for token, _serial, card_id in sources
+            if card_id is not None
+            and _liveness(
+                card_id, ctx.facts(card_id), demand, ctx, board.deck_counts)[0]
+            is DemandState.DEAD}
     contributions = list(FeatureContribution(
         item.feature, -item.activation, item.coefficient, -item.value,
         ("action.discard_spend", *item.provenance))
         for item in baseline.contributions
-        if item.value > 0 and tokens.intersection(item.provenance))
+        if item.value > 0 and tokens.intersection(item.provenance)
+        and not dead_tokens.intersection(item.provenance))
     if ctx is not None:
         from .capabilities import card_option_units
 
         for token, _serial, card_id in sources:
-            if token not in tokens or card_id is None:
+            if token not in tokens or token in dead_tokens or card_id is None:
                 continue
             units = card_option_units(
                 ctx.facts(card_id), board.me, board.them, board, ctx)

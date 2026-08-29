@@ -188,6 +188,10 @@ _DECLARED_RULES = {
         "action", ("draw_before_refresh",), "constant"),
     "action.play_before_refresh": _rule(
         "action", ("play_before_refresh",), "constant"),
+    "action.dead_play": _rule(
+        "action", ("dead_play",), "constant"),
+    "action.dead_discard": _rule(
+        "action", ("dead_discard",), "constant"),
     "action.body_ability_ready": _rule(
         "action", ("body_ability_ready",), "constant"),
     "action.body_copy_overflow": _rule(
@@ -277,7 +281,7 @@ _OBSERVATION_CLAIMS = {
     "damage.floor": "body_damage_fraction",
     "body.hp_per_100": "body_hp_units",
     "bench.open_slot": "open_bench_slot",
-    "bench.developed_body": "developed_bench_body",
+    "body.development": "developed_body",
     "bench.full": "full_bench",
     "body.prize_liability": "extra_prize_liability",
     "energy.concentration": "concentrated_energy",
@@ -287,13 +291,7 @@ _OBSERVATION_CLAIMS = {
     "active.unready_fraction": "unready_active",
     "active.retreat_ready": "retreat_ready_active",
     "active.damage_pressure": "active_damage_pressure",
-    "combat.attack_now": "attack_now",
-    "combat.attack_progress": "attack_progress",
-    "combat.attack_future": "attack_future",
-    "combat.bench_reach": "bench_reach",
-    "combat.active_threat": "active_threat",
-    "combat.line_potential": "line_potential",
-    "combat.prize_phase_fit": "prize_phase_fit",
+    "combat.realization": "combat_realization",
     "combat.realized_ko": "realized_knockout",
     "ability.draw_cards": "ability_draw_cards",
     "ability.search_cards": "ability_search_cards",
@@ -430,6 +428,8 @@ _SCALAR_DEFAULTS = {
     "action.overkill_counter": -100.0,
     "action.draw_before_refresh": -0.75,
     "action.play_before_refresh": -0.25,
+    "action.dead_play": -0.20,
+    "action.dead_discard": 0.15,
     "action.body_ability_ready": 0.40,
     "action.body_copy_overflow": -0.30,
     "action.retreat_doomed_denial": -1.0,
@@ -440,7 +440,7 @@ _SCALAR_DEFAULTS = {
     "zone.under_body": 0.002,
     "zone.attached_usable": 0.004,
     "zone.attached_useless": -0.08,
-    "energy.end_of_turn_rental": -0.20,
+    "energy.end_of_turn_rental": -0.25,
     "zone.tool_attached": 0.002,
     "demand.dead": -0.04,
     "demand.colorless_only": -0.02,
@@ -456,7 +456,7 @@ _SCALAR_DEFAULTS = {
     "damage.floor": 0.30,
     "body.hp_per_100": 0.02,
     "bench.open_slot": 0.15,
-    "bench.developed_body": 0.30,
+    "body.development": 0.30,
     "bench.full": -0.30,
     "body.prize_liability": 0.04,
     "energy.concentration": 0.10,
@@ -466,13 +466,7 @@ _SCALAR_DEFAULTS = {
     "active.unready_fraction": 0.08,
     "active.retreat_ready": 0.04,
     "active.damage_pressure": 0.02,
-    "combat.attack_now": 0.35,
-    "combat.attack_progress": 0.20,
-    "combat.attack_future": 0.16,
-    "combat.bench_reach": 0.10,
-    "combat.active_threat": 0.12,
-    "combat.line_potential": 0.40,
-    "combat.prize_phase_fit": 1.0,
+    "combat.realization": 1.0,
     "combat.realized_ko": 1.0,
     "ability.draw_cards": 0.08,
     "ability.search_cards": 0.10,
@@ -533,11 +527,11 @@ _SCALAR_DEFAULTS = {
     "function.attack.piercing": 0.03,
     "function.energy.provision": 0.04,
     "action.opportunity_cost": 0.065,
-    "status.asleep": 0.15,
-    "status.paralyzed": 0.15,
-    "status.confused": 0.08,
-    "status.poisoned": 0.08,
-    "status.burned": 0.08,
+    "status.asleep": 0.20,
+    "status.paralyzed": 0.20,
+    "status.confused": 0.15,
+    "status.poisoned": 0.10,
+    "status.burned": 0.15,
 }
 
 CLAUSE_PARAMETER_DEFAULTS = MappingProxyType({
@@ -673,8 +667,12 @@ FEATURE_CATALOG = FeatureCatalog(
             for key in (
                 "resource.hand_option", "resource.stadium_option",
                 "resource.deck_option", "resource.prize_locked",
-                "resource.known_top_option")),
-    schema_version=19,
+                "resource.known_top_option",
+                "combat.attack_now", "combat.attack_progress",
+                "combat.attack_future", "combat.bench_reach",
+                "combat.active_threat", "combat.line_potential",
+                "combat.prize_phase_fit", "bench.developed_body")),
+    schema_version=20,
 )
 
 

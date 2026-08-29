@@ -31,7 +31,7 @@ import time
 REPO = Path(__file__).resolve().parents[2]
 sys.path[:0] = [str(REPO), str(REPO / "tools"), str(REPO / "src")]
 
-from common.option_equivalence import class_of, option_equivalence  # noqa: E402
+from common.option_equivalence import option_equivalence, selection_covers_equivalently  # noqa: E402
 from functools import partial
 
 from common.engine import (CgpyTransitionProvider,
@@ -41,7 +41,7 @@ from common.runtime import build_runtime  # noqa: E402
 from common.cards import card_store  # noqa: E402
 from common.decision import (ComputeConfiguration, PolicyConfiguration,
                              SearchConfiguration, correction_compute_profile)  # noqa: E402
-from common.ledger import (EvaluationModel, LedgerDecider, OpponentProfile,
+from common.ledger import (EvaluationModel, FEATURE_CATALOG, LedgerDecider, OpponentProfile,
                            ValuationConfiguration)  # noqa: E402
 from common.opponent import OpponentMechanic, OpponentTrait  # noqa: E402
 from common.strategy import PrizePlan  # noqa: E402
@@ -91,9 +91,10 @@ def _recorded_model(configuration: dict) -> EvaluationModel:
 
     saved = configuration["evaluation_model"]
     valuation = saved["valuation"]
+    legacy_valuation = valuation["schema_version"] != FEATURE_CATALOG.schema_version
     model = EvaluationModel(
-        ValuationConfiguration(valuation["values"],
-                               schema_version=valuation["schema_version"]),
+        ValuationConfiguration.from_recorded(
+            valuation["values"], schema_version=valuation["schema_version"]),
         card_store(),
         PrizePlan(tuple(saved["prize_plan"]["protect"]),
                   tuple(saved["prize_plan"]["offer"])),
@@ -105,9 +106,9 @@ def _recorded_model(configuration: dict) -> EvaluationModel:
         ) for name, profile in saved["opponent_profiles"].items()},
     )
     if model.store_identity != saved["card_store_identity"] \
-            or model.configuration.identity != valuation["identity"] \
+            or (not legacy_valuation and model.configuration.identity != valuation["identity"]) \
             or model.prize_plan.identity != saved["prize_plan"]["identity"] \
-            or model.identity != saved["identity"]:
+            or (not legacy_valuation and model.identity != saved["identity"]):
         raise ValueError("recorded Evaluation Model identity cannot be resolved")
     return model
 
@@ -156,8 +157,7 @@ def _satisfies_one(chosen, correct, equivalence) -> bool:
         return False
     if not correct:
         return not chosen
-    picked = frozenset(chosen)
-    return all(bool(class_of(equivalence, wanted) & picked) for wanted in correct)
+    return selection_covers_equivalently(chosen, correct, equivalence)
 
 
 def _satisfies_human(chosen, correction, equivalence) -> bool:

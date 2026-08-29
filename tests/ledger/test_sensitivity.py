@@ -289,7 +289,8 @@ def test_multi_target_attack_count_changes_total_attack_impact():
     board = _rich_board()
     facts = context.facts(144)
     active = _body_for_facts(board.me.active, facts)
-    side = replace(board.me, active=active)
+    side = replace(
+        board.me, active=active, asleep=False, paralyzed=False, confused=False)
     single = replace(facts, attacks=tuple(replace(
         attack, clauses=tuple(Clause(
             clause.kind, **({**clause.params, "count": 1}

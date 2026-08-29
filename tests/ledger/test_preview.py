@@ -103,6 +103,17 @@ def test_body_ability_readiness_stops_after_the_line_is_fully_developed():
     assert not _body_ability_ready(developed, evolve, context)
 
 
+def test_deck_selection_reads_the_deck_card_before_an_overlapping_hand_index():
+    select = {"context": 7, "minCount": 0, "maxCount": 1,
+              "deck": [{"id": 674, "serial": 800, "playerIndex": 0}],
+              "option": [{"area": 1, "index": 0, "playerIndex": 0, "type": 3}]}
+    board = ObservationStateBuilder(DECK).root(printout(
+        me=player(active=body(673, 1), hand=[DRAKLOAK]), select=select))
+
+    assert _body_ability_ready(
+        board, action("card", (0,)), EvaluationModel.build())
+
+
 def test_compound_fetch_prices_only_copies_above_total_body_capacity():
     select = {"context": 5, "minCount": 1, "maxCount": 2,
               "option": [{"cardId": DREEPY, "serial": 800, "type": 3},

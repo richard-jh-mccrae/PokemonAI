@@ -27,7 +27,7 @@ def test_manifest_describes_declarations_and_ledger_only():
     assert summary(manifest)["system"] == "ledger"
     configuration = manifest["valuation_configuration"]
     assert configuration["identity"]
-    assert configuration["values"]["combat.attack_now"] == 0.35
+    assert configuration["values"]["combat.realization"] == 1.0
     assert not any("role." in key for key in configuration["values"])
     assert configuration["deck_overlay"] == {
         "demand.dead": 0.15, "energy.concentration": 0.02,
@@ -56,7 +56,7 @@ def test_brief_projects_the_same_weights_to_html_and_csv():
     assert manifest["valuation_configuration"]["identity"] in html
     assert "valuation_coefficient" in csv_text
     assert "zone.in_play" in csv_text
-    assert "combat.attack_now" in csv_text
+    assert "combat.realization" in csv_text
     assert "Valuation configuration" in html
 
 

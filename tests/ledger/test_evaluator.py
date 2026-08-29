@@ -14,6 +14,8 @@ import pytest
 
 from common.observation import ObservationStateBuilder
 from common.ledger import DeckOverlay, EvaluationModel, evaluate
+from common.ledger.capabilities import body_capability
+from common.ledger.evaluate import _slot_option
 
 
 def board(**kwargs):
@@ -53,7 +55,7 @@ def test_feature_extraction_is_independent_of_resolved_coefficients():
     state = board(me=player(active=body(DREEPY, 1), hand=[DARK_E, DRAGAPULT]))
     general = EvaluationModel.build()
     bent = EvaluationModel.build(overlay=DeckOverlay({
-        "combat.attack_now": -0.25,
+        "combat.realization": -0.25,
         "zone.in_hand": -1.2,
     }))
 
@@ -149,6 +151,9 @@ def test_ultra_ball_fetching_the_live_evolution_is_positive():
 
 
 # --- bench slots are scarce goods ---
+
+def test_bench_slot_reserve_escalates_toward_the_last_open_slot():
+    assert _slot_option(5) - _slot_option(4) < _slot_option(1) - _slot_option(0)
 
 def test_benching_the_wincon_basic_is_positive_even_on_the_last_slot():
     filler = [body(MAKUHITA, 10 + i) for i in range(4)]
@@ -318,6 +323,106 @@ def test_a_status_condition_prices_the_side_down():
     assert evaluate(sick, context).part("me.status") < 0
 
 
+def test_combat_realization_is_one_attack_envelope_not_a_sum_of_readings():
+    state = board(me=player(active=body(MEGA_STARMIE, 1, energies=(WATER,))))
+    context = ctx()
+
+    capability = body_capability(
+        state.me.active, state.me, state.them, state, context)
+
+    assert capability.realization == pytest.approx(1.2 + (1.9 - 1.0) * (1 / 3) ** 2)
+
+
+def test_stronger_attack_upgrade_gap_values_progress_beyond_a_ready_attack():
+    one_energy = board(
+        me=player(active=body(MEGA_STARMIE, 1, energies=(WATER,))),
+        them=player(active=body(MEGA_STARMIE, 9), own=False))
+    two_energy = board(
+        me=player(active=body(MEGA_STARMIE, 1, energies=(WATER, WATER))),
+        them=player(active=body(MEGA_STARMIE, 9), own=False))
+    context = ctx()
+
+    one = body_capability(
+        one_energy.me.active, one_energy.me, one_energy.them, one_energy, context)
+    two = body_capability(
+        two_energy.me.active, two_energy.me, two_energy.them, two_energy, context)
+
+    assert two.realization > one.realization
+
+
+def test_held_typed_energy_advances_the_next_attachment_clock():
+    without = board(me=player(active=body(MAKUHITA, 1), bench=[body(678, 2)]),
+                    them=player(active=body(DRAKLOAK, 3), own=False))
+    with_fighting = board(
+        me=player(active=body(MAKUHITA, 1), bench=[body(678, 2)], hand=[6]),
+        them=player(active=body(DRAKLOAK, 3), own=False))
+    context = ctx()
+
+    bare = body_capability(
+        without.me.bench[0], without.me, without.them, without, context)
+    funded = body_capability(
+        with_fighting.me.bench[0], with_fighting.me, with_fighting.them,
+        with_fighting, context)
+
+    assert funded.attachment_clock > bare.attachment_clock
+
+
+def test_spent_attachment_allowance_removes_held_energy_from_the_clock():
+    state = board(
+        me=player(active=body(MAKUHITA, 1), bench=[body(678, 2)], hand=[6]),
+        them=player(active=body(DRAKLOAK, 3), own=False),
+        turn=1,
+        energy_attached=True)
+    capability = body_capability(
+        state.me.bench[0], state.me, state.them, state, ctx())
+
+    assert capability.attachment_clock == pytest.approx(capability.realization)
+
+
+def test_promotion_values_active_realization_over_discounted_backup_realization():
+    lucario = body(678, 2)
+    makuhita = body(MAKUHITA, 3, energies=(6,))
+    them = player(active=body(DRAKLOAK, 4), own=False)
+    promoted_lucario = board(
+        me=player(active=lucario, bench=[makuhita], hand=[6]), them=them,
+        energy_attached=True)
+    promoted_makuhita = board(
+        me=player(active=makuhita, bench=[lucario], hand=[6]), them=them,
+        energy_attached=True)
+
+    assert evaluate(promoted_lucario, ctx()).total > evaluate(
+        promoted_makuhita, ctx()).total
+
+
+def test_confusion_reduces_expected_attack_and_retreat_cures_it():
+    context = ctx()
+    healthy = board(me=player(
+        active=body(DREEPY, 1, energies=(PSYCHIC,)), bench=[body(MAKUHITA, 2)]))
+    confused = board(me=player(
+        active=body(DREEPY, 1, energies=(PSYCHIC,)), bench=[body(MAKUHITA, 2)],
+        confused=True))
+    after = board(me=player(
+        active=body(MAKUHITA, 2), bench=[body(DREEPY, 1, energies=(PSYCHIC,))]))
+
+    healthy_capability = body_capability(
+        healthy.me.active, healthy.me, healthy.them, healthy, context)
+    confused_capability = body_capability(
+        confused.me.active, confused.me, confused.them, confused, context)
+
+    assert confused_capability.attack_now < healthy_capability.attack_now
+    assert swing(confused, after, context) > swing(healthy, after, context) + 0.1
+
+
+@pytest.mark.parametrize("status", ("asleep", "paralyzed"))
+def test_attack_blocking_conditions_zero_immediate_realization(status):
+    state = board(me=player(
+        active=body(DREEPY, 1, energies=(PSYCHIC,)), **{status: True}))
+    capability = body_capability(
+        state.me.active, state.me, state.them, state, ctx())
+
+    assert capability.attack_now == 0.0
+
+
 def test_an_attached_tool_adds_its_worth_through_the_body():
     bare = board(me=player(active=body(MEGA_STARMIE, 1)))
     equipped = board(me=player(active=body(MEGA_STARMIE, 1, tools=(AIR_BALLOON,))))
@@ -342,12 +447,19 @@ def test_rule_box_bodies_carry_prize_liability():
 def test_the_active_premium_pays_more_when_the_active_can_attack():
     """Dreepy's Bite costs one Psychic: attached, the same body earns the full premium."""
     context = ctx()
-    unready = evaluate(board(me=player(active=body(DREEPY, 1))), context)
-    ready = evaluate(board(me=player(active=body(DREEPY, 1, energies=(PSYCHIC,)))), context)
+    unready = evaluate(board(me=player(active=body(DREEPY, 1)),
+                             them=player(active=body(MAKUHITA, 2), own=False)), context)
+    ready = evaluate(board(me=player(active=body(DREEPY, 1, energies=(PSYCHIC,))),
+                           them=player(active=body(MAKUHITA, 2), own=False)), context)
     unready_features = {item.feature: item.value for item in unready.activations}
     ready_features = {item.feature: item.value for item in ready.activations}
-    assert unready_features.get("combat.attack_now", 0.0) == 0.0
-    assert ready_features["combat.attack_now"] > 0.0
+    assert ready_features["combat.realization"] > unready_features.get(
+        "combat.realization", 0.0)
+    assert not set(ready_features).intersection({
+        "combat.attack_now", "combat.attack_progress", "combat.attack_future",
+        "combat.bench_reach", "combat.active_threat", "combat.line_potential",
+        "combat.prize_phase_fit",
+    })
 
 
 def test_energy_units_without_card_detail_still_price():
@@ -405,6 +517,37 @@ def test_hand_copies_beyond_consumable_capacity_saturate():
                         context).part("me.hand")
 
     assert hand_part([MAKUHITA] * 3) + 0.02 < 3 * hand_part([MAKUHITA])
+
+
+def test_in_play_line_copy_capacity_comes_from_remaining_terminal_evolutions():
+    decklist = [MEGA_STARMIE] * 3 + [WATER_E] * 20
+    three = board(me=player(
+        active=body(DREEPY, 1),
+        bench=[body(STARYU, 2), body(STARYU, 3), body(STARYU, 4)]),
+        decklist=decklist)
+    four = board(me=player(
+        active=body(DREEPY, 1),
+        bench=[body(STARYU, 2), body(STARYU, 3), body(STARYU, 4), body(STARYU, 5)]),
+        decklist=decklist)
+
+    def surplus(state):
+        return sum(item.value for item in evaluate(state, ctx()).activations
+                   if item.feature == "copy.surplus_in_play")
+
+    assert surplus(three) == 0.0
+    assert surplus(four) == 1.0
+
+
+def test_terminal_copy_capacity_comes_from_observed_terminal_copies():
+    state = board(me=player(
+        active=body(DRAGAPULT, 1),
+        bench=[body(DRAGAPULT, 2), body(DRAGAPULT, 3)]),
+        decklist=[DRAGAPULT] * 3)
+
+    surplus = sum(item.value for item in evaluate(state, ctx()).activations
+                  if item.feature == "copy.surplus_in_play")
+
+    assert surplus == 0.0
 
 
 def test_fetch_liveness_respects_the_target_vocabulary():
@@ -493,8 +636,7 @@ def test_concentration_prefers_finishing_the_started_twin():
     assert armed.configuration["energy.concentration"] > 0
     assert evaluate(split(2, 0), armed).total > evaluate(split(1, 1), armed).total
     flat = ctx(overrides={"energy.concentration": 0.0,
-                          "combat.attack_progress": 0.0,
-                          "combat.attack_future": 0.0})
+                          "combat.realization": 0.0})
     assert evaluate(split(2, 0), flat).total == pytest.approx(
         evaluate(split(1, 1), flat).total)
 
@@ -518,6 +660,32 @@ def test_rental_energy_on_the_bench_prices_zero():
     bare_active = evaluate(board(me=player(active=body(MEGA_STARMIE, 1))), context)
     rental_active = evaluate(board(me=player(active=ignition_body(1))), context)
     assert rental_active.total > bare_active.total
+
+
+def test_rental_subtraction_does_not_erase_persistent_attached_energy():
+    shell = body(MEGA_STARMIE, 1)
+    shell["energies"] = [WATER, 0, 0, 0]
+    shell["energyCards"] = [
+        {"id": WATER_E, "serial": 700},
+        {"id": IGNITION, "serial": 701},
+    ]
+    valuation = evaluate(board(me=player(active=shell)), ctx())
+
+    assert sum(item.value for item in valuation.activations
+               if item.feature == "zone.attached_usable") == 1.0
+
+
+def test_named_once_per_turn_ability_has_one_board_capacity():
+    one = board(me=player(
+        active=body(676, 1), bench=[body(LUNATONE, 2)], hand=[6]))
+    two = board(me=player(
+        active=body(676, 1), bench=[body(LUNATONE, 2), body(LUNATONE, 3)], hand=[6]))
+
+    def draw_units(state):
+        return sum(item.value for item in evaluate(state, ctx()).activations
+                   if item.feature == "ability.draw_cards")
+
+    assert draw_units(two) == pytest.approx(draw_units(one))
 
 
 def test_hp_value_makes_the_evolve_pay_for_its_hand_card():
