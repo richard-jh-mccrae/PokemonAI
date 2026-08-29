@@ -2,9 +2,13 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+from functools import lru_cache
 from itertools import permutations
 
 from common.strategy import PrizePlan
+
+
+PRIZE_ROUTE_CACHE_SIZE = 4096
 
 
 @dataclass(frozen=True)
@@ -33,20 +37,27 @@ def derive_prize_map(board, ctx) -> PrizeMap:
     if remaining == 0 or board.me.active is None:
         return PrizeMap(remaining, (), 0, 0)
     active = _liability(board.me.active, ctx)
-    bench = tuple(_liability(body, ctx) for body in board.me.bench)
+    bench = tuple(sorted(_liability(body, ctx) for body in board.me.bench))
+    route, printed, overrun, preference = _best_route(
+        remaining, active, bench, ctx.prize_plan.offer, ctx.prize_plan.protect)
+    return PrizeMap(remaining, route, printed, overrun, preference)
+
+
+@lru_cache(maxsize=PRIZE_ROUTE_CACHE_SIZE)
+def _best_route(remaining, active, bench, offer, protect):
+    plan = PrizePlan(protect=protect, offer=offer)
     candidates = []
     for suffix in permutations(bench):
         route = _until_game((active, *suffix), remaining)
         printed = sum(value for _card_id, value in route)
         complete = printed >= remaining
         overrun = max(0, printed - remaining) if complete else 0
-        preference = _preference(route, ctx.prize_plan, ctx)
+        preference = _preference(route, plan)
         structural = (int(complete), overrun if complete else printed, len(route))
         candidates.append((structural, preference, route, printed, overrun))
     _structural, preference, route, printed, overrun = max(
         candidates, key=lambda row: (row[0], row[1]))
-    return PrizeMap(remaining, tuple(card_id for card_id, _value in route),
-                    printed, overrun, preference)
+    return tuple(card_id for card_id, _value in route), printed, overrun, preference
 
 
 def _liability(body, ctx) -> tuple[int, int]:
@@ -64,7 +75,7 @@ def _until_game(route, remaining):
     return tuple(chosen)
 
 
-def _preference(route, plan: PrizePlan, ctx) -> tuple[int, ...]:
+def _preference(route, plan: PrizePlan) -> tuple[int, ...]:
     card_ids = tuple(card_id for card_id, _value in route)
     limit = len(card_ids)
 

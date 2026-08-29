@@ -5,7 +5,6 @@ never a persistent chance subtree."""
 from __future__ import annotations
 
 import hashlib
-import gc
 import random
 from collections import defaultdict
 from dataclasses import dataclass
@@ -21,6 +20,9 @@ from common.ledger.evaluate import FeatureActivation, FeatureContribution, Valua
 PLAYER_COUNT = 2
 SEED_DIGEST_BYTES = 8
 DIRECT_REFRESH_CARD_GAIN = 3
+DIRECT_REFRESH_MAX_RETAINED = 1
+MIN_ADAPTIVE_SAMPLES = 4
+SAMPLES_PER_OUTCOME = 2
 
 
 @dataclass(frozen=True, slots=True)
@@ -92,12 +94,13 @@ def refresh_outcomes(observation, board: ObservationState, card_id: int,
     draws = tuple(draws)
     seed = _seed(board, card_id, compute.chance_seed)
     retained = len(hand_ids)
-    if (ctx is not None and draws
+    if (ctx is not None and draws and retained <= DIRECT_REFRESH_MAX_RETAINED
             and min(int(own_draw) - retained
                     for own_draw, _opponent_draw in draws) >= DIRECT_REFRESH_CARD_GAIN):
         baseline = evaluate_fn(board)
         units = card_option_units(
-            ctx.facts(card_id), board.me, board.them, board, ctx)
+            ctx.facts(card_id), board.me, board.them, board, ctx,
+            _price_shuffle_loss=False)
         extra = tuple(FeatureContribution(
             feature, activation, ctx.configuration[feature],
             activation * ctx.configuration[feature], ("refresh.direct",))
@@ -119,6 +122,9 @@ def refresh_outcomes(observation, board: ObservationState, card_id: int,
         return result, tuple(sorted(gaps)), summary
     running = _RunningValuation()
     if draws:
+        minimum_samples = min(
+            compute.chance_sample_budget,
+            max(MIN_ADAPTIVE_SAMPLES, len(draws) * SAMPLES_PER_OUTCOME))
         for index in range(compute.chance_sample_budget):
             own_draw, opponent_draw = draws[index % len(draws)]
             rng = random.Random(_sample_seed(seed, index))
@@ -132,7 +138,8 @@ def refresh_outcomes(observation, board: ObservationState, card_id: int,
             gaps.update(valuation.gaps)
             running.add(valuation)
             del valuation, successor, synthetic
-            gc.collect()
+            if running.count >= minimum_samples and running.m2 == 0.0:
+                break
     ordered_gaps = tuple(sorted(gaps))
     result = running.finish(ordered_gaps)
     variance = 0.0 if not running.count else running.m2 / running.count

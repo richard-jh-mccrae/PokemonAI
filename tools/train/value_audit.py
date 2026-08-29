@@ -16,7 +16,9 @@ SCHEMA_VERSION = 1
 def _candidate(row, selection):
     wanted = tuple(selection or ())
     return next((candidate for candidate in row.get("candidates", ())
-                 if tuple(candidate.get("selection", ())) == wanted), None)
+                 if wanted in {tuple(candidate.get("selection", ())), *(
+                     tuple(item) for item in candidate.get(
+                         "equivalent_selections", ())) }), None)
 
 
 def _complete(candidate) -> bool:

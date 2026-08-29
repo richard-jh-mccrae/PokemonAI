@@ -46,8 +46,12 @@ class PreviewBinding:
     """Successors become PreviewStates; map keys become identity tokens (roots keep theirs)."""
 
     def _bind(self, state, observation):
-        child, _delta = ObservationStateBuilder(state.observation.decklist).advance(
+        child, delta = ObservationStateBuilder(state.observation.decklist).advance(
             state.observation, observation)
+        lineage = getattr(self, "_preview_lineage", None)
+        if lineage is None:
+            lineage = self._preview_lineage = {}
+        lineage[child.valuation_key] = (state.observation, delta)
         metadata = getattr(self, "_provider_metadata", {}).pop(id(observation), {})
         return PreviewState(observation, child, f"preview:{next(self._preview_tokens)}",
                             deck=state.deck, deck_counts=child.deck_counts or (),
@@ -72,6 +76,7 @@ class LedgerNativeProvider(PreviewBinding, NativeCgTransitionProvider):
         if int(kwargs.get("world_count", 1)) != 1:
             raise ValueError("the preview seam is single-world (ADR-0146)")
         self._preview_tokens = count()
+        self._preview_lineage = {}
         super().__init__(root, **kwargs)
 
 

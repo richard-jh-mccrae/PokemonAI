@@ -9,7 +9,8 @@ from common.observation import ObservationState
 from common.observation.knowledge import KnownDeckTop, KnownOwnPrizes
 from common.observation.nodes import Body, HiddenHand, Side
 from common.cards import card_clauses
-from common.cards.card_facts import COLORLESS, SPECIAL_ENERGY, EnergyCard, PokemonCard
+from common.cards.card_facts import (
+    COLORLESS, SPECIAL_ENERGY, SUPPORTER, EnergyCard, PokemonCard, TrainerCard)
 from common.cards.functions.energy import provision_units
 
 from .activation import (DAMAGE_UNIT_HP, ActivationCompiler, ActivationEnvironment,
@@ -126,7 +127,6 @@ class _Trace:
 EVALUATION_GROUPS = ("context", "me", "them", "public")
 OPPONENT_BELIEF_PATH = ("knowledge", "opponent_belief")
 PRIZE_PHASE_PIVOT = 4
-ROUTE_STORED_ENERGY_VALUE = 0.5
 
 
 def evaluate(board: ObservationState, ctx: EvaluationModel) -> Valuation:
@@ -179,7 +179,10 @@ def _dirty_groups(delta) -> frozenset[str]:
             dirty.add("public")
             continue
         if root in {"me", "them"}:
-            dirty.update(("me", "them", "public"))
+            if len(path) > 1 and path[1] in {"hand", "deck", "discard"}:
+                dirty.add(root)
+            else:
+                dirty.update(("me", "them", "public"))
         elif root == "knowledge":
             dirty.update(EVALUATION_GROUPS)
         elif root in {"turn", "stadium", "events", "logs", "legal_actions"}:
@@ -424,6 +427,10 @@ def _side(trace: _Trace, label: str, side: Side, sign: float, ctx: EvaluationMod
     if sign > 0 and side.hand is not None:
         copies = Counter(demand.body_id_counts)
         basic_energy = Counter()
+        hand_evolves_from = Counter(
+            held.evolves_from for card in side.hand
+            if isinstance((held := ctx.facts(card.card_id)), PokemonCard)
+            and held.evolves_from)
         portfolio_entries = []
         portfolio_functions = []
         portfolio_sources = []
@@ -454,7 +461,11 @@ def _side(trace: _Trace, label: str, side: Side, sign: float, ctx: EvaluationMod
             if (getattr(facts, "synergy", ())
                     and any(demand.body_name_counts.get(name, 0) for name in facts.synergy)):
                 trace.emit(f"{label}.hand", "observation", ("synergy_in_hand",), sign)
+            if (isinstance(facts, PokemonCard) and facts.evolves_from is None
+                    and hand_evolves_from[facts.name]):
+                trace.emit(f"{label}.hand", "observation", ("hand_line",), sign)
             if (isinstance(facts, PokemonCard) and facts.evolves_from
+                    and claim != "surplus_hand_copy"
                     and (demand.body_name_counts.get(facts.evolves_from, 0)
                          or demand.hand_name_counts.get(facts.evolves_from, 0))):
                 trace.emit(f"{label}.hand", "observation",
@@ -672,6 +683,9 @@ def _situational_functions(trace: _Trace, part: str, facts, side: Side, opponent
                            demand: Demand, ctx: EvaluationModel, deck_counts,
                            board: ObservationState, *, sign: float, body=None,
                            provenance: str | None = None) -> None:
+    if (isinstance(facts, TrainerCard) and facts.kind == SUPPORTER
+            and board.turn.supporter_played):
+        sign *= FUTURE_TURN_DISCOUNT
     clauses = card_clauses(facts)
     compiler = ActivationCompiler()
     for clause in clauses:
@@ -735,11 +749,11 @@ def _prize_phase_fit(body, capability, opposing_prizes, ctx) -> float:
                      for card_id in _forward_lines().get(facts.name, ())))
     route_prizes = max((int(getattr(card, "prize_value", 1) or 1)
                         for card in line if card is not None), default=1)
-    if (route_prizes > 1) != (int(opposing_prizes) <= PRIZE_PHASE_PIVOT):
+    matches_phase = ((route_prizes > 1)
+                     == (int(opposing_prizes) <= PRIZE_PHASE_PIVOT))
+    if not matches_phase:
         return 0.0
-    readiness = (capability.attack_now + capability.attack_progress
-                 + capability.attack_future)
-    return readiness + len(body.energies) * ROUTE_STORED_ENERGY_VALUE
+    return capability.attack_now + capability.attack_progress + capability.attack_future
 
 
 def _damage_pressure(facts) -> int:

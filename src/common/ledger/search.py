@@ -178,9 +178,16 @@ class LedgerOnePlySearch:
                 and getattr(parent, "cache_key", None)
                 == self._previous_evaluation_state.valuation_key
                 else None)
+            observed = getattr(state, "observation", state)
+            lineage = getattr(provider, "_preview_lineage", {}).get(
+                observed.valuation_key)
+            if lineage is not None:
+                parent_board, delta = lineage
+                parent = state_value(parent_board)
+                reusable_parent = evaluation_states.get(
+                    (request.evaluation_model.identity, parent_board.valuation_key))
             child_request = EvaluationRequest(
                 state, request.evaluation_model, parent, delta)
-            observed = getattr(state, "observation", state)
             key = (request.evaluation_model.identity, observed.valuation_key)
             if key not in state_values:
                 if hasattr(evaluator, "evaluate_with_state"):
@@ -313,6 +320,23 @@ def preservation_frontier(candidates, noise_tolerance=0.0):
                                   or getattr(other, "footprint", None))
             preserved = (() if other_continuation is None else
                          other_continuation.opportunities_preserved)
+            allowances_consumed = getattr(
+                continuation, "allowances_consumed", ())
+            zones_replaced = getattr(continuation, "zones_replaced", ())
+            opportunities_created = getattr(
+                other_continuation, "opportunities_created", ())
+            other_allowances_consumed = getattr(
+                other_continuation, "allowances_consumed", ())
+            refresh_after_preparation = (
+                "supporter_played" in allowances_consumed
+                and "hand" in zones_replaced
+                and other.delta.total > noise_tolerance
+                and bool(opportunities_created)
+                and "play" in preserved
+                and "supporter_played" not in other_allowances_consumed)
+            if refresh_after_preparation:
+                deferred.add(id(candidate))
+                break
             use_expiring_ability = (
                 other.action.identity.kind == "ability"
                 and candidate.action.identity.kind == "evolve"

@@ -1,9 +1,8 @@
 """Price one option: the engine plays it, ObservationState digests the reprint, the Ledger differences.
 
-Every transition node the providers emit is priced here. A forced follow-up chain (Ultra Ball's
-discard pick, then its fetch pick) is resolved inside the preview — each sub-menu chosen by the
-same Ledger greedily, expected value at chance points — and the sub-choices are ADVISORY: the
-real prompt re-decides on the real board when it arrives. A capped or unpriceable chain scores
+Every transition node the providers emit is priced here. A forced follow-up chain is resolved
+inside the preview and its best sub-menu choices are cached for the matching live prompts.
+A capped or unpriceable chain scores
 the last board it could see and logs the gap; it never deletes the root option (the end-chain
 lesson: a cap must not veto the action carrying the turn's value)."""
 from __future__ import annotations
@@ -20,10 +19,10 @@ from common.cards.card_facts import SUPPORTER, TrainerCard
 from common.decision import EvaluationStatus, SearchConfiguration, SuccessorResult
 from common.observation import ObservationState, ObservationStateBuilder, TransitionTrace
 from common.strategy.context import (_ACTIVE, _BENCH, _DAMAGE_COUNTER_ANY, _DISCARD,
-                                     _EVOLVE, _MAIN)
+                                     _EVOLVE, _MAIN, _ATTACH_FROM)
 
 from .activation import ActivationCompiler, ActivationEnvironment
-from .capabilities import DAMAGE_COUNTER_HP
+from .capabilities import DAMAGE_COUNTER_HP, DAMAGE_UNIT_HP
 from .chance import RefreshSummary, refresh_outcomes
 from .decision import state_valuation_from_ledger
 from .evaluate import FeatureActivation, FeatureContribution, Valuation, evaluate
@@ -31,6 +30,7 @@ from .prizes import PrizeMap
 from .worth import EvaluationModel
 
 LOTTERY_DIGEST_BYTES = 8
+PRIZE_PHASE_PIVOT = 4
 @dataclass(frozen=True)
 class ContinuationFootprint:
     state_delta: float
@@ -176,6 +176,21 @@ def price_actions(state, board: ObservationState, baseline: float, provider,
         footprint_values = _root_footprint(
             board, provider, state, action, footprint_landings, walk.gaps,
             track_opportunities=track_opportunities)
+        if isinstance(node, Refresh):
+            facts = ctx.facts(node.card_id)
+            allowances = (("supporter_played",)
+                          if isinstance(facts, TrainerCard) and facts.kind == SUPPORTER
+                          else ())
+            footprint_values = replace(
+                footprint_values,
+                zones_replaced=tuple(sorted(set(
+                    (*footprint_values.zones_replaced, "deck", "hand")))),
+                allowances_consumed=tuple(sorted(set(
+                    (*footprint_values.allowances_consumed, *allowances)))),
+                immediately_usable_outputs=tuple(sorted(set((
+                    *footprint_values.immediately_usable_outputs, "hand")))),
+                opportunities_consumed=tuple(sorted(set((
+                    *footprint_values.opportunities_consumed, "play")))))
         footprint_values = _with_portfolio_opportunity_losses(
             footprint_values, state_contributions, original_actions)
         footprint_contributions = _footprint_contributions(footprint_values, ctx)
@@ -375,11 +390,22 @@ class _Walk:
         for action in actions:
             if self._budget_stopped():
                 break
-            entries.append((action.identity, self.node(
-                state, board, self.provider.transition(state, action), depth - 1)))
+            result = self.node(
+                state, board, self.provider.transition(state, action), depth - 1)
+            local = sum(item.value for item in _event_contributions(
+                "action", _local_action_events(board, action, self.ctx),
+                self.ctx, "action"))
+            valuation, end_probability, landings = result
+            scored = (replace(valuation, total=valuation.total + local),
+                      end_probability, landings)
+            entries.append((action.identity, result, scored))
         if not entries:
             return self.valuation(board), 0.0, ((1.0, state, board, False, ()),)
-        identity, result = self._choose(entries, actor, salt=f"menu:{depth}")
+        identity, _scored = self._choose(
+            ((identity, scored) for identity, _result, scored in entries),
+            actor, salt=f"menu:{depth}")
+        result = next(result for candidate, result, _scored in entries
+                      if candidate == identity)
         self.continuation_policy[tuple(action.identity for action in actions)] = identity
         return _with_path(result, identity)
 
@@ -590,6 +616,8 @@ def _local_action_events(board, action, ctx=None):
     if draw_before_refresh:
         return (("draw_before_refresh", draw_before_refresh),)
     select = board.select
+    if ctx is not None and select is not None and select.context == _ATTACH_FROM:
+        return _acceleration_phase_events(board, action, ctx)
     if select is None or select.context != _DAMAGE_COUNTER_ANY:
         return ()
     for selection in action.selection:
@@ -611,6 +639,34 @@ def _local_action_events(board, action, ctx=None):
                         / max(DAMAGE_COUNTER_HP, target.hp) * prize_value)
             return (("damage_counter_progress", progress),)
     return ()
+
+
+def _acceleration_phase_events(board, action, ctx):
+    from .worth import _forward_lines
+
+    values = []
+    for selection in action.selection:
+        if not 0 <= selection < len(board.select.options):
+            continue
+        option = board.select.options[selection]
+        if option.area != _BENCH or not isinstance(option.index, int):
+            continue
+        side = board.me if option.playerIndex == board.seat else board.them
+        if not 0 <= option.index < len(side.bench):
+            continue
+        facts = ctx.facts(side.bench[option.index].card.card_id)
+        line = (facts, *(ctx.facts(card_id)
+                         for card_id in _forward_lines().get(facts.name, ())))
+        route_prizes = max((int(getattr(card, "prize_value", 1) or 1)
+                            for card in line if card is not None), default=1)
+        damage_per_energy = max((
+            float(attack.damage or attack.damage_fix or attack.damage_max or 0)
+            / DAMAGE_UNIT_HP / max(1, len(attack.cost))
+            for card in line if card is not None for attack in card.attacks), default=0.0)
+        matches = ((route_prizes > 1) == (side is board.me
+                    and board.them.prize_count <= PRIZE_PHASE_PIVOT))
+        values.append((1.0 if matches else -1.0) * damage_per_energy)
+    return (("acceleration_phase_fit", sum(values)),) if values else ()
 
 
 def _draw_before_refresh(board, action, ctx):
