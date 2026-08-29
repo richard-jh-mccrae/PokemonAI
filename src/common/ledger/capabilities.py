@@ -107,7 +107,7 @@ CLAUSE_PARAMETER_VALUE_UNITS = {
         "opp_bench": 0.75,
         "opp_dragon_pokemon": 0.4, "opponent_active": 1.0,
         "opponent": 1.0, "own_bench": 0.75, "own_line": 0.6,
-        "own_type": 0.6, "pokemon": 1.0,
+        "own_type": 0.6, "pokemon": 1.0, "pokemon_or_basic_energy": 1.0,
         "pokemon_ex": 0.6, "self": 0.5, "stadium": 0.5, "stage1": 0.65,
         "stage2": 0.5, "supporter": 0.75, "tera": 0.4, "tool": 0.75,
         "trainer": 0.9,
@@ -729,6 +729,7 @@ def _applies_to_units(value, clause, side, ctx):
             or (value == "basic_non_dark" and getattr(facts, "evolves_from", None) is None
                 and energy_type != DARKNESS)
             or (value == "grass" and energy_type == GRASS)
+            or (value == "fighting" and energy_type == FIGHTING)
             or (value == "metal" and energy_type == METAL)
             or (value == "has_ability" and bool(getattr(facts, "abilities", ())))
             or (value == "has_energy_attached" and bool(body.energies))
@@ -1843,15 +1844,35 @@ def card_option_units(facts, side, opponent, board, ctx, *, reaches=None,
                     clause, facts, side, board, ctx)
                 values["healing"] += gate * healed / DAMAGE_UNIT_HP
                 values["cost"] += gate * rider_cost
-            elif clause.kind in {"switch_self"}:
-                values["mobility"] += gate
+            elif clause.kind in {"self_switch", "switch_self"}:
+                values["mobility"] += gate * switch_target_units(side, board, ctx)
             elif clause.kind in {"gust", "push_out", "opp_hand_to_deck",
                                  "discard_opp_energy"}:
                 values["denial"] += gate * _quantity(clause.amount, 1)
+            elif clause.kind == "coin" and clause.effect in {
+                    "discard_opp_energy", "energy_bounce"}:
+                values["denial"] += (
+                    gate * COIN_HEADS_PROBABILITY * _quantity(clause.amount, 1))
             elif clause.kind == "deck_top":
                 values["search"] += gate * _quantity(clause.amount, 1)
         return OptionUnits(**{key: availability * value for key, value in values.items()})
     return OptionUnits()
+
+
+def switch_target_units(side, board, ctx) -> float:
+    if side.active is None or not side.bench:
+        return 0.0
+    blocked = any(bool(getattr(side, status)) for status in ("asleep", "paralyzed"))
+    facts = ctx.facts(side.active.card.card_id)
+    retreat_cost = int(getattr(facts, "retreat_cost", 0) or 0)
+    reduction = sum(
+        int(clause.amount or 0)
+        for tool in side.active.tools
+        for clause in card_clauses(ctx.facts(tool.card_id))
+        if clause.kind == "retreat_reduction")
+    payable = len(side.active.energies) >= max(0, retreat_cost - reduction)
+    retreat_available = not board.turn.retreated and not blocked and payable
+    return float(not retreat_available)
 
 
 def card_option_value(facts, side, opponent, board, ctx, *, reaches=None) -> float:
@@ -1897,6 +1918,7 @@ def _prospective_condition(condition, side, board, ctx) -> float:
 __all__ = (
     "Capability", "OptionUnits", "attack_damage", "best_current_damage",
     "best_energy_marginal", "body_capability", "card_option_units",
+    "switch_target_units",
     "card_option_value", "energy_marginal", "hidden_zone_expectation", "payment_fraction",
     "recoverable_discard_ids", "unmet_cost_slots",
     "clause_cost_units", "clause_rider_cost_units", "clause_value_units",

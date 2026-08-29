@@ -6,6 +6,6 @@ CARD = TrainerCard(
     name='Night Stretcher',
     kind=ITEM,
     text='Put a Pokémon or a Basic Energy card from your discard pile into your hand.',
-    clauses=(Clause('fetch', target='basic_energy', zone='discard', choice=True), Clause('fetch', target='pokemon', zone='discard', choice=True)),
+    clauses=(Clause('fetch', target='pokemon_or_basic_energy', zone='discard', choice=True),),
     covers='full',
 )

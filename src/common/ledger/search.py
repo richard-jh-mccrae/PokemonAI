@@ -309,8 +309,6 @@ def preservation_frontier(candidates, noise_tolerance=0.0):
                         or getattr(candidate, "footprint", None))
         consumed = set(() if continuation is None else
                        continuation.opportunities_consumed)
-        if not consumed:
-            continue
         for other in candidates:
             if other is candidate:
                 continue
@@ -337,6 +335,24 @@ def preservation_frontier(candidates, noise_tolerance=0.0):
             if refresh_after_preparation:
                 deferred.add(id(candidate))
                 break
+            prepare_before_retreat = (
+                candidate.action.identity.kind == "retreat"
+                and other.delta.total > noise_tolerance
+                and bool(opportunities_created)
+                and "retreat" in preserved)
+            if prepare_before_retreat:
+                deferred.add(id(candidate))
+                break
+            use_free_ability = (
+                other.action.identity.kind == "ability"
+                and other.delta.total > noise_tolerance
+                and candidate.action.identity.kind == "play"
+                and candidate.action.identity.kind in preserved)
+            if use_free_ability:
+                deferred.add(id(candidate))
+                break
+            if not consumed:
+                continue
             use_expiring_ability = (
                 other.action.identity.kind == "ability"
                 and candidate.action.identity.kind == "evolve"
@@ -365,6 +381,22 @@ class GreedyDecisionPolicy:
                            for candidate in roster.candidates)
             raise ValueError(f"normal policy received no comparable candidates: {detail}")
         if not roster.forced:
+            knockouts = tuple(candidate for candidate in candidates
+                              if candidate.disposition is CandidateDisposition.ENDS_TURN
+                              and any(component.key == "combat.realized_ko"
+                                      and component.activation > 0
+                                      for component in candidate.delta.components))
+            meaningful_continuation = any(
+                candidate.disposition is CandidateDisposition.CONTINUES_TURN
+                and candidate.delta.total > max(
+                    configuration.noise_tolerance,
+                    max((abs(component.value) for component in candidate.delta.components
+                         if component.key == "action.opportunity_cost"), default=0.0))
+                for candidate in candidates)
+            if knockouts and not meaningful_continuation:
+                return DecisionChoice(
+                    self._ranked(knockouts, configuration)[0].action,
+                    DecisionReason.BEST_TURN_ENDER)
             continuing = tuple(
                 candidate for candidate in candidates
                 if candidate.disposition is CandidateDisposition.CONTINUES_TURN

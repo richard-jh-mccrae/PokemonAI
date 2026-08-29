@@ -20,6 +20,11 @@ BASELINE = json.loads((
     / "data" / "benchmarks" / "ultra_ball_chain_20260827_baseline.json"
 ).read_text(encoding="utf-8"))
 EXPECTED_BEHAVIOR = {
+    "mega_lucario": {
+        "choices": ((0,), (0, 1), (10,)),
+        "discarded_card_ids": (6, 6),
+        "fetched_card_id": 678,
+    },
     "mega_starmie": {
         "choices": ((0,), (1, 2), (5,)),
         "discarded_card_ids": (17, 666),

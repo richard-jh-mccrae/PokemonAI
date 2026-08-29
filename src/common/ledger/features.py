@@ -186,6 +186,10 @@ _DECLARED_RULES = {
     "action.overkill_counter": _rule("action", ("overkill_counter",), "constant"),
     "action.draw_before_refresh": _rule(
         "action", ("draw_before_refresh",), "constant"),
+    "action.body_ability_ready": _rule(
+        "action", ("body_ability_ready",), "constant"),
+    "action.body_copy_overflow": _rule(
+        "action", ("body_copy_overflow",), "constant"),
     "action.acceleration_phase_fit": _rule(
         "action", ("acceleration_phase_fit",), "constant"),
     "ability.resource_cost": _rule(
@@ -421,6 +425,8 @@ _SCALAR_DEFAULTS = {
     "action.damage_counter_progress": 1.0,
     "action.overkill_counter": -100.0,
     "action.draw_before_refresh": -0.75,
+    "action.body_ability_ready": 0.40,
+    "action.body_copy_overflow": -0.30,
     "zone.in_play": 0.002,
     "zone.in_hand": 0.01,
     "zone.in_deck": 0.001,
@@ -438,7 +444,7 @@ _SCALAR_DEFAULTS = {
     "development.visible_reach": 0.05,
     "development.next_turn_reach": 0.03,
     "copy.surplus": -0.03,
-    "copy.surplus_in_play": -0.50,
+    "copy.surplus_in_play": -1.0,
     "copy.basic_energy_surplus": -0.04,
     "interaction.synergy.in_hand": 0.40,
     "damage.floor": 0.30,
@@ -497,7 +503,7 @@ _SCALAR_DEFAULTS = {
     "continuation.information_value": 0.55,
     "function.draw.available": 0.04,
     "function.draw.hand_count": 0.005,
-    "function.fetch.live_target": 0.04,
+    "function.fetch.live_target": 0.08,
     "function.gust.bench_target": 0.03,
     "function.heal.damage_present": 0.03,
     "function.accel.open_energy_slot": 0.04,
@@ -520,7 +526,7 @@ _SCALAR_DEFAULTS = {
     "function.attack.copy_source": 0.03,
     "function.attack.piercing": 0.03,
     "function.energy.provision": 0.04,
-    "action.opportunity_cost": 0.01,
+    "action.opportunity_cost": 0.065,
     "status.asleep": 0.15,
     "status.paralyzed": 0.15,
     "status.confused": 0.08,
@@ -586,7 +592,7 @@ OPTION_DEFAULTS = MappingProxyType({
     "option.draw": 0.08,
     "option.search": 0.10,
     "option.acceleration": 0.25,
-    "option.denial": 0.20,
+    "option.denial": 0.30,
     "option.healing": 0.25,
     "option.mobility": 0.10,
     "option.energy": 0.10,

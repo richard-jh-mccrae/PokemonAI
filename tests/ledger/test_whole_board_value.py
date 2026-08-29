@@ -3,8 +3,8 @@ from __future__ import annotations
 from dataclasses import replace
 from types import MappingProxyType
 
-from ledger_helpers import (DARKNESS, DARK_E, FIRE_E, LILLIES, LUNATONE, PSYCHIC_E,
-                            body, player, printout)
+from ledger_helpers import (DARKNESS, DARK_E, DRAKLOAK, DREEPY, FIRE_E, LILLIES, LUNATONE,
+                            PSYCHIC_E, body, player, printout)
 
 from common.ledger import EvaluationModel, evaluate
 from common.ledger.capabilities import (OptionUnits, body_capability, card_option_units,
@@ -43,6 +43,10 @@ SALVATORE = 1189
 CRISPIN = 1198
 WAITRESS = 1235
 TELEPATH_PSYCHIC_ENERGY = 19
+CRUSHING_HAMMER = 1120
+AIR_BALLOON = 1174
+NIGHT_STRETCHER = 1097
+GRAVITY_MOUNTAIN = 1252
 
 
 def board(**kwargs):
@@ -85,6 +89,55 @@ def test_feasible_portfolio_counts_one_supporter_but_compatible_items():
     assert activation(one, "option.draw", context) == 2
     assert activation(duplicates, "option.draw", context) == 2
     assert activation(compatible, "option.draw", context) == 4
+
+
+def test_duplicate_active_stadium_has_no_second_board_effect_in_hand():
+    printed = printout(me=player(active=body(DUNSPARCE, 1), hand=[GRAVITY_MOUNTAIN]))
+    printed["current"]["stadium"] = [
+        {"id": GRAVITY_MOUNTAIN, "serial": 700, "playerIndex": 0}]
+    duplicate = ObservationStateBuilder().root(printed)
+    printed["current"]["players"][0]["hand"] = []
+    printed["current"]["players"][0]["handCount"] = 0
+    active_only = ObservationStateBuilder().root(printed)
+
+    assert activation(duplicate, "function.stadium.board_fit") == activation(
+        active_only, "function.stadium.board_fit")
+
+
+def test_body_local_draw_engines_are_not_surplus_in_play_copies():
+    state = board(me=player(
+        active=body(DRAKLOAK, 1),
+        bench=[body(DRAKLOAK, 2), body(DRAKLOAK, 3)]))
+
+    assert activation(state, "copy.surplus_in_play") == 0
+
+
+def test_third_generic_body_copy_is_surplus_but_backup_is_not():
+    backup = board(me=player(active=body(SOLROCK, 1), bench=[body(SOLROCK, 2)]))
+    third = board(me=player(
+        active=body(SOLROCK, 1), bench=[body(SOLROCK, 2), body(SOLROCK, 3)]))
+
+    assert activation(backup, "copy.surplus_in_play") == 0
+    assert activation(third, "copy.surplus_in_play") == 1
+
+
+def test_hand_base_expands_capacity_for_a_second_evolution():
+    constrained = board(me=player(
+        active=body(DREEPY, 1), hand=[DRAKLOAK, DRAKLOAK]))
+    expanded = board(me=player(
+        active=body(DREEPY, 1), hand=[DREEPY, DRAKLOAK, DRAKLOAK]))
+
+    assert activation(constrained, "copy.surplus") == 1
+    assert activation(expanded, "copy.surplus") == 0
+
+
+def test_existing_evolution_does_not_consume_pending_base_capacity():
+    state = board(me=player(
+        active=body(MUNKIDORI, 1),
+        bench=[body(DRAKLOAK, 2), body(DREEPY, 3)],
+        hand=[DREEPY, DRAKLOAK, DRAKLOAK]))
+
+    assert activation(state, "copy.surplus") == 0
 
 
 def test_feasible_portfolio_can_pay_costs_with_dead_hand_material():
@@ -467,6 +520,34 @@ def test_basic_pokemon_option_includes_its_complete_evolution_line():
         context.facts(119), state.me, state.them, state, context).attack \
         > card_option_units(
             context.facts(DUNSPARCE), state.me, state.them, state, context).attack
+
+
+def test_coin_flip_energy_denial_uses_its_expected_outcome():
+    state = board(them=player(own=False, active=body(DREEPY, 2, energies=(DARKNESS,))))
+    context = EvaluationModel.build()
+
+    assert card_option_units(
+        context.facts(CRUSHING_HAMMER), state.me, state.them, state, context).denial == 0.5
+
+
+def test_union_fetch_is_one_option_for_pokemon_or_basic_energy():
+    state = board(me=player(discard=[DREEPY, FIRE_E]))
+    context = EvaluationModel.build()
+
+    assert card_option_units(
+        context.facts(NIGHT_STRETCHER), state.me, state.them, state, context).search == 1.0
+
+
+def test_switch_has_no_mobility_value_when_air_balloon_makes_retreat_free():
+    free = board(me=player(
+        active=body(DREEPY, 1, tools=(AIR_BALLOON,)), bench=(body(DREEPY, 2),)))
+    stranded = board(me=player(
+        active=body(DREEPY, 1), bench=(body(DREEPY, 2),)))
+    context = EvaluationModel.build()
+    switch = context.facts(1123)
+
+    assert card_option_units(switch, free.me, free.them, free, context).mobility == 0.0
+    assert card_option_units(switch, stranded.me, stranded.them, stranded, context).mobility > 0
 
 
 def test_energy_option_has_diminishing_value_for_interchangeable_hand_copies():

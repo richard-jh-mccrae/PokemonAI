@@ -70,6 +70,16 @@ def _hidden_card_identity(card):
     return card
 
 
+def _known_prize_cards(parent, remaining_prizes, count: int) -> list[dict]:
+    known = Counter({int(card_id): int(copies)
+                     for card_id, copies in getattr(parent, "prize_counts", ())})
+    remaining = Counter(
+        int(card_id) for card in remaining_prizes
+        if (card_id := _hidden_card_identity(card)) is not None)
+    taken = known - remaining
+    return [{"id": card_id} for card_id in sorted(taken.elements())[:count]]
+
+
 def _hidden_signature(observation: dict, root_seat: int) -> str:
     """Identity of the determinized hidden state, independent of the action path used to reach it."""
     players = ((observation.get("current") or {}).get("players") or ())
@@ -273,9 +283,18 @@ class NativeCgTransitionProvider:
             root_player = players[parent.root_seat] or {}
             parent_player = parent_players[parent.root_seat] or {}
             known_hand = parent_player.get("hand")
-            if (root_player.get("hand") is None and isinstance(known_hand, list)
-                    and len(known_hand) == int(root_player.get("handCount", -1))):
-                root_player["hand"] = _plain_native(known_hand)
+            hand_count = int(root_player.get("handCount", -1))
+            native_hand = root_player.get("hand")
+            hidden_hand = native_hand is None or (
+                isinstance(native_hand, list) and not native_hand and hand_count > 0)
+            if hidden_hand and isinstance(known_hand, list) and len(known_hand) <= hand_count:
+                restored = _plain_native(known_hand)
+                missing = hand_count - len(restored)
+                if missing:
+                    restored.extend(_known_prize_cards(
+                        parent, root_player.get("prize") or (), missing))
+                if len(restored) == hand_count:
+                    root_player["hand"] = restored
         for seat, player in enumerate(players):
             if not player:
                 continue

@@ -107,7 +107,10 @@ def _open_energy_slot(environment, rule):
 
 
 def _switch_target(environment, rule):
-    return float(environment.side.active is not None and bool(environment.side.bench))
+    from .capabilities import switch_target_units
+
+    return switch_target_units(
+        environment.side, environment.board, environment.evaluation_model)
 
 
 def _opponent_hand_count(environment, rule):

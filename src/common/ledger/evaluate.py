@@ -27,7 +27,8 @@ from .worth import (Demand, DemandState, EvaluationModel, _liveness,
                     any_attack_payable,
                     development_reach_units,
                     legal_line_reach, line_reach, opponent_evaluation,
-                    opponent_line_reach, best_payable_damage, usable_units)
+                    opponent_line_reach, best_payable_damage, pokemon_copy_capacity,
+                    usable_units)
 
 
 @dataclass(frozen=True)
@@ -359,9 +360,10 @@ def _side(trace: _Trace, label: str, side: Side, sign: float, ctx: EvaluationMod
               opposing_side=opposing_side, board=board,
               capability=capability, demand=demand)
         copies = seen.get(body.card.card_id, 0)
-        if copies:
+        copy_capacity = pokemon_copy_capacity(ctx.facts(body.card.card_id))
+        if copy_capacity is not None and copies >= copy_capacity:
             trace.emit(f"{label}.bodies", "observation", ("surplus_in_play_copy",),
-                       sign * copies)
+                       sign)
         seen[body.card.card_id] = copies + 1
 
     active_capability = next((value for body, value in capabilities
@@ -459,17 +461,25 @@ def _side(trace: _Trace, label: str, side: Side, sign: float, ctx: EvaluationMod
                     and basic_energy[facts.provides]):
                 trace.emit(f"{label}.hand", "observation", ("surplus_basic_energy",), sign)
             if (getattr(facts, "synergy", ())
+                    and claim != "surplus_hand_copy"
                     and any(demand.body_name_counts.get(name, 0) for name in facts.synergy)):
                 trace.emit(f"{label}.hand", "observation", ("synergy_in_hand",), sign)
             if (isinstance(facts, PokemonCard) and facts.evolves_from is None
                     and hand_evolves_from[facts.name]):
                 trace.emit(f"{label}.hand", "observation", ("hand_line",), sign)
             if (isinstance(facts, PokemonCard) and facts.evolves_from
-                    and claim != "surplus_hand_copy"
-                    and (demand.body_name_counts.get(facts.evolves_from, 0)
-                         or demand.hand_name_counts.get(facts.evolves_from, 0))):
-                trace.emit(f"{label}.hand", "observation",
-                           ("evolution_access",), sign)
+                    and claim != "surplus_hand_copy"):
+                immediate_base = (
+                    demand.body_name_counts.get(facts.evolves_from, 0)
+                    or demand.hand_name_counts.get(facts.evolves_from, 0))
+                deck_base = any(
+                    count and getattr(ctx.facts(candidate_id), "name", None)
+                    == facts.evolves_from
+                    for candidate_id, count in (deck_counts or ()))
+                if immediate_base or deck_base:
+                    trace.emit(f"{label}.hand", "observation",
+                               ("evolution_access",),
+                               sign * (1.0 if immediate_base else FUTURE_TURN_DISCOUNT))
             copies[card.card_id] += 1
             if isinstance(facts, EnergyCard) and facts.kind != SPECIAL_ENERGY:
                 basic_energy[facts.provides] += 1

@@ -500,6 +500,7 @@ def _clause_probe_board(board, facts, kind, ctx, *, parameter=None, locator=None
             "basic_non_dark": lambda candidate: candidate.evolves_from is None
             and candidate.energy_type != 7,
             "grass": lambda candidate: candidate.energy_type == 1,
+            "fighting": lambda candidate: candidate.energy_type == 6,
             "has_ability": lambda candidate: bool(candidate.abilities),
             "metal": lambda candidate: candidate.energy_type == 8,
             "name_family": lambda candidate: bool(family)

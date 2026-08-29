@@ -60,7 +60,8 @@ def _requirements(facts, side, board, ctx) -> tuple[tuple[str, float], ...] | No
                 not body.appeared_this_turn
                 and getattr(ctx.facts(body.card.card_id), "name", None) == facts.evolves_from
                 for body in side.bodies):
-            return None
+            return ((f"evolve:future:{facts.evolves_from}", 1.0),
+                    (f"hand:{facts.card_id}", 1.0))
         return ((f"evolve:any:{facts.evolves_from}", 1.0),
                 (f"evolve:mature:{facts.evolves_from}", 1.0),
                 (f"hand:{facts.card_id}", 1.0))
@@ -69,7 +70,8 @@ def _requirements(facts, side, board, ctx) -> tuple[tuple[str, float], ...] | No
     if facts.kind == SUPPORTER:
         return (("supporter", 1.0), (f"hand:{facts.card_id}", 1.0))
     if facts.kind == STADIUM:
-        return None if board.turn.stadium_played else (
+        duplicate = any(card.card_id == facts.card_id for card in board.stadium)
+        return None if board.turn.stadium_played or duplicate else (
             ("stadium", 1.0), (f"hand:{facts.card_id}", 1.0))
     if facts.kind == TOOL:
         return (("tool", 1.0), (f"hand:{facts.card_id}", 1.0)) \
@@ -95,6 +97,17 @@ def _capacities(side, board, ctx) -> dict[str, float]:
             if not body.appeared_this_turn:
                 mature_key = f"evolve:mature:{name}"
                 capacities[mature_key] = capacities.get(mature_key, 0) + 1
+    future_bases = Counter()
+    for card in tuple(side.hand):
+        name = getattr(ctx.facts(card.card_id), "name", None)
+        if name:
+            future_bases[name] += 1
+    for card_id, count in board.deck_counts or ():
+        name = getattr(ctx.facts(card_id), "name", None)
+        if name:
+            future_bases[name] += count
+    for name, count in future_bases.items():
+        capacities[f"evolve:future:{name}"] = float(count)
     return capacities
 
 

@@ -47,6 +47,9 @@ def fetch_target_matches(clause, card, *, reading: str = REACH) -> bool:
     if target == "energy":
         return (isinstance(card, EnergyCard)
                 and (clause.energy_type is None or card.provides == clause.energy_type))
+    if target == "pokemon_or_basic_energy":
+        return (isinstance(card, PokemonCard)
+                or isinstance(card, EnergyCard) and card.kind == BASIC_ENERGY)
     if target == "supporter":
         return (reading != REACH
                 and isinstance(card, TrainerCard) and card.kind == SUPPORTER)
