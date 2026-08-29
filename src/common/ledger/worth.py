@@ -14,7 +14,7 @@ from enum import Enum
 from types import MappingProxyType
 from typing import Mapping
 
-from common.cards import FUNCTION_CATALOG, card_store, play_clauses
+from common.cards import FUNCTION_CATALOG, card_clauses, card_store, play_clauses
 from common.cards.card_facts import COLORLESS, SUPPORTER, EnergyCard, PokemonCard, TrainerCard
 from common.cards.functions.energy import provision_units
 from common.cards.functions.fetch import DEADNESS, fetch_target_matches
@@ -28,6 +28,8 @@ from .configuration import DeckOverlay, ValuationConfiguration
 CONTENT_ID_DIGEST_BYTES = 16
 MODEL_ID_DIGEST_BYTES = 8
 MULTI_PROVISION_UNITS = 2
+BACKUP_BODY_CAPACITY = 2
+POKEMON_COPY_CAPACITY = 2
 
 
 @dataclass(frozen=True)
@@ -465,13 +467,28 @@ def _liveness(card_id, facts, demand: Demand, ctx: EvaluationModel, deck_counts)
     if isinstance(facts, PokemonCard):
         if facts.evolves_from is None:
             live = demand.free_bench > 0
-            return (DemandState.LIVE if live else DemandState.DEAD), max(1, demand.free_bench)
-        targets = demand.body_name_counts.get(facts.evolves_from, 0)
-        if targets:
+            existing = demand.body_name_counts.get(facts.name, 0)
+            next_stage = sum(
+                getattr(ctx.facts(card.card_id), "evolves_from", None) == facts.name
+                for card in demand.hand)
+            line_capacity = (max(1, next_stage) if _forward_lines().get(facts.name)
+                             else BACKUP_BODY_CAPACITY)
+            capacity = min(existing + max(0, demand.free_bench), line_capacity)
+            return (DemandState.LIVE if live else DemandState.DEAD), max(1, capacity)
+        field_targets = demand.body_name_counts.get(facts.evolves_from, 0)
+        pending_targets = min(
+            demand.hand_name_counts.get(facts.evolves_from, 0), demand.free_bench)
+        existing = demand.body_name_counts.get(facts.name, 0)
+        targets = existing + field_targets + pending_targets
+        if field_targets:
             return DemandState.LIVE, max(1, targets)
-        # The pair term: base in HAND is setup pending — worth more together than apart.
-        if demand.hand_name_counts.get(facts.evolves_from, 0):
-            return DemandState.SETUP, 1
+        if pending_targets:
+            return DemandState.SETUP, max(1, targets)
+        deck_targets = sum(
+            count for candidate_id, count in (deck_counts or ())
+            if getattr(ctx.facts(candidate_id), "name", None) == facts.evolves_from)
+        if deck_targets:
+            return DemandState.SETUP, max(1, existing + deck_targets)
         return DemandState.DEAD, 1
     if isinstance(facts, EnergyCard):
         reach = line_reach(demand.hand_name_counts, deck_counts, ctx,
@@ -495,6 +512,14 @@ def _liveness(card_id, facts, demand: Demand, ctx: EvaluationModel, deck_counts)
         if facts.kind == SUPPORTER:
             return DemandState.LIVE, 1
     return DemandState.LIVE, None
+
+
+def pokemon_copy_capacity(facts) -> int | None:
+    if not isinstance(facts, PokemonCard):
+        return 1
+    if any(clause.allowance == "body" for clause in card_clauses(facts)):
+        return None
+    return POKEMON_COPY_CAPACITY
 
 
 def _multi_provision_live(facts, body, ctx: EvaluationModel) -> bool:

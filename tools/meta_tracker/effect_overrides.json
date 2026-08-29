@@ -692,13 +692,7 @@
  "1097": [
   {
    "kind": "fetch",
-   "target": "basic_energy",
-   "zone": "discard",
-   "choice": true
-  },
-  {
-   "kind": "fetch",
-   "target": "pokemon",
+   "target": "pokemon_or_basic_energy",
    "zone": "discard",
    "choice": true
   }
@@ -857,7 +851,11 @@
  ],
  "1141": [
   {
-   "kind": "damage_boost"
+   "kind": "damage_boost",
+   "amount": 30,
+   "applies_to": "fighting",
+   "target": "opponent_active",
+   "timing": "before_weakness_resistance"
   }
  ],
  "1101": [

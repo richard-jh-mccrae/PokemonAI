@@ -573,7 +573,8 @@ CLAUSE_PARAMETER_VALUE_CONTRACTS = MappingProxyType({
         "any", "any_pokemon", "basic", "basic_energy", "basic_pokemon", "bench_only",
         "benched", "both_actives", "defending", "energy", "evolution", "future", "item",
         "mega", "opp_active", "opp_any", "opp_bench", "opp_dragon_pokemon", "opponent",
-        "opponent_active", "own_bench", "own_line", "own_type", "pokemon", "pokemon_ex",
+        "opponent_active", "own_bench", "own_line", "own_type", "pokemon",
+        "pokemon_or_basic_energy", "pokemon_ex",
         "self", "stadium", "stage1", "stage2", "supporter", "tera", "tool", "trainer",
     }),
 })

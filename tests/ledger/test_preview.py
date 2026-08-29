@@ -10,15 +10,16 @@ import math
 from types import SimpleNamespace
 import pytest
 
-from ledger_helpers import (DRAGAPULT, FIRE_E, ScriptedProvider, action, body, player,
-                            printout)
+from ledger_helpers import (DRAKLOAK, DRAGAPULT, FIRE_E, ScriptedProvider, action, body,
+                            player, printout)
 
 from common.algebra import (Actor, Chance, Choice, Deterministic, Edge, RevealChoice,
                             RevealOutcome, Terminal, WeightedEdge)
 from common.decision import EvaluationStatus, SearchConfiguration
 from common.ledger import DeckOverlay, EvaluationModel, LedgerDecider
 from common.ledger.evaluate import FeatureActivation, FeatureContribution, Valuation, evaluate
-from common.ledger.preview import _realized_portfolio_contributions, price_actions
+from common.ledger.preview import (_body_ability_ready, _discard_spend_contributions,
+                                   _realized_portfolio_contributions, price_actions)
 from common.observation import ObservationStateBuilder
 from deprecated.bellman.state import DecisionState
 
@@ -59,6 +60,46 @@ def test_chance_weights_its_legs_by_probability():
     mixed, _, _ = price_of(Chance((WeightedEdge(0.25, "good", Deterministic(GOOD)),
                                    WeightedEdge(0.75, "bad", Deterministic(BAD)))))
     assert mixed == pytest.approx(0.25 * good_swing + 0.75 * bad_swing, abs=1e-9)
+
+
+def test_prize_transition_emits_realized_knockout_value():
+    root_observation = printout(
+        me=player(active=body(DRAGAPULT, 1), prizes=6),
+        them=player(own=False, active=body(DRAGAPULT, 2), prizes=6))
+    landing = state_of(printout(
+        me=player(active=body(DRAGAPULT, 1), prizes=5),
+        them=player(own=False, active=body(DRAGAPULT, 3), prizes=6)))
+    attack, end = action("attack", (0,)), action("end", (1,))
+    root = state_of(root_observation)
+    provider = ScriptedProvider(
+        menus={root.semantic_key: (attack, end)},
+        nodes={(root.semantic_key, attack.identity): Terminal(landing, "attack resolved")})
+    context = EvaluationModel.build()
+    board = ObservationStateBuilder(DECK).root(root_observation)
+
+    price = next(item for item in price_actions(
+        root, board, evaluate(board, context).total, provider, context)
+                 if item.action is attack)
+    realized = [item for item in price.footprint.contributions
+                if item.feature == "combat.realized_ko"
+                and "continuation.prize_transition" in item.provenance]
+
+    assert [(item.activation, item.value) for item in realized] == [(1.0, 1.0)]
+
+
+def test_body_ability_readiness_stops_after_the_line_is_fully_developed():
+    select = {"context": 0, "minCount": 1, "maxCount": 1,
+              "option": [{"cardId": DRAKLOAK, "serial": 800, "type": 7}]}
+    developing = ObservationStateBuilder(DECK).root(printout(
+        me=player(active=body(DRAKLOAK, 1), hand=[DRAKLOAK]), select=select))
+    developed = ObservationStateBuilder(DECK).root(printout(
+        me=player(active=body(DRAGAPULT, 1), bench=(body(DRAKLOAK, 2),),
+                  hand=[DRAKLOAK]), select=select))
+    evolve = action("evolve", (0,))
+    context = EvaluationModel.build()
+
+    assert _body_ability_ready(developing, evolve, context)
+    assert not _body_ability_ready(developed, evolve, context)
 
 
 def test_terminal_action_is_priced_against_the_legal_end_successor():
@@ -464,3 +505,40 @@ def test_realization_resolves_main_options_through_their_hand_index(kind):
     realized = _realized_portfolio_contributions(baseline, board, selected)
 
     assert [(item.activation, item.value) for item in realized] == [(2.0, 0.2)]
+
+
+def test_discard_spend_charges_selected_live_portfolio_sources_only():
+    first = "feasible_option_portfolio:serial:11"
+    second = "feasible_option_portfolio:serial:12"
+    baseline = Valuation(0.5, (), (), contributions=(
+        FeatureContribution("option.draw", 1.0, 0.2, 0.2, (first,)),
+        FeatureContribution("option.draw", 1.5, 0.2, 0.3, (second,)),
+    ))
+    board = SimpleNamespace(
+        select=SimpleNamespace(context=8, options=(
+            SimpleNamespace(serial=11, cardId=100),
+            SimpleNamespace(serial=12, cardId=101))),
+        me=SimpleNamespace(hand=()))
+    selected = SimpleNamespace(
+        identity=SimpleNamespace(kind="card"), selection=(0,))
+
+    spent = _discard_spend_contributions(baseline, board, selected)
+
+    assert [(item.activation, item.value) for item in spent] == [(-1.0, -0.2)]
+    assert "action.discard_spend" in spent[0].provenance
+
+
+def test_discard_spend_does_not_charge_a_portfolio_source_with_a_held_replacement():
+    owner = "feasible_option_portfolio:serial:11"
+    baseline = Valuation(0.2, (), (), contributions=(
+        FeatureContribution("option.draw", 1.0, 0.2, 0.2, (owner,)),))
+    board = SimpleNamespace(
+        select=SimpleNamespace(context=8, options=(
+            SimpleNamespace(serial=11, cardId=100),)),
+        me=SimpleNamespace(hand=(
+            SimpleNamespace(serial=11, card_id=100),
+            SimpleNamespace(serial=12, card_id=100))))
+    selected = SimpleNamespace(
+        identity=SimpleNamespace(kind="card"), selection=(0,))
+
+    assert _discard_spend_contributions(baseline, board, selected) == ()

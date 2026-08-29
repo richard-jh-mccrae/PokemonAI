@@ -24,8 +24,6 @@ def _legacy_preservation_frontier(candidates, noise_tolerance=0.0):
     deferred = set()
     for candidate in candidates:
         consumed = set(candidate.footprint.opportunities_consumed)
-        if not consumed:
-            continue
         for other in candidates:
             if other is candidate:
                 continue
@@ -48,6 +46,16 @@ def _legacy_preservation_frontier(candidates, noise_tolerance=0.0):
             if refresh_after_preparation:
                 deferred.add(candidate.action.identity)
                 break
+            prepare_before_retreat = (
+                candidate.action.identity.kind == "retreat"
+                and other.swing > noise_tolerance
+                and bool(opportunities_created)
+                and "retreat" in preserved)
+            if prepare_before_retreat:
+                deferred.add(candidate.action.identity)
+                break
+            if not consumed:
+                continue
             use_expiring_ability = (
                 other.action.identity.kind == "ability"
                 and candidate.action.identity.kind == "evolve"

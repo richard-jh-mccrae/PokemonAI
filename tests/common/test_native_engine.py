@@ -122,6 +122,46 @@ def test_successor_preserves_unchanged_root_hand_when_native_perspective_flips()
     assert successor["current"]["players"][1]["hand"] is None
 
 
+def test_successor_treats_empty_positive_count_root_hand_as_hidden():
+    known_hand = [{"id": 3, "serial": 10}, {"id": 1086, "serial": 20}]
+    parent_observation = {"current": {"yourIndex": 0, "players": [
+        {"deck": [], "prize": [], "hand": known_hand, "handCount": 2},
+        {"deck": [], "prize": [], "hand": None, "handCount": 4},
+    ]}, "select": {"context": 0, "option": []}}
+    native_successor = {"current": {"yourIndex": 1, "players": [
+        {"deck": [], "prize": [], "hand": [], "handCount": 2},
+        {"deck": [], "prize": [], "hand": [{"id": 1}] * 4, "handCount": 4},
+    ]}, "select": {"context": 0, "option": []}}
+    parent = SimpleNamespace(
+        root_seat=0, prize_counts=(), _provider_payload=parent_observation)
+    provider = object.__new__(NativeCgTransitionProvider)
+
+    successor = provider._observation(native_successor, parent, actor_seat=1)
+
+    assert successor["current"]["players"][0]["hand"] == known_hand
+
+
+def test_successor_adds_known_taken_prize_to_hidden_root_hand():
+    known_hand = [{"id": 3, "serial": 10}]
+    parent_observation = {"current": {"yourIndex": 0, "players": [
+        {"deck": [], "prize": [None, None], "hand": known_hand, "handCount": 1},
+        {"deck": [], "prize": [], "hand": None, "handCount": 0},
+    ]}, "select": {"context": 0, "option": []}}
+    native_successor = {"current": {"yourIndex": 1, "players": [
+        {"deck": [], "prize": [{"id": 100}], "hand": [], "handCount": 2},
+        {"deck": [], "prize": [], "hand": [], "handCount": 0},
+    ]}, "select": {"context": 0, "option": []}}
+    parent = SimpleNamespace(
+        root_seat=0, prize_counts=((99, 1), (100, 1)),
+        _provider_payload=parent_observation)
+    provider = object.__new__(NativeCgTransitionProvider)
+
+    successor = provider._observation(native_successor, parent, actor_seat=1)
+
+    assert successor["current"]["players"][0]["hand"] == [*known_hand, {"id": 99}]
+    assert successor["current"]["players"][0]["prize"] == [None]
+
+
 pytest.importorskip("cg.sim", reason="native engine unavailable")
 if os.environ.get("CG_ENGINE") == "py":
     pytest.skip("production-provider test requires native cg", allow_module_level=True)
