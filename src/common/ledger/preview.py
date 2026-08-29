@@ -26,7 +26,8 @@ from .activation import ActivationCompiler, ActivationEnvironment
 from .capabilities import DAMAGE_COUNTER_HP, DAMAGE_UNIT_HP
 from .chance import RefreshSummary, refresh_outcomes
 from .decision import state_valuation_from_ledger
-from .evaluate import FeatureActivation, FeatureContribution, Valuation, evaluate
+from .evaluate import (_active_doomed, FeatureActivation, FeatureContribution,
+                       Valuation, evaluate)
 from .prizes import PrizeMap
 from .worth import EvaluationModel
 
@@ -626,6 +627,8 @@ def _local_action_events(board, action, ctx=None):
         return (("body_ability_ready", 1.0),)
     if ctx is not None and (overflow := _body_copy_overflow(board, action, ctx)):
         return (("body_copy_overflow", overflow),)
+    if ctx is not None and _retreats_doomed_denial(board, action, ctx):
+        return (("retreat_doomed_denial", 1.0),)
     select = board.select
     if ctx is not None and select is not None and select.context == _ATTACH_FROM:
         return _acceleration_phase_events(board, action, ctx)
@@ -650,6 +653,15 @@ def _local_action_events(board, action, ctx=None):
                         / max(DAMAGE_COUNTER_HP, target.hp) * prize_value)
             return (("damage_counter_progress", progress),)
     return ()
+
+
+def _retreats_doomed_denial(board, action, ctx):
+    if action.identity.kind != "retreat" or board.me.active is None:
+        return False
+    facts = ctx.facts(board.me.active.card.card_id)
+    denial = any(clause.kind in {"attack_lock", "item_lock", "no_retreat", "retreat_lock"}
+                 for clause in card_clauses(facts))
+    return denial and _active_doomed(board.them, board.me, ctx)
 
 
 def _body_copy_overflow(board, action, ctx):

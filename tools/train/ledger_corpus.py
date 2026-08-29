@@ -257,7 +257,8 @@ def _replay_one(deck_name: str, correction, weight_overrides=None) -> dict:
     elapsed = time.perf_counter() - started
     chosen = list(decision.chosen)
     correct = list(correction.correct or ())
-    has_ruling = bool(correction.correct) or correction.correct == []
+    has_ruling = bool(correction.correct) or (
+        correction.scope == "decision" and correction.correct == [])
     equivalence = (_runtime_equivalence(decision) or
                    option_equivalence(((obs.get("select") or {}).get("option") or []), obs))
     candidates = _training_candidates(decision)

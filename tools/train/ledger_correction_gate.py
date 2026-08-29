@@ -1,0 +1,89 @@
+from __future__ import annotations
+
+import argparse
+import json
+import os
+import sys
+from pathlib import Path
+
+REPO = Path(__file__).resolve().parents[2]
+sys.path[:0] = [str(REPO / "tools"), str(REPO / "src")]
+
+from train.blunder.store import (DEFAULT_ROOT, dedup_corrections, jsonl_files,
+                                 load_corrections)  # noqa: E402
+from train.ledger_corpus import sweep  # noqa: E402
+from train.value_audit import build_value_audit  # noqa: E402
+
+
+ONE_PLY_LEDGER_FIRST_RUN = "20260828-221100_a39dfc83_mega_starmie"
+
+
+def ledger_correction_sources(root: Path | str = DEFAULT_ROOT) -> tuple[Path, ...]:
+    return tuple(path for path in jsonl_files(root)
+                 if path.parent.name >= ONE_PLY_LEDGER_FIRST_RUN
+                 and path.parent.name[:1].isdigit())
+
+
+def correction_gate_findings(report: dict, audit: dict, *,
+                             correction_count: int) -> tuple[str, ...]:
+    rows = report.get("rows", ())
+    replayed = len(rows) + len(report.get("retired", ()))
+    summary = audit["summary"]
+    findings = []
+    if not correction_count:
+        findings.append("no one-ply Ledger corrections selected")
+    if replayed != correction_count:
+        findings.append(f"replayed {replayed} of {correction_count} corrections")
+    structural = sum(row.get("grading_exclusion") not in {None, "no_ruling"}
+                     for row in rows)
+    if structural:
+        findings.append(f"{structural} correction replays are structurally incomplete")
+    for key, label in (("incomplete", "pairwise value audits are incomplete"),
+                       ("violated_preferences", "correction preferences are violated"),
+                       ("conflict_sets", "correction conflict sets remain")):
+        if summary[key]:
+            findings.append(f"{summary[key]} {label}")
+    fallbacks = sum(bool(row.get("fallback")) for row in rows)
+    if fallbacks:
+        findings.append(f"{fallbacks} correction replays used a fallback")
+    return tuple(findings)
+
+
+def run_gate(*, root: Path | str = DEFAULT_ROOT, workers: int = 1) -> dict:
+    sources = ledger_correction_sources(root)
+    corrections = dedup_corrections([
+        correction for source in sources
+        for correction in load_corrections(source, dedup=False)
+    ])
+    report = sweep(store=sources, workers=workers)
+    audit = build_value_audit(report["rows"])
+    findings = correction_gate_findings(
+        report, audit, correction_count=len(corrections))
+    return {"passed": not findings, "findings": list(findings),
+            "correction_count": len(corrections), "sources": [str(path) for path in sources],
+            "report": report, "value_audit": audit}
+
+
+def main(argv=None) -> int:
+    parser = argparse.ArgumentParser(description="Gate every one-ply Ledger correction")
+    parser.add_argument("--root", type=Path, default=DEFAULT_ROOT)
+    parser.add_argument("--workers", type=int,
+                        default=max(1, (os.cpu_count() or 2) - 1))
+    parser.add_argument("--output", type=Path)
+    args = parser.parse_args(argv)
+    result = run_gate(root=args.root, workers=max(1, args.workers))
+    if args.output:
+        args.output.parent.mkdir(parents=True, exist_ok=True)
+        args.output.write_text(json.dumps(result, indent=2, ensure_ascii=False) + "\n",
+                               encoding="utf-8")
+    print(json.dumps({key: result[key] for key in (
+        "passed", "correction_count", "findings")}, sort_keys=True))
+    return 0 if result["passed"] else 1
+
+
+__all__ = ("ONE_PLY_LEDGER_FIRST_RUN", "correction_gate_findings",
+           "ledger_correction_sources", "run_gate")
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

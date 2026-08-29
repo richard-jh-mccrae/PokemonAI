@@ -190,6 +190,8 @@ _DECLARED_RULES = {
         "action", ("body_ability_ready",), "constant"),
     "action.body_copy_overflow": _rule(
         "action", ("body_copy_overflow",), "constant"),
+    "action.retreat_doomed_denial": _rule(
+        "action", ("retreat_doomed_denial",), "constant"),
     "action.acceleration_phase_fit": _rule(
         "action", ("acceleration_phase_fit",), "constant"),
     "ability.resource_cost": _rule(
@@ -427,6 +429,7 @@ _SCALAR_DEFAULTS = {
     "action.draw_before_refresh": -0.75,
     "action.body_ability_ready": 0.40,
     "action.body_copy_overflow": -0.30,
+    "action.retreat_doomed_denial": -1.0,
     "zone.in_play": 0.002,
     "zone.in_hand": 0.01,
     "zone.in_deck": 0.001,
@@ -451,7 +454,7 @@ _SCALAR_DEFAULTS = {
     "body.hp_per_100": 0.02,
     "bench.open_slot": 0.15,
     "bench.developed_body": 0.30,
-    "bench.full": -0.20,
+    "bench.full": -0.30,
     "body.prize_liability": 0.04,
     "energy.concentration": 0.10,
     "active.doomed": 0.40,

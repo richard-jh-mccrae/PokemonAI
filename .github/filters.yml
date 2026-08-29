@@ -28,6 +28,7 @@ src:
   - 'tests/ledger/**'
   - 'tests/parity/**'
   - 'tests/scouting/**'
+  - 'tests/blunder/**'
   - 'tests/train/**'
   - 'tests/test_import_hygiene.py'
 
@@ -74,6 +75,7 @@ tool_agent_skills:
 # Correction records and their writer/reader contract form an independent component.
 corrections:
   - 'data/corrections/**'
+  - 'tools/train/ledger_correction_gate.py'
   - 'tools/train/blunder/**'
   - 'tools/train/blunder_correction.py'
   - 'tests/blunder/**'
