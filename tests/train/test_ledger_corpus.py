@@ -141,6 +141,18 @@ def test_runtime_legal_actions_supply_duplicate_card_equivalence():
         correct=[6], correct_alternatives=[]), equivalence)
 
 
+def test_one_chosen_copy_cannot_satisfy_two_required_equivalent_copies():
+    equivalence = {
+        3: frozenset({3, 6}),
+        6: frozenset({3, 6}),
+    }
+
+    correction = SimpleNamespace(correct=[3, 6], correct_alternatives=[])
+
+    assert not _satisfies_human([3], correction, equivalence)
+    assert _satisfies_human([3, 6], correction, equivalence)
+
+
 def test_training_candidates_preserve_duplicate_card_selections():
     from train.ledger_corpus import _training_candidates
 

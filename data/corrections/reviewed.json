@@ -327,5 +327,55 @@
     "disposition": "deferred-multi-turn",
     "reason": "the rationale requires retreat -> evolve -> attack; a one-ply ruling cannot grade that maneuver and returns when the turn planner grades sequences",
     "round": "2026-08-26"
+  },
+  "14109113266227352-34": {
+    "disposition": "deferred-multi-turn",
+    "reason": "the ruling is an information-order maneuver (evolve -> draw -> inspect with Drakloak) across independent MAIN actions; returns when PUCT grades full-turn sequences",
+    "round": "2026-08-29"
+  },
+  "14109113266227352-45": {
+    "disposition": "deferred-multi-turn",
+    "reason": "the fetch preference depends on a later Crispin play attaching Darkness Energy to Munkidori; returns when PUCT grades the complete turn",
+    "round": "2026-08-29"
+  },
+  "14109113266227352-60": {
+    "disposition": "deferred-multi-turn",
+    "reason": "the gust target is ruled by which attacker is promoted and used afterward; that attack lies beyond the required target menu and returns with PUCT",
+    "round": "2026-08-29"
+  },
+  "14109113266227352-65": {
+    "disposition": "deferred-multi-turn",
+    "reason": "the ruling orders independent draw Abilities before the turn attachment; returns when PUCT grades full-turn action order",
+    "round": "2026-08-29"
+  },
+  "14109113266227352-67": {
+    "disposition": "deferred",
+    "reason": "the rationale asks for Buddy-Buddy Poffin deck thinning before Drakloak, but the indexed ruling resolves to Boss's Orders; held for re-adjudication rather than grading the mismatched anchor",
+    "round": "2026-08-29"
+  },
+  "14109113266227352-68": {
+    "disposition": "deferred-multi-turn",
+    "reason": "the Poke Pad choice is justified by a later Buddy-Buddy Poffin play and next-turn evolution chain; returns when PUCT grades the sequence",
+    "round": "2026-08-29"
+  },
+  "14109113266227352-74": {
+    "disposition": "deferred-multi-turn",
+    "reason": "the ruling requires gust -> evolve -> attack -> spread placement across independent MAIN actions; returns when PUCT grades the complete turn",
+    "round": "2026-08-29"
+  },
+  "14109113266227352-77": {
+    "disposition": "deferred-multi-turn",
+    "reason": "the ruling orders attachment and benching before Unfair Stamp shuffles the hand; returns when PUCT grades full-turn action order",
+    "round": "2026-08-29"
+  },
+  "48825669905379548-84": {
+    "disposition": "deferred-multi-turn",
+    "reason": "the ruling requires evolve -> retreat -> promote -> attack across independent MAIN actions; returns when PUCT grades the complete turn",
+    "round": "2026-08-29"
+  },
+  "14109113266227352-91": {
+    "disposition": "deferred",
+    "reason": "the rationale condemns an Ultra Ball line that discards Premium Power Pro and fetches an unplayable Mega Lucario, but current replay discards Lillie's Determination plus Energy and fetches playable Hariyama; held for re-adjudication rather than grading a mismatched forced resolution",
+    "round": "2026-08-29"
   }
 }

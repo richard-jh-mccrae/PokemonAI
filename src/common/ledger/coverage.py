@@ -92,13 +92,13 @@ OBSERVATION_FIELD_FEATURES = MappingProxyType({
     "ObservationState.legal_actions": ("clause.parameter.granted_action",),
     "Side.active": ("active.premium",),
     "Side.active_hidden": ("belief.unknown_card",),
-    "Side.bench": ("combat.line_potential", "bench.developed_body", "bench.full"),
+    "Side.bench": ("combat.realization", "body.development", "bench.full"),
     "Side.bench_max": ("bench.open_slot",),
     "Side.deck_count": ("resource.opponent_hidden_deck",),
     "Side.hand": ("option.attack",),
     "Side.hand_count": ("resource.opponent_hidden_option",),
     "Side.discard": ("zone.in_discard",),
-    "Side.prize_count": ("prize.race", "prize.overrun", "combat.prize_phase_fit"),
+    "Side.prize_count": ("prize.race", "prize.overrun"),
     "Side.poisoned": ("status.poisoned",),
     "Side.burned": ("status.burned",),
     "Side.asleep": ("status.asleep",),
@@ -111,13 +111,13 @@ OBSERVATION_FIELD_FEATURES = MappingProxyType({
     "Body.energy_cards": ("interaction.kind.energy.attached_usable",),
     "Body.tools": ("zone.tool_attached",),
     "Body.pre_evolution": ("zone.under_body",),
-    "Card.card_id": ("combat.line_potential",),
+    "Card.card_id": ("combat.realization",),
     "Card.owner": ("option.search",),
     "Turn.number": ("development.visible_reach",),
     "Turn.first_player": ("ability.search_cards",),
     "Turn.supporter_played": ("option.draw",),
     "Turn.energy_attached": ("option.energy",),
-    "Turn.retreated": ("combat.attack_now",),
+    "Turn.retreated": ("combat.realization",),
     "Turn.result": ("result.win",),
     "KnownOwnPrizes.cards": ("option.search",),
     "KnownDeckTop.cards": ("option.search",),
@@ -376,7 +376,7 @@ CLAUSE_PRIMARY_PARAMETER_FEATURES = MappingProxyType({
     ("amount", "move_energy"): "function.accel.open_energy_slot",
     ("amount", "opp_hand_to_deck"): "function.disruption.opponent_hand",
     ("amount", "recoil"): "function.self_cost.exposure",
-    ("amount", "requires_bench_count"): "combat.attack_now",
+    ("amount", "requires_bench_count"): "combat.realization",
     ("amount", "retreat_reduction"): "function.cost_reduction.open_cost",
     ("amount", "self_discard_energy"): "function.self_cost.exposure",
     ("amount", "self_mill"): "function.self_cost.exposure",
@@ -390,7 +390,7 @@ CLAUSE_PRIMARY_PARAMETER_FEATURES = MappingProxyType({
     ("condition", "ability_suppression"): "function.suppression.ability_target",
     ("condition", "accel"): "function.accel.open_energy_slot",
     ("condition", "attack_cost_reduction"): "function.cost_reduction.open_cost",
-    ("condition", "attack_twice"): "combat.attack_now",
+    ("condition", "attack_twice"): "combat.realization",
     ("condition", "cost_reduction"): "function.cost_reduction.open_cost",
     ("condition", "damage_boost"): "function.attack.modifier",
     ("condition", "draw"): "function.draw.available",
@@ -405,7 +405,7 @@ CLAUSE_PRIMARY_PARAMETER_FEATURES = MappingProxyType({
     ("condition", "stadium_static"): "function.stadium.board_fit",
     ("condition", "survive_ko"): "ability.denial",
     ("condition_energy_type", "move_damage"): "function.move_damage.damage_present",
-    ("count", "bench_snipe"): "combat.bench_reach",
+    ("count", "bench_snipe"): "combat.realization",
     ("count", "coin"): "function.attack.modifier",
     ("opponent_amount", "draw"): "ability.resource_cost",
     ("opponent_amount_if", "draw"): "ability.resource_cost",
@@ -718,29 +718,29 @@ CLAUSE_VALUATION_CONTRACTS = MappingProxyType({
         "attack_lock", _D, "capability.denial",
         "ability.denial", "function.denial.opponent_resource"),
     "attack_twice": _clause(
-        "attack_twice", _D, "activation.function", "combat.attack_now"),
+        "attack_twice", _D, "activation.function", "combat.realization"),
     "bench_snipe": _clause(
         "bench_snipe", _D, "capability.bench_reach",
-        "combat.bench_reach", "function.bench_pressure.target_count"),
+        "combat.realization", "function.bench_pressure.target_count"),
     "bench_spread": _clause(
         "bench_spread", _D, "capability.bench_reach",
-        "combat.bench_reach", "function.bench_pressure.target_count"),
+        "combat.realization", "function.bench_pressure.target_count"),
     "checkup_trigger": _clause(
         "checkup_trigger", _D, "activation.function", "ability.damage_move"),
     "coin": _clause(
         "coin", _D, "activation.function",
-        "combat.attack_now", "function.attack.modifier"),
+        "combat.realization", "function.attack.modifier"),
     "confuse": _clause(
         "confuse", _D, "activation.function", "function.status.active_target"),
     "copy_attack": _clause(
         "copy_attack", _D, "activation.function",
-        "combat.attack_now", "function.attack.copy_source"),
+        "combat.realization", "function.attack.copy_source"),
     "cost_reduction": _clause(
         "cost_reduction", _D, "activation.function",
         "function.cost_reduction.open_cost"),
     "damage_boost": _clause(
         "damage_boost", _D, "activation.function",
-        "combat.attack_now", "function.attack.modifier"),
+        "combat.realization", "function.attack.modifier"),
     "damage_counters": _clause(
         "damage_counters", _D, "activation.function",
         "function.bench_pressure.target_count"),
@@ -786,16 +786,16 @@ CLAUSE_VALUATION_CONTRACTS = MappingProxyType({
         "hp_bonus", _D, "activation.function", "function.protection.incoming_pressure"),
     "ignores_effects": _clause(
         "ignores_effects", _D, "capability.attack",
-        "combat.attack_now", "function.attack.piercing"),
+        "combat.realization", "function.attack.piercing"),
     "ignores_wr": _clause(
         "ignores_wr", _D, "capability.attack",
-        "combat.active_threat", "function.attack.piercing"),
+        "combat.realization", "function.attack.piercing"),
     "item_lock": _clause(
         "item_lock", _D, "capability.denial",
         "ability.denial", "function.denial.opponent_resource"),
     "ko": _clause(
         "ko", _D, "capability.knockout",
-        "combat.active_threat", "function.ko.active_target",
+        "combat.realization", "function.ko.active_target",
         "function.ko.self_prize_liability"),
     "mill": _clause(
         "mill", _D, "activation.function", "function.disruption.deck"),
@@ -824,11 +824,11 @@ CLAUSE_VALUATION_CONTRACTS = MappingProxyType({
     "recoil": _clause(
         "recoil", _D, "activation.function", "function.self_cost.exposure"),
     "requires_bench": _clause(
-        "requires_bench", _D, "capability.attack_gate", "combat.attack_now"),
+        "requires_bench", _D, "capability.attack_gate", "combat.realization"),
     "requires_bench_count": _clause(
-        "requires_bench_count", _D, "activation.function", "combat.attack_now"),
+        "requires_bench_count", _D, "activation.function", "combat.realization"),
     "requires_stadium": _clause(
-        "requires_stadium", _D, "activation.function", "combat.attack_now"),
+        "requires_stadium", _D, "activation.function", "combat.realization"),
     "retreat_lock": _clause(
         "retreat_lock", _D, "capability.denial",
         "ability.denial", "function.denial.opponent_resource"),

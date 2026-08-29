@@ -9,7 +9,7 @@ a full pass adopts nothing. The adopted values are printed and reported; committ
 means editing the Feature Catalog defaults.
 
     python tools/train/ledger_tune.py --lever zone.in_hand=0.55,0.75
-        --lever combat.attack_now=0.30,0.40 [--decks ...] [--workers N]
+        --lever combat.realization=0.90,1.10 [--decks ...] [--workers N]
 """
 from __future__ import annotations
 

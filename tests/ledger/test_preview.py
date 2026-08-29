@@ -103,6 +103,17 @@ def test_body_ability_readiness_stops_after_the_line_is_fully_developed():
     assert not _body_ability_ready(developed, evolve, context)
 
 
+def test_deck_selection_reads_the_deck_card_before_an_overlapping_hand_index():
+    select = {"context": 7, "minCount": 0, "maxCount": 1,
+              "deck": [{"id": 674, "serial": 800, "playerIndex": 0}],
+              "option": [{"area": 1, "index": 0, "playerIndex": 0, "type": 3}]}
+    board = ObservationStateBuilder(DECK).root(printout(
+        me=player(active=body(673, 1), hand=[DRAKLOAK]), select=select))
+
+    assert _body_ability_ready(
+        board, action("card", (0,)), EvaluationModel.build())
+
+
 def test_compound_fetch_prices_only_copies_above_total_body_capacity():
     select = {"context": 5, "minCount": 1, "maxCount": 2,
               "option": [{"cardId": DREEPY, "serial": 800, "type": 3},
@@ -112,6 +123,15 @@ def test_compound_fetch_prices_only_copies_above_total_body_capacity():
 
     assert _body_copy_overflow(board, action("card", (0,)), EvaluationModel.build()) == 0
     assert _body_copy_overflow(board, action("card", (0, 1)), EvaluationModel.build()) == 1
+
+
+def test_forced_singleton_fetch_does_not_price_unavailable_body_alternatives():
+    select = {"context": 5, "minCount": 0, "maxCount": 1,
+              "option": [{"cardId": DREEPY, "serial": 800, "type": 3}]}
+    board = ObservationStateBuilder(DECK).root(printout(
+        me=player(active=body(DRAGAPULT, 1), hand=[DREEPY, DREEPY]), select=select))
+
+    assert _body_copy_overflow(board, action("card", (0,)), EvaluationModel.build()) == 0
 
 
 def test_terminal_action_is_priced_against_the_legal_end_successor():
