@@ -20,7 +20,7 @@ from common.cards.card_facts import SUPPORTER, PokemonCard, TrainerCard
 from common.decision import EvaluationStatus, SearchConfiguration, SuccessorResult
 from common.observation import ObservationState, ObservationStateBuilder, TransitionTrace
 from common.strategy.context import (_ACTIVE, _BENCH, _DAMAGE_COUNTER_ANY, _DISCARD,
-                                     _EVOLVE, _MAIN, _ATTACH_FROM, _TO_BENCH, _TO_HAND)
+                                     _EVOLVE, _MAIN, _PLAY, _ATTACH_FROM, _TO_BENCH, _TO_HAND)
 
 from .activation import ActivationCompiler, ActivationEnvironment
 from .capabilities import DAMAGE_COUNTER_HP, DAMAGE_UNIT_HP
@@ -623,6 +623,9 @@ def _local_action_events(board, action, ctx=None):
     draw_before_refresh = _draw_before_refresh(board, action, ctx)
     if draw_before_refresh:
         return (("draw_before_refresh", draw_before_refresh),)
+    play_before_refresh = _play_before_refresh(board, action, ctx)
+    if play_before_refresh:
+        return (("play_before_refresh", play_before_refresh),)
     if ctx is not None and _body_ability_ready(board, action, ctx):
         return (("body_ability_ready", 1.0),)
     if ctx is not None and (overflow := _body_copy_overflow(board, action, ctx)):
@@ -758,6 +761,30 @@ def _draw_before_refresh(board, action, ctx):
     return max((float(clause.amount or 1)
                 for ability in getattr(facts, "abilities", ())
                 for clause in ability.clauses if clause.kind == "draw"), default=0.0)
+
+
+def _play_before_refresh(board, action, ctx):
+    if ctx is None or action.identity.kind != "play" or board.select is None:
+        return 0.0
+    selected = tuple(ctx.facts(card_id) for _serial, card_id in
+                     _selected_cards(board, action) if card_id is not None)
+    refresh = any(
+        isinstance(facts, TrainerCard) and facts.kind == SUPPORTER
+        and any(clause.kind == "draw" and clause.rider == "shuffle_own_hand_in"
+                for clause in card_clauses(facts))
+        for facts in selected)
+    if not refresh:
+        return 0.0
+    playable = 0
+    hand = tuple(board.me.hand)
+    for option in board.select.options:
+        if option.type != _PLAY or not isinstance(option.index, int) \
+                or not 0 <= option.index < len(hand):
+            continue
+        facts = ctx.facts(hand[option.index].card_id)
+        if isinstance(facts, TrainerCard) and facts.kind != SUPPORTER:
+            playable += 1
+    return float(playable)
 
 
 def _payload(state):

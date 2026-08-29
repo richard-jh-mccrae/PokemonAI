@@ -15,7 +15,7 @@ from train.ledger_corpus import sweep  # noqa: E402
 from train.value_audit import build_value_audit  # noqa: E402
 
 
-ONE_PLY_LEDGER_FIRST_RUN = "20260828-221100_a39dfc83_mega_starmie"
+ONE_PLY_LEDGER_FIRST_RUN = "20260828-111914_ad58ab7d_mega_starmie"
 
 
 def ledger_correction_sources(root: Path | str = DEFAULT_ROOT) -> tuple[Path, ...]:
@@ -39,10 +39,17 @@ def correction_gate_findings(report: dict, audit: dict, *,
     if structural:
         findings.append(f"{structural} correction replays are structurally incomplete")
     for key, label in (("incomplete", "pairwise value audits are incomplete"),
-                       ("violated_preferences", "correction preferences are violated"),
                        ("conflict_sets", "correction conflict sets remain")):
         if summary[key]:
             findings.append(f"{summary[key]} {label}")
+    unresolved = sum(
+        item["gradeable"]
+        and not item["satisfied_by_committed"]
+        and item["current_selection"] not in item["acceptable_selections"]
+        and item["margin"]["atomic"] <= 0
+        for item in audit.get("audits", ()))
+    if unresolved:
+        findings.append(f"{unresolved} correction preferences are violated")
     fallbacks = sum(bool(row.get("fallback")) for row in rows)
     if fallbacks:
         findings.append(f"{fallbacks} correction replays used a fallback")
