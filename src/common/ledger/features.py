@@ -186,6 +186,8 @@ _DECLARED_RULES = {
     "action.overkill_counter": _rule("action", ("overkill_counter",), "constant"),
     "action.draw_before_refresh": _rule(
         "action", ("draw_before_refresh",), "constant"),
+    "action.play_before_refresh": _rule(
+        "action", ("play_before_refresh",), "constant"),
     "action.body_ability_ready": _rule(
         "action", ("body_ability_ready",), "constant"),
     "action.body_copy_overflow": _rule(
@@ -427,6 +429,7 @@ _SCALAR_DEFAULTS = {
     "action.damage_counter_progress": 1.0,
     "action.overkill_counter": -100.0,
     "action.draw_before_refresh": -0.75,
+    "action.play_before_refresh": -0.25,
     "action.body_ability_ready": 0.40,
     "action.body_copy_overflow": -0.30,
     "action.retreat_doomed_denial": -1.0,
