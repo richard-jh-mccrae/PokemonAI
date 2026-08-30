@@ -16,7 +16,8 @@ import json
 from collections.abc import Mapping
 
 from common.api import RootDecision
-from common.decision import (DecisionCoordinator, DecisionFailure, DecisionFailureStage,
+from common.decision import (DecisionCoordinator, DecisionDeadlineExceeded,
+                             DecisionFailure, DecisionFailureStage,
                              FailSafeRequest, fail_safe_request)
 from common.observation import (KnownOwnPrizes, ObservationStateBuilder, OpponentBelief,
                                 reduce_knowledge)
@@ -131,7 +132,8 @@ class LedgerDecider:
         return self._behavior_identity
 
     def decide(self, observation, *, opponent=None, knowledge=None, state=None,
-               parent_valuation=None, observation_delta=None) -> RootDecision:
+               parent_valuation=None, observation_delta=None,
+               execution_guard=None) -> RootDecision:
         ctx = self.ctx
         known = knowledge if state is None else state.knowledge
         if opponent is not None and (known is None
@@ -158,6 +160,7 @@ class LedgerDecider:
                     state, provider=provider,
                     parent_valuation=parent_valuation,
                     observation_delta=observation_delta,
+                    execution_guard=execution_guard,
                     strict=os.environ.get("AGENT_BRAIN_STRICT") == "1")
                 if result.chosen_candidate is not None:
                     self._search.commit(result.chosen_candidate.action)
@@ -191,6 +194,8 @@ class LedgerDecider:
                     return self._emergency_projection(result)
         except Exception as exc:
             if isinstance(exc, LedgerUnavailable):
+                raise
+            if isinstance(exc, DecisionDeadlineExceeded):
                 raise
             if coordinator_entered:
                 raise DecisionPostprocessingError(str(exc)) from exc
@@ -313,6 +318,7 @@ class LedgerDecider:
                     "nodes_visited": result.trace.nodes_visited,
                     "stop_reason": result.trace.stop_reason,
                     "frontier": result.trace.frontier,
+                    "portfolio_memo": self._search.portfolio_metrics,
                 },
                 "position_key": (fail_safe_request.state_key
                                  if fail_safe_request is not None else board.position_key),

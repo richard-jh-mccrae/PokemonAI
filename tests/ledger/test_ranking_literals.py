@@ -50,6 +50,9 @@ APPROVED_DECLARATIONS = {
     "src/common/ledger/preview.py": {"LOTTERY_DIGEST_BYTES", "PRIZE_PHASE_PIVOT"},
     "src/common/ledger/prizes.py": {"PRIZE_ROUTE_CACHE_SIZE"},
     "src/common/ledger/portfolio.py": {"HAND_POKEMON_REALIZATION_DISCOUNT"},
+    "src/common/ledger/portfolio_solver.py": {
+        "DEFAULT_TURN_PORTFOLIO_MEMO_ENTRIES", "DOMINANCE_FRONTIER_ENTRIES",
+        "EXECUTION_GUARD_CHECK_INTERVAL"},
     "src/common/ledger/readiness.py": {"REPORT_SCHEMA_VERSION"},
     "src/common/ledger/search.py": {"LOTTERY_DIGEST_BYTES"},
     "src/common/ledger/seam.py": {"version"},

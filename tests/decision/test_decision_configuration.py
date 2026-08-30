@@ -5,6 +5,8 @@ import pytest
 from common.decision import (
     BudgetController,
     ComputeConfiguration,
+    DecisionDeadlineExceeded,
+    DecisionExecutionGuard,
     PolicyConfiguration,
     SearchConfiguration,
     correction_compute_profile,
@@ -77,6 +79,21 @@ def test_correction_profile_uses_structural_bounds_without_an_inner_deadline():
     assert budget.visit("first")
     assert budget.visit("second")
     assert budget.stop_reason == "complete"
+
+
+def test_failure_containment_raises_instead_of_returning_partial_search():
+    times = iter((0.0, 114.9, 115.0))
+    guard = DecisionExecutionGuard(115.0, clock=lambda: next(times))
+
+    guard.check()
+    with pytest.raises(DecisionDeadlineExceeded, match="115"):
+        guard.check()
+
+
+@pytest.mark.parametrize("limit", (0.0, float("nan"), float("inf")))
+def test_failure_containment_requires_a_real_deadline(limit):
+    with pytest.raises(ValueError, match="positive and finite"):
+        DecisionExecutionGuard(limit)
 
 
 def test_policy_configuration_rejects_unknown_status_names():

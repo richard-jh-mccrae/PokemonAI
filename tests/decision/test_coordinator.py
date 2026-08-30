@@ -6,6 +6,7 @@ from common.decision import (
     CandidateDisposition,
     CandidateRoster,
     DecisionCoordinator,
+    DecisionDeadlineExceeded,
     DecisionDelta,
     EvaluationStatus,
     PolicyConfiguration,
@@ -132,6 +133,27 @@ def test_coordinator_keeps_search_evaluation_and_policy_contracts_separate():
     assert decision_policy.calls == [(search_result.roster, "policy-configuration")]
     assert evaluator.calls == [request]
     assert policy_model.calls == [("state", (attach, end))]
+
+
+def test_failure_containment_is_not_converted_to_a_fail_safe_decision():
+    class DeadlineSearch:
+        def search(self, *_args):
+            raise DecisionDeadlineExceeded("expired")
+
+    coordinator = DecisionCoordinator(
+        evaluator=object(),
+        evaluation_model="evaluation-model",
+        search=DeadlineSearch(),
+        search_configuration="search-configuration",
+        policy_model=object(),
+        decision_policy=object(),
+        policy_configuration="policy-configuration",
+        failure_handler=lambda _request, _failure: pytest.fail(
+            "deadline must not produce partial evidence"),
+    )
+
+    with pytest.raises(DecisionDeadlineExceeded, match="expired"):
+        coordinator.decide("state")
 
 
 def test_roster_rejects_duplicate_action_identity_without_dropping_candidates():

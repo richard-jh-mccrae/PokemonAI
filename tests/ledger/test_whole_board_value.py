@@ -10,6 +10,7 @@ from common.ledger import EvaluationModel, evaluate
 from common.ledger.capabilities import (OptionUnits, body_capability, card_option_units,
                                         card_option_value)
 from common.ledger.portfolio import feasible_option_portfolio_result
+from common.ledger.portfolio_solver import TurnPortfolioMemo
 from common.observation import ObservationStateBuilder
 from common.cards.card_facts import (BASIC, STAGE1, Clause, ITEM, SUPPORTER,
                                      PokemonCard, TrainerCard)
@@ -89,6 +90,84 @@ def test_feasible_portfolio_counts_one_supporter_but_compatible_items():
     assert activation(one, "option.draw", context) == 2
     assert activation(duplicates, "option.draw", context) == 2
     assert activation(compatible, "option.draw", context) == 4
+
+
+def test_feasible_portfolio_canonicalizes_equivalent_sources_losslessly():
+    context = EvaluationModel.build()
+    item_id = 9_999_108
+    item = TrainerCard(
+        item_id, "Probe Item", ITEM,
+        clauses=(Clause("draw", amount=1),), covers="full")
+    context = replace(context, store=MappingProxyType({**context.store, item_id: item}))
+    state = board(me=player(
+        active=body(DUNSPARCE, 1), hand=[item_id, item_id, item_id]))
+
+    result = feasible_option_portfolio_result(
+        [(item, OptionUnits(draw=1))] * 3,
+        state.me, state, context, hand_size=3)
+
+    assert result.units == OptionUnits(draw=3)
+    assert result.selected_indices == (0, 1, 2)
+    assert result.selected_units == (
+        (0, OptionUnits(draw=1)),
+        (1, OptionUnits(draw=1)),
+        (2, OptionUnits(draw=1)),
+    )
+    assert result.statistics.entry_count == 3
+    assert result.statistics.class_count == 1
+
+
+def test_feasible_portfolio_reuses_an_exact_turn_problem():
+    context = EvaluationModel.build()
+    state = board(me=player(
+        active=body(DUNSPARCE, 1), hand=[CRISPIN, CRISPIN]))
+    entries = [(context.facts(CRISPIN), OptionUnits(acceleration=1))] * 2
+    reuse = TurnPortfolioMemo()
+
+    first = feasible_option_portfolio_result(
+        entries, state.me, state, context, hand_size=2,
+        reuse=reuse, reuse_identity=("evaluator", context.identity))
+    second = feasible_option_portfolio_result(
+        entries, state.me, state, context, hand_size=2,
+        reuse=reuse, reuse_identity=("evaluator", context.identity))
+
+    assert second.units == first.units
+    assert second.selected_units == first.selected_units
+    assert first.statistics.turn_cache_misses == 1
+    assert second.statistics.turn_cache_hits == 1
+    assert second.statistics.states_visited == 0
+    assert reuse.metrics() == {
+        "entries": 1,
+        "lookups": 2,
+        "hits": 1,
+        "misses": 1,
+        "evictions": 0,
+    }
+
+
+def test_feasible_portfolio_cache_uses_problem_semantics_not_whole_board_identity():
+    context = EvaluationModel.build()
+    state = board(me=player(active=body(DUNSPARCE, 1), hand=[CRISPIN]))
+    entries = [(context.facts(CRISPIN), OptionUnits(acceleration=1))]
+    reuse = TurnPortfolioMemo()
+
+    feasible_option_portfolio_result(
+        entries, state.me, state, context, hand_size=1, reuse=reuse)
+    damaged_active = replace(state.me.active, hp=state.me.active.hp - 10)
+    damaged_side = replace(state.me, active=damaged_active)
+    irrelevant = feasible_option_portfolio_result(
+        entries, damaged_side, replace(
+            state, me=damaged_side,
+            turn=replace(state.turn, number=state.turn.number + 1)), context,
+        hand_size=1, reuse=reuse)
+    relevant = feasible_option_portfolio_result(
+        entries, state.me, replace(state, turn=replace(
+            state.turn, supporter_played=True)), context,
+        hand_size=1, reuse=reuse)
+
+    assert irrelevant.statistics.turn_cache_hits == 1
+    assert relevant.statistics.turn_cache_misses == 1
+    assert len(reuse) == 2
 
 
 def test_duplicate_active_stadium_has_no_second_board_effect_in_hand():

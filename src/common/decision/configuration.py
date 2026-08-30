@@ -9,6 +9,24 @@ from time import monotonic
 from .contracts import EvaluationStatus
 
 
+class DecisionDeadlineExceeded(RuntimeError):
+    pass
+
+
+class DecisionExecutionGuard:
+    def __init__(self, limit_seconds: float, *, clock=monotonic):
+        if not math.isfinite(limit_seconds) or limit_seconds <= 0:
+            raise ValueError("decision containment limit must be positive and finite")
+        self.limit_seconds = float(limit_seconds)
+        self.clock = clock
+        self.started = clock()
+
+    def check(self) -> None:
+        if self.clock() - self.started >= self.limit_seconds:
+            raise DecisionDeadlineExceeded(
+                f"decision failure containment expired after {self.limit_seconds:g}s")
+
+
 def _positive(name, value):
     if value <= 0:
         raise ValueError(f"{name} must be positive")
@@ -137,5 +155,6 @@ def correction_compute_profile() -> ComputeConfiguration:
     )
 
 
-__all__ = ("BudgetController", "ComputeConfiguration", "PolicyConfiguration",
-           "SearchConfiguration", "correction_compute_profile")
+__all__ = ("BudgetController", "ComputeConfiguration", "DecisionDeadlineExceeded",
+           "DecisionExecutionGuard", "PolicyConfiguration", "SearchConfiguration",
+           "correction_compute_profile")

@@ -104,8 +104,25 @@ _Avoid_: State Valuation, policy prior, reward
 
 **Feasible Option Portfolio**:
 The state value of compatible opportunities remaining in the current turn under shared allowances,
-costs, and targets. It is derived without traversing actions and never sums conflicting plays.
+costs, and targets. Equivalent opportunities retain their multiplicity, while a selected opportunity
+retains the exact physical source needed for Realized Portfolio Credit. It is derived without
+traversing actions and never sums conflicting plays.
 _Avoid_: hand-value sum, Action Path, committed turn plan
+
+**Portfolio Problem**:
+The canonical, source-independent representation of current opportunities, multiplicities,
+constraints, and worth used to solve one Feasible Option Portfolio.
+_Avoid_: legal action menu, physical-card list, cached Decision Delta
+
+**Portfolio Plan**:
+The exact best compatible allocation for one Portfolio Problem, before its selected copies are
+materialized onto physical hand sources.
+_Avoid_: Action Path, approximate hand plan, selected card serials
+
+**Portfolio Memo**:
+A Search Algorithm's bounded, turn-scoped reuse of exact Portfolio Plans keyed by the complete
+Portfolio Problem and evaluator identity. It resets at the turn boundary and never spans matches.
+_Avoid_: global cache, approximate reuse, Valuation Cache
 
 **Decision Delta**:
 One candidate's decomposed marginal value against the root State Valuation.
@@ -209,7 +226,8 @@ _Avoid_: Valuation weight, policy preference
 
 **Correction Compute Profile**:
 The deterministic Compute Configuration used by Correction Runs to complete root-candidate pricing
-under structural work bounds. Wall time is failure containment, never a search allocation.
+under structural work bounds. Wall time is failure containment, never a search allocation; expiry
+rejects the decision rather than publishing partial correction evidence.
 _Avoid_: Submission profile, Performance Profile, unlimited search
 
 **Search Configuration**:

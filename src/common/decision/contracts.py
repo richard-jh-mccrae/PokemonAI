@@ -248,6 +248,8 @@ class EvaluationRequest:
     evaluation_model: object
     parent_valuation: StateValuation | None = None
     observation_delta: object | None = None
+    reuse: object | None = None
+    execution_guard: object | None = None
 
 
 @dataclass(frozen=True, slots=True)

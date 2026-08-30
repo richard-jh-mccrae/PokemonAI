@@ -6,6 +6,7 @@ from dataclasses import dataclass, replace
 from .contracts import (CandidateRoster, DecisionChoice, DecisionFailure,
                         DecisionFailureStage, DecisionReason, DecisionResult,
                         EvaluationRequest, SearchTrace)
+from .configuration import DecisionDeadlineExceeded
 
 
 LOTTERY_DIGEST_BYTES = 8
@@ -35,9 +36,11 @@ class DecisionCoordinator:
     failure_handler: object | None = None
 
     def decide(self, state, *, provider=None, parent_valuation=None,
-               observation_delta=None, strict=False, failure=None) -> DecisionResult:
+               observation_delta=None, execution_guard=None,
+               strict=False, failure=None) -> DecisionResult:
         request = EvaluationRequest(
-            state, self.evaluation_model, parent_valuation, observation_delta)
+            state, self.evaluation_model, parent_valuation, observation_delta,
+            execution_guard=execution_guard)
         if failure is not None:
             if self.failure_handler is None:
                 raise ValueError("decision failure requires a failure handler")
@@ -47,6 +50,8 @@ class DecisionCoordinator:
                 result = self.search.search(
                     request, self.evaluator, self.policy_model, provider,
                     self.search_configuration)
+            except DecisionDeadlineExceeded:
+                raise
             except Exception as exc:
                 if strict or self.failure_handler is None:
                     raise

@@ -141,7 +141,8 @@ def evaluate(board: ObservationState, ctx: EvaluationModel) -> Valuation:
 
 def evaluate_snapshot(board: ObservationState, ctx: EvaluationModel, *,
                       parent: EvaluationSnapshot | None = None,
-                      delta=None) -> EvaluationSnapshot:
+                      delta=None, reuse=None, reuse_identity=(), execution_guard=None
+                      ) -> EvaluationSnapshot:
     reusable = (parent is not None and delta is not None
                 and parent.model_identity == ctx.identity)
     dirty = set(EVALUATION_GROUPS if not reusable else _dirty_groups(delta))
@@ -160,7 +161,10 @@ def evaluate_snapshot(board: ObservationState, ctx: EvaluationModel, *,
         elif name == "context":
             valuation = _context_group(board, ctx, opponent)
         elif name == "me":
-            valuation = _side_group("me", board.me, 1.0, board, ctx, opponent)
+            valuation = _side_group(
+                "me", board.me, 1.0, board, ctx, opponent,
+                reuse=reuse, reuse_identity=reuse_identity,
+                execution_guard=execution_guard)
         elif name == "them":
             valuation = _side_group("them", board.them, -1.0, board, ctx, opponent)
         else:
@@ -211,10 +215,13 @@ def _context_group(board, ctx, opponent) -> Valuation:
     return trace.finish()
 
 
-def _side_group(label, side, sign, board, ctx, opponent) -> Valuation:
+def _side_group(label, side, sign, board, ctx, opponent, *, reuse=None,
+                reuse_identity=(), execution_guard=None) -> Valuation:
     trace = _Trace(ctx)
     _side(trace, label, side, sign, ctx, board, opponent,
-          deck_counts=board.deck_counts if sign > 0 else None)
+          deck_counts=board.deck_counts if sign > 0 else None,
+          reuse=reuse, reuse_identity=reuse_identity,
+          execution_guard=execution_guard)
     return trace.finish()
 
 
@@ -341,7 +348,8 @@ def _opponent_traits(trace: _Trace, ctx: EvaluationModel, board: ObservationStat
 
 
 def _side(trace: _Trace, label: str, side: Side, sign: float, ctx: EvaluationModel,
-          board: ObservationState, opponent, *, deck_counts) -> None:
+          board: ObservationState, opponent, *, deck_counts, reuse=None,
+          reuse_identity=(), execution_guard=None) -> None:
     opposing_side = board.them if sign > 0 else board.me
     doomed = _active_doomed(
         board.them if sign > 0 else board.me, side, ctx, board)
@@ -475,7 +483,9 @@ def _side(trace: _Trace, label: str, side: Side, sign: float, ctx: EvaluationMod
             if isinstance(facts, EnergyCard) and facts.kind != SPECIAL_ENERGY:
                 basic_energy[facts.provides] += 1
         portfolio = feasible_option_portfolio_result(
-            portfolio_entries, side, board, ctx, hand_size=len(side.hand))
+            portfolio_entries, side, board, ctx, hand_size=len(side.hand),
+            reuse=reuse, reuse_identity=reuse_identity,
+            execution_guard=execution_guard)
         for index, units in portfolio.selected_units:
             source = portfolio_sources[index]
             provenance = (f"feasible_option_portfolio:serial:{source.serial}"
