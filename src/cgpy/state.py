@@ -103,6 +103,7 @@ class GameState:
     cards: dict[int, CardInstance]
     players: list[PlayerBoard]
     rng: Any
+    execution_guard: Any = None
     turn: int = 0
     turn_action_count: int = 0
     first_player: int = -1

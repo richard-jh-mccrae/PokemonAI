@@ -310,6 +310,8 @@ def _start_eot_tool_active(gs: GameState, seat: int) -> bool:
     for s in list(holder.tools):
         eot = (def_for(gs.card_id(s)) or {}).get("tool", {}).get("onEndTurnActive")
         if eot:
+            if gs.execution_guard is not None:
+                gs.execution_guard(str(gs.card_id(s)))
             gs.frames.append(EffectFrame(program=[dict(eot)], pc=0, vars={},
                                          seat=seat, source=s, kind="eot_tool"))
             run_frames(gs)
@@ -447,6 +449,8 @@ def _resolve_attack(gs: GameState, seat: int, attack_id: int) -> None:
         raise UnsupportedCard(
             f"attack {attack_id} is {'deferred' if adef else 'undefined'}: "
             f"{(adef or {}).get('deferred', 'no ChainDef')}")
+    if gs.execution_guard is not None:
+        gs.execution_guard(f"attack:{attack_id}")
     gs.emit({"type": int(LogType.ATTACK), "playerIndex": seat,
              "cardId": gs.card_id(attacker.top), "serial": attacker.top,
              "attackId": attack_id})

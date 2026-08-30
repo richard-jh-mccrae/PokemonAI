@@ -5,7 +5,8 @@ import gzip
 import hashlib
 import json
 import platform
-from dataclasses import dataclass, fields, is_dataclass
+from copy import deepcopy
+from dataclasses import dataclass, field, fields, is_dataclass
 from pathlib import Path
 
 from common.observation import ObservationStateBuilder
@@ -81,10 +82,13 @@ def _digest(value) -> str:
     return hashlib.sha256(_canonical(value)).hexdigest()
 
 
-def _file_identity(paths) -> str:
+def _file_identity(paths, *, base: Path) -> str:
     hasher = hashlib.sha256()
-    for path in paths:
+    for path in sorted(map(Path, paths)):
+        name = path.relative_to(base).as_posix().encode("utf-8")
         raw = Path(path).read_bytes()
+        hasher.update(len(name).to_bytes(8, "big"))
+        hasher.update(name)
         hasher.update(len(raw).to_bytes(8, "big"))
         hasher.update(raw)
     return hasher.hexdigest()
@@ -92,14 +96,17 @@ def _file_identity(paths) -> str:
 
 def _identities() -> dict:
     root = Path(__file__).resolve().parents[1]
+    repo = root.parents[1]
     definitions = root / "defs"
     return {
-        "engine": _file_identity(root / name for name in (
-            "engine.py", "state.py", "turn.py", "options.py", "chain.py", "rng.py")),
-        "card_tables": _file_identity(definitions / name for name in (
-            "card_data.json", "attack_data.json", "tables_meta.json")),
-        "chain_definitions": _file_identity(definitions / name for name in (
-            "chain_overrides.json", "generated_chains.json")),
+        "engine": _file_identity(root.rglob("*.py"), base=repo),
+        "legal_view": _file_identity((repo / "src" / "common" / "api.py",
+                                      *(repo / "src" / "common" / "observation").rglob("*.py")),
+                                     base=repo),
+        "card_tables": _file_identity((definitions / name for name in (
+            "card_data.json", "attack_data.json", "tables_meta.json")), base=repo),
+        "chain_definitions": _file_identity((definitions / name for name in (
+            "chain_overrides.json", "generated_chains.json")), base=repo),
         "python": platform.python_version(),
         "rng": RNG_SCHEMA,
     }
@@ -135,7 +142,8 @@ def _assert_card_partition(gs: GameState) -> None:
 
 
 def _state_payload(gs: GameState) -> dict:
-    actual = tuple(field.name for field in fields(GameState) if field.name not in {"db", "rng"})
+    excluded = {"db", "rng", "execution_guard"}
+    actual = tuple(field.name for field in fields(GameState) if field.name not in excluded)
     if actual != _GAME_FIELDS:
         raise SnapshotCompatibilityError("GameState field inventory changed")
     return {name: _encode(getattr(gs, name)) for name in _GAME_FIELDS}
@@ -162,9 +170,16 @@ def _observation_record(engine: Engine, seat: int, deck: list[int]) -> Observati
     return ObservationRecord.from_state(ObservationStateBuilder(deck).root(raw))
 
 
-@dataclass(frozen=True, slots=True)
+@dataclass(frozen=True, slots=True, init=False)
 class ExperimentSnapshot:
-    document: dict
+    _document: dict = field(repr=False)
+
+    def __init__(self, document: dict):
+        object.__setattr__(self, "_document", deepcopy(document))
+
+    @property
+    def document(self) -> dict:
+        return deepcopy(self._document)
 
     @classmethod
     def capture(cls, engine: Engine, *, seat: int | None,
@@ -222,31 +237,33 @@ class ExperimentSnapshot:
 
     @property
     def snapshot_id(self) -> str:
-        return str(self.document["snapshot_id"])
+        return str(self._document["snapshot_id"])
 
     @property
     def full_state_digest(self) -> str:
-        return str(self.document["full_state_digest"])
+        return str(self._document["full_state_digest"])
 
     @property
     def rng_digest(self) -> str:
-        return str(self.document["rng_digest"])
+        return str(self._document["rng_digest"])
 
     @property
     def initial_setup_digest(self) -> str:
-        return str(self.document["initial_setup_digest"])
+        return str(self._document["initial_setup_digest"])
 
     @property
     def deck_identities(self) -> tuple[str, str]:
-        return tuple(self.document["identities"]["decks"])
+        return tuple(self._document["identities"]["decks"])
 
     @property
     def provenance(self) -> dict:
-        return _decode(self.document["provenance"])
+        return _decode(self._document["provenance"])
 
     @property
     def observation(self):
-        raw = self.document["observation"]
+        self._validate()
+        self._restore_engine()
+        raw = self._document["observation"]
         return ObservationRecord.loads(json.dumps(raw, sort_keys=True)).to_state()
 
     def save(self, path: Path | str) -> Path:
@@ -255,7 +272,7 @@ class ExperimentSnapshot:
         temporary = target.with_name(target.name + ".tmp")
         with temporary.open("wb") as raw:
             with gzip.GzipFile(filename="", fileobj=raw, mode="wb", mtime=0) as stream:
-                stream.write(_canonical(self.document))
+                stream.write(_canonical(self._document))
         temporary.replace(target)
         return target
 
@@ -276,18 +293,25 @@ class ExperimentSnapshot:
         return self._restore_engine()
 
     def _restore_engine(self) -> Engine:
-        engine = Engine(_restore_state(self.document["state"], self.document["rng_state"]))
+        document = self._document
+        engine = Engine(_restore_state(document["state"], document["rng_state"]))
         _assert_card_partition(engine.gs)
         if _deck_identities(_decks(engine.gs)) != list(self.deck_identities):
             raise SnapshotCompatibilityError("Experiment Snapshot deck identities mismatch")
-        _assert_root(engine.gs, int(self.document["seat"]))
+        seat = int(document["seat"])
+        _assert_root(engine.gs, seat)
         observed = _observation_record(
-            engine, int(self.document["seat"]), _decks(engine.gs)[int(self.document["seat"])]
-        ).to_state()
-        if observed.position_key != self.document["position_key"]:
+            engine, seat, _decks(engine.gs)[seat])
+        observed_raw = json.loads(observed.dumps())
+        observed_state = observed.to_state()
+        if observed_raw != document["observation"]:
+            raise SnapshotCompatibilityError("snapshot legal-view Observation mismatch")
+        if observed_state.position_key != document["position_key"]:
             raise SnapshotCompatibilityError("snapshot Position Key mismatch")
-        if observed.decision_key != self.document["decision_key"]:
+        if observed_state.decision_key != document["decision_key"]:
             raise SnapshotCompatibilityError("snapshot Decision Key mismatch")
+        if engine.gs.turn != document["turn"] or engine.select_seat != seat:
+            raise SnapshotCompatibilityError("snapshot turn or seat metadata mismatch")
         return engine
 
     def fork_roots(self, methods) -> dict[str, Engine]:
@@ -306,7 +330,7 @@ class ExperimentSnapshot:
         return {name: PolicyRoot(name, self.snapshot_id, observation) for name in names}
 
     def _validate(self) -> None:
-        document = self.document
+        document = self._document
         if document.get("schema") != SCHEMA or document.get("schema_version") != SCHEMA_VERSION:
             raise SnapshotCompatibilityError(
                 f"unsupported Experiment Snapshot schema "

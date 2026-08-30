@@ -109,6 +109,27 @@ def test_snapshot_load_rejects_unknown_schema_with_a_diagnostic(tmp_path):
         ExperimentSnapshot.load(path)
 
 
+def test_snapshot_load_rejects_a_tampered_legal_view(tmp_path):
+    document = ExperimentSnapshot.capture(_start_of_turn(), seat=0).document
+    document["observation"]["events"] = []
+    body = {key: value for key, value in document.items() if key != "snapshot_id"}
+    document["snapshot_id"] = _digest(body)
+    path = tmp_path / "tampered-view.snapshot.json.gz"
+    _write_document(path, document)
+
+    with pytest.raises(SnapshotCompatibilityError, match="legal-view Observation"):
+        ExperimentSnapshot.load(path)
+
+
+def test_snapshot_document_access_cannot_mutate_the_artifact():
+    snapshot = ExperimentSnapshot.capture(_start_of_turn(), seat=0)
+    exposed = snapshot.document
+    exposed["seat"] = 1
+
+    assert snapshot.document["seat"] == 0
+    assert snapshot.fork_engine().select_seat == 0
+
+
 def test_experiment_roots_begin_identical_and_evolve_independently():
     snapshot = ExperimentSnapshot.capture(_start_of_turn(), seat=0)
 
@@ -201,11 +222,15 @@ def test_paired_seed_full_matches_relaunch_and_swap_seats_reproducibly():
     swapped = reverse.launch(parity=parity)
 
     assert first.initial_setup_digest == again.initial_setup_digest
+    assert forward.initial_setup_digest == first.initial_setup_digest
     assert len({root.initial_setup_digest for root in first.roots.values()}) == 1
     assert all(root.engine.god_frame() == first.roots["A"].engine.god_frame()
                for root in first.roots.values())
     assert tuple(swapped.deck_identities) == tuple(reversed(first.deck_identities))
     assert forward.case_id != reverse.case_id
+
+    with pytest.raises(SnapshotCompatibilityError, match=r"attack:424.*derived"):
+        first.roots["A"].engine.gs.execution_guard("attack:424")
 
 
 def test_verified_native_trace_root_starts_a_new_randomness_epoch():

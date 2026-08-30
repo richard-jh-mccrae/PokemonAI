@@ -25,6 +25,61 @@ def _identity(value) -> str:
     return hashlib.sha256(_canonical(value)).hexdigest()
 
 
+def _dumps_artifact(value) -> str:
+    return _canonical(asdict(value)).decode("utf-8")
+
+
+def _loads_artifact(encoded: str, cls, label: str, *, has_decks: bool = False):
+    try:
+        raw = json.loads(encoded)
+        raw["methods"] = tuple(raw["methods"])
+        raw["deck_identities"] = tuple(raw["deck_identities"])
+        if has_decks:
+            raw["decks"] = tuple(tuple(deck) for deck in raw["decks"])
+        result = cls(**raw)
+    except (KeyError, TypeError, ValueError) as exc:
+        raise SnapshotCompatibilityError(f"invalid {label}: {exc}") from exc
+    result._validate()
+    return result
+
+
+def _validate_artifact(value, schema: str, label: str) -> None:
+    if value.schema != schema:
+        raise SnapshotCompatibilityError(f"unsupported {label} schema")
+    if value.chance_schema_version != CHANCE_SCHEMA_VERSION:
+        raise SnapshotCompatibilityError("unsupported Chance Sample schema")
+    if (not value.orientation or not value.baseline_identity or not value.methods
+            or len(set(value.methods)) != len(value.methods)
+            or any(not name for name in value.methods)):
+        raise SnapshotCompatibilityError(f"invalid {label} identities")
+    body = asdict(value)
+    body.pop("case_id")
+    if value.case_id != _identity(body):
+        raise SnapshotCompatibilityError(f"{label} content digest mismatch")
+
+
+def _guard_engine(engine: Engine, parity: ExperimentParityManifest, executed: list[str]) -> None:
+    def require(chain: str) -> None:
+        parity.require_verified((chain,))
+        executed.append(chain)
+
+    engine.gs.execution_guard = require
+
+
+def _start_engine(decks, seed: int) -> Engine:
+    engine, seat, error = Engine.start(
+        list(decks[0]), list(decks[1]), rng=SeededRng(seed))
+    if engine is None:
+        raise SnapshotCompatibilityError(
+            f"Paired-Seed Match deck {seat} failed validation with error {error}")
+    return engine
+
+
+def _setup_digest(engine: Engine) -> str:
+    return _digest({"state": _state_payload(engine.gs),
+                    "rng": _encode(engine.gs.rng.export_state())})
+
+
 @dataclass(frozen=True, slots=True)
 class PairedSeedCase:
     schema: str
@@ -63,19 +118,11 @@ class PairedSeedCase:
         return result
 
     def dumps(self) -> str:
-        return _canonical(asdict(self)).decode("utf-8")
+        return _dumps_artifact(self)
 
     @classmethod
     def loads(cls, encoded: str) -> "PairedSeedCase":
-        try:
-            raw = json.loads(encoded)
-            raw["methods"] = tuple(raw["methods"])
-            raw["deck_identities"] = tuple(raw["deck_identities"])
-            result = cls(**raw)
-        except (KeyError, TypeError, ValueError) as exc:
-            raise SnapshotCompatibilityError(f"invalid Paired-Seed Case: {exc}") from exc
-        result._validate()
-        return result
+        return _loads_artifact(encoded, cls, "Paired-Seed Case")
 
     def fork_roots(self, snapshot: ExperimentSnapshot, *,
                    parity: ExperimentParityManifest):
@@ -91,21 +138,13 @@ class PairedSeedCase:
             raise SnapshotCompatibilityError("Paired-Seed Case parity identity mismatch")
         if parity.coverage_identity != self.coverage_identity:
             raise SnapshotCompatibilityError("Paired-Seed Case coverage identity mismatch")
-        return snapshot.fork_roots(self.methods)
+        roots = snapshot.fork_roots(self.methods)
+        for engine in roots.values():
+            _guard_engine(engine, parity, [])
+        return roots
 
     def _validate(self) -> None:
-        if self.schema != CASE_SCHEMA:
-            raise SnapshotCompatibilityError("unsupported Paired-Seed Case schema")
-        if self.chance_schema_version != CHANCE_SCHEMA_VERSION:
-            raise SnapshotCompatibilityError("unsupported Chance Sample schema")
-        if (not self.orientation or not self.baseline_identity or not self.methods
-                or len(set(self.methods)) != len(self.methods)
-                or any(not name for name in self.methods)):
-            raise SnapshotCompatibilityError("invalid Paired-Seed Case identities")
-        body = asdict(self)
-        body.pop("case_id")
-        if self.case_id != _identity(body):
-            raise SnapshotCompatibilityError("Paired-Seed Case content digest mismatch")
+        _validate_artifact(self, CASE_SCHEMA, "Paired-Seed Case")
 
 
 MATCH_SCHEMA = "cgpy-paired-seed-match/v1"
@@ -116,6 +155,7 @@ class FullMatchRoot:
     method_identity: str
     initial_setup_digest: str
     engine: Engine
+    executed_chains: list[str]
 
 
 @dataclass(slots=True)
@@ -135,6 +175,7 @@ class PairedSeedMatch:
     baseline_identity: str
     decks: tuple[tuple[int, ...], tuple[int, ...]]
     deck_identities: tuple[str, str]
+    initial_setup_digest: str
     parity_identity: str
     coverage_identity: str
     chance_schema_version: int
@@ -148,11 +189,13 @@ class PairedSeedMatch:
         if not set().union(*map(set, decks)).issubset(parity.deck_card_ids):
             raise SnapshotCompatibilityError(
                 "Paired-Seed Match decks are outside the parity manifest")
+        setup = _setup_digest(_start_engine(decks, int(experiment_seed)))
         body = {
             "schema": MATCH_SCHEMA, "experiment_seed": int(experiment_seed),
             "orientation": str(orientation), "methods": names,
             "baseline_identity": str(baseline_identity), "decks": decks,
             "deck_identities": tuple(_deck_identities([list(deck) for deck in decks])),
+            "initial_setup_digest": setup,
             "parity_identity": parity.identity,
             "coverage_identity": parity.coverage_identity,
             "chance_schema_version": CHANCE_SCHEMA_VERSION,
@@ -169,20 +212,11 @@ class PairedSeedMatch:
         )
 
     def dumps(self) -> str:
-        return _canonical(asdict(self)).decode("utf-8")
+        return _dumps_artifact(self)
 
     @classmethod
     def loads(cls, encoded: str) -> "PairedSeedMatch":
-        try:
-            raw = json.loads(encoded)
-            raw["methods"] = tuple(raw["methods"])
-            raw["decks"] = tuple(tuple(deck) for deck in raw["decks"])
-            raw["deck_identities"] = tuple(raw["deck_identities"])
-            result = cls(**raw)
-        except (KeyError, TypeError, ValueError) as exc:
-            raise SnapshotCompatibilityError(f"invalid Paired-Seed Match: {exc}") from exc
-        result._validate()
-        return result
+        return _loads_artifact(encoded, cls, "Paired-Seed Match", has_decks=True)
 
     def launch(self, *, parity: ExperimentParityManifest) -> FullMatchLaunch:
         if parity.identity != self.parity_identity:
@@ -192,35 +226,22 @@ class PairedSeedMatch:
         roots = {}
         expected = None
         for method in self.methods:
-            engine, seat, error = Engine.start(
-                list(self.decks[0]), list(self.decks[1]), rng=SeededRng(self.experiment_seed))
-            if engine is None:
+            engine = _start_engine(self.decks, self.experiment_seed)
+            setup = _setup_digest(engine)
+            if setup != self.initial_setup_digest:
                 raise SnapshotCompatibilityError(
-                    f"Paired-Seed Match deck {seat} failed validation with error {error}")
-            setup = _digest({"state": _state_payload(engine.gs),
-                             "rng": _encode(engine.gs.rng.export_state())})
-            if expected is not None and setup != expected:
-                raise SnapshotCompatibilityError("Paired-Seed Match setup was not reproducible")
+                    "Paired-Seed Match initial setup identity mismatch")
             expected = setup
-            roots[method] = FullMatchRoot(method, setup, engine)
+            executed: list[str] = []
+            _guard_engine(engine, parity, executed)
+            roots[method] = FullMatchRoot(method, setup, engine, executed)
         return FullMatchLaunch(expected, self.deck_identities, roots)
 
     def _validate(self) -> None:
-        if self.schema != MATCH_SCHEMA:
-            raise SnapshotCompatibilityError("unsupported Paired-Seed Match schema")
-        if self.chance_schema_version != CHANCE_SCHEMA_VERSION:
-            raise SnapshotCompatibilityError("unsupported Chance Sample schema")
-        if (not self.orientation or not self.baseline_identity or not self.methods
-                or len(set(self.methods)) != len(self.methods)
-                or any(not name for name in self.methods)):
-            raise SnapshotCompatibilityError("invalid Paired-Seed Match identities")
+        _validate_artifact(self, MATCH_SCHEMA, "Paired-Seed Match")
         identities = tuple(_deck_identities([list(deck) for deck in self.decks]))
         if identities != self.deck_identities:
             raise SnapshotCompatibilityError("Paired-Seed Match deck identities mismatch")
-        body = asdict(self)
-        body.pop("case_id")
-        if self.case_id != _identity(body):
-            raise SnapshotCompatibilityError("Paired-Seed Match content digest mismatch")
 
 
 __all__ = (
