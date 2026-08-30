@@ -13,19 +13,25 @@ Attack affordability is deliberately NOT computed: that is an inference, not boa
 """
 from __future__ import annotations
 
-import gzip
 import json
-import re
 import textwrap
-from dataclasses import dataclass
 from pathlib import Path
 
+from meta_tracker.parse import load_replay
+
 from .store import jsonl_files          # the store owns where the correction logs live
+from ..saved_moment import (
+    DEFAULT_CORRECTIONS,
+    DEFAULT_FIXTURES,
+    DEFAULT_REPLAYS,
+    FrameHit,
+    _corrections_in,
+    _note_keys,
+    find_frame,
+    parse_frame_key,
+)
 
 REPO = Path(__file__).resolve().parents[3]
-DEFAULT_CORRECTIONS = REPO / "data" / "corrections"
-DEFAULT_REPLAYS = REPO / "data" / "replays"
-DEFAULT_FIXTURES = REPO / "tests" / "fixtures" / "corrections"
 
 # --- engine enums (src/cg/api.py) ------------------------------------------------------------
 # The film spells these as strings and the obs as ints, so every lookup takes either.
@@ -234,225 +240,6 @@ def _stage(stat) -> str:
     if getattr(stat, "basic", False):
         return "Basic"
     return ""
-
-
-# --- locating a frame -------------------------------------------------------------------------
-
-_KEY = re.compile(r"^\s*(?:ep)?(\d+)\s*[-_:\s]\s*f?(\d+)\s*$", re.IGNORECASE)
-
-# The same pair inside free text. The 6-digit floor stops a date ("2026-07-13" -> ep 2026 frame 7)
-# scanning as a key; Kaggle episode ids run to 8 digits, well clear of it.
-_KEY_IN_TEXT = re.compile(r"(?:ep)?(\d{6,})\s*[-_:\s]\s*f?(\d+)", re.IGNORECASE)
-
-
-def _note_keys(note) -> set[tuple[int, int]]:
-    """Every ``(episode, frame)`` pair a fixture's free-text ``note`` mentions."""
-    return {(int(a), int(b)) for a, b in _KEY_IN_TEXT.findall(str(note or ""))}
-
-
-def parse_frame_key(key: str) -> tuple[int, int]:
-    """``"82756664-97"`` -> ``(82756664, 97)``; also ``82756664-f97``, ``ep82756664 f97``. Raises on
-    the SCOPED Correction keys (``<ep>-t<turn>s<seat>``, ``<ep>-m<seat>``): those name no frame."""
-    text = str(key).strip()
-    m = _KEY.match(text)
-    if not m:
-        hint = ""
-        if re.search(r"-\s*[tm]\d", text, re.IGNORECASE):
-            hint = (" — that looks like a scoped Correction key (a Turn or a Match, not one "
-                    "frame); pass the Anchor frame instead")
-        raise ValueError(f"not an <episode>-<frame> key: {key!r}{hint}")
-    return int(m.group(1)), int(m.group(2))
-
-
-@dataclass
-class FrameHit:
-    """One located frame: its normalized snapshot plus wherever it came from."""
-    episode_id: int
-    frame: int
-    current: dict
-    source: str                       # human-readable provenance line
-    source_path: Path | None = None
-    full_info: bool = True            # film snapshot (both sides listed) vs per-seat obs
-    select_context: int | str | None = None   # int in an obs, string in the film
-    select_type: int | str | None = None
-    options: list | None = None
-    turn: int | None = None
-    asked_seat: int | None = None
-    chosen: list | None = None
-    correction: dict | None = None    # the Correction tag, when the frame came from one
-    obs_recorded: bool = False
-
-
-def _film(replay: dict) -> list:
-    steps = replay.get("steps") or []
-    if not steps or not steps[0]:
-        return []
-    return steps[0][0].get("visualize") or []
-
-
-def _read_json(path: Path) -> dict:
-    if str(path).endswith(".gz"):
-        with gzip.open(path, "rt", encoding="utf-8") as fh:
-            return json.load(fh)
-    return json.loads(path.read_text(encoding="utf-8"))
-
-
-def _corrections_in(path: Path):
-    """Every Correction in one log file, CONSTRUCTED (ADR-0087 decision 1) but not keyed or deduped:
-    the viewer needs the source path and the append history. A malformed line is skipped."""
-    from .correction import Correction
-    for line in path.read_text(encoding="utf-8").splitlines():
-        line = line.strip()
-        if not line:
-            continue
-        try:
-            yield Correction.from_dict(json.loads(line))
-        except (ValueError, TypeError):
-            continue
-
-
-def _hit_from_correction(rec: dict, path: Path) -> FrameHit:
-    dec = rec.get("decision") or {}
-    cur = dec.get("current") or {}
-    hit = FrameHit(
-        episode_id=rec.get("episode_id"),
-        frame=dec.get("frame"),
-        current=cur,
-        source="Correction log — its embedded full-information snapshot",
-        source_path=path,
-        full_info=True,
-        turn=dec.get("turn"),
-        asked_seat=cur.get("yourIndex", rec.get("seat")),
-        chosen=rec.get("chosen"),
-        correction=rec,
-        obs_recorded=bool(rec.get("obs")),
-    )
-    hit.select_context = dec.get("select_context")
-    hit.select_type = dec.get("select_type")
-    hit.options = dec.get("options") or []
-    return hit
-
-
-def _hit_from_film(replay: dict, path: Path, episode_id: int, frame: int) -> FrameHit | None:
-    film = _film(replay)
-    if not (0 <= frame < len(film)):
-        return None
-    entry = film[frame] or {}
-    cur = entry.get("current") or {}
-    select = entry.get("select") if isinstance(entry.get("select"), dict) else {}
-    nxt = film[frame + 1] if frame + 1 < len(film) else None
-    hit = FrameHit(
-        episode_id=episode_id,
-        frame=frame,
-        current=cur,
-        source=f"Replay film, frame {frame} of {len(film)} — full information",
-        source_path=path,
-        full_info=True,
-        turn=cur.get("turn"),
-        asked_seat=cur.get("yourIndex"),
-        chosen=(nxt or {}).get("selected"),
-        obs_recorded=bool((nxt or {}).get("obs")),
-    )
-    hit.select_context = (select or {}).get("context")
-    hit.select_type = (select or {}).get("type")
-    hit.options = (select or {}).get("option") or []
-    return hit
-
-
-def _hit_from_fixture(rec: dict, path: Path, episode_id: int, frame: int) -> FrameHit:
-    obs = rec.get("obs") or {}
-    cur = obs.get("current") or {}
-    select = obs.get("select") if isinstance(obs.get("select"), dict) else {}
-    hit = FrameHit(
-        episode_id=episode_id,
-        frame=frame,
-        current=cur,
-        source="Test fixture — the per-seat agent Observation",
-        source_path=path,
-        full_info=False,
-        turn=cur.get("turn"),
-        asked_seat=cur.get("yourIndex"),
-        chosen=None,
-        correction={"correct": rec.get("correct"), "rationale": rec.get("note")}
-        if rec.get("correct") is not None or rec.get("note") else None,
-        obs_recorded=True,
-    )
-    hit.select_context = (select or {}).get("context")
-    hit.select_type = (select or {}).get("type")
-    hit.options = (select or {}).get("option") or []
-    return hit
-
-
-def find_frame(episode_id: int, frame: int, *, replays=DEFAULT_REPLAYS,
-               corrections=DEFAULT_CORRECTIONS, fixtures=DEFAULT_FIXTURES,
-               replay_path: Path | None = None) -> FrameHit:
-    """Locate ``episode-frame``, richest source first: explicit replay, Correction tree, any matching
-    replay, fixture. Raises ``LookupError`` naming every place searched."""
-    searched: list[str] = []
-
-    if replay_path is not None:
-        replay_path = Path(replay_path)
-        hit = _hit_from_film(_read_json(replay_path), replay_path, episode_id, frame)
-        if hit is None:
-            raise LookupError(f"{replay_path} has no frame {frame}")
-        return hit
-
-    corrections = Path(corrections) if corrections else None
-    if corrections and corrections.exists():
-        searched.append(f"{corrections}/**/corrections.jsonl")
-        # CONSTRUCT rather than re-parse (ADR-0087 decision 1): only `from_dict` backfills `agent`
-        # from `agent_build`. The store owns the layout, so no local glob.
-        for path in jsonl_files(corrections):
-            for c in _corrections_in(path):
-                if c.episode_id != episode_id:
-                    continue
-                if (c.decision or {}).get("frame") != frame:
-                    continue
-                return _hit_from_correction(c.to_dict(), path)
-
-    replays = Path(replays) if replays else None
-    if replays and replays.is_dir():
-        searched.append(f"{replays}/**/*.json[.gz]")
-        candidates = (
-            sorted(replays.rglob(f"episode-{episode_id}-*.json"))
-            + sorted(replays.rglob(f"episode-{episode_id}-*.json.gz"))
-        )
-        if not candidates:
-            candidates = sorted(replays.rglob("*.json")) + sorted(replays.rglob("*.json.gz"))
-        for path in candidates:
-            if path.name.endswith("-logs.json"):
-                continue
-            if path.name.startswith("episode-") and f"episode-{episode_id}-" not in path.name:
-                continue
-            try:
-                replay = _read_json(path)
-            except (OSError, ValueError):
-                continue
-            if not isinstance(replay, dict):
-                continue
-            if (replay.get("info") or {}).get("EpisodeId") != episode_id:
-                continue
-            hit = _hit_from_film(replay, path, episode_id, frame)
-            if hit is not None:
-                return hit
-    elif replays:
-        searched.append(f"{replays} (absent — raw replays are not committed, ADR-0002)")
-
-    fixtures = Path(fixtures) if fixtures else None
-    if fixtures and fixtures.is_dir():
-        searched.append(f"{fixtures}/*.json")
-        for path in sorted(fixtures.glob("*.json")):
-            try:
-                rec = _read_json(path)
-            except (OSError, ValueError):
-                continue
-            if rec.get("obs") and (episode_id, frame) in _note_keys(rec.get("note")):
-                return _hit_from_fixture(rec, path, episode_id, frame)
-
-    raise LookupError(
-        f"frame {episode_id}-{frame} not found. Searched: " + "; ".join(searched or ["nothing"]) +
-        ". A replay makes any frame resolvable — pass --replay <file> if you have the episode's "
-        "film (raw replays are not committed).")
 
 
 # --- rendering ---------------------------------------------------------------------------------
@@ -1002,7 +789,7 @@ def available_frames(episode_id: int | None = None, *, corrections=DEFAULT_CORRE
     if fixtures and fixtures.is_dir():
         for path in fixtures.glob("*.json"):
             try:
-                rec = _read_json(path)
+                rec = load_replay(path)
             except (OSError, ValueError):
                 continue
             if not rec.get("obs"):

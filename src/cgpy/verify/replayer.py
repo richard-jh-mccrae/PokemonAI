@@ -103,7 +103,8 @@ def _strip_for_compare(obs: dict) -> dict:
     return out
 
 
-def replay(trace: Trace, *, compare_god: bool = True, fork_check: bool = False) -> ReplayReport:
+def replay(trace: Trace, *, compare_god: bool = True, fork_check: bool = False,
+           on_frame=None) -> ReplayReport:
     """``fork_check`` also applies every choice to a fresh `Engine.fork()` and requires identical renders."""
     report = ReplayReport(frames_total=len(trace.frames))
     rnd = _TraceRandomness()
@@ -267,6 +268,8 @@ def replay(trace: Trace, *, compare_god: bool = True, fork_check: bool = False) 
             report.divergence, report.kind, report.frame = d, "obs", k
             return report
         report.frames_green += 1
+        if on_frame is not None:
+            on_frame(k, eng.fork())
 
         choice = fr.get("choice")
         if choice is None or k == len(trace.frames) - 1:

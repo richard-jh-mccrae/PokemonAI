@@ -14,6 +14,15 @@ class SeededRng:
     def __init__(self, seed: int | None = None):
         self._r = random.Random(seed)
 
+    def export_state(self) -> tuple:
+        return self._r.getstate()
+
+    @classmethod
+    def from_state(cls, state: tuple) -> "SeededRng":
+        result = cls(0)
+        result._r.setstate(state)
+        return result
+
     def shuffle(self, seq: list, *, seat: int) -> None:
         self._r.shuffle(seq)
 

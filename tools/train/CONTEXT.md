@@ -5,6 +5,8 @@ ADR-0147/0148) tune its closed Valuation Configuration against them; the quarant
 as its frozen acceptance evidence (ADR-0149).
 
 - `blunder/`: correction schema, replay decisions, labels, provenance, telemetry joins, and storage.
+- `saved_moment.py`: shared episode/frame resolver across replay, Correction, and fixture storage;
+  frame viewers and experiment tooling consume this seam instead of owning loaders.
 - `bellman_corpus.py`: reruns Mega Starmie Corrections through the Bellman teacher
   (`deprecated.bellman.build_teacher_runtime`, ADR-0149).
 - `bellman_adjudicate.py`: classifies the unfiltered corpus against written rationales.
