@@ -36,6 +36,22 @@ parity, verified by trace replay. `src/cg/` is never modified; cgpy never import
   Experiment Root starts a new epoch instead of claiming continuation of native randomness.
 - **Chance Sample Key** — the versioned identity of one sampled chance outcome within an Experiment
   Root. The same branch and sample retain the same identity regardless of traversal order.
+- **Primitive Action** — one complete answer to the current engine menu. A multi-select answer is
+  one Primitive Action even when it names several cards.
+- **Turn Search Environment** — the cgpy experiment interface that exposes one Primitive Action per
+  transition while keeping exact engine state private from policy and value consumers.
+- **Search Node** — an immutable, typed search position whose exact engine state remains owned by
+  its Turn Search Environment.
+- **Search State Key** — the versioned canonical identity of a Search Node's rule-relevant state and
+  metadata. Random generator state and diagnostic history are not part of this identity.
+- **Perspective Seat** — the fixed seat whose legal observation and outcome value define one search.
+  It is independent of the absolute seat currently acting.
+- **Information Boundary** — a typed stop where advancing would require information unavailable to
+  the Perspective Seat, including an opponent decision or unresolved hidden randomness.
+- **Primitive Transition** — the versioned record of one Primitive Action and its resulting Search
+  Node, suitable for replay by resolving its Action Identity against the current legal roster.
+- **Chance Transition** — the versioned record of one Chance Sample Key, its outcome, and resulting
+  Search Node. It resolves randomness without pretending the outcome was a strategic action.
 - **Paired-Seed Case** — one comparison unit that gives every method the same Experiment Snapshot
   and seed conditions. A seat-swapped orientation has its own starting-state identity.
 - **ChainDef** — a card's behavior as DATA: a list of ops over the recovered effect-DSL
@@ -60,7 +76,7 @@ building + ordering) · `turn.py` (setup/mulligan machine, turn loop, KO/prize/p
 start/step/observation/clone/`fork()`) · `verify/` (trace/differ/replayer) ·
 `search.py` (M3: `state_from_obs`/`state_from_visualize` structured seeding, the state
 token, clone-per-step sessions) · `experiment/` (versioned exact roots, legal-view policy roots,
-paired-seed matches, parity manifests, traversal-independent Chance Sample Keys) ·
+primitive turn-search nodes, paired-seed matches, parity manifests, Chance Sample Keys) ·
 `game.py` (M3: the `cg/game.py`-shaped battle singleton,
 `visualize_data`) · `compat/` + `alias.py` (M3: the `cg` package surface + `sys.modules`
 mapping, env `CG_ENGINE=py`).
