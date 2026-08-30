@@ -230,7 +230,11 @@ def test_paired_seed_full_matches_relaunch_and_swap_seats_reproducibly():
     assert forward.case_id != reverse.case_id
 
     with pytest.raises(SnapshotCompatibilityError, match=r"attack:424.*derived"):
-        first.roots["A"].engine.gs.execution_guard("attack:424")
+        first.roots["A"].engine.gs.require_chain_parity("attack:424")
+    twin = first.roots["A"].engine.fork()
+    twin.gs.require_chain_parity("1030")
+    assert first.roots["A"].executed_chains == []
+    assert twin.gs.executed_chains == ["1030"]
 
 
 def test_verified_native_trace_root_starts_a_new_randomness_epoch():

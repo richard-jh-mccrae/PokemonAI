@@ -103,7 +103,8 @@ class GameState:
     cards: dict[int, CardInstance]
     players: list[PlayerBoard]
     rng: Any
-    execution_guard: Any = None
+    parity_manifest: Any = None
+    executed_chains: list[str] | None = None
     turn: int = 0
     turn_action_count: int = 0
     first_player: int = -1
@@ -191,12 +192,20 @@ class GameState:
         twin.outbox = [[dict(entry) for entry in rows] for rows in self.outbox]
         twin.outbox_god = [dict(entry) for entry in self.outbox_god]
         twin.phase_data = copy.deepcopy(self.phase_data)
+        twin.executed_chains = (None if self.executed_chains is None
+                                else list(self.executed_chains))
         # Card instances and the card database are immutable after construction. The caller that
         # needs independent randomness (Engine.fork) replaces this shared RNG immediately.
         twin.cards = self.cards
         twin.db = self.db
         twin.rng = self.rng
         return twin
+
+    def require_chain_parity(self, chain: str) -> None:
+        if self.parity_manifest is None:
+            return
+        self.parity_manifest.require_verified((chain,))
+        self.executed_chains.append(chain)
 
     # ---------------------------------------------------------------- helpers
 

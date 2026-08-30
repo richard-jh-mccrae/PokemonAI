@@ -59,11 +59,8 @@ def _validate_artifact(value, schema: str, label: str) -> None:
 
 
 def _guard_engine(engine: Engine, parity: ExperimentParityManifest, executed: list[str]) -> None:
-    def require(chain: str) -> None:
-        parity.require_verified((chain,))
-        executed.append(chain)
-
-    engine.gs.execution_guard = require
+    engine.gs.parity_manifest = parity
+    engine.gs.executed_chains = executed
 
 
 def _start_engine(decks, seed: int) -> Engine:

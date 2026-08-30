@@ -253,8 +253,7 @@ def check_legal(gs: GameState, seat: int, conds: list, pokemon=None) -> bool:
 
 def start_program(gs: GameState, seat: int, source_serial: int, ops: list,
                   *, kind: str = "play") -> None:
-    if gs.execution_guard is not None:
-        gs.execution_guard(str(gs.card_id(source_serial)))
+    gs.require_chain_parity(str(gs.card_id(source_serial)))
     gs.frames.append(EffectFrame(program=list(ops), pc=0, vars={},
                                  seat=seat, source=source_serial, kind=kind))
     run_frames(gs)
@@ -654,8 +653,7 @@ def op_order_triggers(gs, fr, args) -> bool:
     fr.vars.pop("answered_options")
     for i in reversed(order):                      # stack: last pushed runs first
         t = trigs[i]
-        if gs.execution_guard is not None:
-            gs.execution_guard(str(gs.card_id(t["source"])))
+        gs.require_chain_parity(str(gs.card_id(t["source"])))
         gs.frames.append(EffectFrame(program=list(t["ops"]), pc=0, vars={},
                                      seat=fr.seat, source=t["source"], kind="ability"))
     return True

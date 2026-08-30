@@ -142,7 +142,7 @@ def _assert_card_partition(gs: GameState) -> None:
 
 
 def _state_payload(gs: GameState) -> dict:
-    excluded = {"db", "rng", "execution_guard"}
+    excluded = {"db", "rng", "parity_manifest", "executed_chains"}
     actual = tuple(field.name for field in fields(GameState) if field.name not in excluded)
     if actual != _GAME_FIELDS:
         raise SnapshotCompatibilityError("GameState field inventory changed")
