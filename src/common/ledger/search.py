@@ -616,7 +616,7 @@ class GreedyDecisionPolicy:
             tied = tuple(sorted(tied, key=lambda item: (
                 item[1].policy_tie_break if exact else (),
                 hashlib.blake2b(
-                    f"{configuration.tie_seed}:{item[0]}".encode("utf-8"),
+                    f"{configuration.tie_seed}:{item[1].action.identity}".encode("utf-8"),
                     digest_size=LOTTERY_DIGEST_BYTES).digest())))
             ranked.extend(candidate for _index, candidate in tied)
             start = stop
