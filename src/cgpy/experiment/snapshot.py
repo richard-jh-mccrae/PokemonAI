@@ -214,6 +214,11 @@ class ExperimentSnapshot:
                    provenance: dict | None = None) -> "ExperimentSnapshot":
         from ..verify.replayer import replay
 
+        if not 0 <= frame < len(trace.frames):
+            raise SnapshotCompatibilityError(f"trace frame {frame} does not exist")
+        if not isinstance(trace.frames[frame].get("god"), dict):
+            raise SnapshotCompatibilityError(
+                f"trace frame {frame} has no full-information god frame")
         captured = []
 
         def collect(index, engine):
@@ -225,7 +230,7 @@ class ExperimentSnapshot:
         if not report.clean:
             raise SnapshotCompatibilityError(f"trace did not verify: {report}")
         if not captured:
-            raise SnapshotCompatibilityError(f"trace frame {frame} does not exist")
+            raise SnapshotCompatibilityError(f"trace frame {frame} was not replayed")
         metadata = dict(provenance or {})
         metadata.update({
             "trace_frame": int(frame),

@@ -258,6 +258,18 @@ def test_verified_native_trace_root_starts_a_new_randomness_epoch():
         trace.frames[frame]["obs"]["current"]
 
 
+def test_trace_root_rejects_a_god_free_saved_moment():
+    path = REPO / "tests" / "fixtures" / "parity" / "alakazam_9000.trace.json.gz"
+    trace = Trace.load(path)
+    frame = next(index for index, row in enumerate(trace.frames)
+                 if (row["obs"].get("select") or {}).get("context") == 0
+                 and (row["obs"].get("current") or {}).get("turnActionCount") == 1)
+    trace.frames[frame]["god"] = None
+
+    with pytest.raises(SnapshotCompatibilityError, match="full-information god frame"):
+        ExperimentSnapshot.from_trace(trace, frame=frame, experiment_seed=9900)
+
+
 def test_experiment_parity_rejects_an_executed_unverified_effect():
     manifest = ExperimentParityManifest.capture((
         _deck("mega_lucario"), _deck("mega_starmie")))
