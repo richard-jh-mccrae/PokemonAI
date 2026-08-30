@@ -1,4 +1,4 @@
-"""Canonical, rule-state identity for primitive turn-search nodes."""
+"""Canonical rule-state identity for turn-search nodes."""
 from __future__ import annotations
 
 import hashlib
@@ -193,7 +193,7 @@ def _state_projection(gs: GameState):
 def search_state_key(engine: Engine, kind: NodeKind, actor_seat: int | None,
                      perspective_seat: int, root_turn: int,
                      boundary_reason: BoundaryReason | None, *,
-                     continuation=None) -> SearchStateKey:
+                     continuation=None, observation_key: str | None = None) -> SearchStateKey:
     payload = {
         "schema_version": SEARCH_STATE_KEY_SCHEMA_VERSION,
         "state": _state_projection(engine.gs),
@@ -203,6 +203,7 @@ def search_state_key(engine: Engine, kind: NodeKind, actor_seat: int | None,
             "boundary_reason": (None if boundary_reason is None
                                 else boundary_reason.value),
             "continuation": continuation,
+            "observation_key": observation_key,
         },
     }
     return SearchStateKey(hashlib.sha256(_canonical(payload)).hexdigest())
