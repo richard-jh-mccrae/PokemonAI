@@ -58,6 +58,8 @@ jobs:
           F_CGPY: ${{ steps.changes.outputs.cgpy }}
           F_DEPRECATED: ${{ steps.changes.outputs.deprecated }}
           F_MEGA_STARMIE: ${{ steps.changes.outputs.mega_starmie }}
+          F_MEGA_LUCARIO: ${{ steps.changes.outputs.mega_lucario }}
+          F_DRAGAPULT_EX: ${{ steps.changes.outputs.dragapult_ex }}
           F_DOCS: ${{ steps.changes.outputs.docs }}
           F_OPERATIONAL_DATA: ${{ steps.changes.outputs.operational_data }}
           F_AUTHORING: ${{ steps.changes.outputs.authoring }}
@@ -68,12 +70,15 @@ jobs:
             if [ "$1" = sim ]; then sim=true; return; fi
             tool_tests=$(python -c 'import json, sys; tests = json.loads(sys.argv[1]); tool = sys.argv[2]; print(json.dumps(tests if tool in tests else tests + [tool]))' "$tool_tests" "$1")
           }
-          enable_all() { tool_tests='["arena", "meta_tracker", "submit", "test_agent_skills.py"]'; sim=true; corrections=true; src=true; cgpy=true; docs=true; mirrors='["mega_starmie"]'; }
+          add_mirror() {
+            mirrors=$(python -c 'import json, sys; agents = json.loads(sys.argv[1]); agent = sys.argv[2]; print(json.dumps(agents if agent in agents else agents + [agent]))' "$mirrors" "$1")
+          }
+          enable_all() { tool_tests='["arena", "meta_tracker", "submit", "test_agent_skills.py"]'; sim=true; corrections=true; src=true; cgpy=true; docs=true; mirrors='["mega_starmie", "mega_lucario", "dragapult_ex"]'; }
           if [ "$EVENT" != 'pull_request' ] || [ "$F_TOOL_GLOBAL" = true ]; then
             enable_all
           else
             if [ "$F_GLOBAL" = true ]; then
-              corrections=true; src=true; cgpy=true; docs=true; mirrors='["mega_starmie"]'
+              corrections=true; src=true; cgpy=true; docs=true; mirrors='["mega_starmie", "mega_lucario", "dragapult_ex"]'
             fi
             [ "$F_TOOL_ARENA" = true ] && add_tool_test arena
             [ "$F_TOOL_META_TRACKER" = true ] && add_tool_test meta_tracker
@@ -86,13 +91,19 @@ jobs:
             [ "$F_CGPY" = true ] && cgpy=true
             [ "$F_DOCS" = true ] && docs=true
             if [ "$F_RUNTIME" = true ]; then
-              corrections=true; src=true; cgpy=true; mirrors='["mega_starmie"]'
+              corrections=true; src=true; cgpy=true; mirrors='["mega_starmie", "mega_lucario", "dragapult_ex"]'
             fi
             if [ "$F_MEGA_STARMIE" = true ]; then
-              add_tool_test sim; src=true; mirrors='["mega_starmie"]'
+              add_tool_test sim; src=true; add_mirror mega_starmie
+            fi
+            if [ "$F_MEGA_LUCARIO" = true ]; then
+              add_tool_test sim; src=true; add_mirror mega_lucario
+            fi
+            if [ "$F_DRAGAPULT_EX" = true ]; then
+              add_tool_test sim; src=true; add_mirror dragapult_ex
             fi
             known=false
-            for value in "$F_GLOBAL" "$F_TOOL_GLOBAL" "$F_RUNTIME" "$F_SRC" "$F_AGENTS" "$F_TOOL_ARENA" "$F_TOOL_META_TRACKER" "$F_TOOL_SIM" "$F_TOOL_SUBMIT" "$F_TOOL_AGENT_SKILLS" "$F_TOOL_UNTESTED" "$F_CORRECTIONS" "$F_CGPY" "$F_DEPRECATED" "$F_MEGA_STARMIE" "$F_DOCS" "$F_OPERATIONAL_DATA" "$F_AUTHORING"; do
+            for value in "$F_GLOBAL" "$F_TOOL_GLOBAL" "$F_RUNTIME" "$F_SRC" "$F_AGENTS" "$F_TOOL_ARENA" "$F_TOOL_META_TRACKER" "$F_TOOL_SIM" "$F_TOOL_SUBMIT" "$F_TOOL_AGENT_SKILLS" "$F_TOOL_UNTESTED" "$F_CORRECTIONS" "$F_CGPY" "$F_DEPRECATED" "$F_MEGA_STARMIE" "$F_MEGA_LUCARIO" "$F_DRAGAPULT_EX" "$F_DOCS" "$F_OPERATIONAL_DATA" "$F_AUTHORING"; do
               [ "$value" = true ] && known=true
             done
             [ "$F_ANY" = true ] && [ "$known" = false ] && enable_all
