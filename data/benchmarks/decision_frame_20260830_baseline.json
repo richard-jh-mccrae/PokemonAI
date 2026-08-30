@@ -1,0 +1,27 @@
+{
+  "schema": "real-engine-decision-benchmark/1",
+  "captured_at": "2026-08-30T10:24:00+02:00",
+  "runtime_commit": "e1731086971b0c5d81b305813e7ff304853ae495",
+  "command": "python -m pytest tests/ledger/test_real_engine_timing.py -q -k portfolio_stress -s",
+  "environment": {
+    "python": "3.11.9",
+    "platform": "Windows",
+    "processor": "Intel64 Family 6 Model 186 Stepping 3, GenuineIntel"
+  },
+  "scope": {
+    "system_start": "before AgentRuntime.decide on correction frame 8109263769592355-117",
+    "system_stop": "after the complete exact decision returns",
+    "excluded": "AgentRuntime construction and card-data warmup"
+  },
+  "runs_per_frame": 1,
+  "results": {
+    "8109263769592355-117": {
+      "agent": "dragapult_ex",
+      "fixture": "benchmarks/dragapult_ex_8109263769592355_117.json",
+      "choice": [6],
+      "maximum_ms": 60000,
+      "decision_total_ms": {"median": 19751.5655},
+      "previous_runtime_ms": {"lower_bound": 120000}
+    }
+  }
+}

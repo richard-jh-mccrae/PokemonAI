@@ -3,21 +3,27 @@ import math
 import os
 from pathlib import Path
 from statistics import median
-from time import perf_counter_ns
+from time import perf_counter, perf_counter_ns
 
 import pytest
 
 from cgpy.schema import SelectContext
-from common.decision import ComputeConfiguration, SearchConfiguration
+from common.decision import (ComputeConfiguration, SearchConfiguration,
+                             correction_compute_profile)
 from common.observation import ObservationStateBuilder
-from real_engine_helpers import BodySpec, deck, run_ultra_ball_chain
+from real_engine_helpers import BodySpec, deck, run_ultra_ball_chain, runtime
 
 
 RUNS = int(os.environ.get("ULTRA_BALL_BENCH_RUNS", "3"))
+FRAME_RUNS = int(os.environ.get("DECISION_FRAME_BENCH_RUNS", "1"))
 BENCHMARK_COMPUTE = ComputeConfiguration(search=SearchConfiguration(time_budget_ms=10_000))
 BASELINE = json.loads((
     Path(__file__).resolve().parents[2]
     / "data" / "benchmarks" / "ultra_ball_chain_20260827_baseline.json"
+).read_text(encoding="utf-8"))
+FRAME_BASELINE = json.loads((
+    Path(__file__).resolve().parents[2]
+    / "data" / "benchmarks" / "decision_frame_20260830_baseline.json"
 ).read_text(encoding="utf-8"))
 EXPECTED_BEHAVIOR = {
     "dragapult_ex": {
@@ -158,4 +164,41 @@ def test_ultra_ball_match_chain_is_exact_repeatable_and_timed(
         "board_median_change_percent": 100 * (
             board_median / expected["board_chain_ms"]["median"] - 1),
         "board_phase_ms_median": [median(values) for values in board_phases],
+    }, sort_keys=True))
+
+
+def test_dragapult_portfolio_stress_frame_is_exact_and_timed():
+    expected = FRAME_BASELINE["results"]["8109263769592355-117"]
+    observation = json.loads((
+        Path(__file__).resolve().parents[1]
+        / "fixtures" / expected["fixture"]
+    ).read_text(encoding="utf-8"))["obs"]
+    elapsed_ms = []
+
+    for _run in range(FRAME_RUNS):
+        agent_runtime = runtime(
+            expected["agent"], deck(expected["agent"]),
+            provider_factory=None,
+            compute_configuration=correction_compute_profile(),
+            decision_containment_seconds=expected["maximum_ms"] / 1_000)
+        started = perf_counter()
+        decision = agent_runtime.decide(observation)
+        elapsed_ms.append((perf_counter() - started) * 1_000)
+
+        assert tuple(decision.chosen) == tuple(expected["choice"])
+        assert decision.complete is True
+        assert decision.diagnostics["search"]["stop_reason"] == "complete"
+
+    current_median = median(elapsed_ms)
+    assert current_median < expected["maximum_ms"]
+    print("DECISION_FRAME_BENCH " + json.dumps({
+        "frame": "8109263769592355-117",
+        "runs": FRAME_RUNS,
+        "choice": expected["choice"],
+        "decision_total_ms": {
+            "median": current_median,
+            "p95": _p95(elapsed_ms),
+        },
+        "median_change_percent": 100 * (
+            current_median / expected["decision_total_ms"]["median"] - 1),
     }, sort_keys=True))
