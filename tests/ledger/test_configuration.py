@@ -518,3 +518,16 @@ def test_schema_19_recording_migrates_to_one_combat_realization_owner():
     assert migrated.schema_version == FEATURE_CATALOG.schema_version
     assert migrated["combat.realization"] == 1.0
     assert migrated["body.development"] == 0.30
+
+
+def test_schema_20_recording_acquires_default_hand_line_values():
+    old = dict(ValuationConfiguration.general().values)
+    old.pop("development.feasible_hand_link")
+    old.pop("development.basic_hand_link")
+    old.pop("development.reserve_hand_link")
+
+    migrated = ValuationConfiguration.from_recorded(old, schema_version=20)
+
+    assert migrated["development.feasible_hand_link"] == 0.13
+    assert migrated["development.basic_hand_link"] == 0.25
+    assert migrated["development.reserve_hand_link"] == 0.06

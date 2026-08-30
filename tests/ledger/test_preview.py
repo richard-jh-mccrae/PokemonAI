@@ -20,12 +20,29 @@ from common.ledger import DeckOverlay, EvaluationModel, LedgerDecider
 from common.ledger.evaluate import FeatureActivation, FeatureContribution, Valuation, evaluate
 from common.ledger.preview import (_body_ability_ready, _body_copy_overflow,
                                    _discard_spend_contributions,
-                                   _realized_portfolio_contributions, price_actions)
+                                   _RawFootprint, _realized_portfolio_contributions,
+                                   _with_hand_evolution_opportunity, price_actions)
 from common.observation import ObservationStateBuilder
 from deprecated.bellman.state import DecisionState
 
 DECK = (DRAGAPULT, FIRE_E) * 20
 INFORMATION_VALUE = EvaluationModel.build().configuration["continuation.information_value"]
+
+
+def test_playing_a_held_parent_creates_a_future_evolution_opportunity():
+    board = SimpleNamespace(
+        select=SimpleNamespace(options=(
+            SimpleNamespace(serial=800, cardId=DREEPY),)),
+        me=SimpleNamespace(hand=(
+            SimpleNamespace(serial=800, card_id=DREEPY),
+            SimpleNamespace(serial=801, card_id=DRAKLOAK))))
+    play_parent = action("play", (0,))
+
+    footprint = _with_hand_evolution_opportunity(
+        _RawFootprint(), board, play_parent, EvaluationModel.build())
+
+    assert footprint.opportunities_created == ("future_evolve",)
+    assert ("opportunity_created", 1.0) in footprint.activations
 
 
 def state_of(observation):

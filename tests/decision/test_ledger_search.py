@@ -8,6 +8,7 @@ from common.algebra import Chance, Deterministic, WeightedEdge
 from common.decision import (
     CandidateDisposition,
     CandidateRoster,
+    ContinuationResult,
     DecisionDelta,
     EvaluationRequest,
     EvaluationStatus,
@@ -401,6 +402,92 @@ def test_greedy_policy_ignores_unavailable_candidate_instead_of_scoring_it_zero(
 
     assert chosen.action is ending.action
     assert chosen.reason == "best_turn_ender"
+
+
+def test_greedy_policy_spends_a_continuation_that_beats_the_end_counterfactual():
+    continuing = ValuedCandidate(
+        action("attach", (0,)),
+        DecisionDelta(-0.12, LEDGER_VALUE_SCALE),
+        CandidateDisposition.CONTINUES_TURN,
+        EvaluationStatus.COMPLETE,
+        continuation=ContinuationResult(-0.12, 0.05, True),
+    )
+    ending = ValuedCandidate(
+        action("end", (1,)),
+        DecisionDelta(-0.23, LEDGER_VALUE_SCALE),
+        CandidateDisposition.ENDS_TURN,
+        EvaluationStatus.COMPLETE,
+        continuation=ContinuationResult(-0.23, 0.0, False),
+    )
+
+    chosen = GreedyDecisionPolicy().choose(
+        CandidateRoster((continuing, ending)), PolicyConfiguration())
+
+    assert chosen.action is continuing.action
+    assert chosen.reason == "positive_continuation"
+
+
+def test_positive_end_transition_does_not_hide_a_positive_continuation():
+    continuing = ValuedCandidate(
+        action("ability", (0,)), DecisionDelta(0.1, LEDGER_VALUE_SCALE),
+        CandidateDisposition.CONTINUES_TURN, EvaluationStatus.COMPLETE,
+        continuation=ContinuationResult(0.1, 0.0, True),
+    )
+    ending = ValuedCandidate(
+        action("end", (1,)), DecisionDelta(0.3, LEDGER_VALUE_SCALE),
+        CandidateDisposition.ENDS_TURN, EvaluationStatus.COMPLETE,
+    )
+
+    chosen = GreedyDecisionPolicy().choose(
+        CandidateRoster((continuing, ending)), PolicyConfiguration())
+
+    assert chosen.action is continuing.action
+
+
+def test_forced_policy_includes_local_action_opportunity_when_ranking_choices():
+    costly = ValuedCandidate(
+        action("card", (0,)), DecisionDelta(0.1, LEDGER_VALUE_SCALE),
+        CandidateDisposition.FORCED, EvaluationStatus.COMPLETE,
+        continuation=ContinuationResult(0.1, -0.2, True),
+    )
+    cheaper = ValuedCandidate(
+        action("card", (1,)), DecisionDelta(0.0, LEDGER_VALUE_SCALE),
+        CandidateDisposition.FORCED, EvaluationStatus.COMPLETE,
+        continuation=ContinuationResult(0.0, 0.0, True),
+    )
+
+    chosen = GreedyDecisionPolicy().choose(
+        CandidateRoster((costly, cheaper), forced=True), PolicyConfiguration())
+
+    assert chosen.action is cheaper.action
+
+
+def test_greedy_policy_prepares_a_body_before_an_eligible_hand_refresh():
+    refresh = ValuedCandidate(
+        action("play", (0,)), DecisionDelta(0.18, LEDGER_VALUE_SCALE),
+        CandidateDisposition.CONTINUES_TURN, EvaluationStatus.COMPLETE,
+        continuation=ContinuationResult(
+            0.18, 0.0, True, zones_replaced=("hand",),
+            allowances_consumed=("supporter_played",),
+            opportunities_consumed=("play",)),
+    )
+    basic = ValuedCandidate(
+        action("play", (1,)), DecisionDelta(-0.15, LEDGER_VALUE_SCALE),
+        CandidateDisposition.CONTINUES_TURN, EvaluationStatus.COMPLETE,
+        continuation=ContinuationResult(
+            -0.15, 0.0, True, immediately_usable_outputs=("in_play",),
+            opportunities_created=("future_evolve",),
+            opportunities_preserved=("play",)),
+    )
+    ending = ValuedCandidate(
+        action("end", (2,)), DecisionDelta(-0.1, LEDGER_VALUE_SCALE),
+        CandidateDisposition.ENDS_TURN, EvaluationStatus.COMPLETE,
+    )
+
+    chosen = GreedyDecisionPolicy().choose(
+        CandidateRoster((refresh, basic, ending)), PolicyConfiguration())
+
+    assert chosen.action is basic.action
 
 
 def test_greedy_policy_recognizes_knockout_only_from_observable_state_change():

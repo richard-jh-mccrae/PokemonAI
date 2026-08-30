@@ -510,6 +510,7 @@ class Demand:
     bodies: tuple = ()
     free_bench: int = 0
     hand: tuple = ()
+    discard: tuple = ()
     turn: object = None
 
     @classmethod
@@ -523,7 +524,8 @@ class Demand:
                    body_id_counts=Counter(body.card.card_id for body in bodies),
                    hand_name_counts=hand_names, bodies=bodies,
                    free_bench=max(0, side.bench_max - len(side.bench)),
-                   hand=tuple(side.hand or ()), turn=turn)
+                   hand=tuple(side.hand or ()), discard=tuple(side.discard or ()),
+                   turn=turn)
 
 
 def _liveness(card_id, facts, demand: Demand, ctx: EvaluationModel, deck_counts):
@@ -616,6 +618,19 @@ def _liveness(card_id, facts, demand: Demand, ctx: EvaluationModel, deck_counts)
         if fetches and len(fetches) == len(clauses):
             return _fetch_liveness(fetches, demand, ctx, deck_counts), (
                 1 if facts.kind == SUPPORTER else None)
+        recoveries = tuple(
+            c for c in clauses if c.kind == "fetch" and c.zone == "discard")
+        if recoveries and len(recoveries) == len(clauses):
+            best = DemandState.DEAD
+            for card in demand.discard:
+                target = ctx.facts(card.card_id)
+                if not any(fetch_target_matches(clause, target, reading=DEADNESS)
+                           for clause in recoveries):
+                    continue
+                state, _capacity = _liveness(card.card_id, target, demand, ctx, None)
+                if _DEMAND_PRIORITY[state] > _DEMAND_PRIORITY[best]:
+                    best = state
+            return best, (1 if facts.kind == SUPPORTER else None)
         if facts.kind == SUPPORTER:
             return DemandState.LIVE, 1
     return DemandState.LIVE, None

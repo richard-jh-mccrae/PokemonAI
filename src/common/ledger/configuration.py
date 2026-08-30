@@ -14,6 +14,7 @@ from common.decision import ComputeConfiguration
 CONFIGURATION_ID_DIGEST_BYTES = 8
 LEGACY_COMBAT_SCHEMA_VERSION = 19
 COMBAT_REALIZATION_SCHEMA_VERSION = 20
+HAND_LINE_SCHEMA_VERSION = 21
 LEGACY_BODY_DEVELOPMENT_WEIGHT = 0.3
 
 
@@ -90,18 +91,27 @@ class ValuationConfiguration(Mapping[str, float]):
                       catalog: FeatureCatalog = FEATURE_CATALOG):
         if int(schema_version) == catalog.schema_version:
             return cls(values, schema_version=schema_version)
-        if (int(schema_version) != LEGACY_COMBAT_SCHEMA_VERSION
-                or catalog.schema_version != COMBAT_REALIZATION_SCHEMA_VERSION):
+        version = int(schema_version)
+        if (version not in {LEGACY_COMBAT_SCHEMA_VERSION,
+                            COMBAT_REALIZATION_SCHEMA_VERSION}
+                or catalog.schema_version != HAND_LINE_SCHEMA_VERSION):
             raise ValueError("unsupported recorded valuation schema version")
         migrated = dict(_coefficient_pairs(values, "recorded valuation configuration"))
-        realization = migrated.pop("combat.prize_phase_fit", 1.0)
-        for key in (
-                "combat.attack_now", "combat.attack_progress", "combat.attack_future",
-                "combat.bench_reach", "combat.active_threat", "combat.line_potential"):
-            migrated.pop(key, None)
-        migrated["body.development"] = migrated.pop(
-            "bench.developed_body", LEGACY_BODY_DEVELOPMENT_WEIGHT)
-        migrated["combat.realization"] = realization
+        if version == LEGACY_COMBAT_SCHEMA_VERSION:
+            realization = migrated.pop("combat.prize_phase_fit", 1.0)
+            for key in (
+                    "combat.attack_now", "combat.attack_progress", "combat.attack_future",
+                    "combat.bench_reach", "combat.active_threat", "combat.line_potential"):
+                migrated.pop(key, None)
+            migrated["body.development"] = migrated.pop(
+                "bench.developed_body", LEGACY_BODY_DEVELOPMENT_WEIGHT)
+            migrated["combat.realization"] = realization
+        migrated["development.feasible_hand_link"] = catalog[
+            "development.feasible_hand_link"].default
+        migrated["development.basic_hand_link"] = catalog[
+            "development.basic_hand_link"].default
+        migrated["development.reserve_hand_link"] = catalog[
+            "development.reserve_hand_link"].default
         return cls(migrated, schema_version=catalog.schema_version)
 
     def resolve(self, overlay: DeckOverlay,

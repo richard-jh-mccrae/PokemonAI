@@ -268,6 +268,7 @@ def _replay_one(deck_name: str, correction, weight_overrides=None) -> dict:
     diagnostics = decision.diagnostics or {}
     row = {
         "deck": deck_name,
+        "agent_build": correction.agent_build,
         "episode_id": correction.episode_id,
         "key": f"{correction.episode_id}-{(correction.decision or {}).get('frame', -1)}",
         "id": correction.id,

@@ -34,7 +34,8 @@ APPROVED_DECLARATIONS = {
     },
     "src/common/ledger/configuration.py": {
         "COMBAT_REALIZATION_SCHEMA_VERSION", "CONFIGURATION_ID_DIGEST_BYTES",
-        "LEGACY_BODY_DEVELOPMENT_WEIGHT", "LEGACY_COMBAT_SCHEMA_VERSION"},
+        "HAND_LINE_SCHEMA_VERSION", "LEGACY_BODY_DEVELOPMENT_WEIGHT",
+        "LEGACY_COMBAT_SCHEMA_VERSION"},
     "src/common/ledger/decider.py": {"PROVIDER_ID_DIGEST_BYTES"},
     "src/common/ledger/decision.py": {"EVALUATOR_ID_DIGEST_BYTES"},
     "src/common/ledger/evaluate.py": {

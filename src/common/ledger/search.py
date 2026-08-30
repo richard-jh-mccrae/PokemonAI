@@ -344,16 +344,37 @@ def preservation_frontier(candidates, noise_tolerance=0.0):
             zones_replaced = getattr(continuation, "zones_replaced", ())
             opportunities_created = getattr(
                 other_continuation, "opportunities_created", ())
+            immediately_usable_outputs = getattr(
+                other_continuation, "immediately_usable_outputs", ())
             other_allowances_consumed = getattr(
                 other_continuation, "allowances_consumed", ())
             refresh_after_preparation = (
                 "supporter_played" in allowances_consumed
                 and "hand" in zones_replaced
-                and other.delta.total > noise_tolerance
-                and bool(opportunities_created)
+                and (bool(opportunities_created)
+                     or "in_play" in immediately_usable_outputs)
                 and "play" in preserved
                 and "supporter_played" not in other_allowances_consumed)
             if refresh_after_preparation:
+                deferred.add(id(candidate))
+                break
+            deploy_before_transient_play = (
+                candidate.action.identity.kind == "play"
+                and "in_play" not in getattr(
+                    continuation, "immediately_usable_outputs", ())
+                and "in_play" in immediately_usable_outputs
+                and "play" in preserved)
+            if deploy_before_transient_play:
+                deferred.add(id(candidate))
+                break
+            create_before_plain_play = (
+                candidate.action.identity.kind == "play"
+                and other.action.identity.kind == "play"
+                and bool(opportunities_created)
+                and not getattr(continuation, "opportunities_created", ())
+                and "in_play" in immediately_usable_outputs
+                and "play" in preserved)
+            if create_before_plain_play:
                 deferred.add(id(candidate))
                 break
             prepare_before_retreat = (
@@ -404,6 +425,20 @@ class GreedyDecisionPolicy:
                            for candidate in roster.candidates)
             raise ValueError(f"normal policy received no comparable candidates: {detail}")
         if not roster.forced:
+            def policy_value(candidate):
+                continuation = candidate.continuation
+                return candidate.delta.total + (
+                    0.0 if continuation is None else continuation.action_opportunity)
+
+            enders = tuple(
+                candidate for candidate in candidates
+                if candidate.disposition is CandidateDisposition.ENDS_TURN)
+            explicit_end = tuple(
+                candidate for candidate in enders
+                if candidate.action.identity.kind == "end")
+            end_value = max((policy_value(candidate) for candidate in explicit_end),
+                            default=0.0)
+            continuation_threshold = min(0.0, end_value)
             knockouts = tuple(candidate for candidate in candidates
                               if candidate.disposition is CandidateDisposition.ENDS_TURN
                               and any(component.key in {"prize.race", "result.win"}
@@ -411,7 +446,8 @@ class GreedyDecisionPolicy:
                                       for component in candidate.delta.components))
             meaningful_continuation = any(
                 candidate.disposition is CandidateDisposition.CONTINUES_TURN
-                and candidate.delta.total > configuration.noise_tolerance
+                and policy_value(candidate) > (
+                    continuation_threshold + configuration.noise_tolerance)
                 for candidate in candidates)
             if knockouts and not meaningful_continuation:
                 return DecisionChoice(
@@ -421,23 +457,44 @@ class GreedyDecisionPolicy:
                 candidate for candidate in candidates
                 if candidate.disposition is CandidateDisposition.CONTINUES_TURN
                 and candidate.delta is not None
-                and candidate.delta.total > configuration.noise_tolerance)
+                and policy_value(candidate) > (
+                    continuation_threshold + configuration.noise_tolerance))
+            refresh_available = any(
+                candidate.continuation is not None
+                and "supporter_played" in candidate.continuation.allowances_consumed
+                and "hand" in candidate.continuation.zones_replaced
+                for candidate in continuing)
+            if refresh_available:
+                durable_preparation = tuple(
+                    candidate for candidate in candidates
+                    if candidate.disposition is CandidateDisposition.CONTINUES_TURN
+                    and candidate.continuation is not None
+                    and "in_play" in candidate.continuation.immediately_usable_outputs
+                    and candidate.continuation.opportunities_created
+                    and "play" in candidate.continuation.opportunities_preserved
+                    and candidate not in continuing)
+                continuing = (*continuing, *durable_preparation)
             if continuing:
                 candidates = preservation_frontier(
                     continuing, configuration.noise_tolerance)
                 reason = DecisionReason.POSITIVE_CONTINUATION
             else:
-                enders = tuple(candidate for candidate in candidates
-                               if candidate.disposition is CandidateDisposition.ENDS_TURN)
                 if enders:
                     candidates = enders
                     reason = DecisionReason.BEST_TURN_ENDER
-        return DecisionChoice(self._ranked(candidates, configuration)[0].action, reason)
+        return DecisionChoice(self._ranked(
+            candidates, configuration,
+            include_action_opportunity=roster.forced)[0].action, reason)
 
     @staticmethod
-    def _ranked(candidates, configuration):
+    def _ranked(candidates, configuration, *, include_action_opportunity=False):
         def value(candidate):
-            return float("-inf") if candidate.delta is None else candidate.delta.total
+            if candidate.delta is None:
+                return float("-inf")
+            opportunity = (candidate.continuation.action_opportunity
+                           if include_action_opportunity
+                           and candidate.continuation is not None else 0.0)
+            return candidate.delta.total + opportunity
 
         indexed = sorted(enumerate(candidates), key=lambda item: value(item[1]), reverse=True)
         ranked = []

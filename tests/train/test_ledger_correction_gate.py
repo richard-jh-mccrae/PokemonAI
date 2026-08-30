@@ -74,19 +74,27 @@ def test_new_round_routing_is_pinned_to_atomic_vs_ordered_work():
 
 def test_gate_fails_any_unreplayed_record_or_violated_preference():
     report = {
-        "rows": [{"id": "a", "grading_exclusion": None},
-                 {"id": "b", "grading_exclusion": "search_incomplete"}],
+        "rows": [{"id": "a", "grading_exclusion": None,
+                  "agent_build": "20260830-082433_d00f93d6_mega_starmie"},
+                 {"id": "b", "grading_exclusion": "search_incomplete",
+                  "agent_build": "20260830-082433_d00f93d6_mega_starmie"}],
         "retired": [],
     }
     audit = {
         "summary": {"incomplete": 1, "violated_preferences": 2,
                     "conflict_sets": 0},
         "audits": [
-            {"gradeable": True, "satisfied_by_committed": False,
+            {"correction_id": "a", "gradeable": True,
+             "satisfied_by_committed": False,
              "margin": {"atomic": -1.0}, "current_selection": [2],
              "acceptable_selections": [[1]]},
-            {"gradeable": True, "satisfied_by_committed": False,
+            {"correction_id": "a", "gradeable": True,
+             "satisfied_by_committed": False,
              "margin": {"atomic": -0.5}, "current_selection": [3],
+             "acceptable_selections": [[1]]},
+            {"correction_id": "b", "gradeable": False,
+             "satisfied_by_committed": False,
+             "margin": {"atomic": None}, "current_selection": None,
              "acceptable_selections": [[1]]},
         ],
     }
@@ -117,12 +125,16 @@ def test_first_one_ply_round_has_valid_single_choice_rulings():
 
 
 def test_gate_accepts_a_ruled_current_choice_despite_its_raw_pairwise_margin():
-    report = {"rows": [{"id": "a", "grading_exclusion": None}], "retired": []}
+    report = {"rows": [{
+        "id": "a", "grading_exclusion": None,
+        "agent_build": "20260830-082433_d00f93d6_mega_starmie",
+    }], "retired": []}
     audit = {
         "summary": {"incomplete": 0, "violated_preferences": 1,
                     "conflict_sets": 0},
-        "audits": [{"gradeable": True, "satisfied_by_committed": False,
-                    "margin": {"atomic": -1.0}, "current_selection": [1],
+        "audits": [{"correction_id": "a", "gradeable": True,
+                    "satisfied_by_committed": True,
+                    "margin": {"atomic": 1.0}, "current_selection": [1],
                     "acceptable_selections": [[1], [3]]}],
     }
 
@@ -134,6 +146,7 @@ def test_gate_rejects_repeating_the_recorded_blunder_even_with_positive_margin()
         "rows": [{
             "id": "a", "grading_exclusion": None, "graded": True,
             "agrees": False, "chosen": [0], "recorded_chosen": [0],
+            "agent_build": "20260830-082433_d00f93d6_mega_starmie",
         }],
         "retired": [],
     }
@@ -149,12 +162,89 @@ def test_gate_rejects_repeating_the_recorded_blunder_even_with_positive_margin()
         "1 correction replays repeat the recorded blunder",)
 
 
+def test_gate_rejects_a_different_wrong_choice_despite_positive_pairwise_margin():
+    report = {
+        "rows": [{
+            "id": "a", "grading_exclusion": None, "graded": True,
+            "agrees": False, "chosen": [1], "recorded_chosen": [0],
+            "agent_build": "20260830-082433_d00f93d6_mega_starmie",
+        }],
+        "retired": [],
+    }
+    audit = {
+        "summary": {"incomplete": 0, "violated_preferences": 0,
+                    "conflict_sets": 0},
+        "audits": [{"correction_id": "a", "gradeable": True,
+                    "satisfied_by_committed": True,
+                    "margin": {"atomic": 1.0}, "current_selection": [1],
+                    "acceptable_selections": [[2]]}],
+    }
+
+    assert correction_gate_findings(report, audit, correction_count=1) == (
+        "1 correction replays choose outside the ruling",)
+
+
+def test_exact_selection_gate_does_not_reinterpret_legacy_pairwise_corrections():
+    report = {
+        "rows": [{
+            "id": "a", "grading_exclusion": None, "graded": True,
+            "agrees": False, "chosen": [1], "recorded_chosen": [0],
+            "agent_build": "20260829-235959_old_mega_starmie",
+        }],
+        "retired": [],
+    }
+    audit = {
+        "summary": {"incomplete": 0, "violated_preferences": 0,
+                    "conflict_sets": 0},
+        "audits": [{"correction_id": "a", "gradeable": True,
+                    "satisfied_by_committed": False,
+                    "margin": {"atomic": -1.0}, "current_selection": [1],
+                    "acceptable_selections": [[2]]}],
+    }
+
+    assert correction_gate_findings(report, audit, correction_count=1) == ()
+
+
+def test_exact_selection_gate_keeps_legacy_replay_failures_informational():
+    report = {"rows": [{
+        "id": "a", "grading_exclusion": "search_incomplete", "fallback": True,
+        "agent_build": "20260829-235959_old_mega_starmie",
+    }], "retired": []}
+    audit = {
+        "summary": {"incomplete": 1, "violated_preferences": 0,
+                    "conflict_sets": 1},
+        "minimal_conflict_sets": [["a", "legacy-peer"]],
+        "audits": [{"correction_id": "a", "gradeable": False,
+                    "satisfied_by_committed": False,
+                    "margin": {"atomic": None}, "current_selection": None,
+                    "acceptable_selections": [[2]]}],
+    }
+
+    assert correction_gate_findings(report, audit, correction_count=1) == ()
+
+
+def test_exact_selection_gate_rejects_a_new_correction_without_a_ruling():
+    report = {"rows": [{
+        "id": "a", "grading_exclusion": "no_ruling", "graded": False,
+        "agent_build": "20260830-082433_d00f93d6_mega_starmie",
+    }], "retired": []}
+    audit = {"summary": {"incomplete": 0, "violated_preferences": 0,
+                         "conflict_sets": 0}, "audits": []}
+
+    assert correction_gate_findings(report, audit, correction_count=1) == (
+        "1 correction replays are structurally incomplete",)
+
+
 def test_gate_requires_every_ruled_alternative_to_beat_the_recorded_choice():
-    report = {"rows": [{"id": "a", "grading_exclusion": None}], "retired": []}
+    report = {"rows": [{
+        "id": "a", "grading_exclusion": None,
+        "agent_build": "20260830-082433_d00f93d6_mega_starmie",
+    }], "retired": []}
     audit = {
         "summary": {"incomplete": 0, "violated_preferences": 1,
                     "conflict_sets": 0},
-        "audits": [{"gradeable": True, "satisfied_by_committed": False,
+        "audits": [{"correction_id": "a", "gradeable": True,
+                    "satisfied_by_committed": False,
                     "margin": {"atomic": -1.0}, "current_selection": [3],
                     "acceptable_selections": [[1], [2]],
                     "acceptable_preferences": [

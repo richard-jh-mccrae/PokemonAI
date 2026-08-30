@@ -444,9 +444,16 @@ def _side(trace: _Trace, label: str, side: Side, sign: float, ctx: EvaluationMod
     if sign > 0 and side.hand is not None:
         copies = Counter(demand.body_id_counts)
         basic_energy = Counter()
+        ready_evolution_targets = Counter(
+            facts.name for body in side.bodies
+            if not body.appeared_this_turn
+            and (facts := ctx.facts(body.card.card_id)) is not None)
         portfolio_entries = []
         portfolio_functions = []
         portfolio_sources = []
+        viable_hand = []
+        line_hand = []
+        line_hand_names = set()
         for card in side.hand:
             facts = ctx.facts(card.card_id)
             claim, capacity = _hand_claim(
@@ -461,6 +468,12 @@ def _side(trace: _Trace, label: str, side: Side, sign: float, ctx: EvaluationMod
             _card(trace, f"{label}.hand", card.card_id, facts, sign, ctx, own=True,
                   placement=placement, opponent=opponent)
             trace.emit(f"{label}.hand", "observation", (claim,), sign)
+            if isinstance(facts, PokemonCard):
+                line_hand_names.add(facts.name)
+                provenance = (f"feasible_option_portfolio:serial:{card.serial}"
+                              if card.serial is not None else
+                              f"feasible_option_portfolio:card:{card.card_id}")
+                line_hand.append((facts, provenance))
             if claim not in {"dead_hand_card", "surplus_hand_copy"}:
                 portfolio_entries.append((
                     facts, option_units(facts),
@@ -468,17 +481,20 @@ def _side(trace: _Trace, label: str, side: Side, sign: float, ctx: EvaluationMod
                         facts, side, board.them, demand, ctx, deck_counts, board))))
                 portfolio_functions.append(facts)
                 portfolio_sources.append(card)
+                if isinstance(facts, PokemonCard):
+                    provenance = (f"feasible_option_portfolio:serial:{card.serial}"
+                                  if card.serial is not None else
+                                  f"feasible_option_portfolio:card:{card.card_id}")
+                    viable_hand.append((facts, provenance))
             if (isinstance(facts, EnergyCard) and facts.kind != SPECIAL_ENERGY
                     and basic_energy[facts.provides]):
                 trace.emit(f"{label}.hand", "observation", ("surplus_basic_energy",), sign)
-            if (getattr(facts, "synergy", ())
-                    and claim != "surplus_hand_copy"
-                    and any(demand.body_name_counts.get(name, 0) for name in facts.synergy)):
-                trace.emit(f"{label}.hand", "observation", ("synergy_in_hand",), sign)
             if (isinstance(facts, PokemonCard) and facts.evolves_from
-                    and claim == "card_in_hand"):
+                    and claim == "card_in_hand"
+                    and ready_evolution_targets[facts.evolves_from] > 0):
                 trace.emit(f"{label}.hand", "observation",
                            ("evolution_access",), sign)
+                ready_evolution_targets[facts.evolves_from] -= 1
             copies[card.card_id] += 1
             if isinstance(facts, EnergyCard) and facts.kind != SPECIAL_ENERGY:
                 basic_energy[facts.provides] += 1
@@ -495,10 +511,46 @@ def _side(trace: _Trace, label: str, side: Side, sign: float, ctx: EvaluationMod
                 trace, f"{label}.hand", units, sign, provenance=provenance,
                 provenance_features=tuple(
                     feature for feature, _value in units.activations()))
-            if not isinstance(portfolio_functions[index], PokemonCard):
+            facts = portfolio_functions[index]
+            if (getattr(facts, "synergy", ())
+                    and any(demand.body_name_counts.get(name, 0) for name in facts.synergy)):
+                trace.emit(f"{label}.hand", "observation", ("synergy_in_hand",), sign,
+                           provenance=provenance)
+            if not isinstance(facts, PokemonCard):
                 _situational_functions(
-                    trace, f"{label}.hand", portfolio_functions[index], side, board.them,
+                    trace, f"{label}.hand", facts, side, board.them,
                     demand, ctx, deck_counts, board, sign=sign, provenance=provenance)
+        used_cards = set()
+        for child_index, (facts, _child_provenance) in enumerate(viable_hand):
+            parent = facts.evolves_from
+            if not parent or child_index in used_cards:
+                continue
+            parent_match = next((
+                (parent_index, parent_facts, provenance)
+                for parent_index, (parent_facts, provenance) in enumerate(viable_hand)
+                if parent_index not in used_cards and parent_facts.name == parent), None)
+            if parent_match is None:
+                continue
+            parent_index, parent_facts, provenance = parent_match
+            claim = ("basic_hand_link" if parent_facts.stage == "basic"
+                     else "feasible_hand_link")
+            trace.emit(f"{label}.hand", "observation", (claim,), sign,
+                       provenance=provenance)
+            used_cards.update((parent_index, child_index))
+        line_copies = Counter()
+        used_provenances = {viable_hand[index][1] for index in used_cards}
+        deck_names = {
+            facts.name for card_id, count in deck_counts or () if count > 0
+            and isinstance((facts := ctx.facts(card_id)), PokemonCard)}
+        for facts, provenance in line_hand:
+            line_copies[facts.name] += 1
+            if (provenance in used_provenances or line_copies[facts.name] <= 1
+                    or not facts.evolves_from
+                    or (facts.evolves_from not in line_hand_names
+                        and facts.evolves_from not in deck_names)):
+                continue
+            trace.emit(f"{label}.hand", "observation", ("reserve_hand_link",), sign,
+                       provenance=provenance)
     else:
         trace.emit(f"{label}.hand", "observation", ("unknown_opponent_hand_card",),
                    sign * side.hand_count)
@@ -644,8 +696,11 @@ def _body(trace: _Trace, part: str, body: Body, sign: float, ctx: EvaluationMode
             board.deck_counts if own else None, board, sign=sign, body=body)
     if body.energies and not body.energy_cards:
         trace.emit(part, "card", ("kind:energy",), sign * len(body.energies))
+    full_usable = usable_units(body_facts, body.energies, ctx, reach)
+    spent_rentals = max(0.0, full_usable - usable)
     trace.emit(part, "observation", ("end_of_turn_rental",),
-               sign * rentals if body is side.active else 0.0)
+               sign * max(0.0, rentals - spent_rentals)
+               if body is side.active else 0.0)
     trace.emit(part, "observation", ("usable_attached_energy",), sign * usable)
     trace.emit(part, "observation", ("visible_development_reach",),
                sign * visible_reach)
