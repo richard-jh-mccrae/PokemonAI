@@ -22,7 +22,8 @@ from common.ledger.preview import (_body_ability_ready, _body_copy_overflow,
                                    _discard_spend_contributions,
                                    _RawFootprint, _realized_outcomes,
                                    _realized_portfolio_contributions,
-                                   _with_hand_evolution_opportunity, price_actions)
+                                   _with_hand_evolution_opportunity, _expected_valuation,
+                                   price_actions)
 from common.observation import ObservationStateBuilder
 from deprecated.bellman.state import DecisionState
 
@@ -343,6 +344,19 @@ def test_generated_shared_phase_value_cancels_against_end():
 
     assert swings[0] > 0
     assert swings == pytest.approx([swings[0]] * len(swings))
+
+
+def test_expected_valuation_keeps_contribution_only_provenance():
+    context = EvaluationModel.build()
+    valuation = Valuation(
+        0.2, (), (),
+        contributions=(FeatureContribution(
+            "kind.energy", 1.0, context.configuration["kind.energy"], 0.2,
+            ("continuation.policy",)),))
+
+    result = _expected_valuation(((1.0, valuation),), context)
+
+    assert result.activations[0].provenance == ("continuation.policy",)
 
 
 def test_chance_activations_are_independent_of_valuation_coefficients():

@@ -1249,6 +1249,7 @@ def _expected_valuation(weighted, ctx) -> Valuation:
         for item in valuation.contributions:
             key = (item.feature, item.provenance)
             owned.setdefault(key, []).append(probability * item.activation)
+            provenance.setdefault(item.feature, set()).update(item.provenance)
     contributions = tuple(FeatureContribution(
         feature, activation, ctx.configuration[feature],
         activation * ctx.configuration[feature], owner)
