@@ -1,4 +1,4 @@
-# ADR-TEMP-603 — Search state separates engine truth from policy view
+# ADR-0196 — Search state separates engine truth from policy view
 
 The Turn Search Environment belongs to cgpy experiments and privately retains exact `GameState`
 while policy and value consumers receive only `ObservationState` for the fixed Perspective Seat.
