@@ -571,7 +571,9 @@ def _restriction_satisfied(value, facts, side, opponent, board, ctx):
     active = side.active
     active_facts = None if active is None else ctx.facts(active.card.card_id)
     gates = {
-        "active_dragon_only": bool(active_facts and active_facts.energy_type == DRAGON),
+        "active_dragon_only": bool(
+            isinstance(active_facts, PokemonCard)
+            and active_facts.energy_type == DRAGON),
         "active_non_arvens_pokemon": bool(
             active_facts and "arven" not in active_facts.name.casefold()),
         "active_only": active is not None,
