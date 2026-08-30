@@ -324,6 +324,13 @@ class LedgerOnePlySearch:
 
 
 def preservation_frontier(candidates, noise_tolerance=0.0):
+    def value(candidate):
+        continuation = (getattr(candidate, "continuation", None)
+                        or getattr(candidate, "footprint", None))
+        return candidate.delta.total + (
+            0.0 if continuation is None else
+            getattr(continuation, "action_opportunity", 0.0))
+
     deferred = set()
     for candidate in candidates:
         continuation = (getattr(candidate, "continuation", None)
@@ -351,6 +358,8 @@ def preservation_frontier(candidates, noise_tolerance=0.0):
             refresh_after_preparation = (
                 "supporter_played" in allowances_consumed
                 and "hand" in zones_replaced
+                and "hand" in getattr(
+                    continuation, "immediately_usable_outputs", ())
                 and (bool(opportunities_created)
                      or "in_play" in immediately_usable_outputs)
                 and "play" in preserved
@@ -379,8 +388,10 @@ def preservation_frontier(candidates, noise_tolerance=0.0):
                 break
             prepare_before_retreat = (
                 candidate.action.identity.kind == "retreat"
-                and other.delta.total > noise_tolerance
-                and bool(opportunities_created)
+                and ((value(other) > noise_tolerance
+                     and bool(opportunities_created))
+                     or (other.action.identity.kind == "evolve"
+                         and "ready_attacker" in immediately_usable_outputs))
                 and "retreat" in preserved)
             if prepare_before_retreat:
                 deferred.add(id(candidate))
@@ -395,6 +406,12 @@ def preservation_frontier(candidates, noise_tolerance=0.0):
                 break
             if not consumed:
                 continue
+            create_before_consume = (
+                candidate.action.identity.kind in opportunities_created
+                and candidate.action.identity.kind in preserved)
+            if create_before_consume:
+                deferred.add(id(candidate))
+                break
             use_expiring_ability = (
                 other.action.identity.kind == "ability"
                 and candidate.action.identity.kind == "evolve"
@@ -449,7 +466,13 @@ class GreedyDecisionPolicy:
                 and policy_value(candidate) > (
                     continuation_threshold + configuration.noise_tolerance)
                 for candidate in candidates)
-            if knockouts and not meaningful_continuation:
+            best_ender_value = max((candidate.delta.total for candidate in enders),
+                                   default=float("-inf"))
+            knockout_is_best = max(
+                (candidate.delta.total for candidate in knockouts),
+                default=float("-inf")) >= (
+                    best_ender_value - configuration.noise_tolerance)
+            if knockouts and knockout_is_best and not meaningful_continuation:
                 return DecisionChoice(
                     self._ranked(knockouts, configuration)[0].action,
                     DecisionReason.BEST_TURN_ENDER)
@@ -459,6 +482,35 @@ class GreedyDecisionPolicy:
                 and candidate.delta is not None
                 and policy_value(candidate) > (
                     continuation_threshold + configuration.noise_tolerance))
+            recycling_draws = tuple(
+                candidate for candidate in candidates
+                if candidate.disposition is CandidateDisposition.CONTINUES_TURN
+                and candidate.action.identity.kind == "ability"
+                and candidate.continuation is not None
+                and not candidate.continuation.allowances_consumed
+                and {"deck", "hand", "in_play"}.issubset(
+                    candidate.continuation.zones_replaced)
+                and "hand" in candidate.continuation.immediately_usable_outputs
+                and {"end", "play"}.issubset(
+                    candidate.continuation.opportunities_preserved))
+            continuing_ids = {id(candidate) for candidate in continuing}
+            continuing = (*continuing, *(candidate for candidate in recycling_draws
+                                          if id(candidate) not in continuing_ids))
+            durable_development = tuple(
+                candidate for candidate in candidates
+                if candidate.disposition is CandidateDisposition.CONTINUES_TURN
+                and candidate.continuation is not None
+                and "in_play" in candidate.continuation.immediately_usable_outputs
+                and ((candidate.action.identity.kind == "play"
+                      and bool(candidate.continuation.opportunities_created))
+                     or (candidate.action.identity.kind == "evolve"
+                         and "ready_attacker" in
+                         candidate.continuation.immediately_usable_outputs))
+                and {"end", "play"}.issubset(
+                    candidate.continuation.opportunities_preserved))
+            continuing_ids = {id(candidate) for candidate in continuing}
+            continuing = (*continuing, *(candidate for candidate in durable_development
+                                          if id(candidate) not in continuing_ids))
             refresh_available = any(
                 candidate.continuation is not None
                 and "supporter_played" in candidate.continuation.allowances_consumed

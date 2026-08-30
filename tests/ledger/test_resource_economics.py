@@ -1,17 +1,16 @@
 from dataclasses import replace
 
-from ledger_helpers import (DARK_E, DREEPY, FIRE, FIRE_E, IGNITION, MEGA_STARMIE,
-                            STARYU, body, player, printout)
+from ledger_helpers import (DARK_E, DARKNESS, DRAGAPULT, DRAKLOAK, DREEPY, FIRE, FIRE_E,
+                            IGNITION, MEGA_STARMIE, STARYU, body, player, printout)
 
 from common.ledger import EvaluationModel, evaluate
 from common.ledger.capabilities import OptionUnits
 from common.ledger.portfolio import feasible_option_portfolio_result
-from common.ledger.worth import usable_units
+from common.ledger.worth import payoff_usable_units
 from common.observation import ObservationStateBuilder
 
 
 MUNKIDORI = 112
-DRAKLOAK = 120
 DUNSPARCE = 65
 ULTRA_BALL = 1121
 ENERGY_RETRIEVAL = 1118
@@ -69,14 +68,30 @@ def test_scarce_fire_attachment_beats_generic_colorless_absorption():
 def test_unmet_typed_cost_blocks_premature_colorless_absorption():
     context = EvaluationModel.build()
 
-    assert usable_units(context.facts(MUNKIDORI), (FIRE,), context) == 0
-    assert usable_units(context.facts(DREEPY), (FIRE,), context) == 1
+    assert payoff_usable_units(context.facts(MUNKIDORI), (FIRE,), context) == 0
+    assert payoff_usable_units(context.facts(DREEPY), (FIRE,), context) == 1
 
     generic = board(me=player(
         active=body(MUNKIDORI, 1, energies=(FIRE,)), bench=[body(DREEPY, 2)]))
     typed = board(me=player(
         active=body(MUNKIDORI, 1), bench=[body(DREEPY, 2, energies=(FIRE,))]))
     assert value(typed, context) > value(generic, context) + 0.05
+
+
+def test_attachment_builds_the_line_payoff_not_its_cheaper_attack():
+    context = EvaluationModel.build()
+    before = replace(
+        board(me=player(active=body(DRAKLOAK, 1), hand=[DARK_E])),
+        deck_counts=((DRAGAPULT, 1),))
+    dark = replace(
+        board(me=player(active=body(DRAKLOAK, 1, energies=(DARKNESS,)))),
+        deck_counts=((DRAGAPULT, 1),))
+    fire = replace(
+        board(me=player(active=body(DRAKLOAK, 1, energies=(FIRE,)))),
+        deck_counts=((DRAGAPULT, 1),))
+
+    assert value(dark, context) < value(before, context)
+    assert value(fire, context) > value(before, context)
 
 
 def test_fetch_cannot_discard_its_only_condition_energy():

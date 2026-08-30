@@ -496,6 +496,22 @@ def test_greedy_policy_recognizes_knockout_only_from_observable_state_change():
         CandidateDisposition.ENDS_TURN, EvaluationStatus.COMPLETE)
     knockout = ValuedCandidate(
         action("attack", (1,)), DecisionDelta(
+            1.0, LEDGER_VALUE_SCALE,
+            (ValueComponent("prize.race", 1.0, 1.0, 1.0),)),
+        CandidateDisposition.ENDS_TURN, EvaluationStatus.COMPLETE)
+
+    chosen = GreedyDecisionPolicy().choose(
+        CandidateRoster((ending, knockout)), PolicyConfiguration())
+
+    assert chosen.action is knockout.action
+
+
+def test_greedy_policy_does_not_force_a_lower_value_knockout():
+    ending = ValuedCandidate(
+        action("end", (0,)), DecisionDelta(0.0, LEDGER_VALUE_SCALE),
+        CandidateDisposition.ENDS_TURN, EvaluationStatus.COMPLETE)
+    knockout = ValuedCandidate(
+        action("attack", (1,)), DecisionDelta(
             -1.0, LEDGER_VALUE_SCALE,
             (ValueComponent("prize.race", 1.0, -1.0, -1.0),)),
         CandidateDisposition.ENDS_TURN, EvaluationStatus.COMPLETE)
@@ -503,7 +519,7 @@ def test_greedy_policy_recognizes_knockout_only_from_observable_state_change():
     chosen = GreedyDecisionPolicy().choose(
         CandidateRoster((ending, knockout)), PolicyConfiguration())
 
-    assert chosen.action is knockout.action
+    assert chosen.action is ending.action
 
 
 def test_greedy_policy_ignores_legacy_action_only_knockout_signal():

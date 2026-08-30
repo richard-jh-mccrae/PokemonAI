@@ -30,7 +30,7 @@ from .worth import (Demand, DemandState, EvaluationModel, _liveness,
                     visible_development_reach_units,
                     legal_line_reach, line_reach, opponent_evaluation,
                     opponent_line_reach, best_payable_damage, pokemon_copy_capacity,
-                    usable_units, FUTURE_TURN_DISCOUNT)
+                    payoff_usable_units, FUTURE_TURN_DISCOUNT)
 
 
 @dataclass(frozen=True)
@@ -668,7 +668,7 @@ def _body(trace: _Trace, part: str, body: Body, sign: float, ctx: EvaluationMode
     trace.gaps.extend(f"{part}: {gap}" for gap in capability.gaps)
 
     persistent_body = without_end_turn_energy(body, ctx)
-    usable = usable_units(body_facts, persistent_body.energies, ctx, reach)
+    usable = payoff_usable_units(body_facts, persistent_body.energies, ctx, reach)
     visible_reach = visible_development_reach_units(
         body_facts, persistent_body.energies, ctx, reach)
     useless = max(0, len(persistent_body.energies) - usable)
@@ -696,7 +696,7 @@ def _body(trace: _Trace, part: str, body: Body, sign: float, ctx: EvaluationMode
             board.deck_counts if own else None, board, sign=sign, body=body)
     if body.energies and not body.energy_cards:
         trace.emit(part, "card", ("kind:energy",), sign * len(body.energies))
-    full_usable = usable_units(body_facts, body.energies, ctx, reach)
+    full_usable = payoff_usable_units(body_facts, body.energies, ctx, reach)
     spent_rentals = max(0.0, full_usable - usable)
     trace.emit(part, "observation", ("end_of_turn_rental",),
                sign * max(0.0, rentals - spent_rentals)
@@ -707,6 +707,11 @@ def _body(trace: _Trace, part: str, body: Body, sign: float, ctx: EvaluationMode
     trace.emit(part, "observation", ("useless_attached_energy",), sign * useless)
     trace.emit(part, "observation", ("usable_energy_on_damaged_body",),
                sign * usable * missing)
+    if active:
+        threat = (_damage_pressure(body_facts) / DAMAGE_UNIT_HP
+                  * float(_prize_value(body, ctx)))
+        trace.emit(part, "observation", ("damaged_active_threat",),
+                   sign * usable * missing * threat)
     trace.emit(part, "observation", ("concentrated_energy",),
                sign * max(0, usable - 1))
     for card in body.tools:

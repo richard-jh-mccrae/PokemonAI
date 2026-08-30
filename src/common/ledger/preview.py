@@ -29,10 +29,14 @@ from .decision import state_valuation_from_ledger
 from .evaluate import (_active_doomed, FeatureActivation, FeatureContribution,
                        Valuation, evaluate)
 from .prizes import PrizeMap
-from .worth import EvaluationModel
+from .worth import EvaluationModel, any_attack_payable
 
 LOTTERY_DIGEST_BYTES = 8
 PRIZE_PHASE_PIVOT = 4
+PRIZE_AREA = 6
+FORCED_FOOTPRINT_SLOT = 3
+
+
 @dataclass(frozen=True)
 class ContinuationFootprint:
     state_delta: float
@@ -191,7 +195,7 @@ def price_actions(state, board: ObservationState, baseline: float, provider,
         track_opportunities = not isinstance(node, (Chance, Refresh, RevealChoice))
         footprint_landings = landings
         footprint_values = _root_footprint(
-            board, provider, state, action, footprint_landings, walk.gaps,
+            board, provider, state, action, footprint_landings, walk.gaps, ctx,
             track_opportunities=track_opportunities)
         footprint_values = _with_hand_evolution_opportunity(
             footprint_values, board, action, ctx)
@@ -397,6 +401,10 @@ class _Walk:
             self.gaps.append("forced menu offered no actions; unavailable")
             self.unavailable = True
             return self.valuation(board), 0.0, ((1.0, state, board, False, ()),)
+        if (board.select is not None and board.select.context == _TO_HAND
+                and board.select.options
+                and all(option.area == PRIZE_AREA for option in board.select.options)):
+            actions = actions[:1]
         if board.select is not None and board.select.context == _DAMAGE_COUNTER_ANY:
             live = tuple(action for action in actions
                          if not _local_action_events(board, action))
@@ -413,15 +421,30 @@ class _Walk:
                 "action", _local_action_events(board, action, self.ctx),
                 self.ctx, "action"))
             valuation, end_probability, landings = result
-            scored = (replace(valuation, total=valuation.total + local),
+            footprint = _root_footprint(
+                board, self.provider, state, action, landings, self.gaps,
+                self.ctx,
+                track_opportunities=True)
+            opportunity = sum(item.value for item in _footprint_contributions(
+                footprint, self.ctx))
+            scored = (replace(
+                valuation, total=valuation.total + local + opportunity),
                       end_probability, landings)
-            entries.append((action.identity, result, scored))
+            entries.append((action.identity, result, scored, footprint))
         if not entries:
             return self.valuation(board), 0.0, ((1.0, state, board, False, ()),)
+        purposeful = tuple(
+            entry for entry in entries
+            if entry[0].kind != "decline"
+            and ("in_play" in entry[FORCED_FOOTPRINT_SLOT].immediately_usable_outputs
+                 or bool(entry[FORCED_FOOTPRINT_SLOT].opportunities_created)))
+        has_decline = any(entry[0].kind == "decline" for entry in entries)
+        choice_entries = (purposeful if actor is Actor.OURS and has_decline and purposeful
+                          else entries)
         identity, _scored = self._choose(
-            ((identity, scored) for identity, _result, scored in entries),
+            ((identity, scored) for identity, _result, scored, _footprint in choice_entries),
             actor, salt=f"menu:{depth}")
-        result = next(result for candidate, result, _scored in entries
+        result = next(result for candidate, result, _scored, _footprint in entries
                       if candidate == identity)
         self.continuation_policy[tuple(action.identity for action in actions)] = identity
         return _with_path(result, identity)
@@ -562,8 +585,8 @@ def _immediate_information_value(node, branch_budget: int) -> tuple[float, bool]
     return value, capped or bool(pending)
 
 
-def _root_footprint(board: ObservationState, provider, state, action, landings, gaps, *,
-                    track_opportunities: bool) -> _RawFootprint:
+def _root_footprint(board: ObservationState, provider, state, action, landings, gaps, ctx,
+                    *, track_opportunities: bool) -> _RawFootprint:
     if not landings:
         return _RawFootprint()
 
@@ -575,6 +598,21 @@ def _root_footprint(board: ObservationState, provider, state, action, landings, 
             "in_play": len(value.me.bodies),
             "attached_energy": sum(len(body.energies) for body in value.me.bodies),
         }
+
+    def development_outputs(before_state, after_state):
+        outputs = set()
+        for before_body, after_body in zip(
+                before_state.me.bodies, after_state.me.bodies):
+            evolved = (
+                before_body.card.card_id != after_body.card.card_id
+                and any(card.card_id == before_body.card.card_id
+                        for card in after_body.pre_evolution))
+            if not evolved:
+                continue
+            outputs.add("in_play")
+            if any_attack_payable(ctx.facts(after_body.card.card_id), after_body.energies):
+                outputs.add("ready_attacker")
+        return outputs
 
     labels = {name: set() for name in (
         "zones_created", "zones_replaced", "allowances_consumed",
@@ -601,6 +639,7 @@ def _root_footprint(board: ObservationState, provider, state, action, landings, 
                              if not getattr(board.turn, name)
                              and getattr(successor.turn, name)}
         branch_outputs = {name for name in before if after[name] > before[name]}
+        branch_outputs.update(development_outputs(board, successor))
         after_actions = (Counter() if ended or not track_opportunities
                          else _legal_inventory(
                              provider, landing_state, gaps, report_missing=False))

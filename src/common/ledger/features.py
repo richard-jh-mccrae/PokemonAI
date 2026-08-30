@@ -317,6 +317,7 @@ _OBSERVATION_CLAIMS = {
     "context.opponent_unknown_hand": "unknown_opponent_hand_card",
     "context.opponent_unknown_deck": "unknown_opponent_deck_card",
     "context.damaged_attached": "usable_energy_on_damaged_body",
+    "context.damaged_active_threat": "damaged_active_threat",
     "status.asleep": "asleep_status",
     "status.paralyzed": "paralyzed_status",
     "status.confused": "confused_status",
@@ -493,6 +494,7 @@ _SCALAR_DEFAULTS = {
     "context.opponent_unknown_hand": 0.01,
     "context.opponent_unknown_deck": 0.002,
     "context.damaged_attached": -1.0,
+    "context.damaged_active_threat": -1.0,
     "continuation.multi_provision_in_hand": 0.05,
     "continuation.zone_created": 0.01,
     "continuation.zone_replaced": 0.005,
@@ -636,7 +638,7 @@ FEATURE_CATALOG = FeatureCatalog(
         f"clause.parameter.{parameter}", 0.0,
         disposition=FeatureDisposition.RETIRED)
             for parameter in CLAUSE_PARAMETER_QUALIFIERS),
-    schema_version=21,
+    schema_version=22,
 )
 
 

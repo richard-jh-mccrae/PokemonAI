@@ -436,25 +436,24 @@ def best_payable_damage(attacker_facts, attached, defender_facts) -> int:
     return best
 
 
-def usable_units(body_facts, attached, ctx: EvaluationModel, reach=None) -> float:
-    """Return the largest attached-unit count one attack absorbs.
-    Forward-line colorless absorption scales by that evolution's reach gate."""
+def payoff_usable_units(body_facts, attached, ctx: EvaluationModel, reach=None) -> float:
+    """Attached units absorbed by the strongest reachable attack on this line."""
     provisions = tuple(attached)
-    total = len(provisions)
-    if total == 0 or body_facts is None:
+    if not provisions or body_facts is None:
         return 0
-    gates = reach or {}
-    best = 0.0
+    ranked = []
     for attack, evo_id in _line_entries(body_facts, ctx):
-        attack_facts = body_facts if evo_id is None else ctx.facts(evo_id)
-        units = min(total, len(attack.cost) * typed_first_payment_fraction(
-            provisions, attack.cost, attack_facts))
-        status = Reach.HAND if evo_id is None else gates.get(evo_id, Reach.ABSENT)
+        status = Reach.HAND if evo_id is None else (reach or {}).get(evo_id, Reach.ABSENT)
         scale = _reach_scale(status)
-        best = max(best, units * scale)
-        if best >= total:
-            return total
-    return best
+        if scale <= 0.0:
+            continue
+        attack_facts = body_facts if evo_id is None else ctx.facts(evo_id)
+        damage = max(int(attack.damage or 0), int(attack.damage_fix or 0),
+                     int(attack.damage_max or 0))
+        units = min(len(provisions), len(attack.cost) * typed_first_payment_fraction(
+            provisions, attack.cost, attack_facts))
+        ranked.append(((damage, len(attack.cost)), units * scale))
+    return max(ranked, default=((0, 0), 0.0), key=lambda item: item[0])[1]
 
 
 def visible_development_reach_units(body_facts, attached, ctx: EvaluationModel,
@@ -704,4 +703,4 @@ RESISTANCE_REDUCTION = 30
 
 __all__ = ("Demand", "EvaluationModel",
            "any_attack_payable", "legal_line_reach", "line_reach", "opponent_line_reach",
-           "usable_units")
+           "payoff_usable_units")

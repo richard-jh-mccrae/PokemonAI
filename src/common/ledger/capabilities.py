@@ -962,7 +962,7 @@ def self_ko_liability_units(body, side, opponent, ctx):
 
 def knockout_exposure_units(body, ctx) -> float:
     prize_value = float(getattr(ctx.facts(body.card.card_id), "prize_value", 1) or 1)
-    material = (max(0.0, body.hp) / DAMAGE_UNIT_HP
+    material = (max(0.0, body.max_hp) / DAMAGE_UNIT_HP
                 + max(0.0, prize_value - 1.0))
     return max(prize_value, material)
 

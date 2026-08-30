@@ -78,8 +78,10 @@ def test_direct_promotion_uses_weakness_and_resistance_for_attack_yield():
 
 def test_direct_promotion_avoids_doomed_prize_exposure_at_equal_attack_yield():
     context = model(
-        pokemon(STURDY, "Sturdy", hp=200, damage=100, cost=(FIRE,)),
-        pokemon(FRAGILE, "Fragile", hp=60, damage=100, cost=(FIRE,)),
+        pokemon(STURDY, "Sturdy", hp=200, retreat_cost=2,
+                damage=100, cost=(FIRE,)),
+        pokemon(FRAGILE, "Fragile", hp=60, retreat_cost=2,
+                damage=100, cost=(FIRE,)),
         pokemon(THREAT, "Threat", damage=80, cost=(FIRE,)),
     )
     sturdy = board(
@@ -139,12 +141,12 @@ def test_doomed_sacrifice_has_less_exposure_than_developed_attacker():
     context = model(pokemon(THREAT, "Threat", hp=500, damage=500, cost=(FIRE,)))
     sacrifice = board(
         me=player(active=body(BUDEW, 1, hp=30, max_hp=30),
-                  bench=[body(MEGA_STARMIE, 2, hp=330, max_hp=330)]),
+                  bench=[body(MEGA_STARMIE, 2, hp=330, max_hp=330)], asleep=True),
         them=player(own=False, active=body(THREAT, 3, hp=500, max_hp=500,
                                            energies=(FIRE,))))
     developed = board(
         me=player(active=body(MEGA_STARMIE, 2, hp=330, max_hp=330),
-                  bench=[body(BUDEW, 1, hp=30, max_hp=30)]),
+                  bench=[body(BUDEW, 1, hp=30, max_hp=30)], asleep=True),
         them=player(own=False, active=body(THREAT, 3, hp=500, max_hp=500,
                                            energies=(FIRE,))))
 

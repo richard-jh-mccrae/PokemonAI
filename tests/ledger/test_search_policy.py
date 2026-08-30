@@ -40,7 +40,8 @@ def test_positive_ability_is_used_before_evolving_away_its_source():
 
 def test_hand_refresh_waits_for_positive_preparation_without_coarse_consumption():
     supporter = candidate(
-        "play", 3.0, allowances=("supporter_played",), zones=("hand",))
+        "play", 3.0, allowances=("supporter_played",), zones=("hand",),
+        outputs=("hand",))
     evolve = candidate(
         "evolve", 0.2, preserved=("play",), created=("ability",))
 

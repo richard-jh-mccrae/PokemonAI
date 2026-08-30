@@ -34,6 +34,7 @@ APPROVED_DECLARATIONS = {
     },
     "src/common/ledger/configuration.py": {
         "COMBAT_REALIZATION_SCHEMA_VERSION", "CONFIGURATION_ID_DIGEST_BYTES",
+        "DAMAGED_ACTIVE_THREAT_SCHEMA_VERSION",
         "HAND_LINE_SCHEMA_VERSION", "LEGACY_BODY_DEVELOPMENT_WEIGHT",
         "LEGACY_COMBAT_SCHEMA_VERSION"},
     "src/common/ledger/decider.py": {"PROVIDER_ID_DIGEST_BYTES"},
@@ -48,7 +49,8 @@ APPROVED_DECLARATIONS = {
         "OPTION_DEFAULTS", "OPTION_DEPTH_DEFAULTS",
         "_PLACEMENT_FACTORS", "_SCALAR_DEFAULTS",
     },
-    "src/common/ledger/preview.py": {"LOTTERY_DIGEST_BYTES", "PRIZE_PHASE_PIVOT"},
+    "src/common/ledger/preview.py": {
+        "FORCED_FOOTPRINT_SLOT", "LOTTERY_DIGEST_BYTES", "PRIZE_AREA", "PRIZE_PHASE_PIVOT"},
     "src/common/ledger/prizes.py": {"PRIZE_ROUTE_CACHE_SIZE"},
     "src/common/ledger/portfolio.py": {"HAND_POKEMON_REALIZATION_DISCOUNT"},
     "src/common/ledger/portfolio_solver.py": {

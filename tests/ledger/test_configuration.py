@@ -16,7 +16,7 @@ from dataclasses import replace
 import pytest
 from common.cards import FUNCTION_CATALOG, Attack, Clause, PokemonCard, card_store
 from common.cards.pokemon_roles import POKEMON_ROLES
-from common.ledger.worth import _compile_forward_lines, usable_units
+from common.ledger.worth import _compile_forward_lines, payoff_usable_units
 from common.ledger.features import FeatureDisposition
 from common.opponent import (
     ArchetypeBelief, OpponentEvidence, OpponentMechanic, OpponentSnapshot, OpponentTrait,
@@ -402,8 +402,8 @@ def test_posterior_forward_reach_scales_typed_energy_usability(monkeypatch):
     context = replace(EvaluationModel.build(), store={1: base, 2: child})
     monkeypatch.setattr("common.ledger.worth._forward_lines", lambda: {"Base": (2,)})
 
-    assert usable_units(base, (8,), context, {2: 0.1}) == pytest.approx(0.1)
-    assert usable_units(base, (8,), context, {2: 1.0}) == pytest.approx(1.0)
+    assert payoff_usable_units(base, (8,), context, {2: 0.1}) == pytest.approx(0.1)
+    assert payoff_usable_units(base, (8,), context, {2: 1.0}) == pytest.approx(1.0)
 
 
 def test_every_opponent_trait_compiles_against_the_closed_typed_schema():
@@ -531,3 +531,12 @@ def test_schema_20_recording_acquires_default_hand_line_values():
     assert migrated["development.feasible_hand_link"] == 0.13
     assert migrated["development.basic_hand_link"] == 0.25
     assert migrated["development.reserve_hand_link"] == 0.06
+
+
+def test_schema_21_recording_acquires_default_damaged_active_threat_value():
+    old = dict(ValuationConfiguration.general().values)
+    old.pop("context.damaged_active_threat")
+
+    migrated = ValuationConfiguration.from_recorded(old, schema_version=21)
+
+    assert migrated["context.damaged_active_threat"] == -1.0

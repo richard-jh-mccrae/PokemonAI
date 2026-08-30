@@ -28,12 +28,40 @@ def legacy_choose(prices, *, forced, configuration):
         not price.ends_turn
         and policy_value(price) > continuation_threshold + configuration.noise_tolerance
         for price in prices)
-    if knockouts and not meaningful_continuation:
+    best_ender_value = max((price.swing for price in enders),
+                           default=float("-inf"))
+    knockout_is_best = max(
+        (price.swing for price in knockouts), default=float("-inf")) >= (
+            best_ender_value - configuration.noise_tolerance)
+    if knockouts and knockout_is_best and not meaningful_continuation:
         return _legacy_ranked(knockouts, configuration)[0]
     continuing = tuple(price for price in prices
                        if not price.ends_turn
                        and policy_value(price) > (
                            continuation_threshold + configuration.noise_tolerance))
+    recycling_draws = tuple(
+        price for price in prices
+        if not price.ends_turn
+        and price.action.identity.kind == "ability"
+        and not price.footprint.allowances_consumed
+        and {"deck", "hand", "in_play"}.issubset(price.footprint.zones_replaced)
+        and "hand" in price.footprint.immediately_usable_outputs
+        and {"end", "play"}.issubset(price.footprint.opportunities_preserved))
+    continuing_ids = {id(price) for price in continuing}
+    continuing = (*continuing, *(price for price in recycling_draws
+                                  if id(price) not in continuing_ids))
+    durable_development = tuple(
+        price for price in prices
+        if not price.ends_turn
+        and "in_play" in price.footprint.immediately_usable_outputs
+        and ((price.action.identity.kind == "play"
+              and bool(price.footprint.opportunities_created))
+             or (price.action.identity.kind == "evolve"
+                 and "ready_attacker" in price.footprint.immediately_usable_outputs))
+        and {"end", "play"}.issubset(price.footprint.opportunities_preserved))
+    continuing_ids = {id(price) for price in continuing}
+    continuing = (*continuing, *(price for price in durable_development
+                                  if id(price) not in continuing_ids))
     refresh_available = any(
         "supporter_played" in price.footprint.allowances_consumed
         and "hand" in price.footprint.zones_replaced
@@ -54,6 +82,9 @@ def legacy_choose(prices, *, forced, configuration):
 
 
 def _legacy_preservation_frontier(candidates, noise_tolerance=0.0):
+    def value(candidate):
+        return candidate.swing + candidate.footprint.action_opportunity
+
     deferred = set()
     for candidate in candidates:
         consumed = set(candidate.footprint.opportunities_consumed)
@@ -74,6 +105,7 @@ def _legacy_preservation_frontier(candidates, noise_tolerance=0.0):
             refresh_after_preparation = (
                 "supporter_played" in allowances_consumed
                 and "hand" in zones_replaced
+                and "hand" in candidate.footprint.immediately_usable_outputs
                 and (bool(opportunities_created)
                      or "in_play" in immediately_usable_outputs)
                 and "play" in preserved
@@ -101,8 +133,10 @@ def _legacy_preservation_frontier(candidates, noise_tolerance=0.0):
                 break
             prepare_before_retreat = (
                 candidate.action.identity.kind == "retreat"
-                and other.swing > noise_tolerance
-                and bool(opportunities_created)
+                and ((value(other) > noise_tolerance
+                      and bool(opportunities_created))
+                     or (other.action.identity.kind == "evolve"
+                         and "ready_attacker" in immediately_usable_outputs))
                 and "retreat" in preserved)
             if prepare_before_retreat:
                 deferred.add(candidate.action.identity)
@@ -117,6 +151,12 @@ def _legacy_preservation_frontier(candidates, noise_tolerance=0.0):
                 break
             if not consumed:
                 continue
+            create_before_consume = (
+                candidate.action.identity.kind in opportunities_created
+                and candidate.action.identity.kind in preserved)
+            if create_before_consume:
+                deferred.add(candidate.action.identity)
+                break
             use_expiring_ability = (
                 other.action.identity.kind == "ability"
                 and candidate.action.identity.kind == "evolve"
