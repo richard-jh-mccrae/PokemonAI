@@ -264,6 +264,25 @@ def test_latest_corrections_resolve_or_rank_the_ruled_action_above_the_blunder()
         assert values[tuple(row["correct"])] > values[tuple(row["recorded_chosen"])]
 
 
+def test_august_30_corrections_choose_the_ruled_actions():
+    from pathlib import Path
+
+    from train.blunder.store import load_corrections
+    from train.ledger_corpus import _replay_one
+
+    root = Path(__file__).resolve().parents[2] / "data" / "corrections"
+    stores = (
+        root / "20260830-082433_d00f93d6_mega_starmie",
+        root / "20260830-083418_d00f93d6_mega_lucario",
+        root / "20260830-083953_d00f93d6_dragapult_ex",
+    )
+    rows = [_replay_one(correction.agent, correction)
+            for store in stores for correction in load_corrections(store)]
+
+    assert all(row["graded"] and row["agrees"] for row in rows), [
+        (row["key"], row["chosen"], row["correct"]) for row in rows if not row["agrees"]]
+
+
 def _archived_frame(deck_dir="mega_starmie_20260813_c9991b12"):
     from pathlib import Path
 

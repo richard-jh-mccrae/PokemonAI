@@ -193,6 +193,8 @@ def price_actions(state, board: ObservationState, baseline: float, provider,
         footprint_values = _root_footprint(
             board, provider, state, action, footprint_landings, walk.gaps,
             track_opportunities=track_opportunities)
+        footprint_values = _with_hand_evolution_opportunity(
+            footprint_values, board, action, ctx)
         if isinstance(node, Refresh):
             facts = ctx.facts(node.card_id)
             allowances = (("supporter_played",)
@@ -626,6 +628,33 @@ def _action_roster_key(action):
     return action.identity, tuple(action.selection)
 
 
+def _with_hand_evolution_opportunity(footprint, board, action, ctx):
+    if action.identity.kind != "play":
+        return footprint
+    selected = tuple(card_id for _serial, card_id in _selected_cards(board, action)
+                     if card_id is not None)
+    parent_names = {
+        facts.name for card_id in selected
+        if isinstance((facts := ctx.facts(card_id)), PokemonCard)
+    }
+    if not parent_names:
+        return footprint
+    held_child = any(
+        isinstance((facts := ctx.facts(card.card_id)), PokemonCard)
+        and facts.evolves_from in parent_names
+        for card in board.me.hand
+    )
+    if not held_child or "future_evolve" in footprint.opportunities_created:
+        return footprint
+    activations = Counter(dict(footprint.activations))
+    activations["opportunity_created"] += 1.0
+    return replace(
+        footprint,
+        opportunities_created=tuple(sorted((
+            *footprint.opportunities_created, "future_evolve"))),
+        activations=tuple(activations.items()))
+
+
 def _local_action_events(board, action, ctx=None):
     dead_discard = _dead_discard(board, action, ctx)
     if dead_discard:
@@ -677,9 +706,14 @@ def _dead_discard(board, action, ctx):
     from .worth import Demand, DemandState, _liveness
 
     demand = Demand.read(board.me, ctx, board.turn)
+    expendability = {
+        DemandState.DEAD: 1.0,
+        DemandState.COLORLESS_ONLY: 1.0,
+    }
     return float(sum(
-        _liveness(card_id, ctx.facts(card_id), demand, ctx, board.deck_counts)[0]
-        is DemandState.DEAD
+        expendability.get(
+            _liveness(card_id, ctx.facts(card_id), demand, ctx, board.deck_counts)[0],
+            0.0)
         for _serial, card_id in _selected_cards(board, action)
         if card_id is not None))
 

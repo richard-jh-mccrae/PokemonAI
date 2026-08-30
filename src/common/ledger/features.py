@@ -271,6 +271,9 @@ _OBSERVATION_CLAIMS = {
     "demand.setup": "setup_hand_card",
     "development.ready_evolution": "evolution_access",
     "development.visible_reach": "visible_development_reach",
+    "development.feasible_hand_link": "feasible_hand_link",
+    "development.basic_hand_link": "basic_hand_link",
+    "development.reserve_hand_link": "reserve_hand_link",
     "copy.surplus": "surplus_hand_copy",
     "copy.surplus_in_play": "surplus_in_play_copy",
     "copy.basic_energy_surplus": "surplus_basic_energy",
@@ -444,6 +447,9 @@ _SCALAR_DEFAULTS = {
     "demand.setup": 0.032,
     "development.ready_evolution": 0.50,
     "development.visible_reach": 0.0161,
+    "development.feasible_hand_link": 0.13,
+    "development.basic_hand_link": 0.25,
+    "development.reserve_hand_link": 0.06,
     "copy.surplus": -0.03,
     "copy.surplus_in_play": -1.0,
     "copy.basic_energy_surplus": -0.04,
@@ -630,7 +636,7 @@ FEATURE_CATALOG = FeatureCatalog(
         f"clause.parameter.{parameter}", 0.0,
         disposition=FeatureDisposition.RETIRED)
             for parameter in CLAUSE_PARAMETER_QUALIFIERS),
-    schema_version=20,
+    schema_version=21,
 )
 
 

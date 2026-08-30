@@ -20,6 +20,7 @@ from common.ledger import EvaluationModel, LedgerDecider, PrizeMap
 from common.ledger.decider import LedgerUnavailable
 from common.ledger.decision import LEDGER_VALUE_SCALE
 from common.ledger.search import GreedyDecisionPolicy
+from common.ledger.preview import ContinuationFootprint
 from common.scouting.provider import CardStat, DictCardStatProvider
 from deprecated.bellman.state import DecisionState
 
@@ -37,6 +38,7 @@ def choose_prices(decider, prices, *, forced=False):
          CandidateDisposition.ENDS_TURN if price.ends_turn
          else CandidateDisposition.CONTINUES_TURN),
         EvaluationStatus.COMPLETE,
+        continuation=price.footprint,
         policy_tie_break=(() if price.prize_map is None
                           else price.prize_map.plan_rank_key()),
         policy_evidence=price.prize_map,
@@ -487,7 +489,8 @@ def test_a_refresh_for_a_card_not_in_hand_logs_the_gap_and_decides_anyway():
     assert any("not visible in hand" in gap for gap in decision.diagnostics["gaps"])
 
 
-def _price(kind, index, swing, *, ends=False, refresh=False, prize_map=None):
+def _price(kind, index, swing, *, ends=False, refresh=False, prize_map=None,
+           footprint=None):
     from types import SimpleNamespace
 
     from common.ledger.preview import OptionPrice
@@ -495,7 +498,10 @@ def _price(kind, index, swing, *, ends=False, refresh=False, prize_map=None):
     return OptionPrice(
         SimpleNamespace(selection=[index],
                         identity=SimpleNamespace(kind=kind, parts=(index,))),
-        swing, ends, (), prize_map=prize_map)
+        swing, ends, (),
+        footprint=(ContinuationFootprint(0.0, 0.0, False)
+                   if footprint is None else footprint),
+        prize_map=prize_map)
 
 
 def test_prize_plan_does_not_preempt_the_neutral_lottery_for_near_equal_prices():
@@ -519,6 +525,21 @@ def test_a_positive_hand_shuffle_alone_still_gets_played():
     decider = make_decider(provider=None)
     prices = (_price("play", 0, 0.40, refresh=True), _price("end", 1, 0.0, ends=True))
     assert choose_prices(decider, prices).action.identity.kind == "play"
+
+
+def test_unrelated_grossly_negative_body_does_not_block_hand_refresh():
+    refresh = ContinuationFootprint(
+        0.0, 0.0, True, zones_replaced=("hand",),
+        allowances_consumed=("supporter_played",))
+    body_play = ContinuationFootprint(
+        0.0, 0.0, True, immediately_usable_outputs=("in_play",),
+        opportunities_preserved=("play",))
+    prices = (
+        _price("play", 0, 0.4, footprint=refresh),
+        _price("play", 1, -100.0, footprint=body_play),
+        _price("end", 2, 0.0, ends=True))
+
+    assert choose_prices(make_decider(provider=None), prices).action.selection == [0]
 
 
 def test_price_actions_has_no_mechanic_specific_ordering_flags():
@@ -557,7 +578,7 @@ def test_price_actions_has_no_mechanic_specific_ordering_flags():
                == pytest.approx(price.swing) for price in prices)
 
 
-def test_action_opportunity_cost_cannot_change_canonical_delta_or_choice():
+def test_action_opportunity_cost_changes_policy_without_changing_canonical_delta():
     root_obs = printout(me=player(active=body(DRAGAPULT, 1), hand=[FIRE_E]),
                         them=player(own=False, active=body(DRAGAPULT, 2)))
     attached = state_of(printout(
@@ -577,7 +598,7 @@ def test_action_opportunity_cost_cannot_change_canonical_delta_or_choice():
     default_price = next(row for row in default.diagnostics["prices"]
                          if row["action"] == str(attach.identity))
 
-    assert lifted.action.kind == "attach"
+    assert lifted.action.kind == "end"
     assert default.action.kind == "attach"
     assert lifted_price["swing"] == pytest.approx(default_price["swing"])
 

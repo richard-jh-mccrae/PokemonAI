@@ -72,6 +72,14 @@ def test_mature_matching_base_keeps_evolution_live_on_a_full_bench():
     assert activation(state, "development.ready_evolution") == 1
 
 
+def test_duplicate_evolutions_share_one_ready_target():
+    state = replace(board(me=player(
+        active=body(DREEPY, 1), hand=[DRAKLOAK, DRAKLOAK, DRAKLOAK])),
+        deck_counts=((DREEPY, 4), (DRAKLOAK, 4), (DRAGAPULT, 3)))
+
+    assert activation(state, "development.ready_evolution") == 1
+
+
 def test_newly_appeared_matching_base_is_setup_not_ready():
     appeared = {**body(DREEPY, 1), "appearThisTurn": True}
     state = board(me=player(

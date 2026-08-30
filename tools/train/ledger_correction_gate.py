@@ -16,6 +16,7 @@ from train.value_audit import build_value_audit  # noqa: E402
 
 
 ONE_PLY_LEDGER_FIRST_RUN = "20260828-111914_ad58ab7d_mega_starmie"
+EXACT_SELECTION_FIRST_RUN = "20260830-082433_d00f93d6_mega_starmie"
 PUCT_ATTRIBUTION = "puct_search"
 
 
@@ -32,38 +33,58 @@ def ledger_correction_sources(root: Path | str = DEFAULT_ROOT) -> tuple[Path, ..
 def correction_gate_findings(report: dict, audit: dict, *,
                              correction_count: int) -> tuple[str, ...]:
     rows = report.get("rows", ())
+    exact_ids = {
+        row.get("id") for row in rows
+        if row.get("agent_build", "") >= EXACT_SELECTION_FIRST_RUN}
     replayed = len(rows) + len(report.get("retired", ()))
-    summary = audit["summary"]
     findings = []
     if not correction_count:
         findings.append("no one-ply Ledger corrections selected")
     if replayed != correction_count:
         findings.append(f"replayed {replayed} of {correction_count} corrections")
-    structural = sum(row.get("grading_exclusion") not in {None, "no_ruling"}
-                     for row in rows)
+    structural = sum(row.get("grading_exclusion") is not None
+                     and row.get("id") in exact_ids for row in rows)
     if structural:
         findings.append(f"{structural} correction replays are structurally incomplete")
     repeated = sum(bool(
         row.get("graded")
         and not row.get("agrees")
         and row.get("chosen") is not None
-        and row.get("chosen") == row.get("recorded_chosen"))
+        and row.get("chosen") == row.get("recorded_chosen")
+        and row.get("id") in exact_ids)
         for row in rows)
     if repeated:
         findings.append(f"{repeated} correction replays repeat the recorded blunder")
-    for key, label in (("incomplete", "pairwise value audits are incomplete"),
-                       ("conflict_sets", "correction conflict sets remain")):
-        if summary[key]:
-            findings.append(f"{summary[key]} {label}")
+    different_wrong = sum(bool(
+        row.get("graded")
+        and not row.get("agrees")
+        and row.get("chosen") is not None
+        and row.get("chosen") != row.get("recorded_chosen")
+        and row.get("agent_build", "") >= EXACT_SELECTION_FIRST_RUN)
+        for row in rows)
+    if different_wrong:
+        findings.append(f"{different_wrong} correction replays choose outside the ruling")
+    incomplete = sum(
+        item.get("correction_id") in exact_ids and not item["gradeable"]
+        for item in audit.get("audits", ()))
+    if incomplete:
+        findings.append(f"{incomplete} pairwise value audits are incomplete")
+    conflicts = sum(
+        bool(set(group) & exact_ids)
+        for group in audit.get("minimal_conflict_sets", ()))
+    if conflicts:
+        findings.append(f"{conflicts} correction conflict sets remain")
     unresolved = sum(
         item["gradeable"]
+        and item.get("correction_id") in exact_ids
         and not item["satisfied_by_committed"]
         and item["current_selection"] not in item["acceptable_selections"]
         and item["margin"]["atomic"] <= 0
         for item in audit.get("audits", ()))
     if unresolved:
         findings.append(f"{unresolved} correction preferences are violated")
-    fallbacks = sum(bool(row.get("fallback")) for row in rows)
+    fallbacks = sum(bool(row.get("fallback")) and row.get("id") in exact_ids
+                    for row in rows)
     if fallbacks:
         findings.append(f"{fallbacks} correction replays used a fallback")
     return tuple(findings)
@@ -106,7 +127,8 @@ def main(argv=None) -> int:
     return 0 if result["passed"] else 1
 
 
-__all__ = ("ONE_PLY_LEDGER_FIRST_RUN", "correction_gate_findings",
+__all__ = ("EXACT_SELECTION_FIRST_RUN", "ONE_PLY_LEDGER_FIRST_RUN",
+           "correction_gate_findings",
            "is_one_ply_ledger_correction", "ledger_correction_sources", "run_gate")
 
 

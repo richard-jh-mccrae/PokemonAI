@@ -222,6 +222,50 @@ def test_the_pair_in_hand_outprices_either_alone():
     assert marginal_beside_base > marginal_alone + 0.02
 
 
+def test_visible_evolution_link_is_owned_by_its_feasible_parent():
+    valuation = evaluate(board(me=player(
+        active=body(MAKUHITA, 1), hand=[DREEPY, DRAKLOAK, DRAKLOAK])), ctx())
+
+    links = [item for item in valuation.activations
+             if item.feature == "development.basic_hand_link"]
+
+    assert sum(item.value for item in links) == 1.0
+    assert links[0].provenance == ("feasible_option_portfolio:serial:800",)
+
+
+def test_one_middle_card_cannot_complete_two_hand_links():
+    one_middle = evaluate(replace(board(me=player(
+        active=body(MAKUHITA, 1), hand=[DREEPY, DRAKLOAK, DRAGAPULT])),
+        deck_counts=((DREEPY, 2),)), ctx())
+    two_middles = evaluate(replace(board(me=player(
+        active=body(MAKUHITA, 1),
+        hand=[DREEPY, DRAKLOAK, DRAKLOAK, DRAGAPULT])),
+        deck_counts=((DREEPY, 2),)), ctx())
+
+    def links(valuation):
+        return sum(item.value for item in valuation.activations
+                   if item.feature in {"development.basic_hand_link",
+                                       "development.feasible_hand_link"})
+
+    def reserves(valuation):
+        return sum(item.value for item in valuation.activations
+                   if item.feature == "development.reserve_hand_link")
+
+    assert links(one_middle) == 1.0
+    assert links(two_middles) == 2.0
+    assert reserves(one_middle) == 0.0
+    assert reserves(two_middles) == 0.0
+
+
+def test_unused_duplicate_evolution_keeps_a_reserve_deck_link():
+    valuation = evaluate(replace(board(me=player(
+        active=body(MAKUHITA, 1), hand=[DRAKLOAK, DRAKLOAK, DRAGAPULT])),
+        deck_counts=((DREEPY, 2),)), ctx())
+
+    assert sum(item.value for item in valuation.activations
+               if item.feature == "development.reserve_hand_link") == 1.0
+
+
 def test_evolving_transfers_ready_and_energy_reach_into_completed_development():
     before = evaluate(board(me=player(
         active=body(DRAKLOAK, 1, energies=(FIRE, PSYCHIC), under=(DREEPY,)),
@@ -247,6 +291,9 @@ def test_a_named_synergy_partner_in_play_makes_the_held_half_live():
     alone = evaluate(board(me=player(active=body(MAKUHITA, 1), hand=[LUNATONE])), context)
 
     assert paired.part("me.hand") > alone.part("me.hand") + 0.35
+    synergy = next(item for item in paired.activations
+                   if item.feature == "interaction.synergy.in_hand")
+    assert synergy.provenance == ("feasible_option_portfolio:serial:800",)
 
 
 def test_duplicate_supporter_has_less_marginal_hand_value():
@@ -258,6 +305,17 @@ def test_duplicate_supporter_has_less_marginal_hand_value():
 
     assert hand_value([LILLIES, LILLIES]) - hand_value([LILLIES]) \
         < hand_value([LILLIES]) - hand_value([])
+
+
+def test_discard_recovery_is_dead_until_a_matching_target_exists():
+    empty = evaluate(board(me=player(active=body(DREEPY, 1), hand=[1097])), ctx())
+    live = evaluate(board(me=player(
+        active=body(DREEPY, 1), hand=[1097], discard=[DRAKLOAK])), ctx())
+
+    assert any(item.feature == "demand.dead" and item.value == 1.0
+               for item in empty.activations)
+    assert not any(item.feature == "demand.dead" and item.value > 0
+                   for item in live.activations)
 
 
 def test_the_active_with_lower_attack_pressure_is_the_better_gust_target():
@@ -836,6 +894,16 @@ def test_rental_subtraction_does_not_erase_persistent_attached_energy():
 
     assert sum(item.value for item in valuation.activations
                if item.feature == "zone.attached_usable") == 1.0
+
+
+def test_rental_penalty_excludes_provision_the_active_can_spend_now():
+    shell = body(MEGA_STARMIE, 1)
+    shell["energies"] = [0, 0, 0]
+    shell["energyCards"] = [{"id": IGNITION, "serial": 701}]
+    valuation = evaluate(board(me=player(active=shell)), ctx())
+
+    assert not [item for item in valuation.activations
+                if item.feature == "energy.end_of_turn_rental"]
 
 
 def test_named_once_per_turn_ability_has_one_board_capacity():

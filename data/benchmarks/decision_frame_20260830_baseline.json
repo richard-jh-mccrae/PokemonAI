@@ -18,7 +18,7 @@
     "8109263769592355-117": {
       "agent": "dragapult_ex",
       "fixture": "benchmarks/dragapult_ex_8109263769592355_117.json",
-      "choice": [6],
+      "choice": [0],
       "maximum_ms": 60000,
       "decision_total_ms": {"median": 19751.5655},
       "previous_runtime_ms": {"lower_bound": 120000}
