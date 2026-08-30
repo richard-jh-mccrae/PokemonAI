@@ -9,6 +9,7 @@ from pathlib import Path
 from common.decision import (
     CandidateDisposition,
     CandidateRoster,
+    ContinuationOpportunity,
     ContinuationResult,
     BudgetController,
     DecisionChoice,
@@ -20,6 +21,7 @@ from common.decision import (
     EvaluationStatus,
     EvaluationRequest,
     FailSafeRequest,
+    RealizedOutcome,
     SearchResult,
     SearchValue,
     StateValuation,
@@ -296,6 +298,8 @@ class LedgerOnePlySearch:
                 footprint.opportunities_created,
                 footprint.opportunities_preserved,
                 footprint.opportunities_consumed,
+                value_components(footprint.policy_contributions),
+                footprint.realized_outcomes,
             )
             successors = price.successors
             if any(successor.valuation.scale != baseline.scale for successor in successors):
@@ -386,6 +390,12 @@ def preservation_frontier(candidates, noise_tolerance=0.0):
             if create_before_plain_play:
                 deferred.add(id(candidate))
                 break
+            dependency_refresh = (
+                ContinuationOpportunity.DEPENDENCY_REACH in getattr(
+                    continuation, "opportunities_created", ())
+                and value(candidate) > value(other) + noise_tolerance)
+            if dependency_refresh:
+                continue
             prepare_before_retreat = (
                 candidate.action.identity.kind == "retreat"
                 and ((value(other) > noise_tolerance
@@ -450,46 +460,46 @@ class GreedyDecisionPolicy:
             enders = tuple(
                 candidate for candidate in candidates
                 if candidate.disposition is CandidateDisposition.ENDS_TURN)
-            explicit_end = tuple(
-                candidate for candidate in enders
-                if candidate.action.identity.kind == "end")
-            end_value = max((policy_value(candidate) for candidate in explicit_end),
-                            default=0.0)
-            continuation_threshold = min(0.0, end_value)
-            knockouts = tuple(candidate for candidate in candidates
-                              if candidate.disposition is CandidateDisposition.ENDS_TURN
-                              and any(component.key in {"prize.race", "result.win"}
-                                      and component.activation > 0
-                                      for component in candidate.delta.components))
-            meaningful_continuation = any(
-                candidate.disposition is CandidateDisposition.CONTINUES_TURN
-                and policy_value(candidate) > (
-                    continuation_threshold + configuration.noise_tolerance)
-                for candidate in candidates)
+            explicit_end = any(
+                candidate.continuation is not None
+                and RealizedOutcome.EXPLICIT_TURN_END in
+                candidate.continuation.realized_outcomes
+                for candidate in enders)
             best_ender_value = max((candidate.delta.total for candidate in enders),
                                    default=float("-inf"))
-            knockout_is_best = max(
-                (candidate.delta.total for candidate in knockouts),
-                default=float("-inf")) >= (
-                    best_ender_value - configuration.noise_tolerance)
-            if knockouts and knockout_is_best and not meaningful_continuation:
-                return DecisionChoice(
-                    self._ranked(knockouts, configuration)[0].action,
-                    DecisionReason.BEST_TURN_ENDER)
+            ready_knockout_enders = tuple(
+                candidate for candidate in enders
+                if candidate.continuation is not None
+                and RealizedOutcome.OPPONENT_ACTIVE_KNOCKOUT in
+                candidate.continuation.realized_outcomes)
+            continuation_threshold = (
+                0.0 if explicit_end or ready_knockout_enders
+                else min(0.0, best_ender_value))
+
+            def meaningful(candidate):
+                return (policy_value(candidate)
+                        > continuation_threshold + configuration.noise_tolerance)
+
             continuing = tuple(
                 candidate for candidate in candidates
                 if candidate.disposition is CandidateDisposition.CONTINUES_TURN
                 and candidate.delta is not None
-                and policy_value(candidate) > (
-                    continuation_threshold + configuration.noise_tolerance))
+                and meaningful(candidate))
+            ability_would_be_consumed = any(
+                candidate.disposition is CandidateDisposition.CONTINUES_TURN
+                and candidate.continuation is not None
+                and "ability" in candidate.continuation.opportunities_consumed
+                for candidate in candidates)
             recycling_draws = tuple(
                 candidate for candidate in candidates
                 if candidate.disposition is CandidateDisposition.CONTINUES_TURN
                 and candidate.action.identity.kind == "ability"
                 and candidate.continuation is not None
                 and not candidate.continuation.allowances_consumed
-                and {"deck", "hand", "in_play"}.issubset(
+                and {"deck", "hand"}.issubset(
                     candidate.continuation.zones_replaced)
+                and ("in_play" in candidate.continuation.zones_replaced
+                     or ability_would_be_consumed)
                 and "hand" in candidate.continuation.immediately_usable_outputs
                 and {"end", "play"}.issubset(
                     candidate.continuation.opportunities_preserved))
@@ -501,8 +511,7 @@ class GreedyDecisionPolicy:
                 if candidate.disposition is CandidateDisposition.CONTINUES_TURN
                 and candidate.continuation is not None
                 and "in_play" in candidate.continuation.immediately_usable_outputs
-                and ((candidate.action.identity.kind == "play"
-                      and bool(candidate.continuation.opportunities_created))
+                and ((candidate.action.identity.kind == "play")
                      or (candidate.action.identity.kind == "evolve"
                          and "ready_attacker" in
                          candidate.continuation.immediately_usable_outputs))
@@ -510,6 +519,27 @@ class GreedyDecisionPolicy:
                     candidate.continuation.opportunities_preserved))
             continuing_ids = {id(candidate) for candidate in continuing}
             continuing = (*continuing, *(candidate for candidate in durable_development
+                                          if id(candidate) not in continuing_ids))
+            lethal_preparation = tuple(
+                candidate for candidate in candidates
+                if candidate.disposition is CandidateDisposition.CONTINUES_TURN
+                and candidate.continuation is not None
+                and ContinuationOpportunity.LETHAL_ATTACK in
+                candidate.continuation.opportunities_created
+                and "attack" in candidate.continuation.opportunities_preserved)
+            continuing_ids = {id(candidate) for candidate in continuing}
+            continuing = (*continuing, *(candidate for candidate in lethal_preparation
+                                          if id(candidate) not in continuing_ids))
+            positive_refresh = tuple(
+                candidate for candidate in candidates
+                if candidate.disposition is CandidateDisposition.CONTINUES_TURN
+                and candidate.continuation is not None
+                and candidate.delta.total > configuration.noise_tolerance
+                and "supporter_played" in candidate.continuation.allowances_consumed
+                and "hand" in candidate.continuation.zones_replaced
+                and "hand" in candidate.continuation.immediately_usable_outputs)
+            continuing_ids = {id(candidate) for candidate in continuing}
+            continuing = (*continuing, *(candidate for candidate in positive_refresh
                                           if id(candidate) not in continuing_ids))
             refresh_available = any(
                 candidate.continuation is not None
@@ -526,26 +556,49 @@ class GreedyDecisionPolicy:
                     and "play" in candidate.continuation.opportunities_preserved
                     and candidate not in continuing)
                 continuing = (*continuing, *durable_preparation)
+            if ready_knockout_enders:
+                continuing = tuple(candidate for candidate in continuing
+                                   if meaningful(candidate))
             if continuing:
                 candidates = preservation_frontier(
                     continuing, configuration.noise_tolerance)
                 reason = DecisionReason.POSITIVE_CONTINUATION
             else:
                 if enders:
-                    candidates = enders
+                    if ready_knockout_enders:
+                        action_enders = tuple(
+                            candidate for candidate in enders
+                            if candidate.continuation is not None
+                            and RealizedOutcome.ACTION_ENDED_TURN in
+                            candidate.continuation.realized_outcomes)
+                        candidates = action_enders or ready_knockout_enders
+                    else:
+                        candidates = enders
                     reason = DecisionReason.BEST_TURN_ENDER
         return DecisionChoice(self._ranked(
             candidates, configuration,
-            include_action_opportunity=roster.forced)[0].action, reason)
+            include_action_opportunity=roster.forced,
+            include_dependency_opportunity=(
+                reason is DecisionReason.POSITIVE_CONTINUATION))[
+                    0].action,
+            reason)
 
     @staticmethod
-    def _ranked(candidates, configuration, *, include_action_opportunity=False):
+    def _ranked(candidates, configuration, *, include_action_opportunity=False,
+                include_dependency_opportunity=False):
+        dependency_roster = (
+            include_dependency_opportunity
+            and any(candidate.continuation is not None
+                    and ContinuationOpportunity.DEPENDENCY_REACH in
+                    candidate.continuation.opportunities_created
+                    for candidate in candidates))
+
         def value(candidate):
             if candidate.delta is None:
                 return float("-inf")
+            include = include_action_opportunity or dependency_roster
             opportunity = (candidate.continuation.action_opportunity
-                           if include_action_opportunity
-                           and candidate.continuation is not None else 0.0)
+                           if include and candidate.continuation is not None else 0.0)
             return candidate.delta.total + opportunity
 
         indexed = sorted(enumerate(candidates), key=lambda item: value(item[1]), reverse=True)

@@ -26,7 +26,7 @@ CONFUSION_SELF_DAMAGE = 30
 DAMAGE_COUNTER_HP = 10
 DAMAGE_TRANSFER_SIDES = 2.0
 DAMAGE_RANGE_BOUND_COUNT = 2
-TURN_PARITY_COUNT = 2
+DEPENDENCY_REACH_DEPTH = 2
 EVOLUTION_HOP_DISCOUNT = 0.5
 STAGE_RANK = {"basic": 0, "stage1": 1, "stage2": 2}
 DISCARD_AREA = 3
@@ -180,10 +180,7 @@ class OptionUnits:
 def one_attach_fraction(body, attack, side, ctx, board) -> float:
     facts = ctx.facts(body.card.card_id)
     best = typed_first_payment_fraction(body.energies, attack.cost, facts)
-    turn_player = (board.turn.first_player if board.turn.number % TURN_PARITY_COUNT == 1
-                   else None if board.turn.first_player is None
-                   else 1 - board.turn.first_player)
-    if (side is board.me and turn_player == board.seat
+    if (side is board.me and board.turn.player == board.seat
             and board.turn.energy_attached):
         return best
     for card in side.hand or ():
@@ -799,7 +796,8 @@ def _body_matches_applies_to(value, clause, body, facts) -> bool:
         or (value == "stage2" and facts.stage == "stage2"))
 
 
-def _hand_damage_boost(body, facts, attacker, defender, ctx, board) -> float:
+def _hand_damage_boost(body, facts, attacker, defender, ctx, board, *, include_held=True) \
+        -> float:
     defender_facts = (None if defender.active is None else
                       ctx.facts(defender.active.card.card_id))
     total = 0.0
@@ -810,7 +808,7 @@ def _hand_damage_boost(body, facts, attacker, defender, ctx, board) -> float:
         if event.recognized and event.kind == CARD_PLAY_EVENT_KIND
         and fields.get("playerIndex") == body.card.owner
         and "cardId" in fields)
-    held = (() if body is not attacker.active else
+    held = (() if not include_held or body is not attacker.active else
             tuple(ctx.facts(card.card_id) for card in attacker.hand))
     trainers = (*held, *played)
     for trainer in trainers:
@@ -876,7 +874,7 @@ def _scale_value(name, attacker, defender, attacker_body, defender_body, ctx) ->
 
 
 def attack_damage(attack, attacker_facts, defender_facts, attacker_body,
-                  attacker, defender, ctx, board=None) -> float:
+                  attacker, defender, ctx, board=None, *, include_held_modifiers=True) -> float:
     partner = attack.clause("requires_bench")
     if partner is not None and partner.name not in _side_names(attacker, ctx, bench_only=True):
         return 0.0
@@ -887,7 +885,8 @@ def attack_damage(attack, attacker_facts, defender_facts, attacker_body,
         return 0.0
     damage = float(attack.damage_fix if attack.damage_fix is not None else attack.damage or 0)
     damage += _hand_damage_boost(
-        attacker_body, attacker_facts, attacker, defender, ctx, board)
+        attacker_body, attacker_facts, attacker, defender, ctx, board,
+        include_held=include_held_modifiers)
     copy = attack.clause("copy_attack")
     if copy is not None:
         family = str(copy.name_family or "").casefold()
@@ -1337,6 +1336,34 @@ def best_current_damage(body, side, opponent, board, ctx) -> float:
                      if body is side.active and side.confused else 1.0)
 
 
+def creates_lethal_damage_boost(trainer, side, opponent, board, ctx) -> bool:
+    body = side.active
+    defender = opponent.active
+    facts = None if body is None else ctx.facts(body.card.card_id)
+    defender_facts = None if defender is None else ctx.facts(defender.card.card_id)
+    if not isinstance(trainer, TrainerCard) or not isinstance(facts, PokemonCard) \
+            or defender is None:
+        return False
+    boost = sum(
+        _damage_boost(clause, body, side, opponent, ctx, board)
+        for clause in trainer.clauses
+        if clause.kind == "damage_boost"
+        and _body_matches_applies_to(clause.applies_to, clause, body, facts)
+        and not (clause.no_rule_box and facts.is_rule_box)
+        and not (clause.target_class == "ex"
+                 and not getattr(defender_facts, "is_rule_box", False)))
+    if boost <= 0:
+        return False
+    # attack_damage includes feasible held modifiers. Remove this card's boost to
+    # prove that this specific play crosses the knockout boundary.
+    return any(
+        damage >= defender.hp > damage - boost
+        for attack in facts.attacks
+        if payment_fraction(body.energies, attack.cost) >= 1.0
+        for damage in (
+            attack_damage(attack, facts, defender_facts, body, side, opponent, ctx, board),))
+
+
 def energy_marginal(body, energy_facts, side, opponent, board, ctx, *, reach=None) -> float:
     if not isinstance(energy_facts, EnergyCard):
         return 0.0
@@ -1520,6 +1547,71 @@ def card_option_units(facts, side, opponent, board, ctx, *, reaches=None) -> Opt
     return OptionUnits()
 
 
+def _combine_option_units(left, right, scale=1.0):
+    return OptionUnits(**{
+        name: getattr(left, name) + scale * getattr(right, name)
+        for name in OptionUnits.__dataclass_fields__})
+
+
+def _fetch_dependency_units(facts, side, opponent, board, ctx, *, depth, seen,
+                            supporter_spent):
+    if depth <= 0 or not isinstance(facts, TrainerCard):
+        return OptionUnits()
+    best = OptionUnits()
+    seen = frozenset((*seen, facts.card_id))
+    supporter_spent = supporter_spent or facts.kind == SUPPORTER
+    for clause in facts.clauses:
+        if clause.kind != "fetch":
+            continue
+        gate = (_prospective_condition(clause.condition, side, board, ctx, clause)
+                * _selection_feasibility(clause, side, opponent, board, ctx)
+                * float(_restriction_satisfied(
+                    clause.restriction, facts, side, opponent, board, ctx))
+                * float(_rider_feasible(clause, facts, side, board, ctx)))
+        if not gate:
+            continue
+        candidates = tuple(
+            candidate for candidate, count in _zone_fact_counts(
+                clause.zone, side, board, ctx)
+            if count > 0
+            and getattr(candidate, "card_id", None) not in seen
+            and fetch_target_matches(clause, candidate, reading=DEADNESS)
+            and not (supporter_spent and isinstance(candidate, TrainerCard)
+                     and candidate.kind == SUPPORTER))
+        for candidate in candidates:
+            direct = card_option_units(candidate, side, opponent, board, ctx)
+            downstream = _fetch_dependency_units(
+                candidate, side, opponent, board, ctx, depth=depth - 1,
+                seen=seen, supporter_spent=supporter_spent)
+            line = _combine_option_units(direct, downstream)
+            line = _combine_option_units(OptionUnits(), line, gate)
+            if line.total > best.total:
+                best = line
+    return best
+
+
+def hand_dependency_reach_units(
+        side, opponent, board, ctx, *, depth=DEPENDENCY_REACH_DEPTH):
+    items = OptionUnits()
+    best_supporter = OptionUnits()
+    seen = set()
+    for card in tuple(side.hand or ()):
+        facts = ctx.facts(card.card_id)
+        if not isinstance(facts, TrainerCard) or facts.card_id in seen:
+            continue
+        seen.add(facts.card_id)
+        if facts.kind == SUPPORTER and board.turn.supporter_played:
+            continue
+        line = _fetch_dependency_units(
+            facts, side, opponent, board, ctx, depth=depth, seen=frozenset(),
+            supporter_spent=False)
+        if facts.kind != SUPPORTER:
+            items = _combine_option_units(items, line)
+        elif line.total > best_supporter.total:
+            best_supporter = line
+    return _combine_option_units(items, best_supporter)
+
+
 def effective_retreat_cost(body, ctx) -> int:
     facts = ctx.facts(body.card.card_id)
     retreat_cost = int(getattr(facts, "retreat_cost", 0) or 0)
@@ -1581,21 +1673,23 @@ def _prospective_condition(condition, side, board, ctx, clause=None) -> float:
         return float(any(name.casefold() == wanted for name in _side_names(side, ctx)))
     if condition == "pokemon_ko_last_turn":
         return float(_knockout_visible(board))
-    exact = _condition_probability(condition, None, side, board, ctx)
-    if exact == 0 and condition in {"dark_energy_attached", "energy_type_attached"}:
+    if condition in {"dark_energy_attached", "energy_type_attached"}:
         wanted = getattr(clause, "condition_energy_type", None)
-        reachable = any(
-            isinstance((energy := ctx.facts(card.card_id)), EnergyCard)
-            and energy.provides == wanted for card in tuple(side.hand)) or any(
-            count > 0 and isinstance((energy := ctx.facts(card_id)), EnergyCard)
-            and energy.provides == wanted for card_id, count in (board.deck_counts or ()))
-        if reachable:
-            return 1.0
+        return float(
+            side is board.me
+            and not board.turn.energy_attached
+            and any(
+                isinstance((energy := ctx.facts(card.card_id)), EnergyCard)
+                and energy.provides == wanted
+                for card in tuple(side.hand)))
+    exact = _condition_probability(condition, None, side, board, ctx)
     return FUTURE_TURN_DISCOUNT if exact is None else exact
 
 
 __all__ = (
-    "Capability", "OptionUnits", "attack_damage", "best_current_damage",
+    "Capability", "OptionUnits", "attack_damage",
+    "best_current_damage",
+    "creates_lethal_damage_boost",
     "best_energy_marginal", "body_capability", "card_option_units",
     "effective_retreat_cost", "knockout_exposure_units", "retreat_payment_progress",
     "switch_target_units",

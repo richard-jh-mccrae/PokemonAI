@@ -264,7 +264,8 @@ A typed parameterized opponent claim which only gains value through board contex
 _Avoid_: Opponent weight, free-form claim
 
 **Continuation Footprint**:
-The marginal state value and action opportunities an action creates, preserves, or consumes.
+The canonical successor-minus-root state value plus separately decomposed policy opportunities an
+action creates, preserves, or consumes. Policy contributions never enter the Decision Delta.
 _Avoid_: Restock tag, card branch
 
 **Action Opportunity Cost**:

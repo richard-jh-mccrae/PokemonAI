@@ -186,6 +186,7 @@ _DECLARED_RULES = {
     "action.overkill_counter": _rule("action", ("overkill_counter",), "constant"),
     "action.draw_before_refresh": _rule(
         "action", ("draw_before_refresh",), "constant"),
+    "action.gust_spend": _rule("action", ("gust_spend",), "constant"),
     "action.play_before_refresh": _rule(
         "action", ("play_before_refresh",), "constant"),
     "action.dead_play": _rule(
@@ -292,7 +293,6 @@ _OBSERVATION_CLAIMS = {
     "active.retreat_ready": "retreat_ready_active",
     "active.damage_pressure": "active_damage_pressure",
     "combat.realization": "combat_realization",
-    "combat.realized_ko": "realized_knockout",
     "ability.draw_cards": "ability_draw_cards",
     "ability.search_cards": "ability_search_cards",
     "ability.damage_move": "ability_damage_move",
@@ -428,7 +428,8 @@ _SCALAR_DEFAULTS = {
     "action.damage_counter_progress": 1.0,
     "action.overkill_counter": -100.0,
     "action.draw_before_refresh": -0.75,
-    "action.play_before_refresh": -0.25,
+    "action.gust_spend": -1.25,
+    "action.play_before_refresh": -0.20,
     "action.dead_play": -0.20,
     "action.dead_discard": 0.15,
     "action.body_ability_ready": 0.40,
@@ -469,7 +470,6 @@ _SCALAR_DEFAULTS = {
     "active.retreat_ready": 0.04,
     "active.damage_pressure": 0.02,
     "combat.realization": 1.0,
-    "combat.realized_ko": 1.0,
     "ability.draw_cards": 0.062,
     "ability.search_cards": 0.10,
     "ability.damage_move": 0.321,
@@ -631,6 +631,7 @@ FEATURE_CATALOG = FeatureCatalog(
                 "combat.attack_future", "combat.bench_reach",
                 "combat.active_threat", "combat.line_potential",
                 "combat.prize_phase_fit", "bench.developed_body",
+                "combat.realized_ko",
                 "development.hand_line", "development.next_turn_reach",
                 "function.draw.available", "function.draw.hand_count",
                 "function.fetch.live_target"))
@@ -638,7 +639,7 @@ FEATURE_CATALOG = FeatureCatalog(
         f"clause.parameter.{parameter}", 0.0,
         disposition=FeatureDisposition.RETIRED)
             for parameter in CLAUSE_PARAMETER_QUALIFIERS),
-    schema_version=22,
+    schema_version=24,
 )
 
 
