@@ -13,6 +13,7 @@ from common.decision import (
     BudgetController,
     DecisionChoice,
     DecisionDelta,
+    DecisionDeadlineExceeded,
     DecisionFailure,
     DecisionFailureStage,
     DecisionReason,
@@ -31,6 +32,7 @@ from common.strategy.context import _MAIN
 
 from .decision import (evaluator_semantics_identity, ledger_valuation_from_state,
                        value_components)
+from .portfolio_solver import TurnPortfolioMemo
 from .preview import price_actions
 
 
@@ -97,6 +99,7 @@ class LedgerOnePlySearch:
         self._active_continuation_policy = {}
         self._last_continuation_policies = {}
         self._served_cached_continuation = False
+        self._portfolio_memo = TurnPortfolioMemo()
 
     def reset(self):
         self._previous_evaluation_state = None
@@ -104,6 +107,7 @@ class LedgerOnePlySearch:
         self._active_continuation_policy = {}
         self._last_continuation_policies = {}
         self._served_cached_continuation = False
+        self._portfolio_memo.clear()
 
     def commit(self, action):
         if self._served_cached_continuation:
@@ -112,6 +116,10 @@ class LedgerOnePlySearch:
         identity = getattr(action, "identity", action)
         self._active_continuation_policy = dict(
             self._last_continuation_policies.get(identity, ()))
+
+    @property
+    def portfolio_metrics(self):
+        return self._portfolio_memo.metrics()
 
     def _cached_continuation(self, actions):
         menu = tuple(action.identity for action in actions)
@@ -152,6 +160,12 @@ class LedgerOnePlySearch:
         state_values = {}
         evaluation_states = {}
 
+        def check_guard():
+            if request.execution_guard is not None:
+                request.execution_guard.check()
+
+        check_guard()
+
         def evaluation_key(observed):
             return (evaluator.identity, request.evaluation_model.identity,
                     observed.seat, observed.valuation_key)
@@ -175,9 +189,11 @@ class LedgerOnePlySearch:
                 parent = state_value(parent_board)
                 reusable_parent = evaluation_states.get(evaluation_key(parent_board))
             child_request = EvaluationRequest(
-                state, request.evaluation_model, parent, delta)
+                state, request.evaluation_model, parent, delta,
+                self._portfolio_memo, request.execution_guard)
             key = evaluation_key(observed)
             if key not in state_values:
+                check_guard()
                 if hasattr(evaluator, "evaluate_with_state"):
                     value, evaluation_state = evaluator.evaluate_with_state(
                         child_request, reusable_parent)
@@ -185,6 +201,7 @@ class LedgerOnePlySearch:
                 else:
                     value = evaluator.evaluate(child_request)
                 state_values[key] = value
+                check_guard()
             return state_values[key]
 
         def ledger_value(state):
@@ -192,6 +209,8 @@ class LedgerOnePlySearch:
 
         try:
             baseline = state_value(board)
+        except DecisionDeadlineExceeded:
+            raise
         except Exception as exc:
             raise DecisionExecutionError(DecisionFailure.capture(
                 DecisionFailureStage.EVALUATION, exc)) from exc
@@ -220,9 +239,13 @@ class LedgerOnePlySearch:
                 frontier=tuple(budget.frontier),
             )
         try:
+            check_guard()
             provider = provider.open() if isinstance(provider, TransitionProviderSource) else provider
             if not getattr(provider, "available", True):
                 raise RuntimeError(str(getattr(provider, "_error", "provider unavailable")))
+            check_guard()
+        except DecisionDeadlineExceeded:
+            raise
         except Exception as exc:
             raise DecisionExecutionError(DecisionFailure.capture(
                 DecisionFailureStage.PROVIDER, exc)) from exc
@@ -231,6 +254,9 @@ class LedgerOnePlySearch:
                 root, board, baseline.total, provider, request.evaluation_model,
                 configuration, None if cached_identity is not None else budget,
                 ledger_value, state_value)
+            check_guard()
+        except DecisionDeadlineExceeded:
+            raise
         except Exception as exc:
             raise DecisionExecutionError(DecisionFailure.capture(
                 DecisionFailureStage.SEARCH, exc)) from exc

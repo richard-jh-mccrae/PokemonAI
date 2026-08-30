@@ -48,14 +48,17 @@ def deck(agent):
     ).read_text(encoding="utf-8").split()[:60]]
 
 
-def runtime(agent, cards, *, compute_configuration=None):
+def runtime(agent, cards, *, compute_configuration=None,
+            provider_factory=CgpyTransitionProvider,
+            decision_containment_seconds=None):
     path = ROOT / "src" / "agents" / agent / "strategy.py"
     spec = importlib.util.spec_from_file_location(f"_{agent}_scenario", path)
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
     return build_runtime(
-        module.STRATEGY, cards, provider_factory=CgpyTransitionProvider,
-        compute_configuration=compute_configuration)
+        module.STRATEGY, cards, provider_factory=provider_factory,
+        compute_configuration=compute_configuration,
+        decision_containment_seconds=decision_containment_seconds)
 
 
 def scenario(agent, *, me_active, me_bench=(), me_hand=(), me_discard=(),

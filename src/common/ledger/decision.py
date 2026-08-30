@@ -30,6 +30,7 @@ def evaluator_semantics_identity(paths=None) -> str:
         Path(__file__).with_name("evaluate.py"),
         Path(__file__).with_name("features.py"),
         Path(__file__).with_name("portfolio.py"),
+        Path(__file__).with_name("portfolio_solver.py"),
         Path(__file__).with_name("prizes.py"),
         Path(__file__).with_name("worth.py"),
     ))
@@ -56,7 +57,9 @@ class LedgerValueEvaluator:
         model = request.evaluation_model
         parent = parent_state if isinstance(parent_state, EvaluationSnapshot) else None
         snapshot = evaluate_snapshot(
-            board, model, parent=parent, delta=request.observation_delta)
+            board, model, parent=parent, delta=request.observation_delta,
+            reuse=request.reuse, reuse_identity=(self.identity, model.identity),
+            execution_guard=request.execution_guard)
         if parent is not None and os.environ.get("LEDGER_INCREMENTAL_PARITY") == "1":
             full = evaluate(board, model)
             if snapshot.valuation != full:

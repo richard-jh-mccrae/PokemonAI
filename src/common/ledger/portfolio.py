@@ -10,35 +10,20 @@ from common.cards.functions.fetch import DEADNESS, WINDOW, fetch_target_matches
 
 from .capabilities import (DAMAGE_UNIT_HP, OptionUnits, _heal_rider_cost,
                            _heal_targets, _healed_hp, clause_cost_units)
+from .portfolio_solver import (
+    Fetch as _Fetch,
+    Opportunity as _Opportunity,
+    PortfolioProblem,
+    PortfolioSolveStatistics,
+    TurnPortfolioMemo,
+    add_units as _add,
+    solve_portfolio,
+    with_unit as _with_unit,
+)
 from .worth import FUTURE_TURN_DISCOUNT
 
 
 HAND_POKEMON_REALIZATION_DISCOUNT = 0.25
-
-
-@dataclass(frozen=True, slots=True)
-class _Fetch:
-    eligible: tuple[int, ...]
-    amount: float
-    to_bench: bool
-    zone: str
-    field: str = "search"
-    distinct_groups: tuple[tuple[int, int], ...] = ()
-    consumes: bool = True
-    target_resources: tuple[tuple[int, str], ...] = ()
-    target_reservations: tuple[tuple[int, str], ...] = ()
-
-
-@dataclass(frozen=True, slots=True)
-class _Opportunity:
-    units: OptionUnits
-    requirements: tuple[tuple[str, float], ...]
-    discard_cost: int
-    fetches: tuple[_Fetch, ...] = ()
-    discards_hand: bool = False
-    entry_index: int = -1
-    direct_worth: float = 0.0
-    reservations: tuple[tuple[str, float], ...] = ()
 
 
 @dataclass(frozen=True, slots=True)
@@ -47,6 +32,7 @@ class PortfolioResult:
     binding_features: tuple[str, ...]
     selected_indices: tuple[int, ...] = ()
     selected_units: tuple[tuple[int, OptionUnits], ...] = ()
+    statistics: PortfolioSolveStatistics = PortfolioSolveStatistics()
 
 
 def _requirements(facts, side, board, ctx) -> tuple[tuple[str, float], ...] | None:
@@ -122,24 +108,10 @@ def _capacities(side, board, ctx) -> dict[str, float]:
     return capacities
 
 
-def _add(left: OptionUnits, right: OptionUnits) -> OptionUnits:
-    return OptionUnits(**{
-        name: getattr(left, name) + getattr(right, name)
-        for name in OptionUnits.__dataclass_fields__
-    })
-
-
 def _scale(units: OptionUnits, multiplier: float) -> OptionUnits:
     return OptionUnits(**{
         name: getattr(units, name) * multiplier
         for name in OptionUnits.__dataclass_fields__
-    })
-
-
-def _with_unit(units: OptionUnits, name: str, value: float) -> OptionUnits:
-    return OptionUnits(**{
-        field: value if field == name else getattr(units, field)
-        for field in OptionUnits.__dataclass_fields__
     })
 
 
@@ -408,72 +380,13 @@ def _heal_variants(facts, units, requirements, side, board, ctx):
     return tuple(variants)
 
 
-def _realize_fetches(opportunity, usage, capacities):
-    if not opportunity.fetches:
-        return (), (), opportunity.units
-    requirements = []
-    reservations = []
-    claimed = Counter()
-    bench_claim = 0
-    local_usage = dict(usage)
-    used_groups = set()
-    bench_available = capacities.get("bench", 0.0) - usage.get("bench", 0.0)
-    for fetch in sorted(opportunity.fetches, key=lambda item: len(item.eligible)):
-        wanted = min(fetch.amount, int(bench_available) if fetch.to_bench else fetch.amount)
-        for card_id in fetch.eligible:
-            group = next((value for target, value in fetch.distinct_groups
-                          if target == card_id), None)
-            if group is not None and group in used_groups:
-                continue
-            source_key = f"{fetch.zone}:{card_id}"
-            available = capacities.get(source_key, 0.0) - local_usage.get(source_key, 0.0)
-            target_keys = tuple(key for target, key in fetch.target_resources
-                                if target == card_id)
-            reservation_keys = tuple(
-                key for target, key in fetch.target_reservations
-                if target == card_id)
-            for target_key in target_keys:
-                available = min(
-                    available,
-                    capacities.get(target_key, 0.0) - local_usage.get(target_key, 0.0))
-            for reservation_key in reservation_keys:
-                available = min(available, capacities.get(reservation_key, 0.0))
-            take = min(wanted, available)
-            if group is not None:
-                take = min(take, 1.0)
-            if take:
-                if fetch.consumes:
-                    requirements.append((source_key, float(take)))
-                    local_usage[source_key] = local_usage.get(source_key, 0.0) + take
-                for target_key in target_keys:
-                    requirements.append((target_key, float(take)))
-                    local_usage[target_key] = local_usage.get(target_key, 0.0) + take
-                reservations.extend(
-                    (reservation_key, float(take))
-                    for reservation_key in reservation_keys)
-                wanted -= take
-                claimed[fetch.field] += take
-                if group is not None:
-                    used_groups.add(group)
-                if fetch.to_bench:
-                    bench_available -= take
-                    bench_claim += take
-            if not wanted:
-                break
-    if bench_claim:
-        requirements.append(("bench", float(bench_claim)))
-    realized = opportunity.units
-    for field in {fetch.field for fetch in opportunity.fetches}:
-        amount = claimed.get(field, 0.0)
-        realized = _with_unit(
-            realized, field, min(getattr(realized, field), float(amount)))
-    return tuple(requirements), tuple(reservations), realized
-
-
-def feasible_option_portfolio_result(entries, side, board, ctx, *, hand_size: int
+def feasible_option_portfolio_result(entries, side, board, ctx, *, hand_size: int,
+                                     reuse: TurnPortfolioMemo | None = None,
+                                     reuse_identity: tuple = (), execution_guard=None
                                      ) -> PortfolioResult:
+    entries = tuple(entries)
     capacities = _capacities(side, board, ctx)
-    opportunities = []
+    compiled_entries = []
     unconstrained_entries = []
     for index, entry in enumerate(entries):
         facts, units, *optional_direct_worth = entry
@@ -482,9 +395,6 @@ def feasible_option_portfolio_result(entries, side, board, ctx, *, hand_size: in
         requirements = _requirements(facts, side, board, ctx)
         if requirements is None:
             continue
-        card_key = f"card:{index}"
-        capacities[card_key] = 1.0
-        requirements = (*requirements, (card_key, 1.0))
         cost_clauses = (() if not isinstance(facts, TrainerCard) else tuple(
             clause for clause in card_clauses(facts) if clause.cost is not None))
         raw_cost = sum(clause_cost_units(clause, side) for clause in cost_clauses)
@@ -516,14 +426,39 @@ def feasible_option_portfolio_result(entries, side, board, ctx, *, hand_size: in
             _with_energy_ceiling(facts, opportunity.units, energy_claims),
             opportunity.requirements, discard_cost,
             (*opportunity.fetches, *energy_claims), discards_hand),
-            entry_index=index, direct_worth=direct_worth,
+            direct_worth=direct_worth,
             reservations=_preserved_hand_resources(facts, side, ctx))
             for opportunity in variants)
-        opportunities.extend(realized_opportunities)
         if realized_opportunities:
+            compiled_entries.append((
+                getattr(facts, "card_id", None), realized_opportunities, index))
             unconstrained_entries.append(max(
                 (opportunity.units for opportunity in realized_opportunities),
                 key=lambda candidate: _weighted_worth(candidate, ctx)))
+
+    class_lookup = {}
+    class_variants = []
+    class_sources = []
+    for card_id, variants, source_index in compiled_entries:
+        signature = (card_id, variants)
+        group_index = class_lookup.get(signature)
+        if group_index is None:
+            group_index = len(class_variants)
+            class_lookup[signature] = group_index
+            class_variants.append(variants)
+            class_sources.append([])
+        class_sources[group_index].append(source_index)
+
+    opportunities = []
+    for group_index, variants in enumerate(class_variants):
+        copy_key = f"copy:{group_index}"
+        capacities[copy_key] = float(len(class_sources[group_index]))
+        for opportunity in variants:
+            opportunities.append(replace(
+                opportunity,
+                requirements=(*opportunity.requirements, (copy_key, 1.0)),
+                entry_index=group_index,
+            ))
 
     for body_index, body in enumerate(side.bodies):
         target_key = body.card.serial if body.card.serial is not None else body_index
@@ -536,74 +471,65 @@ def feasible_option_portfolio_result(entries, side, board, ctx, *, hand_size: in
     for card_id, count in Counter(card.card_id for card in tuple(side.hand)).items():
         capacities[f"hand:{card_id}"] = float(count)
 
-    keys = tuple(sorted(capacities))
-    initial = tuple(0 for _key in keys)
-    states = {(initial, initial, 0, 0, False): (OptionUnits(), (), 0.0)}
     opportunities.sort(key=lambda opportunity: (opportunity.discards_hand, sum(
         len(fetch.eligible) for fetch in opportunity.fetches) or side.deck_count + 1))
+    opportunities = tuple(
+        replace(opportunity, legacy_order=index)
+        for index, opportunity in enumerate(opportunities))
+    relevant_capacities = set()
     for opportunity in opportunities:
-        expanded = dict(states)
-        for ((used, reserved, plays, discards, exhausted),
-             (units, selected, direct_worth)) in states.items():
-            if exhausted:
-                continue
-            usage = dict(zip(keys, used))
-            reservation = dict(zip(keys, reserved))
-            feasible = True
-            fetch_requirements, fetch_reservations, realized_units = _realize_fetches(
-                opportunity, usage, capacities)
-            for requirement, amount in (*opportunity.requirements, *fetch_requirements):
-                if usage.get(requirement, 0.0) + amount > capacities.get(
-                        requirement, 0.0):
-                    feasible = False
-                    break
-                usage[requirement] = usage.get(requirement, 0.0) + amount
-            if not feasible:
-                continue
-            for requirement, amount in (*opportunity.reservations, *fetch_reservations):
-                reserved_amount = reservation.get(requirement, 0.0) + amount
-                if reserved_amount > capacities.get(requirement, 0.0):
-                    feasible = False
-                    break
-                reservation[requirement] = reserved_amount
-            if not feasible:
-                continue
-            next_plays = plays + 1
-            hand_resources_used = sum(
-                max(amount, reservation.get(name, 0.0))
-                for name, amount in usage.items() if name.startswith("hand:"))
-            next_discards = (max(discards, hand_size - hand_resources_used)
-                             if opportunity.discards_hand else
-                             discards + opportunity.discard_cost)
-            if hand_resources_used + next_discards > hand_size:
-                continue
-            key = (tuple(usage.get(name, 0) for name in keys),
-                   tuple(reservation.get(name, 0) for name in keys), next_plays,
-                   next_discards, opportunity.discards_hand)
-            candidate = _add(units, realized_units)
-            candidate_direct_worth = direct_worth + opportunity.direct_worth
-            incumbent, _incumbent_selected, incumbent_direct_worth = expanded.get(
-                key, (OptionUnits(), (), 0.0))
-            if (_weighted_worth(candidate, ctx) + candidate_direct_worth
-                    > _weighted_worth(incumbent, ctx) + incumbent_direct_worth):
-                expanded[key] = (
-                    candidate, (*selected, (opportunity.entry_index, realized_units)),
-                    candidate_direct_worth)
-        states = expanded
-    def portfolio_worth(result):
-        units, _selected, direct_worth = result
-        return _weighted_worth(units, ctx) + direct_worth
-
-    chosen, selected, _direct_worth = max(states.values(), key=portfolio_worth)
+        relevant_capacities.update(name for name, _amount in opportunity.requirements)
+        relevant_capacities.update(name for name, _amount in opportunity.reservations)
+        for fetch in opportunity.fetches:
+            relevant_capacities.update(
+                f"{fetch.zone}:{card_id}" for card_id in fetch.eligible)
+            relevant_capacities.update(name for _card_id, name in fetch.target_resources)
+            relevant_capacities.update(name for _card_id, name in fetch.target_reservations)
+            if fetch.to_bench:
+                relevant_capacities.add("bench")
+    problem = PortfolioProblem(
+        tuple(sorted((name, float(amount)) for name, amount in capacities.items()
+                     if name in relevant_capacities)),
+        opportunities,
+        hand_size,
+        tuple(ctx.configuration[feature]
+              for feature, _value in OptionUnits().activations()),
+        len(entries),
+        len(class_variants),
+    )
+    cache_key = ("ledger.portfolio/v1", *reuse_identity, problem)
+    plan = None if reuse is None else reuse.lookup(cache_key)
+    if plan is None:
+        plan, statistics = solve_portfolio(problem, execution_guard=execution_guard)
+        statistics = replace(statistics, turn_cache_misses=int(reuse is not None))
+        if reuse is not None:
+            reuse.store(cache_key, plan)
+    else:
+        statistics = PortfolioSolveStatistics(
+            entry_count=problem.entry_count,
+            class_count=problem.class_count,
+            opportunity_count=len(problem.opportunities),
+            turn_cache_hits=1,
+        )
     unconstrained = OptionUnits()
     for units in unconstrained_entries:
         unconstrained = _add(unconstrained, units)
     binding = tuple(
         f"option.{field}" for field in OptionUnits.__dataclass_fields__
-        if getattr(chosen, field) < getattr(unconstrained, field))
+        if getattr(plan.units, field) < getattr(unconstrained, field))
+    source_offsets = Counter()
+    selected = []
+    for selection in plan.selections:
+        source_offset = source_offsets[selection.entry_index]
+        sources = class_sources[selection.entry_index]
+        if source_offset >= len(sources):
+            raise AssertionError("Portfolio Plan selects beyond source multiplicity")
+        selected.append((sources[source_offset], selection.units))
+        source_offsets[selection.entry_index] += 1
     selected_units = tuple(sorted(selected, key=lambda item: item[0]))
     return PortfolioResult(
-        chosen, binding, tuple(index for index, _units in selected_units), selected_units)
+        plan.units, binding, tuple(index for index, _units in selected_units), selected_units,
+        statistics)
 
 
 __all__ = ("PortfolioResult", "feasible_option_portfolio_result")

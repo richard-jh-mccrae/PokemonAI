@@ -23,6 +23,38 @@ def test_external_decision_limit_sets_the_inner_search_budget(monkeypatch):
     assert compute.search.time_budget_ms == 19_000
 
 
+def test_correction_limit_becomes_failure_containment_not_search_allocation(monkeypatch):
+    monkeypatch.setenv("AGENT_LEDGER_COMPUTE_PROFILE", "correction")
+    monkeypatch.setenv("AGENT_DECISION_SECONDS", "20")
+
+    compute = runtime_module._compute_configuration_from_environment()
+    containment = runtime_module._decision_containment_seconds_from_environment()
+
+    assert compute.search.time_budget_ms is None
+    assert containment == 19.0
+
+
+def test_correction_agent_wires_the_failure_containment_limit(monkeypatch):
+    captured = {}
+
+    class Runtime:
+        deck = tuple(range(1, 61))
+        opponent_snapshot = None
+
+    def build(*_args, **kwargs):
+        captured.update(kwargs)
+        return Runtime()
+
+    monkeypatch.setenv("AGENT_LEDGER_COMPUTE_PROFILE", "correction")
+    monkeypatch.setenv("AGENT_DECISION_SECONDS", "20")
+    monkeypatch.setattr(runtime_module, "build_runtime", build)
+    monkeypatch.setattr(runtime_module, "_read_deck", lambda: list(range(1, 61)))
+
+    runtime_module.make_agent(strategy=None)
+
+    assert captured["decision_containment_seconds"] == 19.0
+
+
 @pytest.mark.parametrize("seconds", ("0.05", "0.1"))
 def test_external_decision_limit_rejects_an_outer_clock_without_fallback_room(
         monkeypatch, seconds):

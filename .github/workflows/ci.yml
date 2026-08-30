@@ -173,6 +173,23 @@ jobs:
           python tools/train/ledger_correction_gate.py --workers 2
           --output ledger-correction-gate.json
 
+  test-performance:
+    name: tests / performance
+    needs: plan
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: pip
+      - run: python -m pip install --upgrade pip && pip install -r requirements.txt
+      - name: Run real-engine decision benchmarks
+        run: >-
+          python -m pytest tests/ledger/test_real_engine_timing.py
+          -q -s --tb=short --durations=20
+
   test-src:
     name: tests / src
     needs: plan
@@ -197,6 +214,7 @@ jobs:
           tests/ledger tests/parity tests/scouting tests/blunder tests/train
           tests/test_import_hygiene.py tests/test_source_reachability.py
           -q -n auto --tb=short
+          --ignore=tests/ledger/test_real_engine_timing.py
 
   test-cgpy:
     name: tests / cgpy
@@ -214,7 +232,9 @@ jobs:
           cache: pip
       - run: python -m pip install --upgrade pip && pip install -r requirements.txt
       - name: Run parallel cgpy contracts
-        run: python -m pytest tests/parity tests/ledger -q -n auto --tb=short
+        run: >-
+          python -m pytest tests/parity tests/ledger -q -n auto --tb=short
+          --ignore=tests/ledger/test_real_engine_timing.py
 
   test-docs:
     name: tests / docs

@@ -11,7 +11,8 @@ from time import perf_counter
 
 from common import telemetry
 from common.api import ActionIdentity, RootDecision
-from common.decision import DecisionFailure, DecisionFailureStage
+from common.decision import (DecisionDeadlineExceeded, DecisionExecutionGuard,
+                             DecisionFailure, DecisionFailureStage)
 from common.observation import (HiddenHand, LegalKnowledge, ObservationState,
                                 ObservationDelta, ObservationStateBuilder, OpponentBelief,
                                 reduce_knowledge)
@@ -95,7 +96,7 @@ class AgentRuntime:
     def __init__(self, strategy, deck, *, stats=_ENGINE, knowledge_base=None,
                  opponent_model_factory=OpponentModel, provider_factory=None,
                  valuation_configuration=None, compute_configuration=None,
-                 decision_parity_oracle=None):
+                 decision_parity_oracle=None, decision_containment_seconds=None):
         self.strategy = strategy
         self.deck = tuple(int(card_id) for card_id in deck)
         if stats is _ENGINE:
@@ -118,6 +119,7 @@ class AgentRuntime:
         self._in_pregame = False
         self.knowledge_enricher = None
         self.provider_factory = provider_factory
+        self.decision_containment_seconds = decision_containment_seconds
         self.telemetry_session = telemetry.TelemetrySession()
         self.knowledge = LegalKnowledge()
         profiles = getattr(self.opponent_knowledge, "profiles", {})
@@ -233,6 +235,8 @@ class AgentRuntime:
     def decide(self, observation: dict) -> RootDecision:
         try:
             return self._decide(observation)
+        except DecisionDeadlineExceeded:
+            raise
         except Exception as exc:
             if os.environ.get("AGENT_BRAIN_STRICT") == "1":
                 raise
@@ -279,12 +283,18 @@ class AgentRuntime:
         try:
             self._parent_valuation = parent_valuation
             self._observation_delta = delta
-            return self._decide_core(state, observation)
+            execution_guard = (
+                None if self.decision_containment_seconds is None
+                else DecisionExecutionGuard(self.decision_containment_seconds))
+            if execution_guard is None:
+                return self._decide_core(state, observation)
+            return self._decide_core(state, observation, execution_guard)
         finally:
             if collector_was_enabled:
                 gc.enable()
 
-    def _decide_core(self, state: ObservationState, observation: dict) -> RootDecision:
+    def _decide_core(self, state: ObservationState, observation: dict,
+                     execution_guard=None) -> RootDecision:
         parent_valuation = self._parent_valuation
         delta = self._observation_delta
         snapshot = self._observe_matchup(state)
@@ -301,7 +311,8 @@ class AgentRuntime:
         return self.ledger.decide(
             observation, opponent=snapshot,
             knowledge=self.knowledge, state=state,
-            parent_valuation=parent_valuation, observation_delta=delta)
+            parent_valuation=parent_valuation, observation_delta=delta,
+            execution_guard=execution_guard)
 
 def build_runtime(strategy, deck, **kwargs) -> AgentRuntime:
     """Construct the one shared runtime; injectable seams keep tests engine-independent."""
@@ -319,24 +330,49 @@ def _read_deck() -> list[int]:
         return [int(value) for value in handle.read().splitlines()[:60] if value.strip()]
 
 
-def _compute_configuration_from_environment() -> ComputeConfiguration:
-    from common.decision import correction_compute_profile
-
+def _compute_profile_from_environment() -> str:
     profile = os.environ.get("AGENT_LEDGER_COMPUTE_PROFILE", "deployment")
-    compute = (correction_compute_profile()
-               if profile == "correction" else ComputeConfiguration())
     if profile not in {"deployment", "correction"}:
         raise ValueError("AGENT_LEDGER_COMPUTE_PROFILE must be deployment or correction")
+    return profile
+
+
+def _external_decision_seconds_from_environment() -> float | None:
     raw_limit = os.environ.get("AGENT_DECISION_SECONDS")
-    if raw_limit is None or profile == "correction":
-        return compute
+    if raw_limit is None:
+        return None
     seconds = float(raw_limit)
     if not math.isfinite(seconds) or seconds <= 0:
         raise ValueError("AGENT_DECISION_SECONDS must be positive and finite")
     if seconds <= 0.1:
         raise ValueError("AGENT_DECISION_SECONDS must be greater than 0.1")
-    reserve = min(5.0, max(1.0, seconds * 0.05))
-    budget_ms = max(1, round(max(0.1, seconds - reserve) * 1000))
+    return seconds
+
+
+def _decision_reserve_seconds(seconds: float) -> float:
+    return min(5.0, max(1.0, seconds * 0.05))
+
+
+def _decision_containment_seconds_from_environment() -> float | None:
+    if _compute_profile_from_environment() != "correction":
+        return None
+    seconds = _external_decision_seconds_from_environment()
+    if seconds is None:
+        return None
+    return max(0.1, seconds - _decision_reserve_seconds(seconds))
+
+
+def _compute_configuration_from_environment() -> ComputeConfiguration:
+    from common.decision import correction_compute_profile
+
+    profile = _compute_profile_from_environment()
+    compute = (correction_compute_profile()
+               if profile == "correction" else ComputeConfiguration())
+    seconds = _external_decision_seconds_from_environment()
+    if seconds is None or profile == "correction":
+        return compute
+    budget_ms = max(1, round(max(
+        0.1, seconds - _decision_reserve_seconds(seconds)) * 1000))
     return replace(compute, search=replace(compute.search, time_budget_ms=budget_ms))
 
 
@@ -345,7 +381,8 @@ def make_agent(strategy):
 
     runtime = build_runtime(
         strategy, _read_deck(),
-        compute_configuration=_compute_configuration_from_environment())
+        compute_configuration=_compute_configuration_from_environment(),
+        decision_containment_seconds=_decision_containment_seconds_from_environment())
     own_cards = OwnCardModel(runtime.deck)
     telemetry_on = os.environ.get("AGENT_NO_TELEMETRY") != "1"
 
