@@ -256,8 +256,8 @@ def test_latest_corrections_resolve_or_rank_the_ruled_action_above_the_blunder()
             for frame, record in corrections.items()}
 
     assert all(rows[frame]["agrees"]
-               for frame in (20, 22, 24, 36, 37, 38, 58, 81))
-    for frame in (9, 29, 49, 60):
+               for frame in (20, 24, 36, 37, 38, 58, 81))
+    for frame in (9, 22, 29, 49, 60):
         row = rows[frame]
         values = {tuple(candidate["selection"]): candidate["decision_delta"]
                   for candidate in row["candidates"]}

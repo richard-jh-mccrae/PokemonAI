@@ -11,12 +11,12 @@ choices remain typed Decision Results. The pre-Ledger Bellman planner is quarant
 
 **Ledger**:
 The live decider: board value is the sum of Feature Activations multiplied once by resolved
-Valuation Coefficients; an option's price is its resulting swing and only ending the turn is zero.
+Valuation Coefficients; every option's price is its expected successor value minus the root value.
 _Avoid_: Evaluator stack, value families
 
 **Swing**:
-The one-ply Ledger adapter's scalar Decision Delta: value after minus value now, expected value at
-chance points, plus decomposed continuation contributions.
+The one-ply Ledger adapter's scalar Decision Delta: expected successor value minus root value.
+Continuation footprints describe policy consequences without changing that value.
 _Avoid_: Score, reward
 
 **Position Key**:
@@ -112,7 +112,7 @@ One candidate's decomposed marginal value against the root State Valuation.
 _Avoid_: State Valuation, reward, Swing outside the one-ply adapter
 
 **Turn-End Counterfactual**:
-The legal pass successor used as the same-phase reference for every action that ends the turn.
+The legal pass successor used to value the End candidate itself.
 _Avoid_: unchanged root zero, second MAIN action, opponent rollout
 
 **Valued Candidate**:

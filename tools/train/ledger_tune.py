@@ -52,12 +52,14 @@ def _fmt(overrides: dict) -> str:
 
 
 def run(*, levers: dict[str, list[float]], store, decks=DECKS, workers: int = 1,
-        max_passes: int = 4, log=print) -> dict:
+        max_passes: int = 4, correction_filter=None, log=print) -> dict:
     """Greedy coordinate nudging. Returns {"adopted": overrides, "baseline": …, "best": …,
     "trials": […]} — every trial is recorded, adopted or not, so the report is the audit."""
     ValuationConfiguration.general().with_values(
         {name: values[0] for name, values in levers.items()})
-    baseline = sweep(store=store, decks=decks, workers=workers)
+    sweep_kwargs = ({"correction_filter": correction_filter}
+                    if correction_filter is not None else {})
+    baseline = sweep(store=store, decks=decks, workers=workers, **sweep_kwargs)
     best, best_score = baseline, _score(baseline)
     _, best_agreed = _agree_sets(baseline)
     adopted: dict[str, float] = {}
@@ -72,7 +74,7 @@ def run(*, levers: dict[str, list[float]], store, decks=DECKS, workers: int = 1,
                     continue
                 candidate = {**adopted, lever: value}
                 result = sweep(store=store, decks=decks, workers=workers,
-                               weight_overrides=candidate)
+                               weight_overrides=candidate, **sweep_kwargs)
                 score = _score(result)
                 _, agreed = _agree_sets(result)
                 regressions = sorted(best_agreed - agreed)

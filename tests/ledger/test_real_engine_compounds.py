@@ -54,8 +54,9 @@ def test_ultra_ball_prices_play_two_discards_and_fetch_as_one_real_engine_chain(
 
     decision = agent.decide(observation(engine))
     assert decision.decision_result.search.stop_reason == "cached_continuation"
+    assert decision.decision_result.chosen_candidate.delta.total != 0.0
     assert len(decision.chosen) == 2
-    assert set(_chosen_card_ids(engine, decision)) == {2, 5}
+    assert set(_chosen_card_ids(engine, decision)) == {5, 121}
     engine.step(list(decision.chosen))
     assert engine.gs.pending.context == int(SelectContext.TO_HAND)
 

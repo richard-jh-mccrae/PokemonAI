@@ -156,7 +156,7 @@ def test_search_rejects_non_distribution_policy_priors():
             InvalidPolicyModel(), provider, SearchConfiguration())
 
 
-def test_exhausted_budget_keeps_every_root_action_comparable(monkeypatch):
+def test_exhausted_budget_marks_every_root_action_unavailable(monkeypatch):
     class StoppedBudget:
         stop_reason = "time_budget"
         frontier = []
@@ -179,9 +179,9 @@ def test_exhausted_budget_keeps_every_root_action_comparable(monkeypatch):
         UniformPolicyModel(), provider, SearchConfiguration())
 
     assert {candidate.status for candidate in result.roster.candidates} == {
-        EvaluationStatus.ESTIMATED}
-    assert GreedyDecisionPolicy().choose(
-        result.roster, PolicyConfiguration()).action in {first, second}
+        EvaluationStatus.UNAVAILABLE}
+    with pytest.raises(ValueError, match="no comparable candidates"):
+        GreedyDecisionPolicy().choose(result.roster, PolicyConfiguration())
 
 
 def test_root_evaluation_time_is_inside_the_search_deadline(monkeypatch):
@@ -220,7 +220,7 @@ def test_root_evaluation_time_is_inside_the_search_deadline(monkeypatch):
         UniformPolicyModel(), provider, SearchConfiguration())
 
     assert result.stop_reason == "time_budget"
-    assert all(candidate.status is EvaluationStatus.ESTIMATED
+    assert all(candidate.status is EvaluationStatus.UNAVAILABLE
                for candidate in result.roster.candidates)
 
 
@@ -263,7 +263,8 @@ def test_forced_action_reports_a_deadline_crossed_during_root_evaluation(monkeyp
         UniformPolicyModel(), provider, SearchConfiguration())
 
     assert result.stop_reason == "time_budget"
-    assert result.roster.candidates[0].status is EvaluationStatus.ESTIMATED
+    assert result.roster.candidates[0].status is EvaluationStatus.UNAVAILABLE
+    assert result.roster.candidates[0].delta is None
 
 
 def test_search_owns_and_reuses_the_previous_turn_snapshot():

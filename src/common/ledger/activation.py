@@ -68,28 +68,6 @@ def _constant(environment, rule):
     return 1.0
 
 
-def _clause_parameter_units(environment, rule):
-    from .capabilities import clause_parameter_units
-
-    return clause_parameter_units(
-        rule.claims[0], environment.claim_value, environment.clause,
-        environment.facts, environment.side, environment.opponent,
-        environment.board, environment.evaluation_model, body=environment.body)
-
-
-def _side_hand_count(environment, rule):
-    return environment.side.hand_count
-
-
-def _fetch_live_target(environment, rule):
-    from .worth import DemandState, _liveness
-
-    state, _capacity = _liveness(
-        0, environment.facts, environment.demand, environment.evaluation_model,
-        environment.deck_counts)
-    return float(state is not DemandState.DEAD)
-
-
 def _bench_target(environment, rule):
     return float(bool(environment.opponent.bench))
 
@@ -99,8 +77,7 @@ def _side_damage_units(environment, rule):
 
 
 def _open_energy_slot(environment, rule):
-    from .worth import (Reach, _line_entries, _unfilled, legal_line_reach,
-                        line_reach)
+    from .worth import has_open_attack_slot, line_reach
 
     demand = environment.demand
     reach = ({}
@@ -108,20 +85,11 @@ def _open_energy_slot(environment, rule):
                  demand.hand_name_counts, environment.deck_counts,
                  environment.evaluation_model, hand=demand.hand,
                  turn=demand.turn))
-    open_slots = 0
-    for body in environment.side.bodies:
-        facts = environment.evaluation_model.facts(body.card.card_id)
-        body_reach = legal_line_reach(
-            body, reach, environment.evaluation_model,
-            () if demand is None else demand.hand,
-            None if demand is None else demand.turn)
-        open_slots += any(
-            (evolution_id is None
-             or body_reach.get(evolution_id, Reach.ABSENT) is not Reach.ABSENT)
-            and _unfilled(attack.cost, Counter(body.energies)) != (Counter(), 0)
-            for attack, evolution_id in _line_entries(
-                facts, environment.evaluation_model))
-    return open_slots
+    return sum(has_open_attack_slot(
+        body, environment.evaluation_model, reach,
+        hand=() if demand is None else demand.hand,
+        turn=None if demand is None else demand.turn)
+               for body in environment.side.bodies)
 
 
 def _switch_target(environment, rule):
@@ -236,9 +204,9 @@ def _piercing_target(environment, rule):
 
 
 def _open_cost(environment, rule):
-    from .worth import _unfilled
+    from .worth import unmet_cost_slots
 
-    open_cost = sum(bool(_unfilled(attack.cost, Counter(body.energies)) != (Counter(), 0))
+    open_cost = sum(bool(unmet_cost_slots(body.energies, attack.cost))
                     for body in environment.side.bodies
                     for attack in getattr(environment.evaluation_model.facts(
                         body.card.card_id), "attacks", ()) or ())
@@ -338,7 +306,7 @@ def _prize_difference(environment, rule):
 
 
 def _multi_provision_capacity(environment, rule):
-    from .worth import _unfilled
+    from .worth import unmet_cost_slots
 
     provision = environment.facts.clause("energy_provide")
     if provision is None or not provision.amount_on_evolution:
@@ -348,12 +316,11 @@ def _multi_provision_capacity(environment, rule):
                        if getattr(environment.evaluation_model.facts(
                            body.card.card_id), "evolves_from", None)]
     can_absorb = any(
-        sum(open_typed.values()) + open_colorless >= amount
+        len(unmet_cost_slots(body.energies, attack.cost)) >= amount
         for body in evolved_targets
         for attack in getattr(environment.evaluation_model.facts(
             body.card.card_id), "attacks", ()) or ()
-        for open_typed, open_colorless in [
-            _unfilled(attack.cost, Counter(body.energies))])
+    )
     return max(0, amount - int(provision.amount or 1)) if can_absorb else 0.0
 
 
@@ -386,11 +353,8 @@ _OPERATIONS = {
     "bench_target": _bench_target,
     "board_body_count": _board_body_count,
     "copy_attack_source": _copy_attack_source,
-    "clause_parameter_units": _clause_parameter_units,
     "constant": _constant,
     "evolution_target": _evolution_target,
-    "fetch_live_target": _fetch_live_target,
-    "side_hand_count": _side_hand_count,
     "incoming_pressure": _incoming_pressure,
     "mill_target": _mill_target,
     "multi_provision_capacity": _multi_provision_capacity,

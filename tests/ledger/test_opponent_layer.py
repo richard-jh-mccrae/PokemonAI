@@ -94,9 +94,8 @@ def test_opponent_development_reach_is_candidate_resource_conditioned():
     expected = evaluate(expected_board, EvaluationModel.build(
         opponent_profiles=_profiles(beliefs)))
 
-    assert not any(item.feature == "development.next_turn_reach"
-                   for item in absent.activations)
-    assert _activation(expected, "development.next_turn_reach") < 0
+    assert _activation(expected, "combat.realization") \
+        < _activation(absent, "combat.realization")
 
 
 def test_missing_static_opponent_profile_is_explicitly_estimated():

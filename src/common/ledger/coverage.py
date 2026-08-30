@@ -24,7 +24,7 @@ OBSERVATION_FIELD_OWNERS = {
         "seat": "identity", "me": "container", "them": "container", "turn": "container",
         "stadium": "value", "looking": "legal", "select": "legal",
         "decklist": "identity", "deck_counts": "value", "knowledge": "container",
-        "legal_actions": "conditional", "events": "container", "_pieces": "identity",
+        "legal_actions": "legal", "events": "container", "_pieces": "identity",
     },
     Side: {
         "active": "value", "active_hidden": "belief", "bench": "value",
@@ -89,7 +89,6 @@ OBSERVATION_FIELD_OWNERS = {
 OBSERVATION_FIELD_FEATURES = MappingProxyType({
     "ObservationState.stadium": ("option.search",),
     "ObservationState.deck_counts": ("option.attack",),
-    "ObservationState.legal_actions": ("clause.parameter.granted_action",),
     "Side.active": ("active.premium",),
     "Side.active_hidden": ("belief.unknown_card",),
     "Side.bench": ("combat.realization", "body.development", "bench.full"),
@@ -117,7 +116,7 @@ OBSERVATION_FIELD_FEATURES = MappingProxyType({
     "Turn.first_player": ("ability.search_cards",),
     "Turn.supporter_played": ("option.draw",),
     "Turn.energy_attached": ("option.energy",),
-    "Turn.retreated": ("combat.realization",),
+    "Turn.retreated": ("function.attack.modifier", "option.energy"),
     "Turn.result": ("result.win",),
     "KnownOwnPrizes.cards": ("option.search",),
     "KnownDeckTop.cards": ("option.search",),
@@ -363,11 +362,11 @@ CLAUSE_PRIMARY_PARAMETER_FEATURES = MappingProxyType({
     ("amount", "damage_reduction"): "function.protection.incoming_pressure",
     ("amount", "deck_top"): "option.search",
     ("amount", "discard_opp_energy"): "function.denial.opponent_resource",
-    ("amount", "draw"): "function.draw.available",
+    ("amount", "draw"): "ability.draw_cards",
     ("amount", "energy_bounce"): "function.denial.opponent_resource",
     ("amount", "energy_provide"): "function.energy.provision",
     ("amount", "energy_recur"): "function.accel.open_energy_slot",
-    ("amount", "fetch"): "function.fetch.live_target",
+    ("amount", "fetch"): "ability.search_cards",
     ("amount", "gust"): "function.gust.bench_target",
     ("amount", "heal"): "function.heal.damage_present",
     ("amount", "hp_bonus"): "function.protection.incoming_pressure",
@@ -382,10 +381,10 @@ CLAUSE_PRIMARY_PARAMETER_FEATURES = MappingProxyType({
     ("amount", "self_mill"): "function.self_cost.exposure",
     ("amount", "stadium_static"): "function.stadium.board_fit",
     ("amount", "stadium_trigger"): "function.stadium.board_fit",
-    ("amount_if", "draw"): "function.draw.available",
+    ("amount_if", "draw"): "ability.draw_cards",
     ("amount_on_evolution", "energy_provide"):
         "continuation.multi_provision_in_hand",
-    ("amount_per", "draw"): "function.draw.available",
+    ("amount_per", "draw"): "ability.draw_cards",
     ("amount_per", "hp_bonus"): "function.protection.incoming_pressure",
     ("condition", "ability_suppression"): "function.suppression.ability_target",
     ("condition", "accel"): "function.accel.open_energy_slot",
@@ -393,9 +392,9 @@ CLAUSE_PRIMARY_PARAMETER_FEATURES = MappingProxyType({
     ("condition", "attack_twice"): "combat.realization",
     ("condition", "cost_reduction"): "function.cost_reduction.open_cost",
     ("condition", "damage_boost"): "function.attack.modifier",
-    ("condition", "draw"): "function.draw.available",
+    ("condition", "draw"): "ability.draw_cards",
     ("condition", "evolve_early"): "function.development.board_fit",
-    ("condition", "fetch"): "function.fetch.live_target",
+    ("condition", "fetch"): "ability.search_cards",
     ("condition", "first_turn_attack_permission"): "ability.search_cards",
     ("condition", "gust"): "function.gust.bench_target",
     ("condition", "heal"): "function.heal.damage_present",
@@ -414,7 +413,7 @@ CLAUSE_PRIMARY_PARAMETER_FEATURES = MappingProxyType({
     ("per", "damage_counters"): "function.bench_pressure.target_count",
     ("remaining_hp", "survive_ko"): "ability.denial",
     ("to_hand", "accel"): "option.acceleration",
-    ("to_hand_size", "draw"): "function.draw.available",
+    ("to_hand_size", "draw"): "ability.draw_cards",
 })
 
 
@@ -446,9 +445,13 @@ def clause_primary_parameter_expected_direction(parameter, value, clause):
 def clause_parameter_sensitivity_contract(parameter, value, clause, placement=None):
     parameter = str(parameter)
     if parameter in CLAUSE_PARAMETER_DIRECTION_CONTRACTS:
-        return (f"clause.parameter.{parameter}",
-                clause_parameter_expected_direction(parameter, value, clause))
+        return (None, clause_parameter_expected_direction(parameter, value, clause))
     feature = CLAUSE_PRIMARY_PARAMETER_FEATURES[(parameter, clause.kind)]
+    if placement == "trainer" and clause.kind == "draw" \
+            and not parameter.startswith("opponent_amount"):
+        feature = "option.draw"
+    if placement == "trainer" and clause.kind == "fetch":
+        feature = "option.search"
     if parameter == "condition" and clause.kind == "fetch" \
             and placement == "ability":
         feature = "ability.search_cards"
@@ -757,7 +760,7 @@ CLAUSE_VALUATION_CONTRACTS = MappingProxyType({
         "function.denial.opponent_resource"),
     "draw": _clause(
         "draw", _D, "capability.draw",
-        "ability.draw_cards", "ability.resource_cost", "function.draw.available"),
+        "ability.draw_cards", "ability.resource_cost"),
     "energy_bounce": _clause(
         "energy_bounce", _D, "activation.function", "function.denial.opponent_resource"),
     "energy_double": _clause(
@@ -772,7 +775,7 @@ CLAUSE_VALUATION_CONTRACTS = MappingProxyType({
         "evolve_early", _D, "activation.function", "function.development.board_fit"),
     "fetch": _clause(
         "fetch", _D, "capability.search",
-        "ability.search_cards", "function.fetch.live_target", "option.search"),
+        "ability.search_cards", "option.search"),
     "first_turn_attack_permission": _clause(
         "first_turn_attack_permission", _D, "activation.function", "ability.search_cards"),
     "grant_prevo_attacks": _clause(

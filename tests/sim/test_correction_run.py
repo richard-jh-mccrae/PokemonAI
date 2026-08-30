@@ -119,6 +119,23 @@ def test_correction_run_audit_accepts_declared_pregame_and_complete_ledger_recor
     assert len(summary["behavior_identities"]) == 1
 
 
+def test_correction_run_audit_accepts_a_forced_unpriced_singleton():
+    from sim.correction_run import audit_correction_records
+
+    record = {"record_type": "decision", "record_id": "forced", "decision": {
+        "variant": "ledger", "turn": 1, "policy_reason": "forced",
+        "chosen_action_id": "a"}, "completeness": "unavailable",
+        "candidates": [{"action_id": "a", "status": "unavailable", "gaps": []}],
+        "behavior_identity": {"evaluator": "ledger-linear-v1"},
+        "search": {"failure": None}}
+
+    summary = audit_correction_records([record])
+
+    assert summary["ledger_decisions"] == 1
+    assert summary["forced_unpriced_decisions"] == ["forced"]
+    assert summary["incomplete_decisions"] == []
+
+
 def test_correction_run_audit_requires_one_decision_record_per_replay_choice():
     from sim.correction_run import audit_correction_records
     from sim.record import MatchRecorder

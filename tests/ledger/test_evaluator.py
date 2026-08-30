@@ -15,9 +15,11 @@ from ledger_helpers import (AIR_BALLOON, DARK_E, DARKNESS, DRAGAPULT, DRAKLOAK, 
 import pytest
 
 from common.observation import ObservationStateBuilder
+from common.observation.state import AttackEvent
 from common.ledger import DeckOverlay, EvaluationModel, evaluate
-from common.ledger.capabilities import ITEM_LOCK_BASE_UNITS, body_capability
-from common.ledger.evaluate import KNOWN_BLOCKED_BASIC_PRESSURE, _slot_option
+from common.ledger.capabilities import (
+    ITEM_LOCK_BASE_UNITS, body_capability)
+from common.ledger.evaluate import _slot_option
 
 
 def board(**kwargs):
@@ -182,7 +184,7 @@ def test_benching_a_filler_on_an_empty_bench_is_positive():
     assert swing(before, after) > 0
 
 
-def test_full_bench_pressure_includes_known_blocked_basic_development():
+def test_full_bench_pressure_is_not_a_second_card_option_evaluator():
     full = [body(MAKUHITA, 10 + index) for index in range(5)]
     unknown = board(me=player(active=body(DRAGAPULT, 1), bench=full))
     known = board(
@@ -193,7 +195,7 @@ def test_full_bench_pressure_includes_known_blocked_basic_development():
         return next(item.value for item in evaluate(state, ctx()).activations
                     if item.feature == "bench.full")
 
-    assert pressure(known) == pressure(unknown) + KNOWN_BLOCKED_BASIC_PRESSURE
+    assert pressure(known) == pressure(unknown)
 
 
 # --- evolution demand: a live target prices the card up ---
@@ -218,14 +220,6 @@ def test_the_pair_in_hand_outprices_either_alone():
     marginal_beside_base = value([DREEPY, DRAKLOAK]) - value([DREEPY])
     marginal_alone = value([DRAKLOAK]) - value([])
     assert marginal_beside_base > marginal_alone + 0.02
-
-
-def test_a_stage_one_and_stage_two_in_hand_form_a_development_line():
-    valuation = evaluate(
-        board(me=player(active=body(DREEPY, 1), hand=[DRAKLOAK, DRAGAPULT])), ctx())
-
-    assert next(item.value for item in valuation.activations
-                if item.feature == "development.hand_line") == 1.0
 
 
 def test_evolving_transfers_ready_and_energy_reach_into_completed_development():
@@ -373,10 +367,10 @@ def test_combat_realization_is_one_attack_envelope_not_a_sum_of_readings():
     capability = body_capability(
         state.me.active, state.me, state.them, state, context)
 
-    assert capability.realization == pytest.approx(1.2 + (1.9 - 1.0) * (1 / 3) ** 2)
+    assert capability.realization == pytest.approx(1.2)
 
 
-def test_stronger_attack_upgrade_gap_values_progress_beyond_a_ready_attack():
+def test_incomplete_stronger_attack_does_not_stack_on_a_ready_attack():
     one_energy = board(
         me=player(active=body(MEGA_STARMIE, 1, energies=(WATER,))),
         them=player(active=body(MEGA_STARMIE, 9), own=False))
@@ -390,7 +384,7 @@ def test_stronger_attack_upgrade_gap_values_progress_beyond_a_ready_attack():
     two = body_capability(
         two_energy.me.active, two_energy.me, two_energy.them, two_energy, context)
 
-    assert two.realization > one.realization
+    assert two.realization == one.realization
 
 
 def test_held_typed_energy_advances_the_next_attachment_clock():
@@ -470,6 +464,23 @@ def test_retained_attack_modifiers_cross_the_knockout_threshold():
         two.me.active, two.me, two.them, two, context).attack_now
 
     assert two_attack > one_attack + 1.0
+
+
+def test_held_attack_modifiers_do_not_inflate_every_benched_attacker():
+    state = board(
+        me=player(
+            active=body(MAKUHITA, 1, energies=(6, 6)),
+            bench=[body(MAKUHITA, 2, energies=(6, 6))],
+            hand=[1141, 1141]),
+        them=player(active=body(DRAKLOAK, 3, hp=90, max_hp=90), own=False))
+    context = ctx()
+
+    active = body_capability(
+        state.me.active, state.me, state.them, state, context)
+    benched = body_capability(
+        state.me.bench[0], state.me, state.them, state, context)
+
+    assert active.attack_now > benched.attack_now + 1.0
 
 
 def test_played_attack_modifier_persists_for_the_turn():
@@ -696,8 +707,12 @@ def test_charging_staryu_requires_a_legally_reachable_forward_evolution():
 
     in_deck = [MEGA_STARMIE] + [WATER_E] * 10
     gone = [WATER_E] * 10                        # no Mega Starmie left anywhere
-    assert attach_swing(1, in_deck) > attach_swing(1, gone)
-    assert attach_swing(2, in_deck) > attach_swing(1, gone)
+    for decklist in (in_deck, gone):
+        valuation = evaluate(board(me=player(
+            active=body(STARYU, 1, energies=(WATER,)), hand=[WATER_E]),
+            decklist=decklist), context)
+        assert "development.visible_reach" not in {
+            item.feature for item in valuation.activations}
     assert attach_swing(1, in_deck, extra_hand=[ULTRA_BALL, FIRE_E, FIRE_E]) > (
         attach_swing(1, in_deck))
     assert attach_swing(1, gone, extra_hand=[MEGA_STARMIE]) > attach_swing(1, in_deck)
@@ -717,14 +732,14 @@ def test_stage_two_reach_requires_the_stage_one_or_typed_rare_candy():
     assert visible([DRAGAPULT, 1079]) > 0.0
 
 
-def test_body_played_this_turn_retains_next_turn_but_not_current_reach():
+def test_body_played_this_turn_retains_evolution_hand_option_without_reach_bonus():
     active = body(DREEPY, 1, energies=(FIRE,))
     active["appearThisTurn"] = True
     valuation = evaluate(board(me=player(active=active, hand=[DRAKLOAK])), ctx())
     activations = {item.feature: item.value for item in valuation.activations}
 
     assert "development.visible_reach" not in activations
-    assert activations["development.next_turn_reach"] > 0
+    assert activations["option.attack"] > 0
 
 
 # --- Ignition: the multi-unit provision clause read at the demand seam ---
@@ -740,6 +755,20 @@ def test_ignition_reads_fully_live_beside_a_multi_slot_evolution():
                                context)
     assert beside_mega.part("me.hand") > beside_dragapult.part("me.hand") + 0.015
     assert beside_dragapult.part("me.hand") > beside_makuhita.part("me.hand") + 0.01
+
+
+def test_ignition_stays_live_for_a_reachable_multi_slot_evolution():
+    context = ctx(overrides={"kind.special_energy": 0.10})
+    reachable = evaluate(board(me=player(
+        active=body(STARYU, 1), hand=[MEGA_STARMIE, IGNITION])), context).part("me.hand")
+    evolution = evaluate(board(me=player(
+        active=body(STARYU, 1), hand=[MEGA_STARMIE])), context).part("me.hand")
+    stranded = evaluate(board(me=player(
+        active=body(STARYU, 1), hand=[IGNITION])), context).part("me.hand")
+    empty = evaluate(board(me=player(
+        active=body(STARYU, 1))), context).part("me.hand")
+
+    assert reachable - evolution > stranded - empty + 0.01
 
 
 def test_concentration_prefers_finishing_the_started_twin():
@@ -886,6 +915,61 @@ def test_our_doomed_read_uses_only_currently_payable_damage():
     one_short = ours_vs(body(DRAGAPULT, 9, energies=(FIRE,)))
     assert evaluate(one_short, armed).total == pytest.approx(
         evaluate(one_short, flat).total)
+
+
+def test_doomed_active_does_not_claim_next_turn_combat_realization():
+    def combat(energies):
+        state = board(
+            me=player(active=body(
+                MEGA_STARMIE, 1, hp=150, max_hp=330, energies=energies)),
+            them=player(own=False, active=body(
+                MEGA_STARMIE, 9, hp=330, max_hp=330,
+                energies=(WATER, WATER, WATER))))
+        return next((item.activation for item in evaluate(state, ctx()).contributions
+                     if item.feature == "combat.realization"), 0.0)
+
+    assert combat((WATER, WATER, WATER)) == pytest.approx(combat(()))
+
+
+def test_terminal_ko_route_is_not_double_counted_as_combat_realization():
+    def combat(energies):
+        state = board(
+            me=player(active=body(MEGA_STARMIE, 1, energies=energies)),
+            them=player(own=False, active=body(
+                DRAGAPULT, 9, hp=70, max_hp=320), prizes=2))
+        return next((item.activation for item in evaluate(state, ctx()).contributions
+                     if item.feature == "combat.realization"), 0.0)
+
+    assert combat((WATER,)) == pytest.approx(combat((WATER, WATER, WATER)))
+
+
+def test_combat_readiness_does_not_reprice_against_remaining_target_hp():
+    def against(target_hp):
+        return board(
+            me=player(active=body(DRAGAPULT, 1, energies=(FIRE, PSYCHIC))),
+            them=player(own=False, active=body(
+                MEGA_STARMIE, 9, hp=target_hp, max_hp=330)))
+
+    healthy = body_capability(
+        against(150).me.active, against(150).me, against(150).them,
+        against(150), ctx())
+    damaged = body_capability(
+        against(20).me.active, against(20).me, against(20).them,
+        against(20), ctx())
+
+    assert healthy.realization == pytest.approx(damaged.realization)
+    assert healthy.attack_now != damaged.attack_now
+
+
+def test_whole_board_value_does_not_depend_on_attack_history():
+    state = board(
+        me=player(active=body(DRAGAPULT, 1, energies=(FIRE, PSYCHIC))),
+        them=player(own=False, active=body(
+            MEGA_STARMIE, 9, hp=150, max_hp=330)))
+    attacked = replace(state, events=(AttackEvent(
+        15, (("cardId", DRAGAPULT), ("playerIndex", state.seat)), True),))
+
+    assert evaluate(attacked, ctx()).total == pytest.approx(evaluate(state, ctx()).total)
 
 
 def test_usable_energy_on_our_doomed_active_is_ammunition_not_investment():

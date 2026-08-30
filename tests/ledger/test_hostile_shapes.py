@@ -10,7 +10,7 @@ from dataclasses import replace
 
 import pytest
 
-from ledger_helpers import (DRAGAPULT, FIRE_E, LILLIES, ScriptedProvider, action, body,
+from ledger_helpers import (DRAGAPULT, FIRE_E, LILLIES, UNKNOWN, ScriptedProvider, action, body,
                             player, printout)
 
 from common.algebra import Terminal
@@ -52,7 +52,7 @@ def test_refresh_tolerates_idless_hand_rows():
         calls.append(synthetic.position_key)
         return evaluate(synthetic, EvaluationModel.build())
 
-    valuation, _gaps, summary = refresh_outcomes(
+    valuation, _gaps, summary, _landings = refresh_outcomes(
         obs, board, LILLIES, ((6, 0),), False,
         valued,
         ComputeConfiguration())
@@ -150,3 +150,10 @@ def test_a_corrupt_bench_max_cannot_stall_the_evaluator():
     obs["current"]["players"][0]["benchMax"] = 10 ** 9
     valuation = evaluate(ObservationStateBuilder().root(obs), EvaluationModel.build())
     assert math.isfinite(valuation.total)
+
+
+def test_restricted_target_checks_tolerate_unknown_body_facts():
+    state = ObservationStateBuilder().root(printout(
+        me=player(active=body(UNKNOWN, 1), hand=[1229])))
+
+    assert math.isfinite(evaluate(state, EvaluationModel.build()).total)

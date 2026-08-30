@@ -46,6 +46,8 @@ def _report(slots: list[dict]) -> dict:
         "tuning_ledger_decisions": sum(
             slot["audit"]["ledger_decisions"] for slot in tuning),
         "pregame_decisions": sum(slot["audit"]["pregame_decisions"] for slot in slots),
+        "forced_unpriced_decisions": sum(
+            len(slot["audit"].get("forced_unpriced_decisions", ())) for slot in slots),
         "complete_decisions": sum(slot["audit"]["completeness"]["complete"]
                                   for slot in slots),
         "estimated_decisions": sum(slot["audit"]["completeness"]["estimated"]

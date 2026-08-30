@@ -24,7 +24,7 @@ from .coverage import (
     CLAUSE_VALUATION_CONTRACTS, ClauseValuationMode, DirectEquationOwner,
     clause_parameter_mode, clause_parameter_sensitivity_contract,
 )
-from .features import FEATURE_CATALOG, ActivationRule
+from .features import CLAUSE_PARAMETER_QUALIFIERS, FEATURE_CATALOG, ActivationRule
 from .worth import Demand, EvaluationModel, _model_identity, content_identity
 
 
@@ -133,6 +133,8 @@ def _parameter_witnesses():
     for card_id, facts in sorted(store.items()):
         for placement, locator, clause in _clause_occurrences(facts):
             for parameter, value in clause.params.items():
+                if parameter in CLAUSE_PARAMETER_QUALIFIERS:
+                    continue
                 if clause_parameter_mode(
                         parameter, value, placement,
                         clause.kind) is not ClauseValuationMode.DIRECT_EQUATION:
@@ -253,7 +255,12 @@ def run_parameter_sensitivity(witness, ctx):
     reason = None
     if contribution == 0.0:
         reason = "parameter perturbation produced zero valuation delta"
-    elif witness.expected_feature is not None and feature_delta == 0.0:
+    elif witness.expected_feature is None and witness.expected_direction is not None \
+            and contribution * witness.expected_direction <= 0.0:
+        actual = "positive" if contribution > 0 else "negative"
+        expected = "positive" if witness.expected_direction > 0 else "negative"
+        reason = f"valuation moved {actual}; expected {expected}"
+    elif witness.expected_feature is not None and not feature_delta:
         reason = f"{witness.expected_feature} produced zero valuation delta"
     elif witness.expected_direction is not None \
             and feature_delta * witness.expected_direction <= 0.0:
@@ -456,6 +463,20 @@ def _clause_probe_context(ctx, facts, kind, *, locator=None):
 def _clause_probe_board(board, facts, kind, ctx, *, parameter=None, locator=None):
     clauses = ((_located_clause(facts, locator),) if locator is not None else
                tuple(clause for clause in card_clauses(facts) if clause.kind == kind))
+    if kind == "energy_recur":
+        wanted = next(int(clause.energy_type) for clause in clauses
+                      if clause.energy_type is not None)
+        energy = next(candidate for candidate in ctx.store.values()
+                      if isinstance(candidate, EnergyCard)
+                      and candidate.kind == "basic_energy"
+                      and candidate.provides == wanted)
+        count = max(int(clause.amount or 1) for clause in clauses)
+        cards = (*tuple(board.me.discard), *(Card(
+            energy.card_id, 7830 + index, board.seat) for index in range(count)))
+        board = replace(board, me=replace(
+            board.me, discard=card_bag([{
+                "id": card.card_id, "serial": card.serial,
+                "playerIndex": card.owner} for card in cards])))
     if parameter in {"evolves_into_type", "target_type"}:
         wanted = next(int(getattr(clause, parameter)) for clause in clauses
                       if getattr(clause, parameter, None) is not None)
@@ -1041,15 +1062,6 @@ def _trainer_direct_valuation(facts, ctx, kind, parameter=None, locator=None,
     return {item.feature: item.value for item in trace.finish().activations}
 
 
-def card_clause_contribution(card_id: int, kind: str, ctx: EvaluationModel) -> float:
-    facts = ctx.facts(card_id)
-    contract = CLAUSE_VALUATION_CONTRACTS[str(kind)]
-    if facts is None or not any(
-            clause.kind == kind for clause in card_clauses(facts)):
-        raise KeyError(f"card {card_id} has no {kind!r} clause")
-    return _direct_clause_contribution(contract, facts, ctx)
-
-
 DIRECT_EQUATION_EXECUTORS = MappingProxyType({
     DirectEquationOwner.ACCELERATION: _direct_clause_contribution,
     DirectEquationOwner.ATTACK: _direct_clause_contribution,
@@ -1446,22 +1458,8 @@ def _environment(witness, ctx):
     board = _rich_board()
     if witness.rule.operation == "opponent_empty_bench":
         board = replace(board, them=replace(board.them, bench=()))
-    parameter_clause = None
-    if witness.source == "clause_parameter":
-        facts, parameter_clause = next(
-            (facts, clause)
-            for facts in ctx.store.values()
-            for clause in card_clauses(facts)
-            if witness.claim in clause.params)
-        ctx = _clause_probe_context(ctx, facts, parameter_clause.kind)
-        facts = ctx.facts(facts.card_id)
-        board = _clause_probe_board(
-            board, facts, parameter_clause.kind, ctx, parameter=witness.claim)
-    else:
-        facts = _facts_for_claim(ctx, witness.claim)
-    if witness.rule.operation == "fetch_live_target":
-        facts = ctx.facts(1121)
-    elif witness.rule.operation == "multi_provision_capacity":
+    facts = _facts_for_claim(ctx, witness.claim)
+    if witness.rule.operation == "multi_provision_capacity":
         facts = ctx.facts(17)
     elif witness.rule.operation == "piercing_target":
         clause = next(clause for clause in card_clauses(facts)
@@ -1496,11 +1494,9 @@ def _environment(witness, ctx):
                 board.me, bench=(_body_for_facts(
                     board.me.bench[0], source), *board.me.bench[1:])))
     side, opponent = board.me, board.them
-    clause = parameter_clause or next((
+    clause = next((
         clause for clause in card_clauses(facts)
         if clause.kind == witness.claim), None)
-    claim_value = (clause.params[witness.claim]
-                   if parameter_clause is not None else witness.rule.argument)
     return ActivationEnvironment(
         scale=1.0,
         board=board,
@@ -1511,7 +1507,7 @@ def _environment(witness, ctx):
         facts=facts,
         deck_counts=board.deck_counts,
         candidate=SimpleNamespace(roles={}),
-        claim_value=claim_value,
+        claim_value=witness.rule.argument,
         clause=clause,
     )
 
@@ -1602,7 +1598,7 @@ __all__ = (
     "SENSITIVITY_WITNESSES",
     "ClauseSensitivityResult", "ObservationSensitivityResult", "SensitivityResult",
     "ParameterSensitivityWitness", "SensitivityWitness",
-    "card_clause_contribution", "card_probe_contribution",
+    "card_probe_contribution",
     "run_clause_sensitivity",
     "run_observation_sensitivity", "run_parameter_sensitivity",
     "run_sensitivity_witness",

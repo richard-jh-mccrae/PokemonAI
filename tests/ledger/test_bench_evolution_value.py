@@ -27,13 +27,13 @@ def full_bench():
     return [body(MAKUHITA, 10 + index) for index in range(5)]
 
 
-def test_full_bench_prices_the_best_specific_blocked_development():
+def test_full_bench_pressure_does_not_revalue_blocked_cards_outside_the_portfolio():
     wincon_blocked = board(me=player(
         active=body(DRAGAPULT, 1), bench=full_bench(), hand=[DREEPY]))
     filler_blocked = board(me=player(
         active=body(DRAGAPULT, 1), bench=full_bench(), hand=[LUNATONE]))
 
-    assert activation(wincon_blocked, "bench.full") > activation(
+    assert activation(wincon_blocked, "bench.full") == activation(
         filler_blocked, "bench.full")
 
 
@@ -108,29 +108,3 @@ def test_third_terminal_basic_is_surplus_after_two_are_deployed():
         active=body(SOLROCK, 1), bench=[body(SOLROCK, 2)], hand=[SOLROCK]))
 
     assert activation(redundant, "copy.surplus") == 1
-
-
-def test_second_held_evolution_completes_the_unreserved_hand_line():
-    appeared_drakloak = {**body(DRAKLOAK, 2, under=(DREEPY,)),
-                         "appearThisTurn": True}
-    appeared_dreepy = {**body(DREEPY, 4), "appearThisTurn": True}
-    existing = board(me=player(
-        active=body(MUNKIDORI, 1),
-        bench=[appeared_drakloak, body(BUDEW, 3), appeared_dreepy],
-        hand=[DREEPY, DRAKLOAK]))
-    completed = board(me=player(
-        active=body(MUNKIDORI, 1),
-        bench=[appeared_drakloak, body(BUDEW, 3), appeared_dreepy],
-        hand=[DREEPY, DRAKLOAK, DRAKLOAK]))
-
-    assert activation(existing, "development.hand_line") == 0
-    assert activation(completed, "development.hand_line") == 1
-
-
-def test_surplus_basic_cannot_create_a_hand_line():
-    state = board(me=player(
-        active=body(DREEPY, 1), bench=[body(DREEPY, 2)],
-        hand=[DREEPY, DRAKLOAK]))
-
-    assert activation(state, "copy.surplus") == 1
-    assert activation(state, "development.hand_line") == 0

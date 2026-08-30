@@ -397,5 +397,25 @@
     "disposition": "deferred-multi-turn",
     "reason": "the ruling orders Crushing Hammer before Lillie's Determination shuffles the hand; independent MAIN action ordering returns when PUCT grades the complete turn",
     "round": "2026-08-29"
+  },
+  "8660400227284133-23": {
+    "disposition": "refuted",
+    "reason": "the stored correct selection is identical to the condemned chosen attachment, so the correction cannot express its rationale",
+    "round": "2026-08-29"
+  },
+  "8660400227284133-22": {
+    "disposition": "deferred-multi-turn",
+    "reason": "the target choice compares attach-to-active Dunsparce then retreat into Budew item lock against attach-to-Dreepy then develop its attack line; PUCT must grade those continuations rather than a doctrine-specific Dunsparce penalty",
+    "round": "2026-08-30"
+  },
+  "14109113266227352-21": {
+    "disposition": "covered",
+    "reason": "the current choice plays Munkidori and preserves Drakloak; it no longer performs the condemned Lillie's Determination shuffle, while the rationale does not require retreat over every non-shuffle alternative",
+    "round": "2026-08-30"
+  },
+  "68295020259321141-38": {
+    "disposition": "covered",
+    "reason": "the current choice plays Dreepy and leaves the sacrificial Budew active; it no longer performs the condemned retreat, while the rationale does not distinguish that line from the stored Drakloak evolution",
+    "round": "2026-08-30"
   }
 }

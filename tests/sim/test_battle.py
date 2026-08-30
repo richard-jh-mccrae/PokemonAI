@@ -169,8 +169,12 @@ def test_play_match_runs_a_full_game_and_names_a_winner(agent):
 
     directory = AGENTS / agent
     deck = read_deck(directory)
-    a = AgentServer(directory, SRC, capture_telemetry=True, emit_telemetry=True, strict=True)
-    b = AgentServer(directory, SRC, capture_telemetry=True, emit_telemetry=True, strict=True)
+    a = AgentServer(
+        directory, SRC, capture_telemetry=True, emit_telemetry=True, strict=True,
+        compute_profile="correction")
+    b = AgentServer(
+        directory, SRC, capture_telemetry=True, emit_telemetry=True, strict=True,
+        compute_profile="correction")
     telemetry = []
     try:
         result = play_match(a, b, deck, deck, telemetry=telemetry,
