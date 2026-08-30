@@ -1,4 +1,4 @@
-# ADR-TEMP-604 — Chance resolution simulates future randomness
+# ADR-0197 — Chance resolution simulates future randomness
 
 An Experiment Snapshot retains exact hidden current state, but search must not treat stored random
 continuation or an unknown future deck order as decision evidence. Chance Expansion therefore
