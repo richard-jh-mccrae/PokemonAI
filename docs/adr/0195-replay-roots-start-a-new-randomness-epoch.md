@@ -1,4 +1,4 @@
-# ADR-TEMP-602 — Replay roots start a new randomness epoch
+# ADR-0195 — Replay roots start a new randomness epoch
 
 Native replays can certify observations and full-information frames but cannot expose the native
 random-number generator state. A single recorded frame also cannot prove every internal engine

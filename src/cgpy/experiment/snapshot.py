@@ -1,4 +1,4 @@
-"""Persistent exact roots for deterministic cgpy experiments (ADR-TEMP-602)."""
+"""Persistent exact roots for deterministic cgpy experiments (ADR-0195)."""
 from __future__ import annotations
 
 import gzip
