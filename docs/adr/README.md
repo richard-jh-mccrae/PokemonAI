@@ -141,7 +141,7 @@ fires, the first-merged-keeps-it convention established above still applies: ref
 recompute, rename again. See `.claude/skills/grill-with-docs/SKILL.md` and
 `.claude/skills/open-pr/SKILL.md` for the full mechanics.
 
-**Next free number: 0195.**
+**Next free number: 0196.**
 
 ## Index
 
@@ -342,3 +342,4 @@ recompute, rename again. See `.claude/skills/grill-with-docs/SKILL.md` and
 | [0192](0192-diagnostics-separate-replay-policy-and-outcome.md) | Diagnostics separate replay, policy, and outcome | Accepted; built for Issue #586. |
 | [0193](0193-ledger-values-observable-capabilities.md) | Ledger values observable capabilities | Accepted; built. |
 | [0194](0194-correction-grade-one-ply-ledger.md) | Corrections grade the exact one-ply Ledger boundary | Accepted; built. |
+| [0195](0195-replay-roots-start-a-new-randomness-epoch.md) | Replay roots start a new randomness epoch | Accepted; built for Issue #602. |

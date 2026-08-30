@@ -28,6 +28,16 @@ parity, verified by trace replay. `src/cg/` is never modified; cgpy never import
   (serial scheme, option ordering, mulligan protocol, LIFO returns, …). Recorded in
   this context; load-bearing ones are enforced by
   `tests/parity/test_determinism_pins_engine.py` (skips without the DLL).
+- **Experiment Snapshot** — an immutable, versioned identity of one complete cgpy state and its
+  randomness at a legal decision boundary. It can recreate the same experimental starting point.
+- **Experiment Root** — one independently mutable fork of an Experiment Snapshot assigned to an
+  experimental method.
+- **Randomness Epoch** — a bounded interval governed by one declared random state. A replay-derived
+  Experiment Root starts a new epoch instead of claiming continuation of native randomness.
+- **Chance Sample Key** — the versioned identity of one sampled chance outcome within an Experiment
+  Root. The same branch and sample retain the same identity regardless of traversal order.
+- **Paired-Seed Case** — one comparison unit that gives every method the same Experiment Snapshot
+  and seed conditions. A seat-swapped orientation has its own starting-state identity.
 - **ChainDef** — a card's behavior as DATA: a list of ops over the recovered effect-DSL
   vocabulary, interpreted by `chain.py` on a resumable **EffectFrame** stack. Hand-authored
   layer: `defs/chain_overrides.json`; machine-seeded layer (pool-wide fan-out, M4):
@@ -49,7 +59,9 @@ building + ordering) · `turn.py` (setup/mulligan machine, turn loop, KO/prize/p
 `damage.py` (base→mods→×W→−R→mods) · `chain.py` (the DSL interpreter) · `engine.py` (facade:
 start/step/observation/clone/`fork()`) · `verify/` (trace/differ/replayer) ·
 `search.py` (M3: `state_from_obs`/`state_from_visualize` structured seeding, the state
-token, clone-per-step sessions) · `game.py` (M3: the `cg/game.py`-shaped battle singleton,
+token, clone-per-step sessions) · `experiment/` (versioned exact roots, legal-view policy roots,
+paired-seed matches, parity manifests, traversal-independent Chance Sample Keys) ·
+`game.py` (M3: the `cg/game.py`-shaped battle singleton,
 `visualize_data`) · `compat/` + `alias.py` (M3: the `cg` package surface + `sys.modules`
 mapping, env `CG_ENGINE=py`).
 
