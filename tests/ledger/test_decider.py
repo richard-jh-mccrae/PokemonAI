@@ -186,6 +186,27 @@ def test_forced_menu_is_a_straight_argmax():
     assert decision.action == toss_dark.identity
 
 
+def test_forced_singleton_still_reports_its_successor_delta():
+    select = {"type": 1, "context": 7, "minCount": 1, "maxCount": 1,
+              "option": [{"type": 3, "index": 0}], "deck": None,
+              "contextCard": None, "effect": None,
+              "remainDamageCounter": 0, "remainEnergyCost": 0}
+    root_obs = printout(me=player(active=body(DRAGAPULT, 1), hand=[FIRE_E]),
+                        select=select)
+    discarded = state_of(printout(
+        me=player(active=body(DRAGAPULT, 1), hand=[], discard=[FIRE_E])), DECK)
+    forced = action("discard", (0,))
+    provider = ScriptedProvider(
+        menus={"root": (forced,)},
+        nodes={("root", forced.identity): Deterministic(discarded)})
+
+    decision = make_decider(provider).decide(root_obs)
+    price = decision.diagnostics["prices"][0]
+
+    assert price["swing"] != 0
+    assert decision.decision_result.roster.candidates[0].successors
+
+
 def test_forced_chain_resolves_to_the_best_leaf():
     """play -> forced pick -> main: the play's price is the best sub-choice's resolved board."""
     root_obs = printout(me=player(active=body(DRAGAPULT, 1), hand=[FIRE_E]),
@@ -527,10 +548,11 @@ def test_price_actions_has_no_mechanic_specific_ordering_flags():
     assert all(not hasattr(price, "refresh") and not hasattr(price, "restocks")
                for price in prices)
     refresh_price = next(price for price in prices if price.action is play)
-    assert refresh_price.successors == ()
+    assert refresh_price.successors
     assert len(refresh_price.chance_summaries) == 1
-    assert refresh_price.chance_summaries[0].sample_count == 0
-    assert refresh_price.chance_summaries[0].method == "direct"
+    assert refresh_price.chance_summaries[0].sample_count > 0
+    assert refresh_price.chance_summaries[0].method == "sampled"
+    assert sum(successor.probability for successor in refresh_price.successors) == pytest.approx(1)
     assert all(sum(item.value for item in price.footprint.contributions)
                == pytest.approx(price.swing) for price in prices)
 

@@ -253,15 +253,15 @@ def test_post_pregame_forced_menu_is_a_complete_ledger_decision_without_preview(
 
     assert decision.diagnostics["backend"] == "ledger"
     assert decision.diagnostics["policy_reason"] == "forced"
-    assert decision.complete is True
+    assert decision.complete is False
     assert decision.value == 0.0
     assert decision.chosen == (0,)
     assert decision.diagnostics["prices"] == ({
         "action": str(decision.action),
         "selection": [0],
-        "swing": 0.0,
+        "swing": None,
         "ends_turn": False,
-        "status": "complete",
+        "status": "unavailable",
         "continuation": None,
     },)
 
@@ -282,7 +282,7 @@ def test_live_runtime_captures_the_typed_ledger_record(monkeypatch):
     assert len(records) == 1
     assert records[0]["record_type"] == "decision"
     assert records[0]["decision"]["chosen_action_id"] == records[0]["actions"][0]["id"]
-    assert records[0]["candidates"][0]["status"] == "complete"
+    assert records[0]["candidates"][0]["status"] == "unavailable"
     assert records[0]["configuration"]["evaluation_model"]["identity"] \
         == runtime.ledger.ctx.identity
     assert records.construction_seconds > 0.0
@@ -340,7 +340,7 @@ def test_one_canonical_action_with_equivalent_selections_is_still_forced():
     decision = runtime.decide(observation)
 
     assert decision.diagnostics["policy_reason"] == "forced"
-    assert decision.complete is True
+    assert decision.complete is False
     assert decision.value == 0.0
     assert len(decision.diagnostics["prices"]) == 1
 

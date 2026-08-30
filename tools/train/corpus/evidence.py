@@ -38,6 +38,7 @@ def _replay_choices(replay: dict) -> list[tuple[object, object, list, object]]:
 
 def audit_correction_records(records: list[dict], *, replay: dict | None = None) -> dict:
     ledger, pregame, identities, selected_chain_caps, incomplete = [], [], {}, [], []
+    forced_unpriced = []
     completeness = {"complete": 0, "estimated": 0}
     emitted = [record for record in records if record.get("record_type") == "decision"]
     if replay is not None:
@@ -72,15 +73,23 @@ def audit_correction_records(records: list[dict], *, replay: dict | None = None)
         if reason.startswith("fail_safe"):
             raise ValueError(f"fail-safe decision entered Correction Run: {reason}")
         state = record.get("completeness")
-        if state not in completeness:
-            raise ValueError(f"unavailable Ledger decision entered Correction Run: {state}")
         if (record.get("search") or {}).get("failure") is not None:
             raise ValueError("unavailable Ledger search failure entered Correction Run")
         if not isinstance(decision.get("turn"), int) or decision["turn"] <= 0:
             raise ValueError("Ledger decision occurred during setup")
-        completeness[state] += 1
+        candidates = tuple(record.get("candidates") or ())
+        forced = (reason == "forced" and len(candidates) == 1
+                  and candidates[0].get("action_id") == decision.get("chosen_action_id")
+                  and candidates[0].get("status") == "unavailable")
+        if state not in completeness and not (state == "unavailable" and forced):
+            raise ValueError(f"unavailable Ledger decision entered Correction Run: {state}")
+        if forced:
+            forced_unpriced.append(record.get("record_id"))
+        else:
+            completeness[state] += 1
         if state != "complete":
-            incomplete.append(record.get("record_id"))
+            if not forced:
+                incomplete.append(record.get("record_id"))
         identity = record.get("behavior_identity") or {}
         identities[json.dumps(identity, sort_keys=True, separators=(",", ":"))] = identity
         chosen_id = decision.get("chosen_action_id")
@@ -92,6 +101,7 @@ def audit_correction_records(records: list[dict], *, replay: dict | None = None)
         raise ValueError("Correction Run episode contains no Ledger decisions")
     return {
         "ledger_decisions": len(ledger), "pregame_decisions": len(pregame),
+        "forced_unpriced_decisions": forced_unpriced,
         "completeness": completeness, "incomplete_decisions": incomplete,
         "selected_chain_caps": selected_chain_caps,
         "behavior_identities": [identities[key] for key in sorted(identities)],

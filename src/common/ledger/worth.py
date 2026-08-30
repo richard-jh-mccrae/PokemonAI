@@ -15,7 +15,9 @@ from types import MappingProxyType
 from typing import Mapping
 
 from common.cards import FUNCTION_CATALOG, card_clauses, card_store, play_clauses
-from common.cards.card_facts import COLORLESS, SUPPORTER, EnergyCard, PokemonCard, TrainerCard
+from common.cards.card_facts import (
+    COLORLESS, SUPPORTER, WILDCARD, EnergyCard, PokemonCard, TrainerCard,
+)
 from common.cards.functions.energy import provision_units
 from common.cards.functions.fetch import DEADNESS, fetch_target_matches
 from common.observation.knowledge import PROBABILITY_SCALE
@@ -27,6 +29,7 @@ from .configuration import DeckOverlay, ValuationConfiguration
 
 CONTENT_ID_DIGEST_BYTES = 16
 MODEL_ID_DIGEST_BYTES = 8
+FUTURE_TURN_DISCOUNT = 0.75
 MULTI_PROVISION_UNITS = 2
 BACKUP_BODY_CAPACITY = 2
 POKEMON_COPY_CAPACITY = 2
@@ -123,6 +126,45 @@ def _default_store_identity() -> str:
 
 
 # --- energy usability -------------------------------------------------------------------
+
+def unmet_cost_slots(provisions, requirements) -> tuple[int, ...]:
+    remaining = [int(unit) for unit in provisions]
+    unpaid = []
+    colorless = []
+    for slot, required in enumerate(requirements):
+        if int(required) == COLORLESS:
+            colorless.append(slot)
+            continue
+        found = next((index for index, supplied in enumerate(remaining)
+                      if supplied in {int(required), WILDCARD}), None)
+        if found is None:
+            unpaid.append(slot)
+        else:
+            remaining.pop(found)
+    paid_colorless = min(len(colorless), len(remaining))
+    return tuple((*unpaid, *colorless[paid_colorless:]))
+
+
+def payment_fraction(provisions, requirements) -> float:
+    requirements = tuple(requirements)
+    if not requirements:
+        return 1.0
+    return (len(requirements) - len(unmet_cost_slots(provisions, requirements))) \
+        / len(requirements)
+
+
+def typed_first_payment_fraction(provisions, requirements, facts) -> float:
+    requirements = tuple(requirements)
+    fraction = payment_fraction(provisions, requirements)
+    unpaid = unmet_cost_slots(provisions, requirements)
+    unpaid_typed = sum(requirements[slot] != COLORLESS for slot in unpaid)
+    condition_types = {
+        clause.condition_energy_type for clause in card_clauses(facts)
+        if clause.condition_energy_type is not None}
+    if not unpaid_typed or condition_types.intersection(map(int, provisions)):
+        return fraction
+    paid_typed = sum(unit != COLORLESS for unit in requirements) - unpaid_typed
+    return paid_typed / max(1, len(requirements))
 
 @lru_cache(maxsize=1)
 def _forward_lines() -> Mapping[str, tuple[int, ...]]:
@@ -223,7 +265,8 @@ def legal_line_reach(body, reach, ctx: EvaluationModel, hand=(), turn=None) -> M
               if getattr(card_store().get(card_id), "evolves_from", None) == facts.name}
     legal = {card_id: status for card_id, status in reach.items() if card_id in direct}
     if getattr(body, "appeared_this_turn", False):
-        return {card_id: (status if isinstance(status, (int, float)) else Reach.NEXT_TURN)
+        return {card_id: (status if status is Reach.ABSENT
+                          or isinstance(status, (int, float)) else Reach.NEXT_TURN)
                 for card_id, status in legal.items()}
     candy = any(
         clause.kind == "fetch" and clause.zone == "hand" and clause.rider == "skip_stage1"
@@ -317,19 +360,12 @@ def _fetch_cost_payable(clause, other_hand_cards: int) -> bool:
 
 
 def _unfilled(cost, attached: Counter) -> tuple[Counter, int]:
-    """Typed slots still open after the attached units fill their own colors, and colorless
-    slots still open after the leftovers spill into them."""
-    need = Counter(unit for unit in cost if unit != COLORLESS)
-    colorless = sum(1 for unit in cost if unit == COLORLESS)
-    spent = 0
-    open_typed = Counter()
-    for unit, count in need.items():
-        used = min(count, attached.get(unit, 0))
-        spent += used
-        if count > used:
-            open_typed[unit] = count - used
-    leftovers = sum(attached.values()) - spent
-    return open_typed, max(0, colorless - leftovers)
+    provisions = tuple(attached.elements())
+    requirements = tuple(cost)
+    unpaid = unmet_cost_slots(provisions, requirements)
+    return (Counter(requirements[slot] for slot in unpaid
+                    if requirements[slot] != COLORLESS),
+            sum(requirements[slot] == COLORLESS for slot in unpaid))
 
 
 def any_attack_payable(body_facts, attached) -> bool:
@@ -340,6 +376,16 @@ def any_attack_payable(body_facts, attached) -> bool:
         if not open_typed and open_colorless == 0:
             return True
     return False
+
+
+def has_open_attack_slot(body, ctx: EvaluationModel, reach=None, *, hand=(), turn=None) -> bool:
+    facts = ctx.facts(body.card.card_id)
+    legal_reach = legal_line_reach(body, reach or {}, ctx, hand, turn)
+    attached = Counter(body.energies)
+    return any(
+        (evo_id is None or legal_reach.get(evo_id, Reach.ABSENT) is not Reach.ABSENT)
+        and bool(unmet_cost_slots(attached.elements(), attack.cost))
+        for attack, evo_id in _line_entries(facts, ctx))
 
 
 def _slot_fill(unit: int, body_facts, attached, ctx: EvaluationModel, reach=None) -> str:
@@ -393,40 +439,33 @@ def best_payable_damage(attacker_facts, attached, defender_facts) -> int:
 def usable_units(body_facts, attached, ctx: EvaluationModel, reach=None) -> float:
     """Return the largest attached-unit count one attack absorbs.
     Forward-line colorless absorption scales by that evolution's reach gate."""
-    counts = Counter(attached)
-    total = sum(counts.values())
+    provisions = tuple(attached)
+    total = len(provisions)
     if total == 0 or body_facts is None:
         return 0
     gates = reach or {}
     best = 0.0
-    condition_types = {
-        clause.condition_energy_type for clause in card_clauses(body_facts)
-        if clause.condition_energy_type is not None}
     for attack, evo_id in _line_entries(body_facts, ctx):
-        typed_cost = Counter(unit for unit in attack.cost if unit != COLORLESS)
-        typed = sum(min(count, counts.get(unit, 0))
-                    for unit, count in typed_cost.items())
-        colorless_slots = (
-            min(sum(1 for unit in attack.cost if unit == COLORLESS), total - typed)
-            if (typed == sum(typed_cost.values())
-                or condition_types.intersection(counts)) else 0)
+        attack_facts = body_facts if evo_id is None else ctx.facts(evo_id)
+        units = min(total, len(attack.cost) * typed_first_payment_fraction(
+            provisions, attack.cost, attack_facts))
         status = Reach.HAND if evo_id is None else gates.get(evo_id, Reach.ABSENT)
         scale = _reach_scale(status)
-        best = max(best, (typed + colorless_slots) * scale)
+        best = max(best, units * scale)
         if best >= total:
             return total
     return best
 
 
-def development_reach_units(body_facts, attached, ctx: EvaluationModel, reach=None):
-    counts = Counter(attached)
-    total = sum(counts.values())
-    visible = future = 0.0
+def visible_development_reach_units(body_facts, attached, ctx: EvaluationModel,
+                                    reach=None) -> float:
+    provisions = tuple(attached)
+    total = len(provisions)
+    visible = 0.0
     for attack, evo_id in _line_entries(body_facts, ctx):
-        typed = sum(min(count, counts.get(unit, 0))
-                    for unit, count in Counter(u for u in attack.cost if u != COLORLESS).items())
-        colorless = min(sum(1 for unit in attack.cost if unit == COLORLESS), total - typed)
-        units = typed + colorless
+        attack_facts = body_facts if evo_id is None else ctx.facts(evo_id)
+        units = min(total, len(attack.cost) * typed_first_payment_fraction(
+            provisions, attack.cost, attack_facts))
         if evo_id is None:
             if body_facts.evolves_from:
                 visible = max(visible, units)
@@ -434,11 +473,29 @@ def development_reach_units(body_facts, attached, ctx: EvaluationModel, reach=No
         status = (reach or {}).get(evo_id, Reach.ABSENT)
         if status in {Reach.HAND, Reach.FETCHABLE}:
             visible = max(visible, units)
-        elif status is Reach.NEXT_TURN:
-            future = max(future, units)
-        elif isinstance(status, (int, float)):
-            future = max(future, units * max(0.0, min(1.0, float(status))))
-    return visible, future
+    return visible
+
+
+def marginal_energy_absorption(body_facts, attached, energy_facts, ctx: EvaluationModel,
+                               reach=None) -> float:
+    provisions = tuple(attached)
+    supplied = int(energy_facts.provides)
+    best = 0.0
+    for attack, evo_id in _line_entries(body_facts, ctx):
+        status = Reach.HAND if evo_id is None else (reach or {}).get(evo_id, Reach.ABSENT)
+        scale = (FUTURE_TURN_DISCOUNT if status is Reach.NEXT_TURN
+                 else _reach_scale(status))
+        if evo_id is not None and scale <= 0.0:
+            continue
+        attack_facts = body_facts if evo_id is None else ctx.facts(evo_id)
+        units = provision_units(
+            energy_facts, evolved=bool(evo_id is not None or body_facts.evolves_from))
+        before = len(attack.cost) * typed_first_payment_fraction(
+            provisions, attack.cost, attack_facts)
+        after = len(attack.cost) * typed_first_payment_fraction(
+            (*provisions, *((supplied,) * units)), attack.cost, attack_facts)
+        best = max(best, max(0.0, after - before) * scale)
+    return best
 
 
 # --- demand -----------------------------------------------------------------------------
@@ -537,6 +594,7 @@ def _liveness(card_id, facts, demand: Demand, ctx: EvaluationModel, deck_counts)
         reach = line_reach(demand.hand_name_counts, deck_counts, ctx,
                            hand=demand.hand, turn=demand.turn)
         colorless_only = False
+        future_absorption = 0.0
         for body in demand.bodies:
             body_reach = legal_line_reach(body, reach, ctx, demand.hand, demand.turn)
             fills = _slot_fill(facts.provides, ctx.facts(body.card.card_id),
@@ -544,7 +602,13 @@ def _liveness(card_id, facts, demand: Demand, ctx: EvaluationModel, deck_counts)
             if fills == "typed" or _multi_provision_live(facts, body, ctx):
                 return DemandState.LIVE, None
             colorless_only = colorless_only or fills == "colorless"
+            future_absorption = max(
+                future_absorption,
+                marginal_energy_absorption(
+                    ctx.facts(body.card.card_id), body.energies, facts, ctx,
+                    body_reach))
         return (DemandState.COLORLESS_ONLY if colorless_only
+                else DemandState.SETUP if future_absorption > 0
                 else DemandState.DEAD), None
     if isinstance(facts, TrainerCard):
         clauses = tuple(getattr(facts, "clauses", ()) or ())

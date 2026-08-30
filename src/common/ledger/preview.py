@@ -84,6 +84,18 @@ def price_actions(state, board: ObservationState, baseline: float, provider,
     prices = []
     baseline_valuation = valuation_fn(board)
     original_actions = tuple(provider.actions(state))
+    if (budget is not None
+            and (budget.stop_reason != "complete"
+                 or (hasattr(budget, "check") and budget.check()))):
+        for action in original_actions:
+            budget.frontier.append(action.identity)
+            prices.append(OptionPrice(
+                action, 0.0, False,
+                (f"search stopped: {budget.stop_reason}",),
+                ContinuationFootprint(0.0, 0.0, False),
+                status=EvaluationStatus.UNAVAILABLE,
+                prize_map=baseline_valuation.prize_map))
+        return tuple(prices)
     end_action = next((action for action in original_actions
                        if action.identity.kind == "end"), None)
     end_valuation = baseline_valuation
@@ -148,7 +160,7 @@ def price_actions(state, board: ObservationState, baseline: float, provider,
             prices.append(OptionPrice(
                 action, 0.0, False,
                 (f"search stopped: {budget.stop_reason}",), footprint,
-                status=EvaluationStatus.ESTIMATED,
+                status=EvaluationStatus.UNAVAILABLE,
                 prize_map=baseline_valuation.prize_map))
             continue
         walk = _Walk(
@@ -305,14 +317,14 @@ class _Walk:
             return (_expected_valuation(weighted, self.ctx), end_probability,
                     tuple(landings))
         if isinstance(node, Refresh):
-            valuation, gaps, summary = refresh_outcomes(
+            valuation, gaps, summary, landings = refresh_outcomes(
                 _payload(state), board, node.card_id, node.draws, node.opponent_shuffles,
                 self.valuation, self.compute, self.ctx)
             self.gaps.extend(gaps)
             self.chance_summaries.append(summary)
             if not summary.sample_count and summary.method == "sampled":
                 self.unavailable = True
-            return valuation, 0.0, ()
+            return valuation, 0.0, landings
         if isinstance(node, RevealChoice):
             priced = {}
             for edge in node.choices:
@@ -709,7 +721,9 @@ def _body_copy_overflow(board, action, ctx):
     owned = Counter(body.card.card_id for body in board.me.bodies)
     owned.update(card.card_id for card in board.me.hand)
     overflow = 0
-    owned_names = Counter(ctx.facts(card_id).name for card_id in owned.elements())
+    owned_names = Counter(
+        facts.name for card_id in owned.elements()
+        if (facts := ctx.facts(card_id)) is not None)
     for card_id, count in selected.items():
         facts = ctx.facts(card_id)
         capacity = pokemon_copy_capacity(facts)

@@ -455,7 +455,8 @@ def _retired_row(correction, entry) -> dict:
 def sweep(*, store, decks=DECKS, limit=None, workers: int = 1,
           baseline: dict | None = None, reviewed: dict | None = None,
           weight_overrides: dict | None = None,
-          semantic_flips: dict | None = None) -> dict:
+          semantic_flips: dict | None = None,
+          correction_filter=None) -> dict:
     sources = (store,) if isinstance(store, (str, Path)) else tuple(store)
     files = sorted({path for source in sources for path in jsonl_files(source)},
                    key=lambda value: str(value))
@@ -463,6 +464,9 @@ def sweep(*, store, decks=DECKS, limit=None, workers: int = 1,
                for correction in load_corrections(path, dedup=False)] if files else
               [correction for source in sources for correction in load_corrections(source)])
     corpus = dedup_corrections(loaded) if files else loaded
+    if correction_filter is not None:
+        corpus = [correction for correction in corpus
+                  if correction_filter(correction)]
     swept = [correction for correction in corpus
              if correction.agent in decks and correction.obs is not None]
     # A ruling the owner already dispositioned (refuted, fixed, covered…) is retired: grading

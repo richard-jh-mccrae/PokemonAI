@@ -8,8 +8,9 @@ from common.cards import card_clauses
 from common.cards.card_facts import EnergyCard, PokemonCard, TrainerCard, STADIUM, SUPPORTER, TOOL
 from common.cards.functions.fetch import DEADNESS, WINDOW, fetch_target_matches
 
-from .capabilities import (DAMAGE_UNIT_HP, FUTURE_TURN_DISCOUNT, OptionUnits, _heal_rider_cost,
+from .capabilities import (DAMAGE_UNIT_HP, OptionUnits, _heal_rider_cost,
                            _heal_targets, _healed_hp, clause_cost_units)
+from .worth import FUTURE_TURN_DISCOUNT
 
 
 HAND_POKEMON_REALIZATION_DISCOUNT = 0.25
@@ -26,7 +27,6 @@ class _Fetch:
     consumes: bool = True
     target_resources: tuple[tuple[int, str], ...] = ()
     target_reservations: tuple[tuple[int, str], ...] = ()
-    target_values: tuple[tuple[int, float], ...] = ()
 
 
 @dataclass(frozen=True, slots=True)
@@ -72,7 +72,8 @@ def _requirements(facts, side, board, ctx) -> tuple[tuple[str, float], ...] | No
     if not isinstance(facts, TrainerCard):
         return None
     if facts.kind == SUPPORTER:
-        return (("supporter", 1.0), (f"hand:{facts.card_id}", 1.0))
+        allowance = "future_supporter" if board.turn.supporter_played else "supporter"
+        return ((allowance, 1.0), (f"hand:{facts.card_id}", 1.0))
     if facts.kind == STADIUM:
         duplicate = any(card.card_id == facts.card_id for card in board.stadium)
         return None if board.turn.stadium_played or duplicate else (
@@ -85,7 +86,8 @@ def _requirements(facts, side, board, ctx) -> tuple[tuple[str, float], ...] | No
 
 def _capacities(side, board, ctx) -> dict[str, float]:
     capacities = {
-        "supporter": 1,
+        "supporter": int(not board.turn.supporter_played),
+        "future_supporter": int(board.turn.supporter_played),
         "energy": int(not board.turn.energy_attached),
         "future_energy": int(board.turn.energy_attached),
         "stadium": int(not board.turn.stadium_played),
@@ -189,15 +191,6 @@ def _preserved_hand_resources(facts, side, ctx):
     return tuple(dict.fromkeys(reservations))
 
 
-def _fetch_target_value(facts, side, ctx):
-    if not isinstance(facts, PokemonCard):
-        return 1.0
-    develops_held = any(
-        getattr(ctx.facts(card.card_id), "evolves_from", None) == facts.name
-        for card in side.hand)
-    return 1.0 + HAND_POKEMON_REALIZATION_DISCOUNT * develops_held
-
-
 def _fetch_variants(facts, units, requirements, side, board, ctx):
     clauses = tuple(clause for clause in card_clauses(facts)
                     if clause.kind == "fetch"
@@ -253,9 +246,6 @@ def _fetch_variants(facts, units, requirements, side, board, ctx):
             for card_id in eligible
             for key, _amount in _preserved_hand_resources(
                 ctx.facts(card_id), side, ctx))
-        target_values = tuple(
-            (card_id, _fetch_target_value(ctx.facts(card_id), side, ctx))
-            for card_id in eligible)
         if distinct:
             cap = min(cap, len({group for _card_id, group in distinct}))
         amount = min(cap, copies)
@@ -264,7 +254,7 @@ def _fetch_variants(facts, units, requirements, side, board, ctx):
                 sum(source_counts.values()), copies, int(clause.dig), int(cap))
         return _Fetch(eligible, float(amount), clause.dest == "bench",
                       str(clause.zone), "search", distinct, clause.dest != "deck_top",
-                      target_resources, target_reservations, target_values)
+                      target_resources, target_reservations)
 
     fetches = tuple(fetch(clause) for clause in clauses)
     if any(clause.choice for clause in clauses):
@@ -288,31 +278,23 @@ def _fetch_variants(facts, units, requirements, side, board, ctx):
                 tuple(sorted({pair for item in fetches
                               for pair in item.target_resources})),
                 tuple(sorted({pair for item in fetches
-                              for pair in item.target_reservations})),
-                tuple(sorted({pair for item in fetches
-                              for pair in item.target_values})))
-            quality = max((value for _card_id, value in merged.target_values), default=1.0)
+                              for pair in item.target_reservations})))
             realized = (float(merged.amount) if isinstance(facts, EnergyCard)
-                        else min(units.search, float(merged.amount)) * quality)
+                        else min(units.search, float(merged.amount)))
             return (_Opportunity(
                 _with_unit(units, "search", realized),
                 requirements, 0, (merged,)),)
         return tuple(_Opportunity(
-            _with_unit(units, "search", min(units.search, float(item.amount)) * max(
-                (value for _card_id, value in item.target_values), default=1.0)),
+            _with_unit(units, "search", min(units.search, float(item.amount))),
             requirements, 0, (item,))
                      for item in fetches if item.amount)
     amount = sum(item.amount for item in fetches)
-    weighted_amount = sum(
-        item.amount * max(
-            (value for _card_id, value in item.target_values), default=1.0)
-        for item in fetches)
     realized = (float(amount) if isinstance(facts, EnergyCard)
                 and any(getattr(ctx.facts(body.card.card_id), "energy_type", None)
                         == next((clause.target_type for clause in clauses
                                  if clause.target_type is not None), None)
                         for body in side.bodies)
-                else min(units.search, float(weighted_amount)))
+                else min(units.search, float(amount)))
     return (_Opportunity(_with_unit(units, "search", realized),
                          requirements, 0, fetches),)
 
@@ -438,10 +420,7 @@ def _realize_fetches(opportunity, usage, capacities):
     bench_available = capacities.get("bench", 0.0) - usage.get("bench", 0.0)
     for fetch in sorted(opportunity.fetches, key=lambda item: len(item.eligible)):
         wanted = min(fetch.amount, int(bench_available) if fetch.to_bench else fetch.amount)
-        target_values = dict(fetch.target_values)
-        for card_id in sorted(
-                fetch.eligible, key=lambda target: target_values.get(target, 1.0),
-                reverse=True):
+        for card_id in fetch.eligible:
             group = next((value for target, value in fetch.distinct_groups
                           if target == card_id), None)
             if group is not None and group in used_groups:
@@ -473,7 +452,7 @@ def _realize_fetches(opportunity, usage, capacities):
                     (reservation_key, float(take))
                     for reservation_key in reservation_keys)
                 wanted -= take
-                claimed[fetch.field] += take * target_values.get(card_id, 1.0)
+                claimed[fetch.field] += take
                 if group is not None:
                     used_groups.add(group)
                 if fetch.to_bench:
@@ -517,8 +496,17 @@ def feasible_option_portfolio_result(entries, side, board, ctx, *, hand_size: in
         discard_cost = round(shared_cost)
         units = _with_unit(units, "cost", units.cost - raw_cost + shared_cost)
         if isinstance(facts, PokemonCard):
-            units = _scale(units, HAND_POKEMON_REALIZATION_DISCOUNT)
+            future_evolution = any(
+                requirement.startswith("evolve:future:")
+                for requirement, _amount in requirements)
+            units = _scale(
+                units,
+                FUTURE_TURN_DISCOUNT if future_evolution
+                else HAND_POKEMON_REALIZATION_DISCOUNT)
         elif isinstance(facts, EnergyCard) and board.turn.energy_attached:
+            units = _scale(units, FUTURE_TURN_DISCOUNT)
+        elif (isinstance(facts, TrainerCard) and facts.kind == SUPPORTER
+              and board.turn.supporter_played):
             units = _scale(units, FUTURE_TURN_DISCOUNT)
         variants = _fetch_variants(facts, units, requirements, side, board, ctx)
         if any(clause.kind == "heal" for clause in card_clauses(facts)):

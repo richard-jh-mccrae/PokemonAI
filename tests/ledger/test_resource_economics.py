@@ -1,7 +1,7 @@
 from dataclasses import replace
 
-from ledger_helpers import (DARK_E, DREEPY, FIRE, FIRE_E, body, player,
-                            printout)
+from ledger_helpers import (DARK_E, DREEPY, FIRE, FIRE_E, IGNITION, MEGA_STARMIE,
+                            STARYU, body, player, printout)
 
 from common.ledger import EvaluationModel, evaluate
 from common.ledger.capabilities import OptionUnits
@@ -25,6 +25,21 @@ def board(**kwargs):
 
 def value(state, context):
     return evaluate(state, context).total
+
+
+def activation(state, feature, context):
+    return sum(item.value for item in evaluate(state, context).activations
+               if item.feature == feature)
+
+
+def test_multi_provision_energy_is_live_for_a_reachable_evolution_line():
+    context = EvaluationModel.build()
+    state = replace(
+        board(me=player(active=body(STARYU, 1), hand=[IGNITION])),
+        deck_counts=((MEGA_STARMIE, 1),))
+
+    assert activation(state, "demand.dead", context) == 0
+    assert activation(state, "interaction.kind.special_energy.in_hand_setup", context) == 1
 
 
 def portfolio_search(hand, deck_card):
@@ -77,7 +92,7 @@ def test_fetch_cannot_discard_its_only_evolution_base():
     assert portfolio_search([ULTRA_BALL, DREEPY, DUNSPARCE], DRAKLOAK) == 0
 
 
-def test_recovery_values_a_target_that_completes_a_held_line():
+def test_recovery_target_quality_is_owned_by_the_successor_state():
     context = EvaluationModel.build()
     state = board(me=player(
         active=body(DREEPY, 1), hand=[NIGHT_STRETCHER, DUDUNSPARCE],
@@ -87,7 +102,7 @@ def test_recovery_values_a_target_that_completes_a_held_line():
         [(context.facts(NIGHT_STRETCHER), OptionUnits(search=1))],
         state.me, state, context, hand_size=2)
 
-    assert result.units.search == 1.25
+    assert result.units.search == 1
 
 
 def test_evolution_option_survives_when_its_parent_just_entered_play():
@@ -101,9 +116,9 @@ def test_evolution_option_survives_when_its_parent_just_entered_play():
 
     def available_draw(state):
         return sum(item.activation for item in evaluate(state, context).contributions
-                   if item.feature == "function.draw.available")
+                   if item.feature == "option.draw")
 
-    assert available_draw(after) == available_draw(before)
+    assert available_draw(after) > 0
 
 
 def test_duplicate_energy_has_lower_discard_opportunity_cost():

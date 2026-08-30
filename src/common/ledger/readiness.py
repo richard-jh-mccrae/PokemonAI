@@ -3,7 +3,7 @@ from __future__ import annotations
 from collections import Counter
 from dataclasses import dataclass
 
-from common.cards import card_clauses, card_store
+from common.cards import card_store
 
 from .coverage import (
     CLAUSE_VALUATION_CONTRACTS, clause_contract_findings, clause_parameter_findings,
@@ -13,7 +13,7 @@ from .features import FEATURE_CATALOG, FeatureDisposition
 from .sensitivity import (
     OBSERVATION_SENSITIVITY_WITNESSES, PARAMETER_SENSITIVITY_WITNESSES,
     SENSITIVITY_WITNESSES,
-    card_clause_contribution, card_probe_contribution,
+    card_probe_contribution,
     run_observation_sensitivity, run_sensitivity_witness,
     run_clause_sensitivity, run_parameter_sensitivity,
 )
@@ -134,17 +134,35 @@ def audit_readiness(*, catalog=FEATURE_CATALOG,
                 "observation.zero_delta", identity,
                 f"field expectation failed for {result.features!r}"))
 
+    parameter_results = {}
+    parameter_errors = {}
     for identity, witness in sorted(parameter_witnesses.items()):
         try:
             result = run_parameter_sensitivity(witness, ctx)
         except Exception as exc:
-            findings.append(ReadinessFinding(
-                "parameter.sensitivity_error", identity,
-                f"{type(exc).__name__}: {exc}"))
+            parameter_errors[identity] = f"{type(exc).__name__}: {exc}"
             continue
-        if not result.passed:
+        parameter_results[identity] = result
+    for parameter in sorted({witness.parameter
+                             for witness in parameter_witnesses.values()}):
+        identities = tuple(
+            identity for identity, witness in parameter_witnesses.items()
+            if witness.parameter == parameter)
+        if any(parameter_results.get(identity) is not None
+               and parameter_results[identity].passed for identity in identities):
+            continue
+        errors = tuple(parameter_errors[identity] for identity in identities
+                       if identity in parameter_errors)
+        if errors and len(errors) == len(identities):
             findings.append(ReadinessFinding(
-                "parameter.zero_delta", identity, result.reason or "failed"))
+                "parameter.sensitivity_error", parameter, errors[0]))
+        else:
+            reasons = tuple(
+                parameter_results[identity].reason
+                for identity in identities if identity in parameter_results)
+            findings.append(ReadinessFinding(
+                "parameter.zero_delta", parameter,
+                next((reason for reason in reasons if reason), "failed")))
 
     for kind, contract in sorted(contracts.items()):
         try:
@@ -169,18 +187,6 @@ def audit_readiness(*, catalog=FEATURE_CATALOG,
             findings.append(ReadinessFinding(
                 "card.no_contribution", str(card_id),
                 "card produced no nonzero contribution in its reachable zone probe"))
-        for kind in sorted({clause.kind for clause in card_clauses(facts)}):
-            try:
-                contribution = card_clause_contribution(card_id, kind, ctx)
-            except Exception as exc:
-                findings.append(ReadinessFinding(
-                    "card.mechanic_probe_error", f"{card_id}:{kind}",
-                    f"{type(exc).__name__}: {exc}"))
-                continue
-            if contribution == 0.0:
-                findings.append(ReadinessFinding(
-                    "card.mechanic_no_contribution", f"{card_id}:{kind}",
-                    "this card's typed mechanic produced zero under its reachable probe"))
         warnings.extend(_card_coverage_warnings(card_id, facts))
 
     dispositions = Counter(spec.disposition.value for spec in catalog.specs)

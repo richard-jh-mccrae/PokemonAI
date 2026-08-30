@@ -561,13 +561,18 @@ def test_energy_option_has_diminishing_value_for_interchangeable_hand_copies():
 
 
 def test_spent_supporter_allowance_discounts_instead_of_erasing_next_turn_option():
+    available = board(me=player(active=body(119, 1), hand=[LILLIES]))
     printed = printout(me=player(active=body(119, 1), hand=[LILLIES]))
     printed["current"]["supporterPlayed"] = True
-    state = ObservationStateBuilder().root(printed)
+    spent = ObservationStateBuilder().root(printed)
     context = EvaluationModel.build()
 
-    assert card_option_value(
-        context.facts(LILLIES), state.me, state.them, state, context) > 0
+    def held_draw(state):
+        return sum(item.activation for item in evaluate(state, context).contributions
+                   if item.feature == "option.draw"
+                   and item.provenance == ("feasible_option_portfolio:serial:800",))
+
+    assert 0 < held_draw(spent) < held_draw(available)
 
 
 def test_card_option_units_do_not_embed_trainable_feature_weights():
@@ -597,7 +602,7 @@ def test_restricted_heal_is_live_only_with_an_eligible_active():
         facts, grass.me, grass.them, grass, context).healing == 0
 
 
-def test_matching_typed_supply_and_targets_increase_feasibility_features():
+def test_matching_typed_supply_and_targets_increase_acceleration_option():
     scarce = board(me=player(
         active=body(119, 1), bench=[body(APPLIN, 2)],
         hand=[WONDROUS_PATCH], discard=[FIRE_E]))
@@ -606,14 +611,11 @@ def test_matching_typed_supply_and_targets_increase_feasibility_features():
         hand=[WONDROUS_PATCH], discard=[PSYCHIC_E, PSYCHIC_E]))
     context = EvaluationModel.build()
 
-    def activation(state, feature):
-        return sum(item.value for item in evaluate(state, context).activations
-                   if item.feature == feature)
+    facts = context.facts(WONDROUS_PATCH)
 
-    assert activation(live, "clause.parameter.energy_type") \
-        > activation(scarce, "clause.parameter.energy_type")
-    assert activation(live, "clause.parameter.target_type") \
-        > activation(scarce, "clause.parameter.target_type")
+    assert card_option_units(
+        facts, live.me, live.them, live, context).acceleration \
+        > card_option_units(facts, scarce.me, scarce.them, scarce, context).acceleration
 
 
 def test_lunar_cycle_requires_basic_fighting_energy_in_hand():

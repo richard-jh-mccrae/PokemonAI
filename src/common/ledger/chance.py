@@ -1,7 +1,7 @@
 """Bounded whole-hand sampling for shuffle-draw actions.
 
-Samples are evaluated one at a time and discarded. The caller receives one expected valuation,
-never a persistent chance subtree."""
+The caller receives the expected valuation and the bounded sampled successor roots that produced it.
+"""
 from __future__ import annotations
 
 import hashlib
@@ -13,14 +13,11 @@ from dataclasses import replace
 from common.observation import ObservationState, ObservationStateBuilder, OpponentBelief
 from common.cards import card_store
 from common.cards.card_facts import SUPPORTER
-from common.ledger.capabilities import card_option_units
 from common.ledger.evaluate import FeatureActivation, FeatureContribution, Valuation
 
 
 PLAYER_COUNT = 2
 SEED_DIGEST_BYTES = 8
-DIRECT_REFRESH_CARD_GAIN = 3
-DIRECT_REFRESH_MAX_RETAINED = 1
 MIN_ADAPTIVE_SAMPLES = 4
 SAMPLES_PER_OUTCOME = 2
 
@@ -93,33 +90,8 @@ def refresh_outcomes(observation, board: ObservationState, card_id: int,
 
     draws = tuple(draws)
     seed = _seed(board, card_id, compute.chance_seed)
-    retained = len(hand_ids)
-    if (ctx is not None and draws and retained <= DIRECT_REFRESH_MAX_RETAINED
-            and min(int(own_draw) - retained
-                    for own_draw, _opponent_draw in draws) >= DIRECT_REFRESH_CARD_GAIN):
-        baseline = evaluate_fn(board)
-        units = card_option_units(
-            ctx.facts(card_id), board.me, board.them, board, ctx)
-        extra = tuple(FeatureContribution(
-            feature, activation, ctx.configuration[feature],
-            activation * ctx.configuration[feature], ("refresh.direct",))
-            for feature, activation in units.activations() if activation)
-        by_feature = {item.feature: item for item in baseline.activations}
-        for item in extra:
-            previous = by_feature.get(item.feature)
-            by_feature[item.feature] = FeatureActivation(
-                item.feature,
-                item.activation + (0.0 if previous is None else previous.value),
-                tuple(sorted(set(item.provenance).union(
-                    () if previous is None else previous.provenance))))
-        result = Valuation(
-            baseline.total + sum(item.value for item in extra), baseline.parts,
-            baseline.gaps, tuple(sorted(by_feature.values(), key=lambda item: item.feature)),
-            (*baseline.contributions, *extra), baseline.prize_map)
-        summary = RefreshSummary(
-            0, result.total, 0.0, seed, compute.identity, "direct")
-        return result, tuple(sorted(gaps)), summary
     running = _RunningValuation()
+    successors = []
     if draws:
         minimum_samples = min(
             compute.chance_sample_budget,
@@ -136,7 +108,8 @@ def refresh_outcomes(observation, board: ObservationState, card_id: int,
             valuation = evaluate_fn(successor)
             gaps.update(valuation.gaps)
             running.add(valuation)
-            del valuation, successor, synthetic
+            successors.append(successor)
+            del valuation, synthetic
             if running.count >= minimum_samples and running.m2 == 0.0:
                 break
     ordered_gaps = tuple(sorted(gaps))
@@ -144,7 +117,10 @@ def refresh_outcomes(observation, board: ObservationState, card_id: int,
     variance = 0.0 if not running.count else running.m2 / running.count
     summary = RefreshSummary(
         running.count, result.total, variance, seed, compute.identity)
-    return result, ordered_gaps, summary
+    probability = 0.0 if not successors else 1.0 / len(successors)
+    landings = tuple((probability, successor, successor, False, ())
+                     for successor in successors)
+    return result, ordered_gaps, summary, landings
 
 
 def _seed(board: ObservationState, card_id: int, seed: int) -> int:

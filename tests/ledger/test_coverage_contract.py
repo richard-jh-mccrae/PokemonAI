@@ -23,7 +23,11 @@ from common.ledger.coverage import (
     unowned_clause_kinds,
     unowned_observation_fields,
 )
-from common.ledger.features import CLAUSE_PARAMETER_DEFAULTS, FEATURE_CATALOG
+from common.ledger.features import (
+    CLAUSE_PARAMETER_QUALIFIERS,
+    FEATURE_CATALOG,
+    FeatureDisposition,
+)
 from common.ledger.capabilities import card_option_units
 from common.ledger import EvaluationModel
 from common.observation import ObservationStateBuilder
@@ -71,23 +75,23 @@ def test_every_clause_parameter_and_deployed_value_has_an_explicit_contract():
         name for name, mode in CLAUSE_PARAMETER_CONTRACTS.items()
         if mode is ClauseValuationMode.DIRECT_EQUATION
     }
-    assert set(CLAUSE_PARAMETER_DEFAULTS) == {
+    assert set(CLAUSE_PARAMETER_QUALIFIERS) == {
         name for name, equation in CLAUSE_PARAMETER_DIRECT_EQUATIONS.items()
         if equation == "evaluate._situational_functions"
         or name in {"cost", "rider", "target"}
     }
-    assert not {
-        name for name in CLAUSE_PARAMETER_DEFAULTS
-        if f"clause.parameter.{name}" not in FEATURE_CATALOG
-    }
+    assert all(
+        FEATURE_CATALOG[f"clause.parameter.{name}"].disposition
+        is FeatureDisposition.RETIRED
+        for name in CLAUSE_PARAMETER_QUALIFIERS)
     assert set(CLAUSE_PARAMETER_DIRECTION_CONTRACTS) == set(
-        CLAUSE_PARAMETER_DEFAULTS)
+        CLAUSE_PARAMETER_QUALIFIERS)
     assert set(CLAUSE_PRIMARY_PARAMETER_FEATURES) == {
         (parameter, clause.kind)
         for facts in card_store().values()
         for clause in card_clauses(facts)
         for parameter in clause.params
-        if parameter not in CLAUSE_PARAMETER_DEFAULTS
+        if parameter not in CLAUSE_PARAMETER_QUALIFIERS
     }
     assert not {
         feature for feature in CLAUSE_PRIMARY_PARAMETER_FEATURES.values()

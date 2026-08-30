@@ -292,7 +292,12 @@ def test_every_valued_card_function_is_owned_by_a_feature_activation_rule():
                 if rule.source == "function" for claim in rule.claims}
 
     assert declared <= set(FUNCTION_CATALOG.kinds)
-    assert "draw" in declared
+    assert FEATURE_CATALOG["function.draw.available"].disposition \
+        is FeatureDisposition.RETIRED
+    assert FEATURE_CATALOG["function.fetch.live_target"].disposition \
+        is FeatureDisposition.RETIRED
+    assert FEATURE_CATALOG["development.hand_line"].disposition \
+        is FeatureDisposition.RETIRED
 
 
 def test_every_valuation_feature_owns_a_typed_activation_rule_without_direct_bypass():

@@ -1,4 +1,10 @@
-from train.ledger_correction_gate import correction_gate_findings, ledger_correction_sources
+from types import SimpleNamespace
+
+from train.ledger_correction_gate import (
+    correction_gate_findings,
+    is_one_ply_ledger_correction,
+    ledger_correction_sources,
+)
 from train.blunder.correction import correction_selection_error
 from train.blunder.reviewed import load_reviewed, review_key
 from train.blunder.store import load_corrections
@@ -21,6 +27,49 @@ def test_one_ply_gate_selects_every_round_at_or_after_its_first_production_run(t
         tmp_path / names[1] / "corrections.jsonl",
         tmp_path / names[2] / "corrections.jsonl",
     )
+
+
+def test_one_ply_gate_routes_puct_attribution_out_of_ledger_replay():
+    assert is_one_ply_ledger_correction(SimpleNamespace(attribution=None))
+    assert not is_one_ply_ledger_correction(
+        SimpleNamespace(attribution="puct_search"))
+
+
+def test_new_round_routing_is_pinned_to_atomic_vs_ordered_work():
+    sources = {
+        path.parent.name: path for path in ledger_correction_sources()
+        if path.parent.name in {
+            "20260829-181337_db2e41bd_mega_starmie",
+            "20260829-184447_db2e41bd_mega_lucario",
+        }}
+    corrections = [
+        correction for source in sources.values()
+        for correction in load_corrections(source, dedup=False)]
+    reviewed = load_reviewed()
+
+    puct = {correction.id for correction in corrections
+            if not is_one_ply_ledger_correction(correction)
+            or reviewed.get(review_key(correction), {}).get("disposition")
+            == "deferred-multi-turn"}
+    retired = {correction.id for correction in corrections
+               if review_key(correction) in reviewed and correction.id not in puct}
+    active = {correction.id for correction in corrections
+              if is_one_ply_ledger_correction(correction)
+              and review_key(correction) not in reviewed}
+
+    assert puct == {
+        "0583a2df47ee", "16d8f143c500", "23ab3ad8add1",
+        "17a0280c2b26", "27269b208744", "439acf9eebf0", "bad3f5423491",
+    }
+    assert retired == {
+        "39270eede285",
+    }
+    assert active == {
+        "024d2b10765c", "1fff89399198",
+        "2109d00a2f31", "61ab038cc160", "86ff10e9f2ef",
+        "974a2484f8ee", "9e56f5f95b91", "c7cb00f2f8e7",
+        "fcd365f4e685", "feaaa877cebe",
+    }
 
 
 def test_gate_fails_any_unreplayed_record_or_violated_preference():
@@ -78,6 +127,44 @@ def test_gate_accepts_a_ruled_current_choice_despite_its_raw_pairwise_margin():
     }
 
     assert correction_gate_findings(report, audit, correction_count=1) == ()
+
+
+def test_gate_rejects_repeating_the_recorded_blunder_even_with_positive_margin():
+    report = {
+        "rows": [{
+            "id": "a", "grading_exclusion": None, "graded": True,
+            "agrees": False, "chosen": [0], "recorded_chosen": [0],
+        }],
+        "retired": [],
+    }
+    audit = {
+        "summary": {"incomplete": 0, "violated_preferences": 0,
+                    "conflict_sets": 0},
+        "audits": [{"gradeable": True, "satisfied_by_committed": True,
+                    "margin": {"atomic": 1.0}, "current_selection": [0],
+                    "acceptable_selections": [[2]]}],
+    }
+
+    assert correction_gate_findings(report, audit, correction_count=1) == (
+        "1 correction replays repeat the recorded blunder",)
+
+
+def test_gate_requires_every_ruled_alternative_to_beat_the_recorded_choice():
+    report = {"rows": [{"id": "a", "grading_exclusion": None}], "retired": []}
+    audit = {
+        "summary": {"incomplete": 0, "violated_preferences": 1,
+                    "conflict_sets": 0},
+        "audits": [{"gradeable": True, "satisfied_by_committed": False,
+                    "margin": {"atomic": -1.0}, "current_selection": [3],
+                    "acceptable_selections": [[1], [2]],
+                    "acceptable_preferences": [
+                        {"selection": [1], "margin": -1.0},
+                        {"selection": [2], "margin": 0.25},
+                    ]}],
+    }
+
+    assert correction_gate_findings(report, audit, correction_count=1) == (
+        "1 correction preferences are violated",)
 
 
 def test_refresh_supporter_ordering_is_deferred_to_full_turn_search():

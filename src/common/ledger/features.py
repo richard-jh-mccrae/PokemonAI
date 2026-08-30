@@ -17,8 +17,7 @@ ACTIVATION_OPERATIONS = frozenset({
     "ability_target", "active_retreat_cost", "active_target", "active_tool_count",
     "bench_pressure_target", "bench_target", "board_body_count", "body_clause_count",
     "body_flag_count",
-    "clause_parameter_units",
-    "constant", "copy_attack_source", "evolution_target", "fetch_live_target",
+    "constant", "copy_attack_source", "evolution_target",
     "incoming_pressure", "mill_target", "multi_provision_capacity", "open_cost",
     "open_energy_slot",
     "opponent_bench", "opponent_empty_bench",
@@ -26,7 +25,7 @@ ACTIVATION_OPERATIONS = frozenset({
     "opponent_hand_count", "opponent_single_prize_count",
     "opponent_special_energy_count", "own_bench_count", "own_damage_units",
     "own_hand_count", "own_item_count", "own_max_attack_units", "prize_difference",
-    "side_damage_units", "side_hand_count", "side_status_count", "status_target",
+    "side_damage_units", "side_status_count", "status_target",
     "stadium_board_fit", "switch_target", "piercing_target", "self_ko_liability",
     "turn_number",
 })
@@ -203,9 +202,8 @@ _DECLARED_RULES = {
         "action", ("acceleration_phase_fit",), "constant"),
     "ability.resource_cost": _rule(
         "draw_effect", ("opponent_cards",), "constant"),
-    "function.draw.available": _rule("function", ("draw",), "constant"),
-    "function.draw.hand_count": _rule("function", ("draw",), "side_hand_count"),
-    "function.fetch.live_target": _rule("function", ("fetch",), "fetch_live_target"),
+    "ability.damage_move": _rule(
+        "option", ("ability.damage_move",), "constant"),
     "function.gust.bench_target": _rule("function", ("gust",), "bench_target"),
     "function.heal.damage_present": _rule("function", ("heal",), "constant"),
     "function.accel.open_energy_slot": _rule(
@@ -272,9 +270,7 @@ _OBSERVATION_CLAIMS = {
     "demand.colorless_only": "colorless_only_hand_card",
     "demand.setup": "setup_hand_card",
     "development.ready_evolution": "evolution_access",
-    "development.hand_line": "hand_line",
     "development.visible_reach": "visible_development_reach",
-    "development.next_turn_reach": "next_turn_development_reach",
     "copy.surplus": "surplus_hand_copy",
     "copy.surplus_in_play": "surplus_in_play_copy",
     "copy.basic_energy_surplus": "surplus_basic_energy",
@@ -390,7 +386,7 @@ _KIND_DEFAULTS = {
     "supporter": 0.15,
     "tool": 0.08,
     "stadium": 0.10,
-    "energy": 0.10,
+    "energy": 0.20,
     "special_energy": 0.05,
 }
 
@@ -440,27 +436,25 @@ _SCALAR_DEFAULTS = {
     "zone.in_discard": 0.001,
     "zone.under_body": 0.002,
     "zone.attached_usable": 0.004,
-    "zone.attached_useless": -0.08,
+    "zone.attached_useless": -0.09,
     "energy.end_of_turn_rental": -0.25,
     "zone.tool_attached": 0.002,
     "demand.dead": -0.04,
     "demand.colorless_only": -0.02,
-    "demand.setup": -0.01,
+    "demand.setup": 0.032,
     "development.ready_evolution": 0.50,
-    "development.hand_line": 0.20,
-    "development.visible_reach": 0.50,
-    "development.next_turn_reach": 0.40,
+    "development.visible_reach": 0.0161,
     "copy.surplus": -0.03,
     "copy.surplus_in_play": -1.0,
     "copy.basic_energy_surplus": -0.04,
-    "interaction.synergy.in_hand": 0.40,
-    "damage.floor": 0.30,
-    "body.hp_per_100": 0.02,
+    "interaction.synergy.in_hand": 0.351,
+    "damage.floor": 0.75,
+    "body.hp_per_100": 0.05,
     "bench.open_slot": 0.15,
-    "body.development": 0.30,
+    "body.development": 0.31,
     "bench.full": -0.30,
-    "body.prize_liability": 0.04,
-    "energy.concentration": 0.10,
+    "body.prize_liability": 0.26,
+    "energy.concentration": 0.34,
     "active.doomed": 0.40,
     "active.terminal_liability": 100.0,
     "active.premium": 0.08,
@@ -469,9 +463,9 @@ _SCALAR_DEFAULTS = {
     "active.damage_pressure": 0.02,
     "combat.realization": 1.0,
     "combat.realized_ko": 1.0,
-    "ability.draw_cards": 0.08,
+    "ability.draw_cards": 0.062,
     "ability.search_cards": 0.10,
-    "ability.damage_move": 0.30,
+    "ability.damage_move": 0.321,
     "ability.healing": 0.25,
     "ability.acceleration": 0.25,
     "ability.denial": 0.20,
@@ -479,7 +473,7 @@ _SCALAR_DEFAULTS = {
     "ability.self_cost": -0.12,
     "ability.future": 0.12,
     "mobility.retreat_progress": 0.10,
-    "resource.discard_recoverable": 0.04,
+    "resource.discard_recoverable": 0.022,
     "resource.opponent_hidden_option": 0.08,
     "resource.opponent_hidden_deck": 0.015,
     "prize.race": 1.0,
@@ -502,9 +496,6 @@ _SCALAR_DEFAULTS = {
     "continuation.opportunity_preserved": 0.002,
     "continuation.opportunity_consumed": -0.002,
     "continuation.information_value": 0.55,
-    "function.draw.available": 0.04,
-    "function.draw.hand_count": 0.005,
-    "function.fetch.live_target": 0.08,
     "function.gust.bench_target": 0.03,
     "function.heal.damage_present": 0.03,
     "function.accel.open_energy_slot": 0.04,
@@ -514,7 +505,7 @@ _SCALAR_DEFAULTS = {
     "function.denial.opponent_resource": 0.02,
     "function.bench_pressure.target_count": 0.01,
     "function.protection.incoming_pressure": 0.02,
-    "function.status.active_target": 0.02,
+    "function.status.active_target": 0.05,
     "function.cost_reduction.open_cost": 0.02,
     "function.self_cost.exposure": -0.04,
     "function.suppression.ability_target": 0.02,
@@ -522,7 +513,7 @@ _SCALAR_DEFAULTS = {
     "function.move_damage.damage_present": 0.03,
     "function.ko.active_target": 0.05,
     "function.ko.self_prize_liability": -1.0,
-    "function.stadium.board_fit": 0.005,
+    "function.stadium.board_fit": 0.100,
     "function.attack.modifier": 0.03,
     "function.attack.copy_source": 0.03,
     "function.attack.piercing": 0.03,
@@ -535,57 +526,18 @@ _SCALAR_DEFAULTS = {
     "status.burned": 0.15,
 }
 
-CLAUSE_PARAMETER_DEFAULTS = MappingProxyType({
-    "allowance": 0.01,
-    "applies_to": 0.01,
-    "attack": 0.01,
-    "choice": 0.015,
-    "chooser": 0.01,
-    "cost": 0.02,
-    "cost_required": 0.01,
-    "cost_units": 0.02,
-    "dest": 0.01,
-    "dig": 0.01,
-    "dig_from": 0.005,
-    "distinct_types": 0.01,
-    "duration": 0.01,
-    "each_of": 0.01,
-    "effect": 0.015,
-    "energy": 0.01,
-    "energy_type": 0.005,
-    "evolves_into_type": 0.005,
-    "exclude_name": 0.005,
-    "granted_action": 0.01,
-    "hp_max": 0.01,
-    "includes_effects": 0.01,
-    "name": 0.005,
-    "name_family": 0.005,
-    "named": 0.005,
-    "new_weakness": 0.01,
-    "no_ability": 0.01,
-    "no_rule_box": 0.01,
-    "no_stack": 0.005,
-    "on": 0.01,
-    "optional": 0.01,
-    "random": 0.02,
-    "restriction": 0.01,
-    "rider": 0.015,
-    "rider_amount": 0.01,
-    "rider_energy_type": 0.005,
-    "scope": 0.01,
-    "source": 0.01,
-    "source_class": 0.01,
-    "symmetric": 0.01,
-    "target": 0.01,
-    "target_class": 0.01,
-    "target_condition": 0.01,
-    "target_type": 0.005,
-    "timing": 0.005,
-    "trigger": 0.01,
-    "type": 0.005,
-    "window": 0.005,
-    "zone": 0.01,
-})
+CLAUSE_PARAMETER_QUALIFIERS = frozenset((
+    "allowance", "applies_to", "attack", "choice", "chooser", "cost",
+    "cost_required", "cost_units", "dest", "dig", "dig_from",
+    "distinct_types", "duration", "each_of", "effect", "energy",
+    "energy_type", "evolves_into_type", "exclude_name", "granted_action",
+    "hp_max", "includes_effects", "name", "name_family", "named",
+    "new_weakness", "no_ability", "no_rule_box", "no_stack", "on",
+    "optional", "random", "restriction", "rider", "rider_amount",
+    "rider_energy_type", "scope", "source", "source_class", "symmetric",
+    "target", "target_class", "target_condition", "target_type", "timing",
+    "trigger", "type", "window", "zone",
+))
 
 OPTION_DEFAULTS = MappingProxyType({
     "option.hp": 0.02,
@@ -596,13 +548,15 @@ OPTION_DEFAULTS = MappingProxyType({
     "option.denial": 0.30,
     "option.healing": 0.25,
     "option.mobility": 0.10,
-    "option.energy": 0.30,
+    "option.energy": 0.10,
     "option.cost": -0.10,
 })
 
 OPTION_DEPTH_DEFAULTS = MappingProxyType({
     f"option.depth.{key.removeprefix('option.')}": -value / 2
     for key, value in OPTION_DEFAULTS.items()
+} | {
+    "option.depth.ability.damage_move": -_SCALAR_DEFAULTS["ability.damage_move"] / 2,
 })
 
 _BELIEF_DEFAULTS = {
@@ -611,7 +565,7 @@ _BELIEF_DEFAULTS = {
     "mechanic.effect_immunity": -0.04,
     "mechanic.effect_immunity.ex_body_count": -0.02,
     "mechanic.hand_size_attack": -0.01,
-    "mechanic.item_lock": -0.05,
+    "mechanic.item_lock": -0.01,
     "mechanic.no_pivot": 0.03,
     "mechanic.no_pivot.retreat_cost": 0.01,
     "mechanic.piercing": -0.03,
@@ -640,10 +594,6 @@ FEATURE_CATALOG = FeatureCatalog(
           if key in _CONTINUATION_CLAIMS else ()),
     ))
           for key, value in _SCALAR_DEFAULTS.items())
-    + tuple(FeatureSpec(
-        f"clause.parameter.{parameter}", value, "semantic_units",
-        (_rule("clause_parameter", (parameter,), "clause_parameter_units"),))
-            for parameter, value in CLAUSE_PARAMETER_DEFAULTS.items())
     + tuple(FeatureSpec(key, value, "posterior",
                         ((_TRAIT_RULES[key],) if key in _TRAIT_RULES
                          else (_MECHANIC_RULES[key],)))
@@ -672,12 +622,19 @@ FEATURE_CATALOG = FeatureCatalog(
                 "combat.attack_now", "combat.attack_progress",
                 "combat.attack_future", "combat.bench_reach",
                 "combat.active_threat", "combat.line_potential",
-                "combat.prize_phase_fit", "bench.developed_body")),
+                "combat.prize_phase_fit", "bench.developed_body",
+                "development.hand_line", "development.next_turn_reach",
+                "function.draw.available", "function.draw.hand_count",
+                "function.fetch.live_target"))
+    + tuple(FeatureSpec(
+        f"clause.parameter.{parameter}", 0.0,
+        disposition=FeatureDisposition.RETIRED)
+            for parameter in CLAUSE_PARAMETER_QUALIFIERS),
     schema_version=20,
 )
 
 
-__all__ = ("ACTIVATION_OPERATIONS", "ActivationRule", "CLAUSE_PARAMETER_DEFAULTS",
+__all__ = ("ACTIVATION_OPERATIONS", "ActivationRule", "CLAUSE_PARAMETER_QUALIFIERS",
            "FEATURE_CATALOG",
            "OPTION_DEFAULTS", "OPTION_DEPTH_DEFAULTS",
            "FeatureCatalog", "FeatureDisposition", "FeatureSpec")

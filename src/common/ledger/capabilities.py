@@ -6,24 +6,27 @@ from dataclasses import dataclass, replace
 from common.cards import card_clauses
 from common.cards.card_facts import (
     BASIC_ENERGY, COLORLESS, DARKNESS, DRAGON, FIGHTING, GRASS, METAL, PSYCHIC,
-    SUPPORTER, WILDCARD, Clause, EnergyCard, PokemonCard, TrainerCard,
+    SUPPORTER, Clause, EnergyCard, PokemonCard, TrainerCard,
 )
 from common.cards.functions.damage import bench_reach
 from common.cards.functions.draw import draw_branches
 from common.cards.functions.energy import provision_units
 from common.cards.functions.fetch import DEADNESS, fetch_target_matches
 
+from .worth import (FUTURE_TURN_DISCOUNT, marginal_energy_absorption, payment_fraction,
+                    typed_first_payment_fraction, unmet_cost_slots)
+
 WEAKNESS_MULTIPLIER = 2
 RESISTANCE_REDUCTION = 30
-COMPLETION_EXPONENT = 2
+COMPLETION_EXPONENT = 5
 DEFAULT_PRIZE_COUNT = 6
 COMEBACK_PRIZE_THRESHOLD = 3
 DAMAGE_UNIT_HP = 100
 CONFUSION_SELF_DAMAGE = 30
 DAMAGE_COUNTER_HP = 10
+DAMAGE_TRANSFER_SIDES = 2.0
 DAMAGE_RANGE_BOUND_COUNT = 2
 TURN_PARITY_COUNT = 2
-FUTURE_TURN_DISCOUNT = 0.8
 EVOLUTION_HOP_DISCOUNT = 0.5
 STAGE_RANK = {"basic": 0, "stage1": 1, "stage2": 2}
 DISCARD_AREA = 3
@@ -72,68 +75,6 @@ RIDER_BENEFIT_UNITS = frozenset({
     "heal_30_target", "poison_new_active", "self_switch", "shuffle_before_place",
     "shuffle_both_hands", "skip_stage1",
 })
-
-CLAUSE_PARAMETER_VALUE_UNITS = {
-    "allowance": {"body": 0.75, "card": 1.0},
-    "dest": {
-        "bench": 1.1, "deck_top": 0.7, "hand": 1.0, "in_play": 1.2,
-        "new_benched": 1.1, "opp_any": 1.0,
-    },
-    "dig_from": {"bottom": 0.9},
-    "duration": {
-        "next_turn": FUTURE_TURN_DISCOUNT,
-        "opp_next_turn": FUTURE_TURN_DISCOUNT,
-    },
-    "rider": {
-        "attached_cards_too": 0.5, "both_hands_to_bottom": 0.5,
-        "bounce_energy_to_hand": -0.5, "confuse_target": 1.0,
-        "cure_existing": 1.0, "damage_new_active": 1.0,
-        "discard_basic_f_energy": -1.0, "discard_eot": -1.0,
-        "discard_own_energy": -1.0, "discard_remainder": -0.5,
-        "draw_1": 1.0, "heal_30_target": 0.3, "other_to_bottom": -0.5,
-        "poison_new_active": 1.0, "recoil": -1.0, "self_ko": -1.0,
-        "self_switch": 1.0, "shuffle_before_place": 0.25,
-        "shuffle_both_hands": 0.5, "shuffle_counted_into_deck": -0.5,
-        "shuffle_own_hand_in": -0.5, "shuffle_self_in": -1.0,
-        "skip_stage1": 1.0,
-    },
-    "scope": {
-        "damage_and_effects": 1.0, "resistance": 0.8, "weakness": 1.0,
-    },
-    "source": {
-        "attack_damage": 0.8, "deck": 0.75, "discard": 0.65, "hand": 0.9,
-        "milled_pokemon": 0.5, "opponent_attack": 0.8,
-        "opponent_effects_and_abilities": 0.8, "own_bench": 0.75, "self": 1.0,
-    },
-    "target": {
-        "any": 1.25, "any_pokemon": 1.25, "basic": 0.8,
-        "basic_energy": 0.8, "basic_pokemon": 0.8, "bench_only": 0.75,
-        "benched": 0.75, "both_actives": 1.5, "defending": 1.0,
-        "energy": 0.9, "evolution": 0.75, "future": 0.6, "item": 0.75,
-        "mega": 0.6, "opp_active": 1.0, "opp_any": 1.25,
-        "opp_bench": 0.75,
-        "opp_dragon_pokemon": 0.4, "opponent_active": 1.0,
-        "opponent": 1.0, "own_bench": 0.75, "own_line": 0.6,
-        "own_type": 0.6, "pokemon": 1.0, "pokemon_or_basic_energy": 1.0,
-        "pokemon_ex": 0.6, "self": 0.5, "stadium": 0.5, "stage1": 0.65,
-        "stage2": 0.5, "supporter": 0.75, "tera": 0.4, "tool": 0.75,
-        "trainer": 0.9,
-    },
-    "timing": {
-        "after_weakness_resistance": 0.9,
-        "before_weakness_resistance": 1.0,
-    },
-    "trigger": {
-        "on_attach": 0.9, "on_bench_play": 0.9,
-        "on_evolve": FUTURE_TURN_DISCOUNT,
-        "on_fetch_success": FUTURE_TURN_DISCOUNT, "setup": 0.7,
-    },
-    "zone": {
-        "deck": 0.75, "discard": 0.65, "hand": 0.9,
-        "opp_any": 1.0, "own_any": 1.0,
-    },
-}
-
 
 def _quantity(value, default=0.0) -> float:
     try:
@@ -204,6 +145,7 @@ class Capability:
 class OptionUnits:
     hp: float = 0.0
     attack: float = 0.0
+    damage_move: float = 0.0
     draw: float = 0.0
     search: float = 0.0
     acceleration: float = 0.0
@@ -215,13 +157,15 @@ class OptionUnits:
 
     @property
     def total(self) -> float:
-        return (self.hp + self.attack + self.draw + self.search + self.acceleration
+        return (self.hp + self.attack + self.damage_move + self.draw
+                + self.search + self.acceleration
                 + self.denial + self.healing + self.mobility + self.energy - self.cost)
 
     def activations(self):
         return (
             ("option.hp", self.hp),
             ("option.attack", self.attack),
+            ("ability.damage_move", self.damage_move),
             ("option.draw", self.draw),
             ("option.search", self.search),
             ("option.acceleration", self.acceleration),
@@ -233,49 +177,9 @@ class OptionUnits:
         )
 
 
-def unmet_cost_slots(provisions, requirements) -> tuple[int, ...]:
-    remaining = [int(unit) for unit in provisions]
-    unpaid = []
-    colorless = []
-    for slot, required in enumerate(requirements):
-        if int(required) == COLORLESS:
-            colorless.append(slot)
-            continue
-        found = next((index for index, supplied in enumerate(remaining)
-                      if supplied in {int(required), WILDCARD}), None)
-        if found is None:
-            unpaid.append(slot)
-        else:
-            remaining.pop(found)
-    paid_colorless = min(len(colorless), len(remaining))
-    return tuple((*unpaid, *colorless[paid_colorless:]))
-
-
-def payment_fraction(provisions, requirements) -> float:
-    requirements = tuple(requirements)
-    if not requirements:
-        return 1.0
-    return (len(requirements) - len(unmet_cost_slots(provisions, requirements))) \
-        / len(requirements)
-
-
-def _typed_first_payment_fraction(provisions, requirements, facts) -> float:
-    requirements = tuple(requirements)
-    fraction = payment_fraction(provisions, requirements)
-    unpaid = unmet_cost_slots(provisions, requirements)
-    unpaid_typed = sum(requirements[slot] != COLORLESS for slot in unpaid)
-    condition_types = {
-        clause.condition_energy_type for clause in card_clauses(facts)
-        if clause.condition_energy_type is not None}
-    if not unpaid_typed or condition_types.intersection(map(int, provisions)):
-        return fraction
-    paid_typed = sum(unit != COLORLESS for unit in requirements) - unpaid_typed
-    return paid_typed / max(1, len(requirements))
-
-
 def one_attach_fraction(body, attack, side, ctx, board) -> float:
     facts = ctx.facts(body.card.card_id)
-    best = _typed_first_payment_fraction(body.energies, attack.cost, facts)
+    best = typed_first_payment_fraction(body.energies, attack.cost, facts)
     turn_player = (board.turn.first_player if board.turn.number % TURN_PARITY_COUNT == 1
                    else None if board.turn.first_player is None
                    else 1 - board.turn.first_player)
@@ -289,7 +193,7 @@ def one_attach_fraction(body, attack, side, ctx, board) -> float:
         units = provision_units(
             energy, evolved=bool(getattr(ctx.facts(body.card.card_id), "evolves_from", None)))
         provisions = (*body.energies, *((int(energy.provides),) * units))
-        best = max(best, _typed_first_payment_fraction(
+        best = max(best, typed_first_payment_fraction(
             provisions, attack.cost, facts))
     return best
 
@@ -541,21 +445,6 @@ def _facts_on_side(side, ctx):
     return tuple(ctx.facts(body.card.card_id) for body in side.bodies)
 
 
-def _named_units(value, side, board, ctx, *, family=False):
-    wanted = str(value).casefold()
-    visible = (*_facts_on_side(side, ctx),
-               *(ctx.facts(card.card_id) for card in tuple(side.hand)),
-               *(ctx.facts(card.card_id) for card in side.discard))
-    known_deck = (0 if side is not board.me else sum(
-        count for card_id, count in (board.deck_counts or ())
-        if wanted in getattr(ctx.facts(card_id), "name", "").casefold()
-        if family or getattr(ctx.facts(card_id), "name", "").casefold() == wanted))
-    return float(known_deck + sum(
-        wanted in getattr(candidate, "name", "").casefold()
-        if family else getattr(candidate, "name", "").casefold() == wanted
-        for candidate in visible if candidate is not None))
-
-
 def _energy_eligibility_units(value, clause, side, opponent, board, ctx):
     wanted_basic = str(value) == "basic"
     if clause.kind == "discard_opp_energy":
@@ -678,223 +567,6 @@ def _clause_candidate_rows(clause, side, opponent, board, ctx, body):
     return tuple((candidate, 1) for candidate in _facts_on_side(side, ctx))
 
 
-def _zone_units(value, side, opponent, board, ctx, *, clause=None):
-    value = str(value)
-    if clause is not None and clause.kind == "fetch" \
-            and value in {"deck", "discard", "hand"}:
-        return _eligible_zone_units(clause, side, board, ctx)
-    if value == "deck":
-        return _amount_capacity(clause, side.deck_count)
-    if value == "discard":
-        return _amount_capacity(clause, len(side.discard))
-    if value == "hand":
-        return _amount_capacity(clause, side.hand_count)
-    if value == "own_any":
-        return _amount_capacity(
-            clause, len(side.bodies) + side.hand_count + len(side.discard))
-    if value == "opp_any":
-        return _amount_capacity(
-            clause, len(opponent.bodies) + opponent.hand_count + len(opponent.discard))
-    raise KeyError(f"unpriced clause zone {value!r}")
-
-
-def _target_units(value, clause, facts, side, opponent, board, ctx, body):
-    value = str(value)
-    if clause.kind == "fetch":
-        return (_eligible_zone_units(clause, side, board, ctx)
-                if clause.zone in {"deck", "discard", "hand"} else 0.0)
-    if value in {"self"}:
-        return float(body is not None or isinstance(facts, PokemonCard))
-    if value in {"own_bench", "bench_only", "benched", "future", "own_line",
-                 "own_type"}:
-        return float(len(side.bench))
-    if value in {"opp_active", "opponent_active", "defending"}:
-        return float(opponent.active is not None)
-    if value in {"opp_bench"}:
-        return float(len(opponent.bench))
-    if value in {"opp_any", "any", "any_pokemon", "pokemon"}:
-        return float(len(side.bodies) + len(opponent.bodies))
-    if value == "both_actives":
-        return float((side.active is not None) + (opponent.active is not None))
-    if value == "opponent":
-        return float(bool(opponent.bodies))
-    if value == "opp_dragon_pokemon":
-        return float(sum(getattr(candidate, "energy_type", None) == DRAGON
-                         for candidate in _facts_on_side(opponent, ctx)))
-    if value in {"basic", "basic_pokemon", "evolution", "mega", "pokemon_ex",
-                 "stage1", "stage2", "tera"}:
-        predicates = {
-            "basic": lambda candidate: getattr(candidate, "evolves_from", None) is None,
-            "basic_pokemon": lambda candidate: getattr(
-                candidate, "evolves_from", None) is None,
-            "evolution": lambda candidate: getattr(candidate, "evolves_from", None) is not None,
-            "mega": lambda candidate: "mega" in getattr(candidate, "name", "").casefold(),
-            "pokemon_ex": lambda candidate: getattr(candidate, "is_rule_box", False),
-            "stage1": lambda candidate: getattr(candidate, "stage", None) == "stage1",
-            "stage2": lambda candidate: getattr(candidate, "stage", None) == "stage2",
-            "tera": lambda candidate: getattr(candidate, "tera", False),
-        }
-        return float(sum(predicates[value](candidate)
-                         for candidate in (*_facts_on_side(side, ctx),
-                                           *_facts_on_side(opponent, ctx))))
-    if value in {"basic_energy", "energy"}:
-        return float(sum(len(target.energies) for target in side.bodies)
-                     + _basic_energy_count(tuple(side.hand), ctx)
-                     + _basic_energy_count(side.discard, ctx))
-    if value in {"item", "stadium", "supporter", "tool", "trainer"}:
-        visible = sum(fetch_target_matches(
-            Clause("fetch", target=value), ctx.facts(card.card_id), reading=DEADNESS)
-            for card in (*tuple(side.hand), *tuple(side.discard)))
-        known_deck = sum(
-            count for card_id, count in board.deck_counts
-            if fetch_target_matches(Clause("fetch", target=value),
-                                    ctx.facts(card_id), reading=DEADNESS))
-        return float(visible + known_deck)
-    raise KeyError(f"unpriced clause target {value!r}")
-
-
-def _applies_to_units(value, clause, side, ctx):
-    value = str(value)
-    candidates = tuple(side.bodies)
-    if value in {"self", "attached_body"}:
-        return float(bool(candidates))
-    if value in {"own_bench", "benched"}:
-        return float(len(side.bench))
-    if value == "own_pokemon":
-        return float(len(candidates))
-    count = 0
-    for body in candidates:
-        facts = ctx.facts(body.card.card_id)
-        name = getattr(facts, "name", "").casefold()
-        stage = getattr(facts, "stage", None)
-        energy_type = getattr(facts, "energy_type", None)
-        count += bool(
-            (value in {"basic", "own_basic"} and getattr(facts, "evolves_from", None) is None)
-            or (value == "basic_non_dark" and getattr(facts, "evolves_from", None) is None
-                and energy_type != DARKNESS)
-            or (value == "grass" and energy_type == GRASS)
-            or (value == "fighting" and energy_type == FIGHTING)
-            or (value == "metal" and energy_type == METAL)
-            or (value == "has_ability" and bool(getattr(facts, "abilities", ())))
-            or (value == "has_energy_attached" and bool(body.energies))
-            or (value == "name_family"
-                and bool(family := str(clause.name_family or "").casefold())
-                and family in name)
-            or (value == "no_rule_box" and not getattr(facts, "is_rule_box", False))
-            or (value == "own_evolved" and getattr(facts, "evolves_from", None) is not None)
-            or (value == "own_evolution_r_pokemon" and stage in {"stage1", "stage2"})
-            or (value == "self_ko_abilities" and bool(getattr(facts, "abilities", ())))
-            or (value == "stage2" and stage == "stage2"))
-    return float(count)
-
-
-def _effect_units(value, clause, facts, side, opponent, board, ctx, body):
-    value = str(value)
-    applies = max(1.0, _applies_to_units(
-        clause.applies_to or "self", clause, side, ctx))
-    opposing_facts = (None if opponent.active is None else
-                      ctx.facts(opponent.active.card.card_id))
-    incoming_now = (0.0 if opponent.active is None else best_current_damage(
-        opponent.active, opponent, side, board, ctx) / DAMAGE_UNIT_HP)
-    incoming_later = FUTURE_TURN_DISCOUNT * max((
-        attack.damage or attack.damage_fix or attack.damage_max or 0
-        for attack in getattr(opposing_facts, "attacks", ())), default=0) / DAMAGE_UNIT_HP
-    incoming = max(incoming_now, incoming_later)
-    amount = _quantity(clause.amount, 1)
-    if value == "attack_fails_on_tails":
-        printed = max((attack.damage or attack.damage_fix or attack.damage_max or 0
-                       for attack in getattr(facts, "attacks", ())), default=0)
-        return -COIN_HEADS_PROBABILITY * printed / DAMAGE_UNIT_HP
-    if value == "damage_boost":
-        return amount * applies / DAMAGE_UNIT_HP
-    if value == "damage_counters":
-        return -amount * DAMAGE_COUNTER_HP * applies / DAMAGE_UNIT_HP
-    if value == "damage_protection":
-        return incoming
-    if value == "damage_reduction":
-        return min(incoming, amount / DAMAGE_UNIT_HP) * applies
-    if value == "discard_opp_energy":
-        return float(sum(len(target.energies) for target in opponent.bodies))
-    if value == "evolve_early":
-        return FUTURE_TURN_DISCOUNT * applies
-    if value == "gust":
-        return float(len(opponent.bench))
-    if value == "hp_delta":
-        return amount * applies / DAMAGE_UNIT_HP
-    if value == "prevent_damage":
-        return incoming * applies
-    if value == "prevent_damage_counters":
-        return float(len(side.bench))
-    if value == "shuffle_into_deck":
-        return float(min(len(opponent.bench), int(amount)))
-    if value == "special_condition_immunity":
-        return float(sum(bool(getattr(side, status)) for status in
-                         ("asleep", "paralyzed", "confused", "poisoned", "burned")))
-    raise KeyError(f"unpriced clause effect {value!r}")
-
-
-def _clause_effect_polarity(clause):
-    if clause.effect == "hp_delta":
-        return 1.0 if _quantity(clause.amount) > 0 else -1.0
-    if clause.effect in {"attack_fails_on_tails", "damage_counters"}:
-        return -1.0
-    if clause.kind == "ability_suppression":
-        return -1.0
-    return 1.0
-
-
-def _symmetric_units(clause, facts, side, opponent, board, ctx):
-    if clause.effect is not None:
-        return -_effect_units(
-            clause.effect, clause, facts, opponent, side, board, ctx,
-            opponent.active)
-    if clause.kind == "ability_suppression":
-        return _applies_to_units(clause.applies_to, clause, opponent, ctx)
-    if clause.kind == "deck_top":
-        return -_amount_capacity(clause, opponent.hand_count)
-    if clause.kind in {"checkup_trigger", "stadium_static", "stadium_trigger"}:
-        return 0.0
-    raise KeyError(f"unpriced symmetric clause {clause.kind!r}")
-
-
-def _restriction_units(value, facts, side, opponent, board, ctx):
-    value = str(value)
-    candidates = tuple(side.bodies)
-    predicates = {
-        "active_dragon_only": lambda candidate: getattr(
-            candidate, "energy_type", None) == DRAGON,
-        "active_non_arvens_pokemon": lambda candidate: "arven" not in getattr(
-            candidate, "name", "").casefold(),
-        "arvens_pokemon": lambda candidate: "arven" in getattr(
-            candidate, "name", "").casefold(),
-        "mega_only": lambda candidate: "mega" in getattr(
-            candidate, "name", "").casefold(),
-        "psychic_only": lambda candidate: getattr(
-            candidate, "energy_type", None) == PSYCHIC,
-    }
-    if value in {"active_dragon_only", "active_non_arvens_pokemon"}:
-        active_facts = None if side.active is None else ctx.facts(side.active.card.card_id)
-        return -float(max(1, int(active_facts is None
-                                 or not predicates[value](active_facts))))
-    if value in predicates:
-        return -float(max(1, sum(
-            not predicates[value](ctx.facts(target.card.card_id))
-            for target in candidates)))
-    if value in {"active_only", "self"}:
-        return -float(max(1, len(candidates) - 1))
-    if value == "evolves_from_self":
-        rows = _zone_fact_counts("deck", side, board, ctx)
-        return -float(max(1, sum(
-            count for candidate, count in rows
-            if isinstance(candidate, PokemonCard)
-            and candidate.evolves_from != getattr(facts, "name", None))))
-    if value == "ex_or_v_only":
-        return -float(max(1, sum(
-            not getattr(ctx.facts(target.card.card_id), "is_rule_box", False)
-            for target in opponent.bench)))
-    raise KeyError(f"unpriced clause restriction {value!r}")
-
-
 def _restriction_satisfied(value, facts, side, opponent, board, ctx):
     if value is None:
         return True
@@ -940,8 +612,10 @@ def _restriction_targets(value, facts, side, ctx, *, body=None):
                  "active_only", "arvens_pokemon"}:
         return () if side.active is None else (side.active,)
     predicates = {
-        "mega_only": lambda candidate: "mega" in candidate.name.casefold(),
-        "psychic_only": lambda candidate: candidate.energy_type == PSYCHIC,
+        "mega_only": lambda candidate: "mega" in getattr(
+            candidate, "name", "").casefold(),
+        "psychic_only": lambda candidate: getattr(
+            candidate, "energy_type", None) == PSYCHIC,
     }
     if value in predicates:
         return tuple(
@@ -1026,262 +700,27 @@ def _clause_gate(clause, body, facts, side, opponent, board, ctx):
             if count > 0))
     return (float(condition)
             * in_play_fetch
+            * _selection_feasibility(clause, side, opponent, board, ctx, body)
             * float(_restriction_satisfied(
                 clause.restriction, facts, side, opponent, board, ctx))
             * float(_rider_feasible(
                 clause, facts, side, board, ctx, body=body)))
 
 
-def _rider_units(value, clause, facts, side, opponent, board, ctx, *, body=None):
-    value = str(value)
-    if clause.kind == "heal" and value in {
-            "bounce_energy_to_hand", "discard_own_energy"}:
-        _target, _healed, cost = _heal_selection(
-            clause, facts, side, board, ctx, body=body)
-        opportunity = (cost / BOUNCE_ENERGY_HAND_UNIT
-                       if value == "bounce_energy_to_hand" else cost)
-        return opportunity * CLAUSE_PARAMETER_VALUE_UNITS["rider"][value]
-    opportunities = {
-        "attached_cards_too": sum(len(body.tools) + len(body.energy_cards)
-                                   for body in opponent.bodies),
-        "both_hands_to_bottom": side.hand_count + opponent.hand_count,
-        "bounce_energy_to_hand": sum(len(body.energies) for body in side.bodies),
-        "confuse_target": int(opponent.active is not None and not opponent.confused),
-        "cure_existing": sum(bool(getattr(side, status)) for status in
-                             ("asleep", "paralyzed", "confused", "poisoned", "burned")),
-        "damage_new_active": int(bool(opponent.bench)),
-        "discard_basic_f_energy": _basic_energy_in_hand(
-            side, ctx, FIGHTING),
-        "discard_eot": sum(len(body.energies) for body in side.bodies),
-        "discard_own_energy": sum(len(body.energies) for body in side.bodies),
-        "discard_remainder": side.deck_count,
-        "draw_1": side.deck_count,
-        "heal_30_target": sum(max(0, body.max_hp - body.hp) for body in side.bodies)
-                          / DAMAGE_UNIT_HP,
-        "other_to_bottom": side.hand_count,
-        "poison_new_active": int(bool(side.bench)),
-        "recoil": int(bool(side.active)),
-        "self_ko": int(bool(side.active)),
-        "self_switch": int(bool(side.bench)),
-        "shuffle_before_place": side.deck_count,
-        "shuffle_both_hands": side.hand_count + opponent.hand_count,
-        "shuffle_counted_into_deck": side.deck_count,
-        "shuffle_own_hand_in": side.hand_count,
-        "shuffle_self_in": int(bool(side.active)),
-        "skip_stage1": int(bool(side.bench)),
-    }
-    try:
-        return float(opportunities[value]) * CLAUSE_PARAMETER_VALUE_UNITS["rider"][value]
-    except KeyError:
-        raise KeyError(f"unpriced clause rider {value!r}") from None
-
-
-def clause_parameter_units(parameter, value, clause, facts, side, opponent,
-                           board, ctx, *, body=None) -> float:
-    parameter = str(parameter)
-    if value is None:
-        return 0.0
-    if parameter == "allowance":
-        return float(len(side.bodies) if value == "body" else side.hand_count)
-    if parameter == "applies_to":
-        return (_clause_effect_polarity(clause)
-                * _applies_to_units(value, clause, side, ctx))
-    if parameter == "attack":
-        return -float(any(attack.name == value for attack in getattr(facts, "attacks", ())))
-    if parameter == "choice":
-        return float(bool(value)) * _target_units(
-            clause.target or "any", clause, facts, side, opponent, board, ctx, body)
-    if parameter == "chooser":
-        return -float(len(opponent.bodies))
-    if parameter == "cost":
-        return -clause_cost_units(clause, side)
-    if parameter == "cost_required":
-        return -float(bool(value))
-    if parameter == "cost_units":
-        return -float(len(value))
-    if parameter == "dest":
-        capacity = {
-            "bench": side.bench_max - len(side.bench), "new_benched": side.bench_max - len(side.bench),
-            "in_play": len(side.bodies), "hand": side.hand_count,
-            "deck_top": side.deck_count, "opp_any": len(opponent.bodies),
-        }
-        return (CLAUSE_PARAMETER_VALUE_UNITS["dest"][str(value)]
-                * _amount_capacity(clause, capacity[str(value)]))
-    if parameter == "dig":
-        return _quantity(value) / max(1, side.deck_count)
-    if parameter == "dig_from":
-        return CLAUSE_PARAMETER_VALUE_UNITS["dig_from"][str(value)] * side.deck_count
-    if parameter == "distinct_types":
-        source = clause.zone or clause.source or "deck"
-        rows = _zone_fact_counts(source, side, board, ctx)
-        types = {
-            candidate.provides for candidate, _count in rows
-            if isinstance(candidate, EnergyCard) and candidate.kind == BASIC_ENERGY
-        }
-        required = (_quantity(clause.amount, 1) + _quantity(clause.to_hand)
-                    if clause.kind == "accel" else _quantity(clause.amount, 1))
-        return float(min(len(types), required) if clause.amount != "all" else len(types))
-    if parameter == "duration":
-        return CLAUSE_PARAMETER_VALUE_UNITS["duration"][str(value)] * float(
-            opponent.active is not None)
-    if parameter == "each_of":
-        return _clause_effect_polarity(clause) * float(bool(value)) * _target_units(
-            clause.target or "any", clause, facts, side, opponent, board, ctx, body)
-    if parameter == "effect":
-        return _effect_units(value, clause, facts, side, opponent, board, ctx, body)
-    if parameter == "energy":
-        return _energy_eligibility_units(
-            value, clause, side, opponent, board, ctx)
-    if parameter in {"energy_type", "rider_energy_type"}:
-        return _typed_eligibility_units(
-            value, clause, side, opponent, board, ctx)
-    if parameter == "evolves_into_type":
-        return float(sum(
-            getattr(candidate, "energy_type", None) == int(value)
-            for candidate in _facts_on_side(side, ctx)))
-    if parameter == "target_type":
-        return _target_type_units(
-            value, clause, side, opponent, board, ctx, body)
-    if parameter == "exclude_name":
-        excluded = sum(
-            count for candidate, count in _clause_candidate_rows(
-                clause, side, opponent, board, ctx, body)
-            if getattr(candidate, "name", None) == value)
-        harmful = clause.kind == "checkup_trigger" \
-            and clause.effect == "damage_counters"
-        return float(excluded if harmful else -excluded)
-    if parameter == "granted_action":
-        return float(bool(value)) * len(board.legal_actions)
-    if parameter == "hp_max":
-        rows = (_zone_fact_counts(clause.zone, side, board, ctx)
-                if clause.zone in {"deck", "discard", "hand"} else
-                tuple((candidate, 1) for candidate in _facts_on_side(side, ctx)))
-        available = sum(
-            count for candidate, count in rows
-            if isinstance(candidate, PokemonCard) and candidate.hp <= int(value)
-            and fetch_target_matches(clause, candidate, reading=DEADNESS))
-        return _amount_capacity(clause, available)
-    if parameter == "includes_effects":
-        return float(bool(value) and opponent.active is not None)
-    if parameter == "name":
-        return _named_units(value, side, board, ctx)
-    if parameter == "name_family":
-        return _named_units(value, side, board, ctx, family=True)
-    if parameter == "named":
-        return _named_units(value, side, board, ctx)
-    if parameter == "new_weakness":
-        return float(opponent.active is not None and int(value) >= 0)
-    if parameter == "no_ability":
-        available = sum(
-            count for candidate, count in _clause_candidate_rows(
-                clause, side, opponent, board, ctx, body)
-            if isinstance(candidate, PokemonCard) and not candidate.abilities)
-        return (_amount_capacity(clause, available)
-                if clause.kind == "fetch" else float(available))
-    if parameter == "no_rule_box":
-        available = sum(
-            count for candidate, count in _clause_candidate_rows(
-                clause, side, opponent, board, ctx, body)
-            if isinstance(candidate, PokemonCard) and not candidate.is_rule_box)
-        return (_amount_capacity(clause, available)
-                if clause.kind == "fetch" else float(available))
-    if parameter == "no_stack":
-        return -float(sum(other.card.card_id == getattr(facts, "card_id", None)
-                          for other in side.bodies))
-    if parameter == "on":
-        return (_clause_effect_polarity(clause)
-                * float(side.bench_max - len(side.bench)))
-    if parameter == "optional":
-        return float(bool(value)) / (1.0 + clause_cost_units(clause, side)
-                                     + clause_rider_cost_units(clause, side))
-    if parameter == "random":
-        return -COIN_HEADS_PROBABILITY * float(bool(value)) * opponent.hand_count
-    if parameter == "restriction":
-        return _restriction_units(value, facts, side, opponent, board, ctx)
-    if parameter == "rider":
-        return _rider_units(
-            value, clause, facts, side, opponent, board, ctx, body=body)
-    if parameter == "rider_amount":
-        if clause.rider is None:
-            return 0.0
-        rider = CLAUSE_PARAMETER_VALUE_UNITS["rider"][str(clause.rider)]
-        return ((1.0 if rider > 0 else -1.0)
-                * _quantity(value) / DAMAGE_UNIT_HP)
-    if parameter == "scope":
-        return float(opponent.active is not None) \
-            * CLAUSE_PARAMETER_VALUE_UNITS["scope"][str(value)]
-    if parameter == "source":
-        source = str(value)
-        availability = (_zone_units(
-                            source, side, opponent, board, ctx, clause=clause)
-                        if source in {"deck", "discard", "hand"}
-                        else len(side.bench) if source == "own_bench"
-                        else len(side.discard) if source == "milled_pokemon"
-                        else int(opponent.active is not None))
-        return CLAUSE_PARAMETER_VALUE_UNITS["source"][source] * availability
-    if parameter == "source_class":
-        source_class = str(value)
-        matches = {
-            "basic": lambda candidate: getattr(candidate, "evolves_from", None) is None,
-            "ex": lambda candidate: getattr(candidate, "is_rule_box", False),
-            "ex_or_v": lambda candidate: getattr(candidate, "is_rule_box", False),
-            "has_ability": lambda candidate: bool(getattr(candidate, "abilities", ())),
-        }
-        return float(sum(matches[source_class](candidate)
-                         for candidate in _facts_on_side(opponent, ctx)))
-    if parameter == "symmetric":
-        return float(bool(value)) * _symmetric_units(
-            clause, facts, side, opponent, board, ctx)
-    if parameter == "target":
-        target = str(value)
-        harmful = (clause.kind, target) in {
-            ("bench_spread", "own_bench"),
-            ("confuse", "self"),
-            ("energy_bounce", "self"),
-            ("ko", "both_actives"),
-            ("mill", "self"),
-        }
-        return ((-1.0 if harmful else 1.0)
-                * CLAUSE_PARAMETER_VALUE_UNITS["target"][target]
-                * _target_units(
-                    target, clause, facts, side, opponent, board, ctx, body))
-    if parameter == "target_class":
-        if str(value) != "ex":
-            raise KeyError(f"unpriced clause target class {value!r}")
-        return float(sum(getattr(candidate, "is_rule_box", False)
-                         for candidate in _facts_on_side(opponent, ctx)))
-    if parameter == "target_condition":
-        return float(sum(not target.appeared_this_turn for target in side.bodies))
-    if parameter == "timing":
-        return CLAUSE_PARAMETER_VALUE_UNITS["timing"][str(value)] * float(
-            opponent.active is not None)
-    if parameter == "trigger":
-        trigger = str(value)
-        gates = {
-            "on_attach": sum(len(target.energies) for target in side.bodies),
-            "on_bench_play": side.bench_max - len(side.bench),
-            "on_evolve": sum(bool(target.pre_evolution) for target in side.bodies),
-            "on_fetch_success": side.deck_count,
-            "setup": int(board.turn.number <= 1),
-        }
-        return CLAUSE_PARAMETER_VALUE_UNITS["trigger"][trigger] * gates[trigger]
-    if parameter == "type":
-        provided = {
-            "colorless": COLORLESS, "fighting": FIGHTING, "psychic": PSYCHIC,
-        }[str(value)]
-        if getattr(facts, "provides", None) != provided:
-            return 0.0
-        return float(any(
-            payment_fraction((provided,), attack.cost) > 0.0
-            for candidate in _facts_on_side(side, ctx)
-            for attack in getattr(candidate, "attacks", ())))
-    if parameter == "window":
-        return FUTURE_TURN_DISCOUNT ** _quantity(value) * side.deck_count
-    if parameter == "zone":
-        zone = str(value)
-        return CLAUSE_PARAMETER_VALUE_UNITS["zone"][zone] * _zone_units(
-            zone, side, opponent, board, ctx, clause=clause)
-    raise KeyError(f"unpriced clause parameter {parameter!r}")
+def _selection_feasibility(clause, side, opponent, board, ctx, body=None) -> float:
+    if clause.kind == "fetch" and clause.zone in {"deck", "discard", "hand"}:
+        return float(_eligible_zone_units(clause, side, board, ctx) > 0)
+    checks = []
+    if clause.energy is not None:
+        checks.append(_energy_eligibility_units(
+            clause.energy, clause, side, opponent, board, ctx))
+    if clause.energy_type is not None:
+        checks.append(_typed_eligibility_units(
+            clause.energy_type, clause, side, opponent, board, ctx))
+    if clause.target_type is not None:
+        checks.append(_target_type_units(
+            clause.target_type, clause, side, opponent, board, ctx, body))
+    return float(all(value > 0 for value in checks))
 
 
 def _clause_amount(clause, body, side) -> float:
@@ -1371,10 +810,9 @@ def _hand_damage_boost(body, facts, attacker, defender, ctx, board) -> float:
         if event.recognized and event.kind == CARD_PLAY_EVENT_KIND
         and fields.get("playerIndex") == body.card.owner
         and "cardId" in fields)
-    trainers = (
-        *(ctx.facts(card.card_id) for card in attacker.hand),
-        *played,
-    )
+    held = (() if body is not attacker.active else
+            tuple(ctx.facts(card.card_id) for card in attacker.hand))
+    trainers = (*held, *played)
     for trainer in trainers:
         if not isinstance(trainer, TrainerCard):
             continue
@@ -1502,10 +940,10 @@ def attack_damage(attack, attacker_facts, defender_facts, attacker_body,
     return max(0.0, damage)
 
 
-def _target_impact(damage: float, target, ctx) -> float:
+def _target_impact(damage: float, target, ctx, *, readiness: bool = False) -> float:
     if target is None or damage <= 0:
         return max(0.0, damage) / DAMAGE_UNIT_HP
-    live_hp = max(1, target.hp)
+    live_hp = max(1, target.max_hp if readiness else target.hp)
     progress = min(damage, live_hp) / DAMAGE_UNIT_HP
     if damage >= live_hp:
         progress += float(getattr(ctx.facts(target.card.card_id), "prize_value", 1))
@@ -1546,12 +984,13 @@ def _attack_effect_units(attack, facts, body, side, opponent, ctx, board) -> flo
         for clause in attack.clauses if clause.kind in ATTACK_EFFECT_UNITS)
 
 
-def _attack_impact(attack, facts, body, side, opponent, ctx, board) -> tuple[float, float]:
+def _attack_impact(attack, facts, body, side, opponent, ctx, board, *,
+                   readiness: bool = False) -> tuple[float, float]:
     defender_facts = (None if opponent.active is None else
                       ctx.facts(opponent.active.card.card_id))
     active = _target_impact(
         attack_damage(attack, facts, defender_facts, body, side, opponent, ctx, board),
-        opponent.active, ctx) + _attack_effect_units(
+        opponent.active, ctx, readiness=readiness) + _attack_effect_units(
             attack, facts, body, side, opponent, ctx, board)
     reach = float(bench_reach(attack))
     any_target = attack.clause("bench_snipe")
@@ -1560,12 +999,14 @@ def _attack_impact(attack, facts, body, side, opponent, ctx, board) -> tuple[flo
         bench_targets = tuple(
             target for target in bench_targets
             if getattr(ctx.facts(target.card.card_id), "is_rule_box", False))
-    bench = max((_target_impact(reach, target, ctx) for target in bench_targets),
+    bench = max((_target_impact(
+        reach, target, ctx, readiness=readiness) for target in bench_targets),
                 default=0.0)
     if any_target is not None and any_target.target == "opp_any":
         count = max(1, int(any_target.count or 1))
         targets = ((opponent.active, False), *((target, True) for target in bench_targets))
-        chosen = sorted(((_target_impact(reach, target, ctx), is_bench)
+        chosen = sorted(((_target_impact(
+            reach, target, ctx, readiness=readiness), is_bench)
                          for target, is_bench in targets if target is not None), reverse=True)
         selected = chosen[:count]
         total = sum(value for value, _is_bench in selected)
@@ -1682,12 +1123,14 @@ def body_capability(body, side, opponent, board, ctx, *, reach=None,
     facts = ctx.facts(body.card.card_id)
     if not isinstance(facts, PokemonCard):
         return Capability(gaps=(f"body {body.card.card_id} has no Pokemon facts",))
-    immediate = progress = attachment_clock = bench = potential = chosen_attack_cost = 0.0
-    attack_profiles = []
+    immediate = progress = attachment_clock = bench = potential = 0.0
+    ready_realization = 0.0
     immediate_net = float("-inf")
     for attack in facts.attacks:
         impact, attack_bench = _attack_impact(
             attack, facts, body, side, opponent, ctx, board)
+        readiness, readiness_bench = _attack_impact(
+            attack, facts, body, side, opponent, ctx, board, readiness=True)
         resource_cost = sum(
                             clause_cost_units(clause, side)
                             + clause_rider_cost_units(clause, side)
@@ -1701,10 +1144,14 @@ def body_capability(body, side, opponent, board, ctx, *, reach=None,
             without_optional = impact - attack_bench
             if impact - resource_cost <= without_optional:
                 impact, attack_bench, resource_cost = without_optional, 0.0, 0.0
+            readiness_without_optional = readiness - readiness_bench
+            if readiness - resource_cost <= readiness_without_optional:
+                readiness, readiness_bench = readiness_without_optional, 0.0
         printed = max(float(attack.damage or attack.damage_fix or attack.damage_max or 0),
                       float(bench_reach(attack))) / DAMAGE_UNIT_HP
-        potential = max(potential, max(impact, printed) / max(1, len(attack.cost)))
-        fraction = _typed_first_payment_fraction(
+        potential = max(
+            potential, max(readiness, printed) / max(1, len(attack.cost)))
+        fraction = typed_first_payment_fraction(
             body.energies, attack.cost, facts)
         attach_fraction = (one_attach_fraction(body, attack, side, ctx, board)
                            if include_hand_attach else fraction)
@@ -1718,25 +1165,25 @@ def body_capability(body, side, opponent, board, ctx, *, reach=None,
             and board.turn.first_player == board.seat
             and permission_gate <= 0.0)
         attack_blocked = body is side.active and (side.asleep or side.paralyzed)
-        attack_profiles.append((
-            float(attack.damage or attack.damage_fix or attack.damage_max or 0)
-            / DAMAGE_UNIT_HP,
-            fraction,
-            fraction >= 1.0 and not first_turn_blocked and not attack_blocked,
-        ))
         if fraction >= 1.0 and not first_turn_blocked and not attack_blocked:
             net = impact - resource_cost
+            readiness_net = readiness - resource_cost
             if body is side.active and side.confused:
                 net = (COIN_HEADS_PROBABILITY * net
                        - COIN_HEADS_PROBABILITY * CONFUSION_SELF_DAMAGE / DAMAGE_UNIT_HP)
                 impact = max(0.0, net + resource_cost)
                 attack_bench *= COIN_HEADS_PROBABILITY
+                readiness_net = (
+                    COIN_HEADS_PROBABILITY * readiness_net
+                    - COIN_HEADS_PROBABILITY * CONFUSION_SELF_DAMAGE / DAMAGE_UNIT_HP)
             if net > immediate_net:
                 immediate_net = net
-                immediate, bench, chosen_attack_cost = impact, attack_bench, resource_cost
+                immediate, bench = impact, attack_bench
+            ready_realization = max(ready_realization, readiness_net)
         else:
-            current_build = impact * fraction ** COMPLETION_EXPONENT
-            attach_build = (FUTURE_TURN_DISCOUNT * impact
+            current_build = (FUTURE_TURN_DISCOUNT * readiness
+                             * fraction ** COMPLETION_EXPONENT)
+            attach_build = (FUTURE_TURN_DISCOUNT * readiness
                             * attach_fraction ** COMPLETION_EXPONENT)
             progress = max(progress, current_build)
             attachment_clock = max(attachment_clock, current_build, attach_build)
@@ -1750,8 +1197,9 @@ def body_capability(body, side, opponent, board, ctx, *, reach=None,
         scale *= EVOLUTION_HOP_DISCOUNT ** evolution_hops
         for attack in evolved.attacks:
             impact, _attack_bench = _attack_impact(
-                attack, evolved, body, side, opponent, ctx, board)
-            fraction = _typed_first_payment_fraction(
+                attack, evolved, body, side, opponent, ctx, board,
+                readiness=True)
+            fraction = typed_first_payment_fraction(
                 body.energies, attack.cost, evolved)
             attach_fraction = (one_attach_fraction(body, attack, side, ctx, board)
                                if include_hand_attach else fraction)
@@ -1773,8 +1221,9 @@ def body_capability(body, side, opponent, board, ctx, *, reach=None,
              - source_rank))
         for card in line if isinstance(card, PokemonCard) for attack in card.attacks)
     line_potential = max((value for value, _hops in line_options), default=potential)
-    development = max((value * EVOLUTION_HOP_DISCOUNT ** hops
-                       for value, hops in line_options if hops > 0), default=0.0)
+    development = float(bool(facts.evolves_from or len(line) > 1)) + max((
+        value * EVOLUTION_HOP_DISCOUNT ** hops
+        for value, hops in line_options if hops > 0), default=0.0)
     ability = _ability_capability(
         body, facts, side, opponent, board, ctx,
         used_named_abilities=used_named_abilities)
@@ -1808,18 +1257,8 @@ def body_capability(body, side, opponent, board, ctx, *, reach=None,
         1.0 for clause in card_clauses(facts)
         if clause.kind == "weakness_override" and opponent.active is not None), default=0.0)
     retreat = retreat_payment_progress(body, side, board, ctx)
-    ready_payoff = max((payoff for payoff, _fraction, ready in attack_profiles if ready),
-                       default=0.0)
-    stronger_payoff, stronger_fraction = max(
-        ((payoff, fraction) for payoff, fraction, _ready in attack_profiles),
-        default=(0.0, 0.0))
-    survival = (max(0.0, min(1.0, body.hp / body.max_hp))
-                if body.max_hp > 0 else 0.0)
-    upgrade_gap = (max(0.0, stronger_payoff - ready_payoff)
-                   * stronger_fraction ** COMPLETION_EXPONENT * survival
-                   if ready_payoff > 0 else 0.0)
     realization = max(
-        immediate - chosen_attack_cost - attack_lock_cost + upgrade_gap,
+        ready_realization - attack_lock_cost,
         progress, future)
     result = replace(ability, realization=realization,
                    attachment_clock=max(realization, attachment_clock),
@@ -1846,8 +1285,7 @@ def body_capability(body, side, opponent, board, ctx, *, reach=None,
             result, attack_progress=persistent.attack_progress,
             attack_future=persistent.attack_future,
             attachment_clock=persistent.attachment_clock,
-            realization=max(result.attack_now - chosen_attack_cost - attack_lock_cost
-                            + upgrade_gap,
+            realization=max(ready_realization - attack_lock_cost,
                             persistent.attack_progress,
                             persistent.attack_future))
     return result
@@ -1919,7 +1357,9 @@ def energy_marginal(body, energy_facts, side, opponent, board, ctx, *, reach=Non
     after = body_capability(
         after_body, after_side, opponent, board, ctx, reach=reach,
         include_hand_attach=False)
-    return after.option_units() - before.option_units()
+    return max(
+        after.option_units() - before.option_units(),
+        marginal_energy_absorption(facts, body.energies, energy_facts, ctx, reach))
 
 
 def best_energy_marginal(energy_facts, side, opponent, board, ctx, reaches=None) -> float:
@@ -1929,13 +1369,23 @@ def best_energy_marginal(energy_facts, side, opponent, board, ctx, reaches=None)
         reach=reaches.get(body.card.serial)) for body in side.bodies), default=0.0)
 
 
-def recoverable_discard_ids(side, ctx) -> frozenset[int]:
-    sources = tuple(side.hand or ()) + tuple(
-        card for body in side.bodies for card in (body.card, *body.tools))
+def recoverable_discard_ids(side, ctx, deck_counts=()) -> frozenset[int]:
+    source_facts = tuple(
+        ctx.facts(card.card_id)
+        for card in tuple(side.hand or ())) + tuple(
+        ctx.facts(card.card_id)
+        for body in side.bodies for card in (body.card, *body.tools))
+    body_names = {
+        getattr(ctx.facts(body.card.card_id), "name", None) for body in side.bodies}
+    source_facts += tuple(
+        ctx.facts(card_id)
+        for card_id, count in (deck_counts or ())
+        if count > 0
+        and getattr(ctx.facts(card_id), "evolves_from", None) in body_names)
     discard = tuple(side.discard)
     recoverable = set()
-    for source in sources:
-        for clause in card_clauses(ctx.facts(source.card_id)):
+    for source in source_facts:
+        for clause in card_clauses(source):
             if clause.kind not in {"fetch", "energy_recur"} or clause.zone != "discard":
                 continue
             for card in discard:
@@ -1976,7 +1426,7 @@ def card_option_units(facts, side, opponent, board, ctx, *, reaches=None) -> Opt
         clauses = tuple(clause for card in line for ability in card.abilities
                         for clause in ability.clauses)
         gate = lambda clause: (
-            _prospective_condition(clause.condition, side, board, ctx)
+            _prospective_condition(clause.condition, side, board, ctx, clause)
             * float(_restriction_satisfied(
                 clause.restriction, facts, side, opponent, board, ctx))
             * float(_rider_feasible(
@@ -1994,6 +1444,10 @@ def card_option_units(facts, side, opponent, board, ctx, *, reaches=None) -> Opt
         return OptionUnits(
             hp=facts.hp / DAMAGE_UNIT_HP,
             attack=attack,
+            damage_move=max((
+                DAMAGE_TRANSFER_SIDES * gate(clause)
+                * _quantity(clause.amount) / DAMAGE_UNIT_HP
+                for clause in clauses if clause.kind == "move_damage"), default=0.0),
             draw=max((draw_units(clause)[0]
                       for clause in clauses if clause.kind == "draw"), default=0.0),
             search=max((gate(clause) * _quantity(clause.amount, 1)
@@ -2019,7 +1473,10 @@ def card_option_units(facts, side, opponent, board, ctx, *, reaches=None) -> Opt
                         if facts.kind == SUPPORTER and board.turn.supporter_played else 1.0)
         values = {name: 0.0 for name in OptionUnits.__dataclass_fields__}
         for clause in facts.clauses:
-            gate = (_prospective_condition(clause.condition, side, board, ctx)
+            gate = (_prospective_condition(
+                        clause.condition, side, board, ctx, clause)
+                    * _selection_feasibility(
+                        clause, side, opponent, board, ctx)
                     * float(_restriction_satisfied(
                         clause.restriction, facts, side, opponent, board, ctx))
                     * float(_rider_feasible(
@@ -2115,7 +1572,7 @@ def hidden_zone_expectation(count, side, opponent_side, board, ctx, belief, *,
     return float(count) * expectation
 
 
-def _prospective_condition(condition, side, board, ctx) -> float:
+def _prospective_condition(condition, side, board, ctx, clause=None) -> float:
     if not condition:
         return 1.0
     condition = str(condition)
@@ -2125,6 +1582,15 @@ def _prospective_condition(condition, side, board, ctx) -> float:
     if condition == "pokemon_ko_last_turn":
         return float(_knockout_visible(board))
     exact = _condition_probability(condition, None, side, board, ctx)
+    if exact == 0 and condition in {"dark_energy_attached", "energy_type_attached"}:
+        wanted = getattr(clause, "condition_energy_type", None)
+        reachable = any(
+            isinstance((energy := ctx.facts(card.card_id)), EnergyCard)
+            and energy.provides == wanted for card in tuple(side.hand)) or any(
+            count > 0 and isinstance((energy := ctx.facts(card_id)), EnergyCard)
+            and energy.provides == wanted for card_id, count in (board.deck_counts or ()))
+        if reachable:
+            return 1.0
     return FUTURE_TURN_DISCOUNT if exact is None else exact
 
 

@@ -16,6 +16,11 @@ from train.value_audit import build_value_audit  # noqa: E402
 
 
 ONE_PLY_LEDGER_FIRST_RUN = "20260828-111914_ad58ab7d_mega_starmie"
+PUCT_ATTRIBUTION = "puct_search"
+
+
+def is_one_ply_ledger_correction(correction) -> bool:
+    return correction.attribution != PUCT_ATTRIBUTION
 
 
 def ledger_correction_sources(root: Path | str = DEFAULT_ROOT) -> tuple[Path, ...]:
@@ -38,6 +43,14 @@ def correction_gate_findings(report: dict, audit: dict, *,
                      for row in rows)
     if structural:
         findings.append(f"{structural} correction replays are structurally incomplete")
+    repeated = sum(bool(
+        row.get("graded")
+        and not row.get("agrees")
+        and row.get("chosen") is not None
+        and row.get("chosen") == row.get("recorded_chosen"))
+        for row in rows)
+    if repeated:
+        findings.append(f"{repeated} correction replays repeat the recorded blunder")
     for key, label in (("incomplete", "pairwise value audits are incomplete"),
                        ("conflict_sets", "correction conflict sets remain")):
         if summary[key]:
@@ -61,8 +74,13 @@ def run_gate(*, root: Path | str = DEFAULT_ROOT, workers: int = 1) -> dict:
     corrections = dedup_corrections([
         correction for source in sources
         for correction in load_corrections(source, dedup=False)
+        if is_one_ply_ledger_correction(correction)
     ])
-    report = sweep(store=sources, workers=workers)
+    report = sweep(
+        store=sources,
+        workers=workers,
+        correction_filter=is_one_ply_ledger_correction,
+    )
     audit = build_value_audit(report["rows"])
     findings = correction_gate_findings(
         report, audit, correction_count=len(corrections))
@@ -89,7 +107,7 @@ def main(argv=None) -> int:
 
 
 __all__ = ("ONE_PLY_LEDGER_FIRST_RUN", "correction_gate_findings",
-           "ledger_correction_sources", "run_gate")
+           "is_one_ply_ledger_correction", "ledger_correction_sources", "run_gate")
 
 
 if __name__ == "__main__":
