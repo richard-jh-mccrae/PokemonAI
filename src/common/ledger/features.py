@@ -201,6 +201,10 @@ _DECLARED_RULES = {
         "action", ("evolution_target_commitment",), "constant"),
     "action.retreat_doomed_denial": _rule(
         "action", ("retreat_doomed_denial",), "constant"),
+    "action.rider_energy_opportunity": _rule(
+        "action", ("rider_energy_opportunity",), "constant"),
+    "action.survival_tool_target": _rule(
+        "action", ("survival_tool_target",), "constant"),
     "action.acceleration_phase_fit": _rule(
         "action", ("acceleration_phase_fit",), "constant"),
     "ability.resource_cost": _rule(
@@ -438,6 +442,8 @@ _SCALAR_DEFAULTS = {
     "action.body_copy_overflow": -0.30,
     "action.evolution_target_commitment": 0.05,
     "action.retreat_doomed_denial": -1.0,
+    "action.rider_energy_opportunity": -0.25,
+    "action.survival_tool_target": 0.10,
     "zone.in_play": 0.002,
     "zone.in_hand": 0.01,
     "zone.in_deck": 0.001,

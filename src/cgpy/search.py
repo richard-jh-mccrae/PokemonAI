@@ -192,6 +192,7 @@ _OP_POSES = {
     # Turbo Flare asks for Basic Energies before targets. Native search tokens make that first ask
     # reconstructible only from the attack definition, before its public attack log exists.
     "xDeckEnergyAttachDistribute": {(int(SelectType.CARD), int(SelectContext.ATTACH_TO))},
+    "xDiscardEnergyAttachBench": {(int(SelectType.CARD), int(SelectContext.ATTACH_TO))},
     "xDeckEvolveInPlayAndShuffle": {
         (int(SelectType.CARD), int(SelectContext.EVOLVES_TO)),
         (int(SelectType.CARD), int(SelectContext.EVOLVES_FROM)),

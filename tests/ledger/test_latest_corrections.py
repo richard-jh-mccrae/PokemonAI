@@ -17,6 +17,10 @@ EARLIER_DRAGAPULT_CORRECTIONS = (Path(__file__).parents[2] / "data" / "correctio
                                 / "20260830-083953_d00f93d6_dragapult_ex")
 WIN_CORRECTIONS = (Path(__file__).parents[2] / "data" / "corrections"
                    / "20260831-051533_d74ec20f_mega_starmie")
+NEW_LUCARIO_CORRECTIONS = (Path(__file__).parents[2] / "data" / "corrections"
+                           / "20260831-120851_7d11660f_mega_lucario")
+NEW_STARMIE_CORRECTIONS = (Path(__file__).parents[2] / "data" / "corrections"
+                          / "20260831-124008_7d11660f_mega_starmie")
 
 
 def replay_frame(frame):
@@ -270,4 +274,46 @@ def test_poffin_and_hammer_are_both_accepted_before_hand_disruption():
 
     assert row["acceptable"] == [[3], [2]]
     assert row["graded"]
+    assert row["agrees"], row
+
+
+@pytest.mark.parametrize("frame", (54, 89, 124))
+def test_new_lucario_atomic_corrections(frame):
+    result = sweep(
+        store=NEW_LUCARIO_CORRECTIONS,
+        decks=("dragapult_ex", "mega_lucario"),
+        correction_filter=lambda correction: correction.decision.get("frame") == frame,
+        reviewed={},
+    )
+    [row] = result["rows"]
+
+    assert row["graded"], row
+    assert row["agrees"], row
+
+
+@pytest.mark.parametrize(("frame", "condemned"), ((26, [12]), (144, [7])))
+def test_new_lucario_covered_defects_are_not_repeated(frame, condemned):
+    result = sweep(
+        store=NEW_LUCARIO_CORRECTIONS,
+        decks=("dragapult_ex", "mega_lucario"),
+        correction_filter=lambda correction: correction.decision.get("frame") == frame,
+        reviewed={},
+    )
+    [row] = result["rows"]
+
+    assert row["graded"], row
+    assert row["chosen"] != condemned, row
+
+
+@pytest.mark.parametrize("frame", (8, 30, 83, 107, 123, 125, 150))
+def test_new_starmie_atomic_corrections(frame):
+    result = sweep(
+        store=NEW_STARMIE_CORRECTIONS,
+        decks=("dragapult_ex", "mega_starmie"),
+        correction_filter=lambda correction: correction.decision.get("frame") == frame,
+        reviewed={},
+    )
+    [row] = result["rows"]
+
+    assert row["graded"], row
     assert row["agrees"], row

@@ -642,6 +642,10 @@ def pokemon_copy_capacity(facts, *, demand: Demand | None = None,
         return 1
     if any(clause.allowance == "body" for clause in card_clauses(facts)):
         return None
+    roles = set(getattr(facts, "default_roles", ()))
+    if (not roles.intersection({"primary_attacker", "backup_attacker"})
+            and any(clause.allowance == "card" for clause in card_clauses(facts))):
+        return 1
     if demand is not None and ctx is not None:
         descendants = tuple(_forward_lines().get(facts.name, ()))
         if not descendants and facts.evolves_from is None:

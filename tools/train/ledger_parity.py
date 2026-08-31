@@ -27,15 +27,31 @@ def legacy_choose(prices, *, forced, configuration):
         price.footprint.realized_outcomes)
     ready_winning_enders = tuple(
         price for price in ready_knockout_enders
-        if any(component.feature in {"result.win", "active.terminal_liability"}
-               and component.value > 0
-               for component in price.footprint.contributions))
+        if (RealizedOutcome.GAME_WIN in price.footprint.realized_outcomes
+            or any(component.feature in {"result.win", "active.terminal_liability"}
+                   and component.value > 0
+                   for component in price.footprint.contributions)))
     continuation_threshold = (
         0.0 if explicit_end or ready_knockout_enders
         else min(0.0, best_ender_value))
 
     def meaningful(price):
         return policy_value(price) > continuation_threshold + configuration.noise_tolerance
+
+    def repays_action_cost(price):
+        cost = -sum(component.value for component in price.footprint.policy_contributions
+                    if component.feature == "action.opportunity_cost")
+        return price.footprint.action_opportunity > cost + configuration.noise_tolerance
+
+    def worth_before_knockout(price):
+        if not meaningful(price):
+            return False
+        refresh = ("supporter_played" in price.footprint.allowances_consumed
+                   and "hand" in price.footprint.zones_replaced)
+        if not refresh:
+            return True
+        knockout_value = max(ready.swing for ready in ready_knockout_enders)
+        return policy_value(price) > knockout_value + configuration.noise_tolerance
 
     continuing = tuple(price for price in prices
                        if not price.ends_turn and meaningful(price))
@@ -48,6 +64,7 @@ def legacy_choose(prices, *, forced, configuration):
         if not price.ends_turn
         and price.action.identity.kind == "ability"
         and not price.footprint.allowances_consumed
+        and "attach" not in price.footprint.opportunities_consumed
         and {"deck", "hand"}.issubset(price.footprint.zones_replaced)
         and ("in_play" in price.footprint.zones_replaced
              or ability_would_be_consumed)
@@ -59,6 +76,7 @@ def legacy_choose(prices, *, forced, configuration):
     durable_development = tuple(
         price for price in prices
         if not price.ends_turn
+        and repays_action_cost(price)
         and "in_play" in price.footprint.immediately_usable_outputs
         and ((price.action.identity.kind == "play")
              or (price.action.identity.kind == "evolve"
@@ -122,16 +140,16 @@ def legacy_choose(prices, *, forced, configuration):
     elif winning_preparation:
         continuing = winning_preparation
     elif ready_knockout_enders:
-        continuing = tuple(price for price in continuing if meaningful(price))
+        continuing = tuple(price for price in continuing
+                           if worth_before_knockout(price))
     if continuing:
         return _legacy_ranked(_legacy_preservation_frontier(
             continuing, configuration.noise_tolerance), configuration,
             include_dependency_opportunity=True)[0]
+    if ready_winning_enders:
+        return _legacy_ranked(ready_winning_enders, configuration)[0]
     if ready_knockout_enders:
-        action_enders = tuple(
-            price for price in enders
-            if RealizedOutcome.ACTION_ENDED_TURN in price.footprint.realized_outcomes)
-        return _legacy_ranked(action_enders or ready_knockout_enders, configuration)[0]
+        return _legacy_ranked(ready_knockout_enders, configuration)[0]
     return _legacy_ranked(enders or prices, configuration)[0]
 
 
@@ -156,6 +174,17 @@ def _legacy_preservation_frontier(candidates, noise_tolerance=0.0):
                 other.footprint, "immediately_usable_outputs", ())
             other_allowances_consumed = getattr(
                 other.footprint, "allowances_consumed", ())
+            same_exclusive_spend = (
+                consumed
+                and consumed == set(other.footprint.opportunities_consumed)
+                and candidate.action.identity.kind == other.action.identity.kind
+                and any(component.feature == "action.survival_tool_target"
+                        for price in (candidate, other)
+                        for component in price.footprint.policy_contributions)
+                and value(other) > value(candidate) + noise_tolerance)
+            if same_exclusive_spend:
+                deferred.add(candidate.action.identity)
+                break
             refresh_after_preparation = (
                 "supporter_played" in allowances_consumed
                 and "hand" in zones_replaced

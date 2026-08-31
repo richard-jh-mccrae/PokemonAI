@@ -463,6 +463,10 @@ def _clause_probe_context(ctx, facts, kind, *, locator=None):
 def _clause_probe_board(board, facts, kind, ctx, *, parameter=None, locator=None):
     clauses = ((_located_clause(facts, locator),) if locator is not None else
                tuple(clause for clause in card_clauses(facts) if clause.kind == kind))
+    if kind == "retreat_reduction":
+        board = replace(board, me=replace(
+            board.me, asleep=False, paralyzed=False,
+            active=replace(board.me.active, energies=(), tools=())))
     if kind == "energy_recur":
         wanted = next(int(clause.energy_type) for clause in clauses
                       if clause.energy_type is not None)

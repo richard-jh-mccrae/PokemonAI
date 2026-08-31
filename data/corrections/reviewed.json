@@ -472,5 +472,50 @@
     "disposition": "covered",
     "reason": "the current choice attaches Ignition Energy to the Active and creates the game-winning attack; the rationale requires an Active attachment, not Basic Water specifically",
     "round": "2026-08-31"
+  },
+  "57894709469460179-40": {
+    "disposition": "deferred-multi-turn",
+    "reason": "the ruling orders Crushing Hammer before Lillie's Determination; independent MAIN action ordering returns when PUCT grades the complete turn",
+    "round": "2026-08-31"
+  },
+  "57894709469460179-26": {
+    "disposition": "covered",
+    "reason": "current replay no longer fetches the redundant Lunatone; the ruling does not reject the live Makuhita-Hariyama line in favor of Riolu",
+    "round": "2026-08-31"
+  },
+  "57894709469460179-85": {
+    "disposition": "covered",
+    "reason": "the current choice no longer discards Dragapult with Ultra Ball, which is the defect named by the rationale",
+    "round": "2026-08-31"
+  },
+  "57894709469460179-134": {
+    "disposition": "covered",
+    "reason": "the current choice no longer spends Rosa on the fully energized Stage 2, which is the defect named by the rationale",
+    "round": "2026-08-31"
+  },
+  "57894709469460179-144": {
+    "disposition": "covered",
+    "reason": "current replay preserves the only Fighting Energy by playing Riolu instead of consuming it with Lunar Cycle; exact attach-first ordering belongs to the complete turn",
+    "round": "2026-08-31"
+  },
+  "45833423496846964-31": {
+    "disposition": "off-policy",
+    "reason": "this attachment follows the corrected forced Energy recipient at frame 30; the recorded board is unreachable once that earlier one-ply choice changes",
+    "round": "2026-08-31"
+  },
+  "45833423496846964-37": {
+    "disposition": "deferred-multi-turn",
+    "reason": "the ruling orders attachment and evolution before Lillie's Determination; independent MAIN action ordering returns when PUCT grades the complete turn",
+    "round": "2026-08-31"
+  },
+  "45833423496846964-65": {
+    "disposition": "transposition",
+    "reason": "current replay already selects the other identical Crushing Hammer copy, satisfying the ruling before the attack",
+    "round": "2026-08-31"
+  },
+  "45833423496846964-82": {
+    "disposition": "deferred-multi-turn",
+    "reason": "the ruling orders Crushing Hammer before the turn-ending attack; independent MAIN action ordering returns when PUCT grades the complete turn",
+    "round": "2026-08-31"
   }
 }

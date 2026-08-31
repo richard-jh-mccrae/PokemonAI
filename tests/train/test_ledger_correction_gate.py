@@ -72,6 +72,38 @@ def test_new_round_routing_is_pinned_to_atomic_vs_ordered_work():
     }
 
 
+def test_august_31_round_routes_atomic_work_into_ledger():
+    names = {
+        "20260831-120851_7d11660f_mega_lucario",
+        "20260831-124008_7d11660f_mega_starmie",
+    }
+    corrections = [
+        correction
+        for source in ledger_correction_sources()
+        if source.parent.name in names
+        for correction in load_corrections(source, dedup=False)
+    ]
+    reviewed = load_reviewed()
+
+    retired = {correction.id for correction in corrections
+               if review_key(correction) in reviewed}
+    active = {correction.id for correction in corrections
+              if review_key(correction) not in reviewed}
+
+    assert retired == {
+        "27ff682acbf9", "01829144bf52", "bad1216e2270", "0e4fca2eaaab",
+        "7261225c513f",
+        "4ec3475fe67b", "50964bb238cc", "ebfbe1fc1516",
+        "611817dff74b",
+    }
+    assert active == {
+        "b491be50b188", "8ffb66fdfce6", "09737c564e45",
+        "e11e5bf11353",
+        "026997e92f18", "42e7d5365817", "cd3dd713f99b",
+        "945ecbcd0b9c", "ed7107a58fc7", "2fd2f96def47",
+    }
+
+
 def test_gate_fails_any_unreplayed_record_or_violated_preference():
     report = {
         "rows": [{"id": "a", "grading_exclusion": None,
