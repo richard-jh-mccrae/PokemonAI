@@ -776,7 +776,7 @@ def _damage_boost(clause, body, attacker, defender, ctx, board) -> float:
     return gate * _quantity(clause.amount) * units
 
 
-def _body_matches_applies_to(value, clause, body, facts) -> bool:
+def body_matches_clause_target(value, clause, body, facts) -> bool:
     value = str(value or "self")
     name = getattr(facts, "name", "").casefold()
     energy_type = getattr(facts, "energy_type", None)
@@ -823,7 +823,7 @@ def _hand_damage_boost(body, facts, attacker, defender, ctx, board, *, include_h
                 continue
             if trainer.kind == "tool" and body.tools:
                 continue
-            if not _body_matches_applies_to(clause.applies_to, clause, body, facts):
+            if not body_matches_clause_target(clause.applies_to, clause, body, facts):
                 continue
             if clause.no_rule_box and facts.is_rule_box:
                 continue
@@ -941,6 +941,23 @@ def attack_damage(attack, attacker_facts, defender_facts, attacker_body,
     return max(0.0, damage)
 
 
+def forward_threat_units(target, ctx) -> float:
+    if target is None:
+        return 0.0
+    from .worth import _forward_lines
+
+    facts = ctx.facts(target.card.card_id)
+    line = (facts, *(ctx.facts(card_id)
+                     for card_id in _forward_lines().get(
+                         getattr(facts, "name", None), ())))
+    return max((
+        (float(attack.damage or attack.damage_fix or attack.damage_max or 0)
+         + float(bench_reach(attack)))
+        / DAMAGE_UNIT_HP / max(1, len(attack.cost))
+        for card in line if isinstance(card, PokemonCard)
+        for attack in card.attacks), default=0.0)
+
+
 def _target_impact(damage: float, target, ctx, *, readiness: bool = False) -> float:
     if target is None or damage <= 0:
         return max(0.0, damage) / DAMAGE_UNIT_HP
@@ -1009,7 +1026,8 @@ def _attack_impact(attack, facts, body, side, opponent, ctx, board, *,
         count = max(1, int(any_target.count or 1))
         targets = ((opponent.active, False), *((target, True) for target in bench_targets))
         chosen = sorted(((_target_impact(
-            reach, target, ctx, readiness=readiness), is_bench)
+            reach, target, ctx, readiness=readiness),
+                          is_bench)
                          for target, is_bench in targets if target is not None), reverse=True)
         selected = chosen[:count]
         total = sum(value for value, _is_bench in selected)
@@ -1340,6 +1358,29 @@ def best_current_damage(body, side, opponent, board, ctx) -> float:
                      if body is side.active and side.confused else 1.0)
 
 
+def has_payable_active_ko(body, side, opponent, board, ctx) -> bool:
+    target = opponent.active
+    facts = None if body is None else ctx.facts(body.card.card_id)
+    if not isinstance(facts, PokemonCard) or target is None:
+        return False
+    if body is side.active and (side.asleep or side.paralyzed or side.confused):
+        return False
+    defender_facts = ctx.facts(target.card.card_id)
+    for attack in facts.attacks:
+        if payment_fraction(body.energies, attack.cost) < 1.0:
+            continue
+        damage = attack_damage(
+            attack, facts, defender_facts, body, side, opponent, ctx, board)
+        any_target = attack.clause("bench_snipe")
+        if any_target is not None and any_target.target == "opp_any" \
+                and (any_target.restriction != "ex_or_v_only"
+                     or getattr(defender_facts, "is_rule_box", False)):
+            damage = max(damage, float(bench_reach(attack)))
+        if damage >= target.hp:
+            return True
+    return False
+
+
 def creates_lethal_damage_boost(trainer, side, opponent, board, ctx) -> bool:
     body = side.active
     defender = opponent.active
@@ -1352,7 +1393,7 @@ def creates_lethal_damage_boost(trainer, side, opponent, board, ctx) -> bool:
         _damage_boost(clause, body, side, opponent, ctx, board)
         for clause in trainer.clauses
         if clause.kind == "damage_boost"
-        and _body_matches_applies_to(clause.applies_to, clause, body, facts)
+        and body_matches_clause_target(clause.applies_to, clause, body, facts)
         and not (clause.no_rule_box and facts.is_rule_box)
         and not (clause.target_class == "ex"
                  and not getattr(defender_facts, "is_rule_box", False)))
@@ -1557,11 +1598,17 @@ def _combine_option_units(left, right, scale=1.0):
         for name in OptionUnits.__dataclass_fields__})
 
 
+def _option_units_worth(units, ctx):
+    return sum(value * ctx.configuration[feature]
+               for feature, value in units.activations())
+
+
 def _fetch_dependency_units(facts, side, opponent, board, ctx, *, depth, seen,
                             supporter_spent):
     if depth <= 0 or not isinstance(facts, TrainerCard):
         return OptionUnits()
     best = OptionUnits()
+    best_energy = OptionUnits()
     seen = frozenset((*seen, facts.card_id))
     supporter_spent = supporter_spent or facts.kind == SUPPORTER
     for clause in facts.clauses:
@@ -1591,7 +1638,13 @@ def _fetch_dependency_units(facts, side, opponent, board, ctx, *, depth, seen,
             line = _combine_option_units(OptionUnits(), line, gate)
             if line.total > best.total:
                 best = line
-    return best
+            if isinstance(candidate, EnergyCard) \
+                    and _option_units_worth(line, ctx) > _option_units_worth(
+                        best_energy, ctx):
+                best_energy = line
+    return (best_energy
+            if _option_units_worth(best_energy, ctx) > _option_units_worth(best, ctx)
+            else best)
 
 
 def hand_dependency_reach_units(
@@ -1695,6 +1748,7 @@ __all__ = (
     "best_current_damage",
     "creates_lethal_damage_boost",
     "best_energy_marginal", "body_capability", "card_option_units",
+    "forward_threat_units", "has_payable_active_ko",
     "effective_retreat_cost", "knockout_exposure_units", "retreat_payment_progress",
     "switch_target_units",
     "card_option_value", "energy_marginal", "hidden_zone_expectation", "payment_fraction",

@@ -18,14 +18,15 @@ from .activation import (DAMAGE_UNIT_HP, ActivationCompiler, ActivationEnvironme
 from .capabilities import (Capability, best_current_damage,
                            body_capability, card_option_units,
                            card_option_value, clause_value_units, hidden_zone_expectation,
-                           expected_draw_counts, recoverable_discard_ids,
+                           expected_draw_counts, forward_threat_units,
+                           has_payable_active_ko, recoverable_discard_ids,
                            knockout_exposure_units, retreat_payment_progress,
                            without_end_turn_energy)
 from .coverage import card_coverage_gap
 from .features import FEATURE_CATALOG
 from .prizes import PrizeMap, derive_prize_map
 from .portfolio import feasible_option_portfolio_result
-from .worth import (Demand, DemandState, EvaluationModel, _liveness,
+from .worth import (Demand, DemandState, EvaluationModel, _forward_lines, _liveness,
                     any_attack_payable,
                     visible_development_reach_units,
                     legal_line_reach, line_reach, opponent_evaluation,
@@ -403,13 +404,32 @@ def _side(trace: _Trace, label: str, side: Side, sign: float, ctx: EvaluationMod
         board.turn.number <= 1
         and board.turn.first_player == side_seat
         and active_capability.attack_now <= 0.0)
+    incoming = (
+        best_current_damage(
+            opposing_side.active, opposing_side, side, board, ctx)
+        if side.active is not None and opposing_side.active is not None else 0.0)
+    return_hp = (
+        FUTURE_TURN_DISCOUNT
+        * max(0.0, side.active.hp - incoming) / DAMAGE_UNIT_HP
+        if (incoming > 0.0 and side.active is not None
+            and turn_player != side_seat) else 0.0)
+    active_ko_bonus = (
+        forward_threat_units(opposing_side.active, ctx)
+        if (side.active is not None and opposing_side.active is not None
+            and set(getattr(ctx.facts(
+                opposing_side.active.card.card_id), "default_roles", ())).intersection(
+                    {"primary_attacker", "backup_attacker"})
+            and has_payable_active_ko(
+                side.active, side, opposing_side, board, ctx))
+        else 0.0)
     active_realization = (
         0.0 if terminal_target
         else active_capability.attack_now if doomed and turn_player == side_seat
         else 0.0 if doomed
         else (BENCH_REALIZATION_DISCOUNT * FUTURE_TURN_DISCOUNT
               * active_capability.realization) if first_turn_attack_blocked
-        else max(active_capability.realization, active_capability.attachment_clock))
+        else max(active_capability.realization,
+                 active_capability.attachment_clock, return_hp) + active_ko_bonus)
     bench_realization = max((
         FUTURE_TURN_DISCOUNT * max(value.realization, value.attachment_clock)
         for body, value in capabilities if body is not side.active), default=0.0)
@@ -525,7 +545,9 @@ def _side(trace: _Trace, label: str, side: Side, sign: float, ctx: EvaluationMod
                     feature for feature, _value in units.activations()))
             facts = portfolio_functions[index]
             if (getattr(facts, "synergy", ())
-                    and any(demand.body_name_counts.get(name, 0) for name in facts.synergy)):
+                    and not demand.body_name_counts.get(facts.name, 0)
+                    and any(demand.body_name_counts.get(name, 0)
+                            for name in facts.synergy)):
                 trace.emit(f"{label}.hand", "observation", ("synergy_in_hand",), sign,
                            provenance=provenance)
             if not isinstance(facts, PokemonCard):
@@ -544,6 +566,13 @@ def _side(trace: _Trace, label: str, side: Side, sign: float, ctx: EvaluationMod
             if parent_match is None:
                 continue
             parent_index, parent_facts, provenance = parent_match
+            descendants = tuple(_forward_lines().get(facts.name, ()))
+            terminal_names = ({facts.name} if not descendants else {
+                candidate.name for card_id in descendants
+                if isinstance((candidate := ctx.facts(card_id)), PokemonCard)
+                and not _forward_lines().get(candidate.name)})
+            if any(demand.body_name_counts.get(name, 0) for name in terminal_names):
+                continue
             claim = ("basic_hand_link" if parent_facts.stage == "basic"
                      else "feasible_hand_link")
             trace.emit(f"{label}.hand", "observation", (claim,), sign,
@@ -720,8 +749,17 @@ def _body(trace: _Trace, part: str, body: Body, sign: float, ctx: EvaluationMode
     if active:
         threat = (_damage_pressure(body_facts) / DAMAGE_UNIT_HP
                   * float(_prize_value(body, ctx)))
+        threat_exposure = usable * missing * threat
+        if sign > 0 and side.bench:
+            replacement_exposure = max(
+                knockout_exposure_units(candidate, ctx)
+                for candidate in side.bench)
+            removable_exposure = max(
+                0.0,
+                knockout_exposure_units(body, ctx) - replacement_exposure)
+            threat_exposure = min(threat_exposure, removable_exposure)
         trace.emit(part, "observation", ("damaged_active_threat",),
-                   sign * usable * missing * threat)
+                   sign * threat_exposure)
     roles = set(getattr(body_facts, "default_roles", ()))
     pure_draw_engine = "draw_engine" in roles and not roles.intersection(
         {"primary_attacker", "backup_attacker"})

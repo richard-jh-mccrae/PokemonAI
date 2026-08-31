@@ -52,8 +52,8 @@ APPROVED_DECLARATIONS = {
         "_PLACEMENT_FACTORS", "_SCALAR_DEFAULTS",
     },
     "src/common/ledger/preview.py": {
-        "DAMAGE_TARGET_EVOLUTION_COMMITMENT", "FORCED_FOOTPRINT_SLOT",
-        "LOTTERY_DIGEST_BYTES", "PRIZE_AREA", "PRIZE_PHASE_PIVOT"},
+        "FORCED_FOOTPRINT_SLOT", "LOTTERY_DIGEST_BYTES", "PRIZE_AREA",
+        "PRIZE_PHASE_PIVOT"},
     "src/common/ledger/prizes.py": {"PRIZE_ROUTE_CACHE_SIZE"},
     "src/common/ledger/portfolio.py": {"HAND_POKEMON_REALIZATION_DISCOUNT"},
     "src/common/ledger/portfolio_solver.py": {

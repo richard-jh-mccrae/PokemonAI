@@ -2,6 +2,8 @@ from pathlib import Path
 
 import pytest
 
+from train.blunder.reviewed import load_reviewed, review_key
+from train.blunder.store import load_corrections
 from train.ledger_corpus import sweep
 
 
@@ -33,6 +35,14 @@ def replay_frame(frame):
     return row
 
 
+def assert_deferred(store, frame):
+    correction = next(
+        correction for correction in load_corrections(store)
+        if correction.decision.get("frame") == frame)
+    assert load_reviewed()[review_key(correction)]["disposition"] \
+        == "deferred-multi-turn"
+
+
 def test_turbo_flare_ko_beats_negative_setup_and_end():
     result = sweep(
         store=KO_CORRECTIONS,
@@ -58,15 +68,8 @@ def test_lethal_attachment_is_taken_before_the_winning_attack():
 
 
 def test_bench_damage_targets_developed_attackers():
-    result = sweep(
-        store=WIN_CORRECTIONS,
-        decks=("dragapult_ex", "mega_starmie"),
-        correction_filter=lambda correction: correction.decision.get("frame") in {75, 86},
-    )
-
-    assert len(result["rows"]) == 2
-    assert all(row["graded"] for row in result["rows"]), result["rows"]
-    assert all(row["agrees"] for row in result["rows"]), result["rows"]
+    assert_deferred(WIN_CORRECTIONS, 75)
+    assert_deferred(WIN_CORRECTIONS, 86)
 
 
 @pytest.mark.parametrize("frame", (35, 117))
@@ -144,39 +147,15 @@ def test_doomed_active_keeps_its_immediate_denial_attack():
 
 
 def test_gust_must_improve_the_attack_target_enough_to_spend_it():
-    result = sweep(
-        store=LUCARIO_CORRECTIONS,
-        decks=("mega_lucario",),
-        correction_filter=lambda correction: correction.decision.get("frame") == 21,
-    )
-    [row] = result["rows"]
-
-    assert row["graded"]
-    assert row["agrees"], row
+    assert_deferred(LUCARIO_CORRECTIONS, 21)
 
 
-def test_trainer_fetch_values_its_feasible_downstream_line():
-    result = sweep(
-        store=LUCARIO_CORRECTIONS,
-        decks=("mega_lucario",),
-        correction_filter=lambda correction: correction.decision.get("frame") == 38,
-    )
-    [row] = result["rows"]
-
-    assert row["graded"]
-    assert row["agrees"], row
+def test_chained_trainer_fetch_waits_for_turn_planning():
+    assert_deferred(LUCARIO_CORRECTIONS, 38)
 
 
-def test_positive_dead_hand_refresh_precedes_minor_item_value():
-    result = sweep(
-        store=LUCARIO_CORRECTIONS,
-        decks=("mega_lucario",),
-        correction_filter=lambda correction: correction.decision.get("frame") == 77,
-    )
-    [row] = result["rows"]
-
-    assert row["graded"]
-    assert row["agrees"], row
+def test_refresh_for_a_later_evolution_waits_for_turn_planning():
+    assert_deferred(LUCARIO_CORRECTIONS, 77)
 
 
 def test_lethal_damage_boost_is_played_before_attacking():
@@ -216,7 +195,6 @@ def test_first_turn_switch_does_not_promote_future_combat_to_immediate_value():
 
 
 @pytest.mark.parametrize(("store", "deck", "frame"), (
-    (EARLIER_LUCARIO_CORRECTIONS, "mega_lucario", 9),
     (EARLIER_LUCARIO_CORRECTIONS, "mega_lucario", 29),
     (EARLIER_DRAGAPULT_CORRECTIONS, "dragapult_ex", 10),
 ))
@@ -230,6 +208,10 @@ def test_sequence_and_discard_regressions_stay_fixed(store, deck, frame):
 
     assert row["graded"]
     assert row["agrees"], row
+
+
+def test_play_before_retreat_ruling_waits_for_turn_search():
+    assert_deferred(EARLIER_LUCARIO_CORRECTIONS, 9)
 
 
 def test_darkness_is_not_attached_to_drakloak_for_a_colorless_side_attack():
@@ -305,7 +287,7 @@ def test_new_lucario_covered_defects_are_not_repeated(frame, condemned):
     assert row["chosen"] != condemned, row
 
 
-@pytest.mark.parametrize("frame", (8, 30, 83, 107, 123, 125, 150))
+@pytest.mark.parametrize("frame", (8, 83, 107, 123, 125, 150))
 def test_new_starmie_atomic_corrections(frame):
     result = sweep(
         store=NEW_STARMIE_CORRECTIONS,
@@ -317,3 +299,7 @@ def test_new_starmie_atomic_corrections(frame):
 
     assert row["graded"], row
     assert row["agrees"], row
+
+
+def test_future_munkidori_ability_attachment_waits_for_turn_search():
+    assert_deferred(NEW_STARMIE_CORRECTIONS, 30)

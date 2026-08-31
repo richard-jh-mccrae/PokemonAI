@@ -1497,6 +1497,20 @@ def _environment(witness, ctx):
             board = replace(board, me=replace(
                 board.me, bench=(_body_for_facts(
                     board.me.bench[0], source), *board.me.bench[1:])))
+    elif witness.rule.operation == "stadium_board_fit":
+        from .capabilities import body_matches_clause_target
+
+        clause = next(clause for clause in card_clauses(facts)
+                      if clause.kind == witness.claim)
+        if clause.applies_to not in {"benched", "own_bench"}:
+            target = next(candidate for candidate in ctx.store.values()
+                          if isinstance(candidate, PokemonCard)
+                          and body_matches_clause_target(
+                              clause.applies_to, clause,
+                              board.me.bench[0], candidate))
+            board = replace(board, me=replace(
+                board.me, bench=(_body_for_facts(
+                    board.me.bench[0], target), *board.me.bench[1:])))
     side, opponent = board.me, board.them
     clause = next((
         clause for clause in card_clauses(facts)

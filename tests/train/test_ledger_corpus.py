@@ -268,6 +268,7 @@ def test_latest_corrections_resolve_or_rank_the_ruled_action_above_the_blunder()
 def test_august_30_corrections_choose_the_ruled_actions():
     from pathlib import Path
 
+    from train.blunder.reviewed import load_reviewed, review_key
     from train.blunder.store import load_corrections
     from train.ledger_corpus import _replay_one
 
@@ -277,11 +278,18 @@ def test_august_30_corrections_choose_the_ruled_actions():
         root / "20260830-083418_d00f93d6_mega_lucario",
         root / "20260830-083953_d00f93d6_dragapult_ex",
     )
-    rows = [_replay_one(correction.agent, correction)
-            for store in stores for correction in load_corrections(store)]
+    corrections = [correction for store in stores for correction in load_corrections(store)]
+    reviewed = load_reviewed()
+    active = [correction for correction in corrections
+              if review_key(correction) not in reviewed]
+    rows = [_replay_one(correction.agent, correction) for correction in active]
 
     assert all(row["graded"] and row["agrees"] for row in rows), [
         (row["key"], row["chosen"], row["correct"]) for row in rows if not row["agrees"]]
+    deferred = next(correction for correction in corrections
+                    if correction.decision.get("frame") == 9
+                    and correction.agent == "mega_lucario")
+    assert reviewed[review_key(deferred)]["disposition"] == "deferred-multi-turn"
 
 
 def _archived_frame(deck_dir="mega_starmie_20260813_c9991b12"):

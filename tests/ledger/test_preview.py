@@ -10,7 +10,7 @@ import math
 from types import SimpleNamespace
 import pytest
 
-from ledger_helpers import (DRAKLOAK, DRAGAPULT, DREEPY, FIRE_E, MAKUHITA,
+from ledger_helpers import (DRAKLOAK, DRAGAPULT, DREEPY, FIRE_E, LUNATONE, MAKUHITA,
                             ScriptedProvider, action, body, player, printout)
 
 from common.algebra import (Actor, Chance, Choice, Deterministic, Edge, RevealChoice,
@@ -26,11 +26,13 @@ from common.ledger.preview import (_body_ability_ready, _body_copy_overflow,
                                    price_actions)
 from common.ledger.worth import pokemon_copy_capacity
 from common.observation import ObservationStateBuilder
-from common.strategy.context import _DAMAGE, _DAMAGE_COUNTER_ANY
+from common.strategy.context import _ATTACH_FROM, _DAMAGE, _DAMAGE_COUNTER_ANY
 from deprecated.bellman.state import DecisionState
 
 DECK = (DRAGAPULT, FIRE_E) * 20
 INFORMATION_VALUE = EvaluationModel.build().configuration["continuation.information_value"]
+HARIYAMA = 674
+RIOLU = 677
 
 
 def test_playing_a_held_parent_creates_a_future_evolution_opportunity():
@@ -208,6 +210,28 @@ def test_tera_bench_blocks_attack_damage_but_not_damage_counters(context, expect
         assert events == expected
 
 
+def test_damage_counter_target_uses_live_threat_not_sunk_evolution_stack():
+    select = {"context": _DAMAGE_COUNTER_ANY, "minCount": 1, "maxCount": 1,
+              "option": [
+                  {"area": 5, "index": 0, "playerIndex": 1, "type": 3},
+                  {"area": 5, "index": 1, "playerIndex": 1, "type": 3},
+              ]}
+    board = ObservationStateBuilder(DECK).root(printout(
+        me=player(active=body(DRAGAPULT, 1)),
+        them=player(
+            own=False,
+            active=body(DREEPY, 2),
+            bench=[body(HARIYAMA, 3, hp=150, max_hp=150, under=(MAKUHITA,)),
+                   body(RIOLU, 4, hp=80, max_hp=80)]),
+        select=select))
+    context = EvaluationModel.build()
+
+    hariyama = _local_action_events(board, action("card", (0,)), context)
+    riolu = _local_action_events(board, action("card", (1,)), context)
+
+    assert riolu[0][1] > hariyama[0][1]
+
+
 def test_body_ability_readiness_stops_after_the_line_is_fully_developed():
     select = {"context": 0, "minCount": 1, "maxCount": 1,
               "option": [{"cardId": DRAKLOAK, "serial": 800, "type": 7}]}
@@ -259,6 +283,51 @@ def test_named_shared_ability_caps_only_a_non_attacker_copy():
 
     assert pokemon_copy_capacity(context.facts(675)) == 1
     assert pokemon_copy_capacity(context.facts(756)) == 2
+
+
+def test_fetch_prices_a_shared_ability_body_above_its_copy_capacity():
+    select = {
+        "context": 5, "minCount": 1, "maxCount": 1,
+        "option": [{"cardId": LUNATONE, "serial": 800, "type": 3},
+                   {"cardId": MAKUHITA, "serial": 801, "type": 3}],
+    }
+    board = ObservationStateBuilder(DECK).root(printout(
+        me=player(active=body(DRAGAPULT, 1), bench=[body(LUNATONE, 2)]),
+        select=select))
+
+    assert _body_copy_overflow(
+        board, action("card", (0,)), EvaluationModel.build()) == 1
+
+
+def test_fetch_prices_a_redundant_named_synergy_attacker():
+    select = {
+        "context": 5, "minCount": 1, "maxCount": 1,
+        "option": [{"cardId": 676, "serial": 800, "type": 3},
+                   {"cardId": MAKUHITA, "serial": 801, "type": 3}],
+    }
+    board = ObservationStateBuilder(DECK).root(printout(
+        me=player(active=body(DRAGAPULT, 1),
+                  bench=[body(676, 2), body(LUNATONE, 3)]),
+        select=select))
+
+    assert _body_copy_overflow(
+        board, action("card", (0,)), EvaluationModel.build()) == 1
+
+
+def test_acceleration_phase_prices_an_active_recipient():
+    select = {
+        "context": _ATTACH_FROM, "minCount": 1, "maxCount": 1,
+        "contextCard": {"id": FIRE_E, "serial": 800, "playerIndex": 0},
+        "option": [{"area": 4, "index": 0, "playerIndex": 0, "type": 3}],
+    }
+    board = ObservationStateBuilder(DECK).root(printout(
+        me=player(active=body(DRAGAPULT, 1)),
+        them=player(own=False, active=body(DREEPY, 2)), select=select))
+
+    events = _local_action_events(
+        board, action("card", (0,)), EvaluationModel.build())
+
+    assert events and events[0][0] == "acceleration_phase_fit"
 
 
 def test_terminal_action_delta_is_independent_of_the_end_counterfactual():

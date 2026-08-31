@@ -5,17 +5,19 @@ from types import MappingProxyType
 
 import pytest
 
-from ledger_helpers import (AIR_BALLOON, DREEPY, FIRE, LILLIES, MAKUHITA,
+from ledger_helpers import (AIR_BALLOON, DRAGAPULT, DREEPY, FIRE, LILLIES, MAKUHITA,
                             MEGA_STARMIE, PSYCHIC, body, player, printout)
 
-from common.cards.card_facts import BASIC, Attack, PokemonCard
+from common.cards.card_facts import BASIC, Attack, Clause, PokemonCard
 from common.ledger import EvaluationModel, evaluate
-from common.ledger.capabilities import body_capability, card_option_units
+from common.ledger.capabilities import (body_capability, card_option_units,
+                                        has_payable_active_ko)
 from common.observation import ObservationStateBuilder
 
 
 READY, UNPAYABLE, TARGET, THREAT, STURDY, FRAGILE = range(9_990_001, 9_990_007)
 BOSS, SWITCH, BUDEW = 1182, 1123, 235
+FEZANDIPITI_EX, RIOLU = 140, 677
 
 
 def board(**kwargs):
@@ -30,13 +32,14 @@ def model(*cards):
 
 
 def pokemon(card_id, name, *, hp=100, energy_type=FIRE, weakness=None,
-            resistance=None, retreat_cost=1, damage=0, cost=()):
+            resistance=None, retreat_cost=1, damage=0, cost=(), roles=(), clauses=()):
     attacks = (() if damage <= 0 else
-               (Attack(card_id, f"{name} attack", tuple(cost), damage),))
+               (Attack(card_id, f"{name} attack", tuple(cost), damage,
+                       clauses=tuple(clauses)),))
     return PokemonCard(
         card_id, name, hp, energy_type, BASIC, weakness=weakness,
         resistance=resistance, retreat_cost=retreat_cost, attacks=attacks,
-        covers="full")
+        default_roles=roles, covers="full")
 
 
 def test_direct_promotion_prefers_payable_ko_over_unpayable_printed_damage():
@@ -94,6 +97,109 @@ def test_direct_promotion_avoids_doomed_prize_exposure_at_equal_attack_yield():
         them=player(own=False, active=body(THREAT, 3, energies=(FIRE,))))
 
     assert evaluate(sturdy, context).total > evaluate(fragile, context).total
+
+
+def test_direct_promotion_values_return_hp_before_either_body_is_doomed():
+    context = model(
+        pokemon(STURDY, "Sturdy", hp=150),
+        pokemon(FRAGILE, "Fragile", hp=80),
+        pokemon(THREAT, "Threat", damage=70, cost=(FIRE,)),
+    )
+    sturdy = board(
+        me=player(active=body(STURDY, 1, hp=150, max_hp=150),
+                  bench=[body(FRAGILE, 2, hp=80, max_hp=80)]),
+        them=player(own=False, active=body(THREAT, 3, energies=(FIRE,))))
+    fragile = board(
+        me=player(active=body(FRAGILE, 2, hp=80, max_hp=80),
+                  bench=[body(STURDY, 1, hp=150, max_hp=150)]),
+        them=player(own=False, active=body(THREAT, 3, energies=(FIRE,))))
+
+    assert evaluate(sturdy, context).total > evaluate(fragile, context).total
+
+
+def test_direct_promotion_values_a_payable_ko_over_item_lock_denial():
+    context = model(
+        pokemon(READY, "Ready", damage=100, cost=(FIRE,)),
+        pokemon(TARGET, "Loaded target", hp=100, damage=100, cost=(FIRE,),
+                roles=("primary_attacker",)),
+    )
+    ready = board(
+        me=player(active=body(READY, 1, energies=(FIRE,)),
+                  bench=[body(BUDEW, 2, energies=(FIRE,))]),
+        them=player(own=False, active=body(
+            TARGET, 3, hp=100, max_hp=100)))
+    denial = board(
+        me=player(active=body(BUDEW, 2, hp=30, max_hp=30, energies=(FIRE,)),
+                  bench=[body(READY, 1, energies=(FIRE,))]),
+        them=player(own=False, active=body(
+            TARGET, 3, hp=100, max_hp=100)))
+
+    assert evaluate(ready, context).total > evaluate(denial, context).total
+
+
+def test_direct_promotion_values_ko_of_a_live_forward_attacker():
+    context = EvaluationModel.build()
+    fez = board(
+        me=player(
+            active=body(FEZANDIPITI_EX, 1, hp=210, max_hp=210,
+                        energies=(7, 7, PSYCHIC)),
+            bench=[body(BUDEW, 2, hp=30, max_hp=30)]),
+        them=player(own=False, active=body(RIOLU, 3, hp=80, max_hp=80)))
+    budew = board(
+        me=player(
+            active=body(BUDEW, 2, hp=30, max_hp=30),
+            bench=[body(FEZANDIPITI_EX, 1, hp=210, max_hp=210,
+                        energies=(7, 7, PSYCHIC))]),
+        them=player(own=False, active=body(RIOLU, 3, hp=80, max_hp=80)))
+
+    assert evaluate(fez, context).total > evaluate(budew, context).total
+
+
+def test_bench_only_snipe_does_not_claim_an_active_ko():
+    context = model(
+        pokemon(READY, "Sniper", damage=1, cost=(FIRE,),
+                clauses=(Clause("bench_snipe", amount=120, target="opp_bench"),)),
+        pokemon(TARGET, "Target", hp=100),
+    )
+    state = board(
+        me=player(active=body(READY, 1, energies=(FIRE,))),
+        them=player(own=False, active=body(TARGET, 2, hp=100, max_hp=100)))
+
+    assert not has_payable_active_ko(
+        state.me.active, state.me, state.them, state, context)
+
+
+def test_confused_attacker_does_not_claim_a_certain_active_ko():
+    context = model(
+        pokemon(READY, "Attacker", damage=100, cost=(FIRE,)),
+        pokemon(TARGET, "Target", hp=100),
+    )
+    state = board(
+        me=player(active=body(READY, 1, energies=(FIRE,)), confused=True),
+        them=player(own=False, active=body(TARGET, 2, hp=100, max_hp=100)))
+
+    assert not has_payable_active_ko(
+        state.me.active, state.me, state.them, state, context)
+
+
+def test_damaged_primary_relief_is_bounded_by_the_backup_prize_exposure():
+    context = EvaluationModel.build()
+    primary = board(
+        me=player(
+            active=body(DRAGAPULT, 1, hp=120, max_hp=320,
+                        energies=(FIRE, PSYCHIC)),
+            bench=[body(FEZANDIPITI_EX, 2, hp=210, max_hp=210,
+                        energies=(7, 7, PSYCHIC))]),
+        them=player(own=False, active=body(MAKUHITA, 3, hp=150, max_hp=150)))
+    backup = board(
+        me=player(
+            active=body(FEZANDIPITI_EX, 2, hp=210, max_hp=210,
+                        energies=(7, 7, PSYCHIC)),
+            bench=[body(DRAGAPULT, 1, hp=120, max_hp=320,
+                        energies=(FIRE, PSYCHIC))]),
+        them=player(own=False, active=body(MAKUHITA, 3, hp=150, max_hp=150)))
+
+    assert evaluate(primary, context).total > evaluate(backup, context).total
 
 
 @pytest.mark.parametrize("status", ("asleep", "paralyzed"))

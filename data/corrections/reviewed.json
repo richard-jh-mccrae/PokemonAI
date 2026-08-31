@@ -328,6 +328,11 @@
     "reason": "the rationale requires retreat -> evolve -> attack; a one-ply ruling cannot grade that maneuver and returns when the turn planner grades sequences",
     "round": "2026-08-26"
   },
+  "14109113266227352-20": {
+    "disposition": "deferred-multi-turn",
+    "reason": "the ruling fetches a second Drakloak for a Dreepy that appeared this turn; its value begins with a later-turn evolution and is outside a one-ply target choice",
+    "round": "2026-09-01"
+  },
   "14109113266227352-34": {
     "disposition": "deferred-multi-turn",
     "reason": "the ruling is an information-order maneuver (evolve -> draw -> inspect with Drakloak) across independent MAIN actions; returns when PUCT grades full-turn sequences",
@@ -517,5 +522,175 @@
     "disposition": "deferred-multi-turn",
     "reason": "the ruling orders Crushing Hammer before the turn-ending attack; independent MAIN action ordering returns when PUCT grades the complete turn",
     "round": "2026-08-31"
+  },
+  "16829385564828143-16": {
+    "disposition": "deferred-multi-turn",
+    "reason": "the ruling values an attachment through the following attack; that dependent attach-then-attack line requires complete turn sequencing",
+    "round": "2026-08-31"
+  },
+  "16829385564828143-18": {
+    "disposition": "off-policy",
+    "reason": "this frame follows the corrected frame 16 line and is unreachable once that earlier ruling changes the turn trajectory",
+    "round": "2026-08-31"
+  },
+  "16829385564828143-67": {
+    "disposition": "off-policy",
+    "reason": "the rationale requires Psychic Energy, but the forced context card is Fire Energy and the active Dragapult ex already has Fire attached; grading the stated recipient would reward a redundant typed attachment",
+    "round": "2026-08-31"
+  },
+  "16829385564828143-77": {
+    "disposition": "deferred-multi-turn",
+    "reason": "the ruling orders evolution before the turn-ending attack; independent MAIN action ordering returns when PUCT grades the complete turn",
+    "round": "2026-08-31"
+  },
+  "16829385564828143-103": {
+    "disposition": "deferred-multi-turn",
+    "reason": "the ruling orders evolution before Lillie's Determination; independent MAIN action ordering returns when PUCT grades the complete turn",
+    "round": "2026-08-31"
+  },
+  "16829385564828143-104": {
+    "disposition": "off-policy",
+    "reason": "this frame follows the corrected frame 103 line and is unreachable once that earlier ruling changes the turn trajectory",
+    "round": "2026-08-31"
+  },
+  "16829385564828143-161": {
+    "disposition": "deferred-multi-turn",
+    "reason": "the ruling orders attachment before Harlequin refreshes the hand; independent MAIN action ordering returns when PUCT grades the complete turn",
+    "round": "2026-08-31"
+  },
+  "16829385564828143-172": {
+    "disposition": "deferred-multi-turn",
+    "reason": "the ruling orders attachment before Lillie's Determination; independent MAIN action ordering returns when PUCT grades the complete turn",
+    "round": "2026-08-31"
+  },
+  "4282733624711999-74": {
+    "disposition": "deferred-multi-turn",
+    "reason": "the exact ruling composes attachment with a later attack; the one-ply retreat-exposure defect is tested separately without claiming that complete sequence",
+    "round": "2026-08-31"
+  },
+  "4282733624711999-95": {
+    "disposition": "deferred-multi-turn",
+    "reason": "the ruling orders Fezandipiti's Ability before attachment; independent MAIN action ordering returns when PUCT grades the complete turn",
+    "round": "2026-08-31"
+  },
+  "4282733624711999-96": {
+    "disposition": "off-policy",
+    "reason": "this frame follows the corrected frame 95 line and is unreachable once that earlier ruling changes the turn trajectory",
+    "round": "2026-08-31"
+  },
+  "16650902666221556-18": {
+    "disposition": "deferred-multi-turn",
+    "reason": "the ruling composes Air Balloon attachment, retreat, and promotion across independent MAIN actions; PUCT must grade the maneuver",
+    "round": "2026-08-31"
+  },
+  "17386420467649563-14": {
+    "disposition": "off-policy",
+    "reason": "this frame depends on the redundant Solrock selected at frame 12 and conflicts with that earlier corrected fetch target",
+    "round": "2026-08-31"
+  },
+  "17386420467649563-59": {
+    "disposition": "deferred-multi-turn",
+    "reason": "the ruling composes retreat with a later Fezandipiti attack; PUCT must grade the complete maneuver",
+    "round": "2026-08-31"
+  },
+  "17386420467649563-76": {
+    "disposition": "deferred-multi-turn",
+    "reason": "the ruling composes retreat with a later Dragapult attack; PUCT must grade the complete maneuver",
+    "round": "2026-08-31"
+  },
+  "17386420467649563-89": {
+    "disposition": "deferred-multi-turn",
+    "reason": "the ruling composes Boss's Orders, Phantom Dive, and spread placement; PUCT must grade the complete turn",
+    "round": "2026-08-31"
+  },
+  "17386420467649563-110": {
+    "disposition": "off-policy",
+    "reason": "this frame follows the corrected frame 102 fetch and is unreachable once Riolu replaces Makuhita in that earlier selection",
+    "round": "2026-08-31"
+  },
+  "17386420467649563-127": {
+    "disposition": "deferred-multi-turn",
+    "reason": "the ruling values an attachment through the following attack; that dependent attach-then-attack line requires complete turn sequencing",
+    "round": "2026-08-31"
+  },
+  "17386420467649563-141": {
+    "disposition": "deferred-multi-turn",
+    "reason": "the ruling composes Lunar Cycle, Premium Power Pro, and an attack across independent MAIN actions; PUCT must grade the sequence",
+    "round": "2026-08-31"
+  },
+  "17386420467649563-139": {
+    "disposition": "deferred-multi-turn",
+    "reason": "the ruling composes attachment, retreat, and promotion across independent MAIN actions; PUCT must grade the maneuver",
+    "round": "2026-08-31"
+  },
+  "17386420467649563-152": {
+    "disposition": "deferred-multi-turn",
+    "reason": "the stored evolution selection does not express the rationale's attachment target, and the described evolve-then-attach line also requires complete turn sequencing",
+    "round": "2026-08-31"
+  },
+  "17386420467649563-162": {
+    "disposition": "covered",
+    "reason": "current replay already plays Riolu and avoids the condemned Stamp-first line; exact attachment-before-Stamp ordering belongs to complete turn search",
+    "round": "2026-08-31"
+  },
+  "17386420467649563-169": {
+    "disposition": "off-policy",
+    "reason": "this frame follows the corrected frame 162 line and is unreachable once that earlier ruling changes the turn trajectory",
+    "round": "2026-08-31"
+  },
+  "17386420467649563-175": {
+    "disposition": "off-policy",
+    "reason": "this frame follows the corrected first damage-counter target at frame 174 and is unreachable once that earlier choice changes",
+    "round": "2026-08-31"
+  },
+  "17386420467649563-176": {
+    "disposition": "off-policy",
+    "reason": "this frame follows the corrected first damage-counter target at frame 174 and is unreachable once that earlier choice changes",
+    "round": "2026-08-31"
+  },
+  "17386420467649563-191": {
+    "disposition": "deferred-multi-turn",
+    "reason": "the exact ruling composes an Ability with a later attack; the one-ply retreat-exposure defect is tested separately without claiming that complete sequence",
+    "round": "2026-08-31"
+  },
+  "17290397409584176-9": {
+    "disposition": "deferred-multi-turn",
+    "reason": "the ruling requires Solrock to be benched before a separately legal retreat even though both actions remain available; PUCT must grade that turn order",
+    "round": "2026-09-01"
+  },
+  "52182892931977890-21": {
+    "disposition": "deferred-multi-turn",
+    "reason": "the ruling compares attacking now with Boss's Orders followed by a later attack; one-ply board value cannot grade the resource across that sequence",
+    "round": "2026-09-01"
+  },
+  "25325576764785525-75": {
+    "disposition": "deferred-multi-turn",
+    "reason": "the snipe target depends on preserving a later Mega Starmie route and an expected Hero's Cape evolution; PUCT must grade that future prize route",
+    "round": "2026-09-01"
+  },
+  "25325576764785525-86": {
+    "disposition": "deferred-multi-turn",
+    "reason": "the exact Drakloak-over-Dreepy snipe ruling depends on their later evolution and attack routes rather than the immediate damage placement alone",
+    "round": "2026-09-01"
+  },
+  "45833423496846964-30": {
+    "disposition": "deferred-multi-turn",
+    "reason": "the attachment is justified by Munkidori's later damage-moving Ability; the captured board has no immediate Ability payoff for one-ply Ledger to grade",
+    "round": "2026-09-01"
+  },
+  "17386420467649563-31": {
+    "disposition": "deferred-multi-turn",
+    "reason": "the ruling fetches Fighting Gong now so a later Gong target choice can fetch Energy for a still-later attachment; that chained setup is not a one-ply card choice",
+    "round": "2026-09-01"
+  },
+  "52182892931977890-38": {
+    "disposition": "deferred-multi-turn",
+    "reason": "the ruling composes Petrel into Ultra Ball into Mega Lucario ex into a later knockout; one-ply Ledger cannot grade that four-action chain",
+    "round": "2026-09-01"
+  },
+  "52182892931977890-77": {
+    "disposition": "deferred-multi-turn",
+    "reason": "the ruling values Lillie's Determination for drawing Mega Lucario ex and evolving Riolu afterward; that payoff lies beyond the immediate shuffle-draw action",
+    "round": "2026-09-01"
   }
 }

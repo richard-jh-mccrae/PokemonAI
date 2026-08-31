@@ -26,7 +26,8 @@ from common.strategy.context import (_ACTIVE, _BENCH, _DAMAGE, _DAMAGE_COUNTER_A
 
 from .activation import ActivationCompiler, ActivationEnvironment
 from .capabilities import (DAMAGE_COUNTER_HP, DAMAGE_UNIT_HP, attack_damage,
-                           best_energy_marginal, creates_lethal_damage_boost,
+                           best_energy_marginal, body_capability,
+                           creates_lethal_damage_boost,
                            hand_dependency_reach_units, knockout_exposure_units)
 from .chance import RefreshSummary, refresh_outcomes
 from .decision import state_valuation_from_ledger
@@ -39,7 +40,6 @@ LOTTERY_DIGEST_BYTES = 8
 PRIZE_PHASE_PIVOT = 4
 PRIZE_AREA = 6
 FORCED_FOOTPRINT_SLOT = 3
-DAMAGE_TARGET_EVOLUTION_COMMITMENT = 3
 
 
 @dataclass(frozen=True)
@@ -806,25 +806,26 @@ def _local_action_events(board, action, ctx=None):
         if not 0 <= selection < len(select.options):
             continue
         option = select.options[selection]
-        if option.area != _BENCH or not isinstance(option.index, int):
+        side = board.me if option.playerIndex in {None, board.seat} else board.them
+        target = _option_body(board, option)
+        if target is None:
             continue
-        side = board.me if option.playerIndex == board.seat else board.them
-        if not 0 <= option.index < len(side.bench):
-            continue
-        target = side.bench[option.index]
         if target.hp <= 0:
             return (("overkill_counter", 1.0),)
         if ctx is not None:
             facts = ctx.facts(target.card.card_id)
-            if select.context == _DAMAGE and getattr(facts, "tera", False):
+            if (option.area == _BENCH and select.context == _DAMAGE
+                    and getattr(facts, "tera", False)):
                 return ()
             prize_value = int(getattr(facts, "prize_value", 1) or 1)
-            target_commitment = (
-                1 + DAMAGE_TARGET_EVOLUTION_COMMITMENT * len(target.pre_evolution)
-                + len(target.energies) + len(target.tools))
+            opponent = board.them if side is board.me else board.me
+            capability = body_capability(
+                target, side, opponent, board, ctx,
+                include_hand_attach=False)
+            threat = max(capability.attack_now, capability.line_potential)
             progress = (min(DAMAGE_COUNTER_HP, target.hp)
                         / max(DAMAGE_COUNTER_HP, target.hp)
-                        * math.sqrt(prize_value) * target_commitment)
+                        * math.sqrt(prize_value) * (1.0 + threat))
             return (("damage_counter_progress", progress),)
     return ()
 
@@ -887,7 +888,10 @@ def _selected_body(board, action):
     selection = action.selection[0]
     if not 0 <= selection < len(board.select.options):
         return None
-    option = board.select.options[selection]
+    return _option_body(board, board.select.options[selection])
+
+
+def _option_body(board, option):
     area = option.inPlayArea if option.inPlayArea is not None else option.area
     index = option.inPlayIndex if option.inPlayIndex is not None else option.index
     side = board.me if option.playerIndex in {None, board.seat} else board.them
@@ -948,14 +952,16 @@ def _body_copy_overflow(board, action, ctx):
     if board.select.max_count == 1 and len(selectable) <= 1:
         return 0
     selected = Counter(card_id for _serial, card_id in _selected_cards(board, action)
-                       if card_id is not None
-                       and pokemon_copy_capacity(ctx.facts(card_id)) != 1)
+                       if card_id is not None)
     owned = Counter(body.card.card_id for body in board.me.bodies)
     owned.update(card.card_id for card in board.me.hand)
     overflow = 0
     owned_names = Counter(
         facts.name for card_id in owned.elements()
         if (facts := ctx.facts(card_id)) is not None)
+    in_play_names = Counter(
+        facts.name for body in board.me.bodies
+        if (facts := ctx.facts(body.card.card_id)) is not None)
     for card_id, count in selected.items():
         facts = ctx.facts(card_id)
         capacity = pokemon_copy_capacity(facts)
@@ -964,6 +970,9 @@ def _body_copy_overflow(board, action, ctx):
         if (isinstance(facts, PokemonCard) and facts.evolves_from
                 and not owned_names[facts.evolves_from]):
             capacity = min(capacity, 1)
+        if (isinstance(facts, PokemonCard) and in_play_names[facts.name]
+                and any(in_play_names[name] for name in facts.synergy)):
+            capacity = min(capacity, in_play_names[facts.name])
         overflow += max(0, owned[card_id] + count - capacity)
     return overflow
 
@@ -1028,12 +1037,10 @@ def _acceleration_phase_events(board, action, ctx):
         if not 0 <= selection < len(board.select.options):
             continue
         option = board.select.options[selection]
-        if option.area != _BENCH or not isinstance(option.index, int):
+        body = _option_body(board, option)
+        if body is None:
             continue
-        side = board.me if option.playerIndex == board.seat else board.them
-        if not 0 <= option.index < len(side.bench):
-            continue
-        body = side.bench[option.index]
+        side = board.me if option.playerIndex in {None, board.seat} else board.them
         opponent = board.them if side is board.me else board.me
         facts = ctx.facts(body.card.card_id)
         line = (facts, *(ctx.facts(card_id)
