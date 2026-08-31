@@ -1,4 +1,4 @@
-# ADR-TEMP-605 — Teacher targets are complete contingent policies
+# ADR-0198 — Teacher targets are complete contingent policies
 
 Status: Accepted for Issue #605 (2026-08-31).
 
