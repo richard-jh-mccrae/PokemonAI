@@ -527,6 +527,15 @@ def test_a_positive_hand_shuffle_alone_still_gets_played():
     assert choose_prices(decider, prices).action.identity.kind == "play"
 
 
+def test_negative_continuation_does_not_hide_the_best_turn_ender():
+    decider = make_decider(provider=None)
+    prices = (_price("play", 0, -0.212),
+              _price("attack", 1, 0.735, ends=True),
+              _price("end", 2, -0.274, ends=True))
+
+    assert choose_prices(decider, prices).action.identity.kind == "attack"
+
+
 def test_unrelated_grossly_negative_body_does_not_block_hand_refresh():
     refresh = ContinuationFootprint(
         0.0, 0.0, True, zones_replaced=("hand",),
@@ -624,6 +633,8 @@ def test_continuation_footprint_is_policy_telemetry_not_ledger_delta():
     assert footprint["state_delta"] == pytest.approx(price["swing"])
     assert sum(item["value"] for item in footprint["contributions"]) == pytest.approx(
         price["swing"])
+    assert sum(item["value"] for item in footprint["policy_contributions"]) \
+        == pytest.approx(footprint["action_opportunity"])
 
 
 def test_no_card_or_mechanic_specific_ordering_branch_remains():

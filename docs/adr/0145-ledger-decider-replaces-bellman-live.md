@@ -33,7 +33,7 @@ value stack is bespoke per aspect. The engine's `TransitionProvider` seam and AD
   pool, evaluated as boards, averaged — seeded from the board key, so replays are identical.
   Coin flips and reveals take exact branch math.
 - **Spend the turn, then end best** (`decider.py`): turn-continuing options must clear a
-  float-noise floor; enders compete only when nothing is worth doing; End is the zero.
+  float-noise floor; enders compete only when nothing is worth doing.
   Unpriceable anything decides anyway at a floor and sinks a coverage record.
 - **The swap**: `BellmanRuntime.decide` routes to the Ledger. The planner/solver machinery
   stays constructed and callable — `brain="bellman"` re-selects it for its own pins
@@ -64,7 +64,7 @@ read.
 
 ## Addendum 2026-08-28
 
-End remains the policy zero, but its real successor is the Turn-End Counterfactual. Every
-turn-ending candidate is differenced against that same-phase successor; continuing actions remain
-differenced against the root. This prevents ordinary phase advancement from counting only against
-attacks while preserving strict one-ply search.
+Every candidate, including End and attacks, is differenced against the root. The Turn-End
+Counterfactual is End's real successor, not a shared baseline for other terminal actions. Policy-only
+sequencing value is decomposed separately from canonical state delta. A visible prize transition
+raises the continuation floor to zero, preventing negative setup from displacing a ready knockout.

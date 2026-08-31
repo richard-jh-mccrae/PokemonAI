@@ -474,6 +474,29 @@ def test_spent_attachment_allowance_removes_held_energy_from_the_clock():
     assert capability.attachment_clock == pytest.approx(capability.realization)
 
 
+def test_bench_value_already_includes_a_held_manual_attachment():
+    held = board(
+        me=player(active=body(MAKUHITA, 1), bench=[body(677, 2)], hand=[6]),
+        them=player(active=body(DRAKLOAK, 3), own=False),
+        turn=1)
+    attached = board(
+        me=player(
+            active=body(MAKUHITA, 1), bench=[body(677, 2, energies=(6,))]),
+        them=player(active=body(DRAKLOAK, 3), own=False),
+        turn=1,
+        energy_attached=True)
+
+    held_combat = evaluate(held, ctx()).part("me.combat")
+    attached_combat = evaluate(attached, ctx()).part("me.combat")
+
+    assert attached_combat == pytest.approx(held_combat)
+
+
+@pytest.mark.parametrize(("turn", "player"), ((1, 0), (2, 1), (3, 0), (4, 1)))
+def test_turn_exposes_the_current_player(turn, player):
+    assert board(turn=turn).turn.player == player
+
+
 def test_promotion_values_active_realization_over_discounted_backup_realization():
     lucario = body(678, 2)
     makuhita = body(MAKUHITA, 3, energies=(6,))

@@ -13,6 +13,7 @@ from common.decision import (
     EvaluationRequest,
     EvaluationStatus,
     PolicyConfiguration,
+    RealizedOutcome,
     SearchConfiguration,
     ValueComponent,
     ValuedCandidate,
@@ -404,7 +405,7 @@ def test_greedy_policy_ignores_unavailable_candidate_instead_of_scoring_it_zero(
     assert chosen.reason == "best_turn_ender"
 
 
-def test_greedy_policy_spends_a_continuation_that_beats_the_end_counterfactual():
+def test_greedy_policy_uses_explicit_end_as_the_zero_cost_waiting_baseline():
     continuing = ValuedCandidate(
         action("attach", (0,)),
         DecisionDelta(-0.12, LEDGER_VALUE_SCALE),
@@ -414,6 +415,31 @@ def test_greedy_policy_spends_a_continuation_that_beats_the_end_counterfactual()
     )
     ending = ValuedCandidate(
         action("end", (1,)),
+        DecisionDelta(-0.23, LEDGER_VALUE_SCALE),
+        CandidateDisposition.ENDS_TURN,
+        EvaluationStatus.COMPLETE,
+        continuation=ContinuationResult(
+            -0.23, 0.0, False,
+            realized_outcomes=(RealizedOutcome.EXPLICIT_TURN_END,)),
+    )
+
+    chosen = GreedyDecisionPolicy().choose(
+        CandidateRoster((continuing, ending)), PolicyConfiguration())
+
+    assert chosen.action is ending.action
+    assert chosen.reason == "best_turn_ender"
+
+
+def test_greedy_policy_spends_a_continuation_that_beats_a_forced_ender():
+    continuing = ValuedCandidate(
+        action("attach", (0,)),
+        DecisionDelta(-0.12, LEDGER_VALUE_SCALE),
+        CandidateDisposition.CONTINUES_TURN,
+        EvaluationStatus.COMPLETE,
+        continuation=ContinuationResult(-0.12, 0.05, True),
+    )
+    ending = ValuedCandidate(
+        action("attack", (1,)),
         DecisionDelta(-0.23, LEDGER_VALUE_SCALE),
         CandidateDisposition.ENDS_TURN,
         EvaluationStatus.COMPLETE,
@@ -498,7 +524,11 @@ def test_greedy_policy_recognizes_knockout_only_from_observable_state_change():
         action("attack", (1,)), DecisionDelta(
             1.0, LEDGER_VALUE_SCALE,
             (ValueComponent("prize.race", 1.0, 1.0, 1.0),)),
-        CandidateDisposition.ENDS_TURN, EvaluationStatus.COMPLETE)
+        CandidateDisposition.ENDS_TURN, EvaluationStatus.COMPLETE,
+        continuation=ContinuationResult(
+            1.0, 0.0, False,
+            realized_outcomes=(RealizedOutcome.OPPONENT_ACTIVE_KNOCKOUT,
+                               RealizedOutcome.ACTION_ENDED_TURN)))
 
     chosen = GreedyDecisionPolicy().choose(
         CandidateRoster((ending, knockout)), PolicyConfiguration())
@@ -506,7 +536,7 @@ def test_greedy_policy_recognizes_knockout_only_from_observable_state_change():
     assert chosen.action is knockout.action
 
 
-def test_greedy_policy_does_not_force_a_lower_value_knockout():
+def test_greedy_policy_takes_a_ready_knockout_over_a_non_prize_ender():
     ending = ValuedCandidate(
         action("end", (0,)), DecisionDelta(0.0, LEDGER_VALUE_SCALE),
         CandidateDisposition.ENDS_TURN, EvaluationStatus.COMPLETE)
@@ -514,25 +544,109 @@ def test_greedy_policy_does_not_force_a_lower_value_knockout():
         action("attack", (1,)), DecisionDelta(
             -1.0, LEDGER_VALUE_SCALE,
             (ValueComponent("prize.race", 1.0, -1.0, -1.0),)),
-        CandidateDisposition.ENDS_TURN, EvaluationStatus.COMPLETE)
+        CandidateDisposition.ENDS_TURN, EvaluationStatus.COMPLETE,
+        continuation=ContinuationResult(
+            -1.0, 0.0, False,
+            realized_outcomes=(RealizedOutcome.OPPONENT_ACTIVE_KNOCKOUT,
+                               RealizedOutcome.ACTION_ENDED_TURN)))
 
     chosen = GreedyDecisionPolicy().choose(
         CandidateRoster((ending, knockout)), PolicyConfiguration())
 
-    assert chosen.action is ending.action
+    assert chosen.action is knockout.action
 
 
-def test_greedy_policy_ignores_legacy_action_only_knockout_signal():
-    ending = ValuedCandidate(
-        action("end", (0,)), DecisionDelta(0.0, LEDGER_VALUE_SCALE),
+def test_greedy_policy_does_not_force_a_bench_knockout_over_active_damage():
+    active_damage = ValuedCandidate(
+        action("attack", (0,)), DecisionDelta(1.0, LEDGER_VALUE_SCALE),
         CandidateDisposition.ENDS_TURN, EvaluationStatus.COMPLETE)
-    alleged_knockout = ValuedCandidate(
+    bench_knockout = ValuedCandidate(
         action("attack", (1,)), DecisionDelta(
-            -1.0, LEDGER_VALUE_SCALE,
-            (ValueComponent("combat.realized_ko", 1.0, -1.0, -1.0),)),
+            0.5, LEDGER_VALUE_SCALE,
+            (ValueComponent("prize.race", 1.0, 0.5, 0.5),)),
         CandidateDisposition.ENDS_TURN, EvaluationStatus.COMPLETE)
 
     chosen = GreedyDecisionPolicy().choose(
-        CandidateRoster((ending, alleged_knockout)), PolicyConfiguration())
+        CandidateRoster((active_damage, bench_knockout)), PolicyConfiguration())
 
-    assert chosen.action is ending.action
+    assert chosen.action is active_damage.action
+
+
+def test_greedy_policy_does_not_let_negative_development_delay_active_knockout():
+    development = ValuedCandidate(
+        action("play", (0,)), DecisionDelta(-0.1, LEDGER_VALUE_SCALE),
+        CandidateDisposition.CONTINUES_TURN, EvaluationStatus.COMPLETE,
+        continuation=ContinuationResult(
+            -0.1, 0.0, True,
+            immediately_usable_outputs=("in_play",),
+            opportunities_preserved=("end", "play")))
+    knockout = ValuedCandidate(
+        action("attack", (1,)), DecisionDelta(-1.0, LEDGER_VALUE_SCALE),
+        CandidateDisposition.ENDS_TURN, EvaluationStatus.COMPLETE,
+        continuation=ContinuationResult(
+            -1.0, 0.0, False,
+            realized_outcomes=(RealizedOutcome.OPPONENT_ACTIVE_KNOCKOUT,
+                               RealizedOutcome.ACTION_ENDED_TURN)))
+    ending = ValuedCandidate(
+        action("end", (2,)), DecisionDelta(0.0, LEDGER_VALUE_SCALE),
+        CandidateDisposition.ENDS_TURN, EvaluationStatus.COMPLETE)
+
+    chosen = GreedyDecisionPolicy().choose(
+        CandidateRoster((development, knockout, ending)), PolicyConfiguration())
+
+    assert chosen.action is knockout.action
+
+
+def test_greedy_policy_does_not_let_negative_evolution_delay_active_knockout():
+    evolution = ValuedCandidate(
+        action("evolve", (0,)), DecisionDelta(-0.1, LEDGER_VALUE_SCALE),
+        CandidateDisposition.CONTINUES_TURN, EvaluationStatus.COMPLETE,
+        continuation=ContinuationResult(
+            -0.1, 0.0, True,
+            immediately_usable_outputs=("in_play", "ready_attacker"),
+            opportunities_preserved=("attack", "end", "play")))
+    knockout = ValuedCandidate(
+        action("attack", (1,)), DecisionDelta(-1.0, LEDGER_VALUE_SCALE),
+        CandidateDisposition.ENDS_TURN, EvaluationStatus.COMPLETE,
+        continuation=ContinuationResult(
+            -1.0, 0.0, False,
+            realized_outcomes=(RealizedOutcome.OPPONENT_ACTIVE_KNOCKOUT,
+                               RealizedOutcome.ACTION_ENDED_TURN)))
+    ending = ValuedCandidate(
+        action("end", (2,)), DecisionDelta(0.0, LEDGER_VALUE_SCALE),
+        CandidateDisposition.ENDS_TURN, EvaluationStatus.COMPLETE,
+        continuation=ContinuationResult(
+            0.0, 0.0, False,
+            realized_outcomes=(RealizedOutcome.EXPLICIT_TURN_END,)))
+
+    chosen = GreedyDecisionPolicy().choose(
+        CandidateRoster((evolution, knockout, ending)), PolicyConfiguration())
+
+    assert chosen.action is knockout.action
+
+
+def test_greedy_policy_keeps_raw_ranking_between_attacks_when_one_kos_active():
+    knockout = ValuedCandidate(
+        action("attack", (0,)), DecisionDelta(0.5, LEDGER_VALUE_SCALE),
+        CandidateDisposition.ENDS_TURN, EvaluationStatus.COMPLETE,
+        continuation=ContinuationResult(
+            0.5, 0.0, False,
+            realized_outcomes=(RealizedOutcome.OPPONENT_ACTIVE_KNOCKOUT,
+                               RealizedOutcome.ACTION_ENDED_TURN)))
+    stronger_attack = ValuedCandidate(
+        action("attack", (1,)), DecisionDelta(1.0, LEDGER_VALUE_SCALE),
+        CandidateDisposition.ENDS_TURN, EvaluationStatus.COMPLETE,
+        continuation=ContinuationResult(
+            1.0, 0.0, False,
+            realized_outcomes=(RealizedOutcome.ACTION_ENDED_TURN,)))
+    ending = ValuedCandidate(
+        action("end", (2,)), DecisionDelta(2.0, LEDGER_VALUE_SCALE),
+        CandidateDisposition.ENDS_TURN, EvaluationStatus.COMPLETE,
+        continuation=ContinuationResult(
+            2.0, 0.0, False,
+            realized_outcomes=(RealizedOutcome.EXPLICIT_TURN_END,)))
+
+    chosen = GreedyDecisionPolicy().choose(
+        CandidateRoster((knockout, stronger_attack, ending)), PolicyConfiguration())
+
+    assert chosen.action is stronger_attack.action

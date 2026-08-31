@@ -1,6 +1,7 @@
 from .contracts import (
     CandidateDisposition,
     CandidateRoster,
+    ContinuationOpportunity,
     ContinuationResult,
     DecisionDelta,
     DecisionFailure,
@@ -13,6 +14,7 @@ from .contracts import (
     EvaluationStatus,
     FailSafeRequest,
     PolicyModel,
+    RealizedOutcome,
     SearchAlgorithm,
     SearchResult,
     SearchTrace,
@@ -32,12 +34,13 @@ from .fail_safe import fail_safe_request, safe_legal_selection
 
 __all__ = (
     "BudgetController", "CandidateDisposition", "CandidateRoster", "ComputeConfiguration",
-    "ContinuationResult",
+    "ContinuationOpportunity", "ContinuationResult",
     "DecisionChoice", "DecisionCoordinator", "DecisionDelta", "DecisionFailure",
     "DecisionDeadlineExceeded", "DecisionExecutionGuard", "DecisionFailureStage",
     "DecisionReason",
     "DecisionPolicy", "DecisionResult", "EvaluationRequest", "EvaluationStatus",
-    "FailSafeRequest", "PolicyConfiguration", "PolicyModel", "SearchAlgorithm",
+    "FailSafeRequest", "PolicyConfiguration", "PolicyModel", "RealizedOutcome",
+    "SearchAlgorithm",
     "SearchConfiguration", "correction_compute_profile",
     "SearchResult", "SearchTrace", "SearchValue", "StateValuation",
     "SuccessorResult", "ValueComponent", "ValueEvaluator", "ValueScale",

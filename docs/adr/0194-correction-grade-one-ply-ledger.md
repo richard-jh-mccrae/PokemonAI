@@ -32,8 +32,9 @@ preference violations. Weight adoption is rejected whenever an accepted preferen
 
 ## Addendum 2026-08-28
 
-Correction grading uses the Turn-End Counterfactual for terminal candidates. Hand opportunity value
-is credited on use only when that action realizes its selected Feasible Option Portfolio entry;
+Correction grading prices every candidate as expected successor value minus root value; the
+Turn-End Counterfactual is only End's successor. Hand opportunity value is credited on use only
+when that action realizes its selected Feasible Option Portfolio entry;
 discarded payment receives no credit. Pokémon development uses shared-resource feasibility rather
 than independent line sums. Corrections must obey the Anchor prompt's selection cardinality;
 multi-MAIN sequences belong in turn-scope evidence.

@@ -10,18 +10,20 @@ import math
 from types import SimpleNamespace
 import pytest
 
-from ledger_helpers import (DRAKLOAK, DRAGAPULT, DREEPY, FIRE_E, ScriptedProvider, action, body,
-                            player, printout)
+from ledger_helpers import (DRAKLOAK, DRAGAPULT, DREEPY, FIRE_E, MAKUHITA,
+                            ScriptedProvider, action, body, player, printout)
 
 from common.algebra import (Actor, Chance, Choice, Deterministic, Edge, RevealChoice,
                             RevealOutcome, Terminal, WeightedEdge)
-from common.decision import EvaluationStatus, SearchConfiguration
+from common.decision import EvaluationStatus, RealizedOutcome, SearchConfiguration
 from common.ledger import DeckOverlay, EvaluationModel, LedgerDecider
 from common.ledger.evaluate import FeatureActivation, FeatureContribution, Valuation, evaluate
 from common.ledger.preview import (_body_ability_ready, _body_copy_overflow,
                                    _discard_spend_contributions,
-                                   _RawFootprint, _realized_portfolio_contributions,
-                                   _with_hand_evolution_opportunity, price_actions)
+                                   _RawFootprint, _realized_outcomes,
+                                   _realized_portfolio_contributions,
+                                   _with_hand_evolution_opportunity, _expected_valuation,
+                                   price_actions)
 from common.observation import ObservationStateBuilder
 from deprecated.bellman.state import DecisionState
 
@@ -103,9 +105,68 @@ def test_prize_transition_is_valued_only_as_successor_state_delta():
 
     assert price.swing == pytest.approx(expected)
     assert price.footprint.state_delta == pytest.approx(expected)
+    assert price.footprint.action_opportunity == pytest.approx(0.0)
     assert sum(item.value for item in price.footprint.contributions) == pytest.approx(expected)
     assert all(item.feature != "combat.realized_ko"
                for item in price.footprint.contributions)
+
+
+def test_active_knockout_without_serial_uses_the_selected_lethal_attack():
+    select = {"context": 0, "minCount": 1, "maxCount": 1,
+              "option": [{"attackId": 153, "type": 13}]}
+    root = ObservationStateBuilder(DECK).root(printout(
+        me=player(active=body(DRAGAPULT, 1, energies=(2,)), prizes=6),
+        them=player(own=False, active=body(DRAGAPULT, None, hp=60, max_hp=320),
+                    prizes=6), select=select))
+    landing = ObservationStateBuilder(DECK).root(printout(
+        me=player(active=body(DRAGAPULT, 1, energies=(2,)), prizes=5),
+        them=player(own=False, active=body(DRAGAPULT, 3), prizes=6)))
+
+    outcomes = _realized_outcomes(
+        root, action("attack", (0,)), ((1.0, None, landing, True, ()),),
+        EvaluationModel.build())
+
+    assert outcomes == (RealizedOutcome.OPPONENT_ACTIVE_KNOCKOUT,)
+
+
+def test_missing_serial_does_not_turn_an_unrelated_prize_into_active_knockout():
+    select = {"context": 0, "minCount": 1, "maxCount": 1,
+              "option": [{"attackId": 153, "type": 13}]}
+    root = ObservationStateBuilder(DECK).root(printout(
+        me=player(active=body(DRAGAPULT, 1, energies=(2,)), prizes=6),
+        them=player(own=False, active=body(DRAGAPULT, None, hp=100, max_hp=320),
+                    prizes=6), select=select))
+    landing = ObservationStateBuilder(DECK).root(printout(
+        me=player(active=body(DRAGAPULT, 1, energies=(2,)), prizes=5),
+        them=player(own=False, active=body(DRAGAPULT, 3), prizes=6)))
+
+    outcomes = _realized_outcomes(
+        root, action("attack", (0,)), ((1.0, None, landing, True, ()),),
+        EvaluationModel.build())
+
+    assert outcomes == ()
+
+
+def test_missing_serial_knockout_proof_excludes_unplayed_hand_boosts():
+    select = {"context": 0, "minCount": 1, "maxCount": 1,
+              "option": [{"attackId": 977, "type": 13}]}
+    root = ObservationStateBuilder(DECK).root(printout(
+        me=player(active=body(MAKUHITA, 1, energies=(6, 6)), hand=[1141, 1141],
+                  prizes=6),
+        them=player(
+            own=False, active=body(DRAGAPULT, None, hp=90, max_hp=320),
+            bench=[body(DREEPY, 4, hp=10)], prizes=6), select=select))
+    landing = ObservationStateBuilder(DECK).root(printout(
+        me=player(active=body(MAKUHITA, 1, energies=(6, 6)), hand=[1141, 1141],
+                  prizes=5),
+        them=player(own=False, active=body(DRAGAPULT, None, hp=90, max_hp=320),
+                    prizes=6)))
+
+    outcomes = _realized_outcomes(
+        root, action("attack", (0,)), ((1.0, None, landing, True, ()),),
+        EvaluationModel.build())
+
+    assert outcomes == ()
 
 
 def test_body_ability_readiness_stops_after_the_line_is_fully_developed():
@@ -283,6 +344,19 @@ def test_generated_shared_phase_value_cancels_against_end():
 
     assert swings[0] > 0
     assert swings == pytest.approx([swings[0]] * len(swings))
+
+
+def test_expected_valuation_keeps_contribution_only_provenance():
+    context = EvaluationModel.build()
+    valuation = Valuation(
+        0.2, (), (),
+        contributions=(FeatureContribution(
+            "kind.energy", 1.0, context.configuration["kind.energy"], 0.2,
+            ("continuation.policy",)),))
+
+    result = _expected_valuation(((1.0, valuation),), context)
+
+    assert result.activations[0].provenance == ("continuation.policy",)
 
 
 def test_chance_activations_are_independent_of_valuation_coefficients():

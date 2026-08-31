@@ -1,12 +1,10 @@
 """The Ledger decider: spend the turn while something is worth doing, then end it best.
 
-One rule (plan §4): while any turn-continuing option's swing clears the noise floor, take the
-best of those; only when nothing is worth doing, take the best turn-ender — and ending the turn
-is worth exactly zero, so a turn-ender must earn its damage. Forced menus (no End on offer) are
-a straight argmax. Ties inside the noise floor use a seeded neutral lottery. Every decision
-reports its option prices and coverage gaps
-in `RootDecision.diagnostics`; a `gap_sink` callable receives one record per decision that met
-a gap — the honest worklist, counted per decision affected."""
+Every action's canonical price is expected successor value minus root value. Policy opportunity
+prices unresolved sequencing separately. A continuation clears zero, or the best negative ender;
+a ready prize transition restores the zero floor so setup cannot displace the knockout. Forced
+menus rank canonical and policy contributions together. Ties inside tolerance use a seeded neutral
+lottery. Diagnostics expose both decompositions and coverage gaps."""
 from __future__ import annotations
 
 import os
@@ -364,6 +362,15 @@ class LedgerDecider:
                                          candidate.continuation.opportunities_preserved,
                                      "opportunities_consumed":
                                          candidate.continuation.opportunities_consumed,
+                                     "policy_contributions": tuple({
+                                         "feature": item.key,
+                                         "activation": item.activation,
+                                         "coefficient": item.coefficient,
+                                         "value": item.value,
+                                         "provenance": item.provenance,
+                                     } for item in candidate.continuation.policy_components),
+                                     "realized_outcomes":
+                                         candidate.continuation.realized_outcomes,
                                      "contributions": tuple({
                                          "feature": item.key,
                                          "activation": item.activation,

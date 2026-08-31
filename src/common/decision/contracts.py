@@ -21,6 +21,17 @@ class CandidateDisposition(str, Enum):
     FORCED = "forced"
 
 
+class ContinuationOpportunity(str, Enum):
+    DEPENDENCY_REACH = "dependency_reach"
+    LETHAL_ATTACK = "lethal_attack"
+
+
+class RealizedOutcome(str, Enum):
+    ACTION_ENDED_TURN = "action_ended_turn"
+    EXPLICIT_TURN_END = "explicit_turn_end"
+    OPPONENT_ACTIVE_KNOCKOUT = "opponent_active_knockout"
+
+
 class DecisionFailureStage(str, Enum):
     EVALUATION = "evaluation"
     PROVIDER = "provider"
@@ -171,6 +182,8 @@ class ContinuationResult:
     opportunities_created: tuple[str, ...] = ()
     opportunities_preserved: tuple[str, ...] = ()
     opportunities_consumed: tuple[str, ...] = ()
+    policy_components: tuple[ValueComponent, ...] = ()
+    realized_outcomes: tuple[RealizedOutcome, ...] = ()
 
 
 @dataclass(frozen=True, slots=True)
@@ -336,12 +349,14 @@ class DecisionPolicy(Protocol):
 
 
 __all__ = (
-    "CandidateDisposition", "CandidateRoster", "ContinuationResult", "DecisionChoice",
+    "CandidateDisposition", "CandidateRoster", "ContinuationOpportunity",
+    "ContinuationResult", "DecisionChoice",
     "DecisionDelta", "DecisionFailure", "DecisionFailureStage", "DecisionReason",
     "FailSafeRequest",
     "DecisionPolicy",
     "DecisionResult", "EvaluationRequest", "EvaluationStatus", "PolicyModel",
-    "SearchAlgorithm", "SearchResult", "SearchTrace", "SearchValue", "StateValuation",
+    "RealizedOutcome", "SearchAlgorithm", "SearchResult", "SearchTrace", "SearchValue",
+    "StateValuation",
     "SuccessorResult", "ValueComponent", "ValueEvaluator", "ValueScale",
     "ValuedCandidate",
 )

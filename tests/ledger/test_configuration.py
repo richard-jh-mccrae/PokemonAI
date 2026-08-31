@@ -540,3 +540,21 @@ def test_schema_21_recording_acquires_default_damaged_active_threat_value():
     migrated = ValuationConfiguration.from_recorded(old, schema_version=21)
 
     assert migrated["context.damaged_active_threat"] == -1.0
+
+
+def test_schema_22_recording_drops_retired_realized_knockout_value():
+    old = dict(ValuationConfiguration.general().values)
+    old["combat.realized_ko"] = 7.0
+
+    migrated = ValuationConfiguration.from_recorded(old, schema_version=22)
+
+    assert "combat.realized_ko" not in migrated
+
+
+def test_schema_23_recording_acquires_default_gust_spend_value():
+    old = dict(ValuationConfiguration.general().values)
+    old.pop("action.gust_spend")
+
+    migrated = ValuationConfiguration.from_recorded(old, schema_version=23)
+
+    assert migrated["action.gust_spend"] == -1.25

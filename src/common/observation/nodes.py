@@ -216,6 +216,12 @@ class Turn:
     retreated: bool
     result: int | None
 
+    @property
+    def player(self) -> int | None:
+        if self.number < 1 or self.first_player is None:
+            return None
+        return self.first_player if self.number % 2 else 1 - self.first_player
+
     def scalars(self) -> tuple:
         return (self.number, self.first_player, self.supporter_played, self.stadium_played,
                 self.energy_attached, self.retreated, self.result)

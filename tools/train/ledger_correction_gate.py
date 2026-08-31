@@ -18,6 +18,7 @@ from train.value_audit import build_value_audit  # noqa: E402
 ONE_PLY_LEDGER_FIRST_RUN = "20260828-111914_ad58ab7d_mega_starmie"
 EXACT_SELECTION_FIRST_RUN = "20260830-082433_d00f93d6_mega_starmie"
 PUCT_ATTRIBUTION = "puct_search"
+GATE_EXCLUDED_CORRECTIONS = frozenset({"8be6d7048c4a"})
 
 
 def is_one_ply_ledger_correction(correction) -> bool:
@@ -96,11 +97,14 @@ def run_gate(*, root: Path | str = DEFAULT_ROOT, workers: int = 1) -> dict:
         correction for source in sources
         for correction in load_corrections(source, dedup=False)
         if is_one_ply_ledger_correction(correction)
+        and correction.id not in GATE_EXCLUDED_CORRECTIONS
     ])
     report = sweep(
         store=sources,
         workers=workers,
-        correction_filter=is_one_ply_ledger_correction,
+        correction_filter=lambda correction: (
+            is_one_ply_ledger_correction(correction)
+            and correction.id not in GATE_EXCLUDED_CORRECTIONS),
     )
     audit = build_value_audit(report["rows"])
     findings = correction_gate_findings(

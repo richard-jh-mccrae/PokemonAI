@@ -2,7 +2,8 @@ from __future__ import annotations
 
 import hashlib
 
-from common.decision import EvaluationStatus
+from common.decision import (ContinuationOpportunity, EvaluationStatus,
+                             RealizedOutcome)
 from common.ledger.evaluate import evaluate
 from common.ledger.preview import price_actions
 
@@ -15,36 +16,36 @@ def legacy_choose(prices, *, forced, configuration):
         return price.swing + price.footprint.action_opportunity
 
     enders = tuple(price for price in prices if price.ends_turn)
-    explicit_end = tuple(
-        price for price in enders if price.action.identity.kind == "end")
-    end_value = max((policy_value(price) for price in explicit_end), default=0.0)
-    continuation_threshold = min(0.0, end_value)
-    knockouts = tuple(price for price in prices
-                      if price.ends_turn
-                      and any(item.feature in {"prize.race", "result.win"}
-                              and item.activation > 0
-                              for item in price.footprint.contributions))
-    meaningful_continuation = any(
-        not price.ends_turn
-        and policy_value(price) > continuation_threshold + configuration.noise_tolerance
-        for price in prices)
+    explicit_end = any(
+        RealizedOutcome.EXPLICIT_TURN_END in price.footprint.realized_outcomes
+        for price in enders)
     best_ender_value = max((price.swing for price in enders),
                            default=float("-inf"))
-    knockout_is_best = max(
-        (price.swing for price in knockouts), default=float("-inf")) >= (
-            best_ender_value - configuration.noise_tolerance)
-    if knockouts and knockout_is_best and not meaningful_continuation:
-        return _legacy_ranked(knockouts, configuration)[0]
+    ready_knockout_enders = tuple(
+        price for price in enders
+        if RealizedOutcome.OPPONENT_ACTIVE_KNOCKOUT in
+        price.footprint.realized_outcomes)
+    continuation_threshold = (
+        0.0 if explicit_end or ready_knockout_enders
+        else min(0.0, best_ender_value))
+
+    def meaningful(price):
+        return policy_value(price) > continuation_threshold + configuration.noise_tolerance
+
     continuing = tuple(price for price in prices
-                       if not price.ends_turn
-                       and policy_value(price) > (
-                           continuation_threshold + configuration.noise_tolerance))
+                       if not price.ends_turn and meaningful(price))
+    ability_would_be_consumed = any(
+        not price.ends_turn
+        and "ability" in price.footprint.opportunities_consumed
+        for price in prices)
     recycling_draws = tuple(
         price for price in prices
         if not price.ends_turn
         and price.action.identity.kind == "ability"
         and not price.footprint.allowances_consumed
-        and {"deck", "hand", "in_play"}.issubset(price.footprint.zones_replaced)
+        and {"deck", "hand"}.issubset(price.footprint.zones_replaced)
+        and ("in_play" in price.footprint.zones_replaced
+             or ability_would_be_consumed)
         and "hand" in price.footprint.immediately_usable_outputs
         and {"end", "play"}.issubset(price.footprint.opportunities_preserved))
     continuing_ids = {id(price) for price in continuing}
@@ -54,13 +55,31 @@ def legacy_choose(prices, *, forced, configuration):
         price for price in prices
         if not price.ends_turn
         and "in_play" in price.footprint.immediately_usable_outputs
-        and ((price.action.identity.kind == "play"
-              and bool(price.footprint.opportunities_created))
+        and ((price.action.identity.kind == "play")
              or (price.action.identity.kind == "evolve"
                  and "ready_attacker" in price.footprint.immediately_usable_outputs))
         and {"end", "play"}.issubset(price.footprint.opportunities_preserved))
     continuing_ids = {id(price) for price in continuing}
     continuing = (*continuing, *(price for price in durable_development
+                                  if id(price) not in continuing_ids))
+    lethal_preparation = tuple(
+        price for price in prices
+        if not price.ends_turn
+        and ContinuationOpportunity.LETHAL_ATTACK in
+        price.footprint.opportunities_created
+        and "attack" in price.footprint.opportunities_preserved)
+    continuing_ids = {id(price) for price in continuing}
+    continuing = (*continuing, *(price for price in lethal_preparation
+                                  if id(price) not in continuing_ids))
+    positive_refresh = tuple(
+        price for price in prices
+        if not price.ends_turn
+        and price.swing > configuration.noise_tolerance
+        and "supporter_played" in price.footprint.allowances_consumed
+        and "hand" in price.footprint.zones_replaced
+        and "hand" in price.footprint.immediately_usable_outputs)
+    continuing_ids = {id(price) for price in continuing}
+    continuing = (*continuing, *(price for price in positive_refresh
                                   if id(price) not in continuing_ids))
     refresh_available = any(
         "supporter_played" in price.footprint.allowances_consumed
@@ -75,9 +94,17 @@ def legacy_choose(prices, *, forced, configuration):
             and "play" in price.footprint.opportunities_preserved
             and price not in continuing)
         continuing = (*continuing, *durable_preparation)
+    if ready_knockout_enders:
+        continuing = tuple(price for price in continuing if meaningful(price))
     if continuing:
         return _legacy_ranked(_legacy_preservation_frontier(
-            continuing, configuration.noise_tolerance), configuration)[0]
+            continuing, configuration.noise_tolerance), configuration,
+            include_dependency_opportunity=True)[0]
+    if ready_knockout_enders:
+        action_enders = tuple(
+            price for price in enders
+            if RealizedOutcome.ACTION_ENDED_TURN in price.footprint.realized_outcomes)
+        return _legacy_ranked(action_enders or ready_knockout_enders, configuration)[0]
     return _legacy_ranked(enders or prices, configuration)[0]
 
 
@@ -131,6 +158,12 @@ def _legacy_preservation_frontier(candidates, noise_tolerance=0.0):
             if create_before_plain_play:
                 deferred.add(candidate.action.identity)
                 break
+            dependency_refresh = (
+                ContinuationOpportunity.DEPENDENCY_REACH in
+                candidate.footprint.opportunities_created
+                and value(candidate) > value(other) + noise_tolerance)
+            if dependency_refresh:
+                continue
             prepare_before_retreat = (
                 candidate.action.identity.kind == "retreat"
                 and ((value(other) > noise_tolerance
@@ -222,10 +255,18 @@ def assert_runtime_parity(*, state, board, provider, evaluation_model, result,
         configuration=policy_configuration)
 
 
-def _legacy_ranked(prices, configuration, *, include_action_opportunity=False):
+def _legacy_ranked(prices, configuration, *, include_action_opportunity=False,
+                   include_dependency_opportunity=False):
+    dependency_roster = (
+        include_dependency_opportunity
+        and any(ContinuationOpportunity.DEPENDENCY_REACH in
+                price.footprint.opportunities_created
+                for price in prices))
+
     def value(price):
+        include = include_action_opportunity or dependency_roster
         return price.swing + (
-            price.footprint.action_opportunity if include_action_opportunity else 0.0)
+            price.footprint.action_opportunity if include else 0.0)
 
     remaining = list(enumerate(prices))
     ranked = []

@@ -395,11 +395,23 @@ def _side(trace: _Trace, label: str, side: Side, sign: float, ctx: EvaluationMod
         opposing_side.active is not None
         and _active_doomed(side, opposing_side, ctx, board)
         and _prize_value(opposing_side.active, ctx) >= opposing_side.prize_count)
-    active_realization = (0.0 if doomed or terminal_target else next((
-        max(value.realization, value.attachment_clock)
-        for body, value in capabilities if body is side.active), 0.0))
+    active_capability = next((
+        value for body, value in capabilities if body is side.active), Capability())
+    turn_player = board.turn.player
+    side_seat = board.seat if sign > 0 else 1 - board.seat
+    first_turn_attack_blocked = (
+        board.turn.number <= 1
+        and board.turn.first_player == side_seat
+        and active_capability.attack_now <= 0.0)
+    active_realization = (
+        0.0 if terminal_target
+        else active_capability.attack_now if doomed and turn_player == side_seat
+        else 0.0 if doomed
+        else (BENCH_REALIZATION_DISCOUNT * FUTURE_TURN_DISCOUNT
+              * active_capability.realization) if first_turn_attack_blocked
+        else max(active_capability.realization, active_capability.attachment_clock))
     bench_realization = max((
-        FUTURE_TURN_DISCOUNT * value.realization
+        FUTURE_TURN_DISCOUNT * max(value.realization, value.attachment_clock)
         for body, value in capabilities if body is not side.active), default=0.0)
     combat_realization = active_realization + BENCH_REALIZATION_DISCOUNT * bench_realization
     trace.emit(f"{label}.combat", "observation", ("combat_realization",),
@@ -630,8 +642,6 @@ def _body(trace: _Trace, part: str, body: Body, sign: float, ctx: EvaluationMode
         return
     if body.max_hp > 0 and body.hp <= 0:
         trace.emit(part, "observation", ("body_damage_fraction",), -sign)
-        trace.emit(part, "observation", ("realized_knockout",),
-                   -sign * _prize_value(body, ctx))
         return
     _card(trace, part, body.card.card_id, body_facts, sign, ctx, own=own,
           placement="in_play", opponent=opponent)
