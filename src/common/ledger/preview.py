@@ -547,8 +547,8 @@ class _Walk:
         indexed = tuple(enumerate(tied))
 
         def lottery(indexed_entry):
-            _index, entry = indexed_entry
-            payload = f"{self.compute.tie_seed}:{salt}:{entry[0]}".encode("utf-8")
+            index, _entry = indexed_entry
+            payload = f"{self.compute.tie_seed}:{salt}:{index}".encode("utf-8")
             return hashlib.blake2b(payload, digest_size=LOTTERY_DIGEST_BYTES).digest()
 
         return min(indexed, key=lottery)[1]
