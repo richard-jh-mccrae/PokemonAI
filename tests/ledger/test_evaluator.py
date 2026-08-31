@@ -869,6 +869,17 @@ def test_concentration_prefers_finishing_the_started_twin():
         evaluate(split(1, 1), flat).total)
 
 
+def test_draw_engine_does_not_earn_attacker_concentration_bonus():
+    dunsparce = 305
+    state = board(me=player(active=body(
+        dunsparce, 1, energies=(DARKNESS, DARKNESS))))
+
+    concentration = sum(
+        item.activation for item in evaluate(state, ctx()).contributions
+        if item.feature == "energy.concentration")
+    assert concentration == 0
+
+
 def test_acceleration_open_slots_include_reachable_evolution_costs():
     def activation(first_units, second_units):
         first = body(STARYU, 1, energies=(WATER,) * first_units)

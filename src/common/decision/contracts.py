@@ -24,6 +24,7 @@ class CandidateDisposition(str, Enum):
 class ContinuationOpportunity(str, Enum):
     DEPENDENCY_REACH = "dependency_reach"
     LETHAL_ATTACK = "lethal_attack"
+    WINNING_ATTACK = "winning_attack"
 
 
 class RealizedOutcome(str, Enum):

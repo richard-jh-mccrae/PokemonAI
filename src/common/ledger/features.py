@@ -197,6 +197,8 @@ _DECLARED_RULES = {
         "action", ("body_ability_ready",), "constant"),
     "action.body_copy_overflow": _rule(
         "action", ("body_copy_overflow",), "constant"),
+    "action.evolution_target_commitment": _rule(
+        "action", ("evolution_target_commitment",), "constant"),
     "action.retreat_doomed_denial": _rule(
         "action", ("retreat_doomed_denial",), "constant"),
     "action.acceleration_phase_fit": _rule(
@@ -434,6 +436,7 @@ _SCALAR_DEFAULTS = {
     "action.dead_discard": 0.15,
     "action.body_ability_ready": 0.40,
     "action.body_copy_overflow": -0.30,
+    "action.evolution_target_commitment": 0.05,
     "action.retreat_doomed_denial": -1.0,
     "zone.in_play": 0.002,
     "zone.in_hand": 0.01,
@@ -639,7 +642,7 @@ FEATURE_CATALOG = FeatureCatalog(
         f"clause.parameter.{parameter}", 0.0,
         disposition=FeatureDisposition.RETIRED)
             for parameter in CLAUSE_PARAMETER_QUALIFIERS),
-    schema_version=24,
+    schema_version=25,
 )
 
 

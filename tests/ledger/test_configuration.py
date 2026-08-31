@@ -558,3 +558,12 @@ def test_schema_23_recording_acquires_default_gust_spend_value():
     migrated = ValuationConfiguration.from_recorded(old, schema_version=23)
 
     assert migrated["action.gust_spend"] == -1.25
+
+
+def test_schema_24_recording_acquires_default_evolution_target_value():
+    old = dict(ValuationConfiguration.general().values)
+    old.pop("action.evolution_target_commitment")
+
+    migrated = ValuationConfiguration.from_recorded(old, schema_version=24)
+
+    assert migrated["action.evolution_target_commitment"] == 0.05

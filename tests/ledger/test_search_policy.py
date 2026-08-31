@@ -81,3 +81,11 @@ def test_retreat_waits_for_positive_preparation_that_preserves_retreat():
         "evolve", 0.5, preserved=("retreat",), created=("ability",))
 
     assert preservation_frontier((retreat, evolve)) == (evolve,)
+
+
+def test_retreat_waits_for_attack_setup_even_when_static_value_is_negative():
+    retreat = candidate("retreat", 1.4)
+    attach = candidate(
+        "attach", -0.5, preserved=("retreat",), created=("attack",))
+
+    assert preservation_frontier((retreat, attach)) == (attach,)

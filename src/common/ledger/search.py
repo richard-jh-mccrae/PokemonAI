@@ -312,7 +312,9 @@ class LedgerOnePlySearch:
                 None if delta is None else SearchValue(
                     baseline.total + delta.total, baseline.scale),
                 prior,
-                (() if price.prize_map is None else price.prize_map.plan_rank_key()),
+                (-sum(component.value for component in continuation.policy_components
+                      if component.key == "action.evolution_target_commitment"),
+                 *(() if price.prize_map is None else price.prize_map.plan_rank_key())),
                 price.prize_map))
         legal_actions = (actions if getattr(provider, "requires_observation_roster", False)
                          else tuple(price.action for price in prices))
@@ -398,8 +400,9 @@ def preservation_frontier(candidates, noise_tolerance=0.0):
                 continue
             prepare_before_retreat = (
                 candidate.action.identity.kind == "retreat"
-                and ((value(other) > noise_tolerance
-                     and bool(opportunities_created))
+                and (((value(other) > noise_tolerance
+                       or "attack" in opportunities_created)
+                      and bool(opportunities_created))
                      or (other.action.identity.kind == "evolve"
                          and "ready_attacker" in immediately_usable_outputs))
                 and "retreat" in preserved)
@@ -472,6 +475,11 @@ class GreedyDecisionPolicy:
                 if candidate.continuation is not None
                 and RealizedOutcome.OPPONENT_ACTIVE_KNOCKOUT in
                 candidate.continuation.realized_outcomes)
+            ready_winning_enders = tuple(
+                candidate for candidate in ready_knockout_enders
+                if any(component.key in {"result.win", "active.terminal_liability"}
+                       and component.value > 0
+                       for component in candidate.delta.components))
             continuation_threshold = (
                 0.0 if explicit_end or ready_knockout_enders
                 else min(0.0, best_ender_value))
@@ -526,10 +534,30 @@ class GreedyDecisionPolicy:
                 and candidate.continuation is not None
                 and ContinuationOpportunity.LETHAL_ATTACK in
                 candidate.continuation.opportunities_created
-                and "attack" in candidate.continuation.opportunities_preserved)
+                and "attack" in {
+                    *candidate.continuation.opportunities_created,
+                    *candidate.continuation.opportunities_preserved})
             continuing_ids = {id(candidate) for candidate in continuing}
             continuing = (*continuing, *(candidate for candidate in lethal_preparation
                                           if id(candidate) not in continuing_ids))
+            attack_preparation = tuple(
+                candidate for candidate in candidates
+                if candidate.disposition is CandidateDisposition.CONTINUES_TURN
+                and candidate.continuation is not None
+                and "attack" in candidate.continuation.opportunities_created
+                and "retreat" in candidate.continuation.opportunities_preserved)
+            continuing_ids = {id(candidate) for candidate in continuing}
+            continuing = (*continuing, *(candidate for candidate in attack_preparation
+                                          if id(candidate) not in continuing_ids))
+            winning_preparation = tuple(
+                candidate for candidate in candidates
+                if candidate.disposition is CandidateDisposition.CONTINUES_TURN
+                and candidate.continuation is not None
+                and ContinuationOpportunity.WINNING_ATTACK in
+                candidate.continuation.opportunities_created
+                and "attack" in {
+                    *candidate.continuation.opportunities_created,
+                    *candidate.continuation.opportunities_preserved})
             positive_refresh = tuple(
                 candidate for candidate in candidates
                 if candidate.disposition is CandidateDisposition.CONTINUES_TURN
@@ -556,7 +584,11 @@ class GreedyDecisionPolicy:
                     and "play" in candidate.continuation.opportunities_preserved
                     and candidate not in continuing)
                 continuing = (*continuing, *durable_preparation)
-            if ready_knockout_enders:
+            if ready_winning_enders:
+                continuing = ()
+            elif winning_preparation:
+                continuing = winning_preparation
+            elif ready_knockout_enders:
                 continuing = tuple(candidate for candidate in continuing
                                    if meaningful(candidate))
             if continuing:

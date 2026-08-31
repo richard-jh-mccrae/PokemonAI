@@ -25,6 +25,11 @@ def legacy_choose(prices, *, forced, configuration):
         price for price in enders
         if RealizedOutcome.OPPONENT_ACTIVE_KNOCKOUT in
         price.footprint.realized_outcomes)
+    ready_winning_enders = tuple(
+        price for price in ready_knockout_enders
+        if any(component.feature in {"result.win", "active.terminal_liability"}
+               and component.value > 0
+               for component in price.footprint.contributions))
     continuation_threshold = (
         0.0 if explicit_end or ready_knockout_enders
         else min(0.0, best_ender_value))
@@ -67,10 +72,28 @@ def legacy_choose(prices, *, forced, configuration):
         if not price.ends_turn
         and ContinuationOpportunity.LETHAL_ATTACK in
         price.footprint.opportunities_created
-        and "attack" in price.footprint.opportunities_preserved)
+        and "attack" in {
+            *price.footprint.opportunities_created,
+            *price.footprint.opportunities_preserved})
     continuing_ids = {id(price) for price in continuing}
     continuing = (*continuing, *(price for price in lethal_preparation
                                   if id(price) not in continuing_ids))
+    attack_preparation = tuple(
+        price for price in prices
+        if not price.ends_turn
+        and "attack" in price.footprint.opportunities_created
+        and "retreat" in price.footprint.opportunities_preserved)
+    continuing_ids = {id(price) for price in continuing}
+    continuing = (*continuing, *(price for price in attack_preparation
+                                  if id(price) not in continuing_ids))
+    winning_preparation = tuple(
+        price for price in prices
+        if not price.ends_turn
+        and ContinuationOpportunity.WINNING_ATTACK in
+        price.footprint.opportunities_created
+        and "attack" in {
+            *price.footprint.opportunities_created,
+            *price.footprint.opportunities_preserved})
     positive_refresh = tuple(
         price for price in prices
         if not price.ends_turn
@@ -94,7 +117,11 @@ def legacy_choose(prices, *, forced, configuration):
             and "play" in price.footprint.opportunities_preserved
             and price not in continuing)
         continuing = (*continuing, *durable_preparation)
-    if ready_knockout_enders:
+    if ready_winning_enders:
+        continuing = ()
+    elif winning_preparation:
+        continuing = winning_preparation
+    elif ready_knockout_enders:
         continuing = tuple(price for price in continuing if meaningful(price))
     if continuing:
         return _legacy_ranked(_legacy_preservation_frontier(
@@ -166,7 +193,8 @@ def _legacy_preservation_frontier(candidates, noise_tolerance=0.0):
                 continue
             prepare_before_retreat = (
                 candidate.action.identity.kind == "retreat"
-                and ((value(other) > noise_tolerance
+                and (((value(other) > noise_tolerance
+                       or "attack" in opportunities_created)
                       and bool(opportunities_created))
                      or (other.action.identity.kind == "evolve"
                          and "ready_attacker" in immediately_usable_outputs))
@@ -231,8 +259,7 @@ def assert_decision_parity(prices, search_result, choice, *, forced, configurati
             raise AssertionError(
                 f"candidate decomposition changed: {price.action.identity}; "
                 f"expected={expected!r}; actual={actual!r}")
-        expected_tie_break = (() if price.prize_map is None
-                              else price.prize_map.plan_rank_key())
+        expected_tie_break = _policy_tie_break(price)
         if candidate.policy_tie_break != expected_tie_break:
             raise AssertionError(f"candidate tie break changed: {price.action.identity}")
     legacy = legacy_choose(prices, forced=forced, configuration=configuration)
@@ -276,16 +303,23 @@ def _legacy_ranked(prices, configuration, *, include_action_opportunity=False,
                      if best - value(price) <= configuration.noise_tolerance)
         exact = all(value(price) == best for _index, price in tied)
         tied = tuple(sorted(tied, key=lambda indexed: (
-            (indexed[1].prize_map.plan_rank_key()
-             if exact and indexed[1].prize_map is not None else ()),
+            (_policy_tie_break(indexed[1]) if exact else ()),
             hashlib.blake2b(
-                f"{configuration.tie_seed}:{indexed[0]}".encode("utf-8"),
+                f"{configuration.tie_seed}:{indexed[1].action.identity}".encode("utf-8"),
                 digest_size=8).digest())))
         ranked.extend(price for _index, price in tied)
         tied_indices = {index for index, _price in tied}
         remaining = tuple((index, price) for index, price in remaining
                           if index not in tied_indices)
     return tuple(ranked)
+
+
+def _policy_tie_break(price):
+    commitment = sum(
+        component.value for component in price.footprint.policy_contributions
+        if component.feature == "action.evolution_target_commitment")
+    prize = (() if price.prize_map is None else price.prize_map.plan_rank_key())
+    return (-commitment, *prize)
 
 
 __all__ = ("assert_decision_parity", "assert_runtime_parity", "legacy_choose")
