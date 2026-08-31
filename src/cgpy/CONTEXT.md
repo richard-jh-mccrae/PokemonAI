@@ -44,6 +44,12 @@ parity, verified by trace replay. `src/cg/` is never modified; cgpy never import
   one Primitive Action even when it names several cards.
 - **Turn Search Environment** — the cgpy experiment interface that exposes one Primitive Action per
   transition while keeping exact engine state private from policy and value consumers.
+- **Within-Horizon Teacher** — an offline fixed-perspective search that compares complete or
+  near-complete Contingent Turn Policies from one Experiment Root through turn end, terminal state,
+  Information Boundary, or an explicit safety cap, using Ledger at leaves.
+- **Contingent Turn Policy** — the state-keyed Primitive Action choice for every reached decision
+  branch of one turn. A displayed principal variation is one diagnostic path through this policy,
+  not the policy itself.
 - **Search Node** — an immutable, typed search position whose exact engine state remains owned by
   its Turn Search Environment.
 - **Search State Key** — the versioned canonical identity of a Search Node's rule-relevant state and
