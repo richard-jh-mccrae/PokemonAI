@@ -23,6 +23,7 @@ from common.ledger.search import GreedyDecisionPolicy
 from common.ledger.preview import ContinuationFootprint
 from common.scouting.provider import CardStat, DictCardStatProvider
 from deprecated.bellman.state import DecisionState
+from tools.train.ledger_parity import legacy_choose
 
 
 def make_decider(provider, deck=(DRAGAPULT, FIRE_E, DARK_E) * 20, sink=None):
@@ -337,6 +338,10 @@ def test_equal_swings_use_a_reproducible_neutral_lottery():
                     0.1, False, ()),
     )
     assert choose_prices(decider, (first, second)) is chosen
+    for prices in ((first, second), (second, first)):
+        forced = choose_prices(decider, prices, forced=True)
+        assert legacy_choose(
+            prices, forced=True, configuration=decider.compute.policy) is forced
     assert choose_prices(decider, relabeled).action.selection == chosen.action.selection
 
 

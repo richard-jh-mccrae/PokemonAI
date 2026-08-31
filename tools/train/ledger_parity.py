@@ -67,10 +67,20 @@ def legacy_choose(prices, *, forced, configuration):
         if not price.ends_turn
         and ContinuationOpportunity.LETHAL_ATTACK in
         price.footprint.opportunities_created
-        and "attack" in price.footprint.opportunities_preserved)
+        and "attack" in {
+            *price.footprint.opportunities_created,
+            *price.footprint.opportunities_preserved})
     continuing_ids = {id(price) for price in continuing}
     continuing = (*continuing, *(price for price in lethal_preparation
                                   if id(price) not in continuing_ids))
+    winning_preparation = tuple(
+        price for price in prices
+        if not price.ends_turn
+        and ContinuationOpportunity.WINNING_ATTACK in
+        price.footprint.opportunities_created
+        and "attack" in {
+            *price.footprint.opportunities_created,
+            *price.footprint.opportunities_preserved})
     positive_refresh = tuple(
         price for price in prices
         if not price.ends_turn
@@ -94,7 +104,9 @@ def legacy_choose(prices, *, forced, configuration):
             and "play" in price.footprint.opportunities_preserved
             and price not in continuing)
         continuing = (*continuing, *durable_preparation)
-    if ready_knockout_enders:
+    if winning_preparation:
+        continuing = winning_preparation
+    elif ready_knockout_enders:
         continuing = tuple(price for price in continuing if meaningful(price))
     if continuing:
         return _legacy_ranked(_legacy_preservation_frontier(
@@ -279,7 +291,7 @@ def _legacy_ranked(prices, configuration, *, include_action_opportunity=False,
             (indexed[1].prize_map.plan_rank_key()
              if exact and indexed[1].prize_map is not None else ()),
             hashlib.blake2b(
-                f"{configuration.tie_seed}:{indexed[0]}".encode("utf-8"),
+                f"{configuration.tie_seed}:{indexed[1].action.identity}".encode("utf-8"),
                 digest_size=8).digest())))
         ranked.extend(price for _index, price in tied)
         tied_indices = {index for index, _price in tied}

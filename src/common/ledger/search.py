@@ -526,10 +526,21 @@ class GreedyDecisionPolicy:
                 and candidate.continuation is not None
                 and ContinuationOpportunity.LETHAL_ATTACK in
                 candidate.continuation.opportunities_created
-                and "attack" in candidate.continuation.opportunities_preserved)
+                and "attack" in {
+                    *candidate.continuation.opportunities_created,
+                    *candidate.continuation.opportunities_preserved})
             continuing_ids = {id(candidate) for candidate in continuing}
             continuing = (*continuing, *(candidate for candidate in lethal_preparation
                                           if id(candidate) not in continuing_ids))
+            winning_preparation = tuple(
+                candidate for candidate in candidates
+                if candidate.disposition is CandidateDisposition.CONTINUES_TURN
+                and candidate.continuation is not None
+                and ContinuationOpportunity.WINNING_ATTACK in
+                candidate.continuation.opportunities_created
+                and "attack" in {
+                    *candidate.continuation.opportunities_created,
+                    *candidate.continuation.opportunities_preserved})
             positive_refresh = tuple(
                 candidate for candidate in candidates
                 if candidate.disposition is CandidateDisposition.CONTINUES_TURN
@@ -556,7 +567,9 @@ class GreedyDecisionPolicy:
                     and "play" in candidate.continuation.opportunities_preserved
                     and candidate not in continuing)
                 continuing = (*continuing, *durable_preparation)
-            if ready_knockout_enders:
+            if winning_preparation:
+                continuing = winning_preparation
+            elif ready_knockout_enders:
                 continuing = tuple(candidate for candidate in continuing
                                    if meaningful(candidate))
             if continuing:

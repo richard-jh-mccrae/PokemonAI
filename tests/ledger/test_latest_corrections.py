@@ -15,6 +15,8 @@ EARLIER_LUCARIO_CORRECTIONS = (Path(__file__).parents[2] / "data" / "corrections
                                / "20260830-083418_d00f93d6_mega_lucario")
 EARLIER_DRAGAPULT_CORRECTIONS = (Path(__file__).parents[2] / "data" / "corrections"
                                 / "20260830-083953_d00f93d6_dragapult_ex")
+WIN_CORRECTIONS = (Path(__file__).parents[2] / "data" / "corrections"
+                   / "20260831-051533_d74ec20f_mega_starmie")
 
 
 def replay_frame(frame):
@@ -32,6 +34,18 @@ def test_turbo_flare_ko_beats_negative_setup_and_end():
         store=KO_CORRECTIONS,
         decks=("mega_starmie",),
         correction_filter=lambda correction: correction.decision.get("frame") == 20,
+    )
+    [row] = result["rows"]
+
+    assert row["graded"]
+    assert row["agrees"], row
+
+
+def test_lethal_attachment_is_taken_before_the_winning_attack():
+    result = sweep(
+        store=WIN_CORRECTIONS,
+        decks=("mega_starmie",),
+        correction_filter=lambda correction: correction.decision.get("frame") == 163,
     )
     [row] = result["rows"]
 

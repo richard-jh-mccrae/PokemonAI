@@ -203,7 +203,7 @@ def price_actions(state, board: ObservationState, baseline: float, provider,
         footprint_values = _with_hand_evolution_opportunity(
             footprint_values, board, action, ctx)
         footprint_values = _with_lethal_attack_opportunity(
-            footprint_values, board, action, ctx)
+            footprint_values, board, action, ctx, landings)
         if isinstance(node, Refresh):
             facts = ctx.facts(node.card_id)
             allowances = (("supporter_played",)
@@ -713,23 +713,45 @@ def _with_hand_evolution_opportunity(footprint, board, action, ctx):
         activations=tuple(activations.items()))
 
 
-def _with_lethal_attack_opportunity(footprint, board, action, ctx):
-    if action.identity.kind != "play" or "attack" not in footprint.opportunities_preserved:
-        return footprint
+def _with_lethal_attack_opportunity(footprint, board, action, ctx, landings=()):
+    attack_available = "attack" in {
+        *footprint.opportunities_created, *footprint.opportunities_preserved}
+    successor_winning = (
+        attack_available
+        and not _active_doomed(board.me, board.them, ctx, board)
+        and bool(landings)
+        and all(not ended and _attack_wins_game(successor, ctx)
+                for _probability, _state, successor, ended, _path in landings))
     selected = tuple(
         ctx.facts(card_id) for _serial, card_id in _selected_cards(board, action)
         if card_id is not None)
-    if not any(creates_lethal_damage_boost(
-            facts, board.me, board.them, board, ctx) for facts in selected):
+    damage_boost_lethal = (
+        action.identity.kind == "play"
+        and "attack" in footprint.opportunities_preserved
+        and any(creates_lethal_damage_boost(
+            facts, board.me, board.them, board, ctx) for facts in selected))
+    if not successor_winning and not damage_boost_lethal:
         return footprint
+    opportunities = set(footprint.opportunities_created)
+    if damage_boost_lethal:
+        opportunities.add(ContinuationOpportunity.LETHAL_ATTACK)
+    if successor_winning:
+        opportunities.add(ContinuationOpportunity.WINNING_ATTACK)
     activations = Counter(dict(footprint.activations))
-    activations["opportunity_created"] += 1.0
+    activations["opportunity_created"] += (
+        len(opportunities) - len(footprint.opportunities_created))
     return replace(
         footprint,
-        opportunities_created=tuple(sorted((
-            *footprint.opportunities_created,
-            ContinuationOpportunity.LETHAL_ATTACK))),
+        opportunities_created=tuple(sorted(opportunities)),
         activations=tuple(activations.items()))
+
+
+def _attack_wins_game(board, ctx):
+    if board.them.active is None or not _active_doomed(
+            board.me, board.them, ctx, board):
+        return False
+    prizes = getattr(ctx.facts(board.them.active.card.card_id), "prize_value", 1)
+    return prizes >= board.them.prize_count or not board.them.bench
 
 
 def _local_action_events(board, action, ctx=None):
