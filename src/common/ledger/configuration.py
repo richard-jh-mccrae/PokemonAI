@@ -18,6 +18,7 @@ HAND_LINE_SCHEMA_VERSION = 21
 DAMAGED_ACTIVE_THREAT_SCHEMA_VERSION = 22
 REALIZED_KO_RETIREMENT_SCHEMA_VERSION = 23
 GUST_SPEND_SCHEMA_VERSION = 24
+EVOLUTION_TARGET_SCHEMA_VERSION = 25
 LEGACY_BODY_DEVELOPMENT_WEIGHT = 0.3
 
 
@@ -99,8 +100,9 @@ class ValuationConfiguration(Mapping[str, float]):
                             COMBAT_REALIZATION_SCHEMA_VERSION,
                             HAND_LINE_SCHEMA_VERSION,
                             DAMAGED_ACTIVE_THREAT_SCHEMA_VERSION,
-                            REALIZED_KO_RETIREMENT_SCHEMA_VERSION}
-                or catalog.schema_version != GUST_SPEND_SCHEMA_VERSION):
+                            REALIZED_KO_RETIREMENT_SCHEMA_VERSION,
+                            GUST_SPEND_SCHEMA_VERSION}
+                or catalog.schema_version != EVOLUTION_TARGET_SCHEMA_VERSION):
             raise ValueError("unsupported recorded valuation schema version")
         migrated = dict(_coefficient_pairs(values, "recorded valuation configuration"))
         if version == LEGACY_COMBAT_SCHEMA_VERSION:
@@ -125,6 +127,9 @@ class ValuationConfiguration(Mapping[str, float]):
         migrated.pop("combat.realized_ko", None)
         if version < GUST_SPEND_SCHEMA_VERSION:
             migrated["action.gust_spend"] = catalog["action.gust_spend"].default
+        if version < EVOLUTION_TARGET_SCHEMA_VERSION:
+            migrated["action.evolution_target_commitment"] = catalog[
+                "action.evolution_target_commitment"].default
         return cls(migrated, schema_version=catalog.schema_version)
 
     def resolve(self, overlay: DeckOverlay,

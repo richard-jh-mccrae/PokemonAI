@@ -417,5 +417,60 @@
     "disposition": "covered",
     "reason": "the current choice plays Dreepy and leaves the sacrificial Budew active; it no longer performs the condemned retreat, while the rationale does not distinguish that line from the stored Drakloak evolution",
     "round": "2026-08-30"
+  },
+  "25325576764785525-17": {
+    "disposition": "refuted",
+    "reason": "the correction explicitly says the decision was not a blunder, and the requested audit found a 91.61% chance of drawing any Energy and an 84.45% chance of Basic Water",
+    "round": "2026-08-31"
+  },
+  "25325576764785525-22": {
+    "disposition": "covered",
+    "reason": "the current policy preserves Cinderace's attack setup before retreating; useful setup may precede the recorded attachment without repeating the condemned retreat-first line",
+    "round": "2026-08-31"
+  },
+  "25325576764785525-47": {
+    "disposition": "covered",
+    "reason": "the current choice attaches Basic Water before Lillie's Determination, so it no longer shuffles away the available Energy before using it",
+    "round": "2026-08-31"
+  },
+  "25325576764785525-48": {
+    "disposition": "deferred-multi-turn",
+    "reason": "the ruling values Ignition on the Active through the newly enabled attack followed by its bench damage; that dependent attach-then-attack line requires complete turn sequencing",
+    "round": "2026-08-31"
+  },
+  "25325576764785525-68": {
+    "disposition": "covered",
+    "reason": "the current choice no longer evolves the backup Drakloak, preserving its draw Ability as the rationale requires; fetching Munkidori was described as optional upside",
+    "round": "2026-08-31"
+  },
+  "25325576764785525-73": {
+    "disposition": "deferred-multi-turn",
+    "reason": "the ruling orders Ultra Ball fetch, deployment of the fetched Munkidori, and only then Unfair Stamp; those independent Main actions require complete turn sequencing",
+    "round": "2026-08-31"
+  },
+  "25325576764785525-98": {
+    "disposition": "covered",
+    "reason": "the current choice plays Crushing Hammer and no longer wastes Darkness Energy on Dunsparce, which is the defect named by the rationale",
+    "round": "2026-08-31"
+  },
+  "25325576764785525-127": {
+    "disposition": "deferred-multi-turn",
+    "reason": "the Starmie attachment pays through a later promotion and a next-turn double Knock Out; that future attack route is outside a one-ply decision comparison",
+    "round": "2026-08-31"
+  },
+  "25325576764785525-141": {
+    "disposition": "deferred-multi-turn",
+    "reason": "the ruling composes attachment to Drakloak, a final Phantom Dive chip attack, and a two-turn Knock Out route; the attachment is not independently decisive",
+    "round": "2026-08-31"
+  },
+  "25325576764785525-153": {
+    "disposition": "covered",
+    "reason": "the current policy immediately takes the game-winning Nebula Beam instead of consuming that win with Wally's Compassion; Crushing Hammer is unnecessary once the win is terminal",
+    "round": "2026-08-31"
+  },
+  "25325576764785525-155": {
+    "disposition": "covered",
+    "reason": "the current choice attaches Ignition Energy to the Active and creates the game-winning attack; the rationale requires an Active attachment, not Basic Water specifically",
+    "round": "2026-08-31"
   }
 }

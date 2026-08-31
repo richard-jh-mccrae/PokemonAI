@@ -187,6 +187,8 @@ _OP_POSES = {
     "effectSwitchEnemy": {(int(SelectType.CARD), int(SelectContext.SWITCH))},
     "trashEnergyEnemy": {(int(SelectType.ENERGY), int(SelectContext.DISCARD_ENERGY))},
     "xHealMegaBounceEnergy": {(int(SelectType.CARD), int(SelectContext.HEAL))},
+    "xDistributeCounters": {
+        (int(SelectType.CARD), int(SelectContext.DAMAGE_COUNTER_ANY))},
     # Turbo Flare asks for Basic Energies before targets. Native search tokens make that first ask
     # reconstructible only from the attack definition, before its public attack log exists.
     "xDeckEnergyAttachDistribute": {(int(SelectType.CARD), int(SelectContext.ATTACH_TO))},
@@ -248,6 +250,8 @@ def _reconstruct_effect_frame(gs: GameState, select: dict, seat: int, logs: list
         if gs.pending.context_card is None:
             raise ValueError("state_from_obs: evolution target ask has no chosen evolution card")
         frame_vars["evo"] = gs.pending.context_card
+    if op_name == "xDistributeCounters":
+        frame_vars["left"] = gs.pending.remain_damage_counter
     gs.frames = [EffectFrame(program=list(program), pc=pcs[0], vars=frame_vars, seat=seat,
                              source=eff, kind=kind)]
 

@@ -20,9 +20,9 @@ from common.cards.card_facts import SUPPORTER, PokemonCard, TrainerCard
 from common.decision import (ContinuationOpportunity, EvaluationStatus, RealizedOutcome,
                              SearchConfiguration, SuccessorResult)
 from common.observation import ObservationState, ObservationStateBuilder, TransitionTrace
-from common.strategy.context import (_ACTIVE, _BENCH, _DAMAGE_COUNTER_ANY, _DECK, _DISCARD,
-                                     _EVOLVE, _HAND, _LOOKING, _MAIN, _PLAY, _ATTACH_FROM,
-                                     _TO_BENCH, _TO_HAND)
+from common.strategy.context import (_ACTIVE, _BENCH, _DAMAGE, _DAMAGE_COUNTER_ANY, _DECK,
+                                     _DISCARD, _EVOLVE, _HAND, _LOOKING, _MAIN, _PLAY,
+                                     _ATTACH_FROM, _TO_BENCH, _TO_HAND)
 
 from .activation import ActivationCompiler, ActivationEnvironment
 from .capabilities import (DAMAGE_COUNTER_HP, DAMAGE_UNIT_HP, attack_damage,
@@ -38,6 +38,7 @@ LOTTERY_DIGEST_BYTES = 8
 PRIZE_PHASE_PIVOT = 4
 PRIZE_AREA = 6
 FORCED_FOOTPRINT_SLOT = 3
+DAMAGE_TARGET_EVOLUTION_COMMITMENT = 3
 
 
 @dataclass(frozen=True)
@@ -770,7 +771,13 @@ def _local_action_events(board, action, ctx=None):
     if ctx is not None and _spends_gust(board, action, ctx):
         return (("gust_spend", 1.0),)
     if ctx is not None and _body_ability_ready(board, action, ctx):
+        commitment = _evolution_target_commitment(board, action)
+        if commitment:
+            return (("body_ability_ready", 1.0),
+                    ("evolution_target_commitment", commitment))
         return (("body_ability_ready", 1.0),)
+    if commitment := _evolution_target_commitment(board, action):
+        return (("evolution_target_commitment", commitment),)
     if ctx is not None and (overflow := _body_copy_overflow(board, action, ctx)):
         return (("body_copy_overflow", overflow),)
     if ctx is not None and _retreats_doomed_denial(board, action, ctx):
@@ -778,7 +785,7 @@ def _local_action_events(board, action, ctx=None):
     select = board.select
     if ctx is not None and select is not None and select.context == _ATTACH_FROM:
         return _acceleration_phase_events(board, action, ctx)
-    if select is None or select.context != _DAMAGE_COUNTER_ANY:
+    if select is None or select.context not in {_DAMAGE, _DAMAGE_COUNTER_ANY}:
         return ()
     for selection in action.selection:
         if not 0 <= selection < len(select.options):
@@ -795,8 +802,12 @@ def _local_action_events(board, action, ctx=None):
         if ctx is not None:
             facts = ctx.facts(target.card.card_id)
             prize_value = int(getattr(facts, "prize_value", 1) or 1)
+            target_commitment = (
+                1 + DAMAGE_TARGET_EVOLUTION_COMMITMENT * len(target.pre_evolution)
+                + len(target.energies) + len(target.tools))
             progress = (min(DAMAGE_COUNTER_HP, target.hp)
-                        / max(DAMAGE_COUNTER_HP, target.hp) * prize_value)
+                        / max(DAMAGE_COUNTER_HP, target.hp)
+                        * math.sqrt(prize_value) * target_commitment)
             return (("damage_counter_progress", progress),)
     return ()
 
@@ -807,6 +818,30 @@ def _spends_gust(board, action, ctx):
         for _serial, card_id in _selected_cards(board, action)
         if card_id is not None
         for clause in card_clauses(ctx.facts(card_id)))
+
+
+def _evolution_target_commitment(board, action):
+    if action.identity.kind != "evolve":
+        return 0.0
+    target = _selected_body(board, action)
+    return 0.0 if target is None else float(len(target.energies) + len(target.tools))
+
+
+def _selected_body(board, action):
+    if board.select is None or len(action.selection) != 1:
+        return None
+    selection = action.selection[0]
+    if not 0 <= selection < len(board.select.options):
+        return None
+    option = board.select.options[selection]
+    area = option.inPlayArea if option.inPlayArea is not None else option.area
+    index = option.inPlayIndex if option.inPlayIndex is not None else option.index
+    side = board.me if option.playerIndex in {None, board.seat} else board.them
+    if area == _ACTIVE:
+        return side.active
+    if area == _BENCH and isinstance(index, int) and 0 <= index < len(side.bench):
+        return side.bench[index]
+    return None
 
 
 def _dead_discard(board, action, ctx):

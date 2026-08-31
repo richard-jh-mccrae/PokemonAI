@@ -53,6 +53,44 @@ def test_lethal_attachment_is_taken_before_the_winning_attack():
     assert row["agrees"], row
 
 
+def test_bench_damage_targets_developed_attackers():
+    result = sweep(
+        store=WIN_CORRECTIONS,
+        decks=("dragapult_ex", "mega_starmie"),
+        correction_filter=lambda correction: correction.decision.get("frame") in {75, 86},
+    )
+
+    assert len(result["rows"]) == 2
+    assert all(row["graded"] for row in result["rows"]), result["rows"]
+    assert all(row["agrees"] for row in result["rows"]), result["rows"]
+
+
+@pytest.mark.parametrize("frame", (35, 117))
+def test_development_targets_the_invested_body(frame):
+    result = sweep(
+        store=WIN_CORRECTIONS,
+        decks=("dragapult_ex",),
+        correction_filter=lambda correction: correction.decision.get("frame") == frame,
+    )
+    [row] = result["rows"]
+
+    assert row["graded"]
+    assert row["agrees"], row
+
+
+def test_ready_game_winning_attack_ends_the_game_now():
+    result = sweep(
+        store=WIN_CORRECTIONS,
+        decks=("mega_starmie",),
+        correction_filter=lambda correction: correction.decision.get("frame") == 153,
+        reviewed={},
+    )
+    [row] = result["rows"]
+
+    assert row["graded"]
+    assert row["chosen"] == [10], row
+
+
 def test_looking_selection_uses_the_revealed_card_identity():
     result = sweep(
         store=LUCARIO_CORRECTIONS,

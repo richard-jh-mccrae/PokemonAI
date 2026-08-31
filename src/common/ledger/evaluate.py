@@ -722,8 +722,11 @@ def _body(trace: _Trace, part: str, body: Body, sign: float, ctx: EvaluationMode
                   * float(_prize_value(body, ctx)))
         trace.emit(part, "observation", ("damaged_active_threat",),
                    sign * usable * missing * threat)
+    roles = set(getattr(body_facts, "default_roles", ()))
+    pure_draw_engine = "draw_engine" in roles and not roles.intersection(
+        {"primary_attacker", "backup_attacker"})
     trace.emit(part, "observation", ("concentrated_energy",),
-               sign * max(0, usable - 1))
+               0.0 if pure_draw_engine else sign * max(0, usable - 1))
     for card in body.tools:
         _card(trace, part, card.card_id, ctx.facts(card.card_id), sign, ctx, own=own,
               placement="tool_attached", opponent=opponent)
