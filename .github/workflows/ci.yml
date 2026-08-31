@@ -207,6 +207,8 @@ jobs:
     if: needs.plan.outputs.src == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 25
+    env:
+      PYTHONHASHSEED: '0'
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -235,6 +237,7 @@ jobs:
     timeout-minutes: 20
     env:
       CG_ENGINE: py
+      PYTHONHASHSEED: '0'
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
