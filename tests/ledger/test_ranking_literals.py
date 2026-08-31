@@ -13,7 +13,7 @@ APPROVED_DECLARATIONS = {
     "src/common/ledger/activation.py": {"DAMAGE_UNIT_HP", "SYMMETRIC_STADIUM_FIT"},
     "src/common/ledger/chance.py": {
         "DIRECT_REFRESH_CARD_GAIN", "DIRECT_REFRESH_MAX_RETAINED",
-        "MIN_ADAPTIVE_SAMPLES", "PLAYER_COUNT",
+        "MIN_ADAPTIVE_SAMPLES", "PLAYER_COUNT", "SAMPLE_SEED_BITS",
         "SAMPLES_PER_OUTCOME", "SEED_DIGEST_BYTES"},
     "src/common/ledger/capabilities.py": {
         "ACTIVE_AREA", "ANCIENT_POKEMON_IDS", "ATTACHED_ENERGY_MATERIAL_UNIT",

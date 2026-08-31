@@ -18,6 +18,7 @@ from common.ledger.evaluate import FeatureActivation, FeatureContribution, Valua
 
 PLAYER_COUNT = 2
 SEED_DIGEST_BYTES = 8
+SAMPLE_SEED_BITS = 64
 MIN_ADAPTIVE_SAMPLES = 4
 SAMPLES_PER_OUTCOME = 2
 
@@ -149,7 +150,7 @@ def _sample(rng: random.Random, pool: list, count: int) -> list:
     if count >= len(pool):
         return list(pool)
     # Rank positions with a stable digest because `random.sample` varies by Python version.
-    seed = rng.getrandbits(64)
+    seed = rng.getrandbits(SAMPLE_SEED_BITS)
     ranked = sorted(
         range(len(pool)),
         key=lambda index: hashlib.blake2b(
