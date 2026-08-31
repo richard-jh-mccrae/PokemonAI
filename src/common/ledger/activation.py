@@ -204,6 +204,18 @@ def _piercing_target(environment, rule):
 
 
 def _open_cost(environment, rule):
+    if getattr(environment.clause, "kind", None) == "retreat_reduction":
+        from .capabilities import effective_retreat_cost
+
+        active = environment.side.active
+        if (active is None or not environment.side.bench or environment.board.turn.retreated
+                or environment.side.asleep or environment.side.paralyzed):
+            return 0.0
+        deficit = max(0, effective_retreat_cost(active, environment.evaluation_model)
+                      - len(active.energies))
+        reduction = (deficit if environment.clause.amount in {"all", "any"}
+                     else float(environment.clause.amount or 0))
+        return min(float(reduction), float(deficit))
     from .worth import unmet_cost_slots
 
     open_cost = sum(bool(unmet_cost_slots(body.energies, attack.cost))

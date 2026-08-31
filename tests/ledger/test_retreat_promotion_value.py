@@ -196,3 +196,13 @@ def test_retreat_tool_attachment_is_worthwhile_when_it_creates_mobility():
         active=body(DREEPY, 1, tools=(AIR_BALLOON,)), bench=[body(MAKUHITA, 2)]))
 
     assert evaluate(attached, context).total > evaluate(held, context).total
+
+
+def test_retreat_tool_is_better_held_than_parked_on_the_bench():
+    context = EvaluationModel.build()
+    held = board(me=player(
+        active=body(DREEPY, 1), bench=[body(MAKUHITA, 2)], hand=[AIR_BALLOON]))
+    attached = board(me=player(
+        active=body(DREEPY, 1), bench=[body(MAKUHITA, 2, tools=(AIR_BALLOON,))]))
+
+    assert evaluate(held, context).total > evaluate(attached, context).total

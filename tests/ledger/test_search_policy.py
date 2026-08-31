@@ -4,7 +4,7 @@ from common.ledger.search import preservation_frontier
 
 
 def candidate(kind, value, *, preserved=(), consumed=(), allowances=(), zones=(), created=(),
-              outputs=()):
+              outputs=(), opportunity=0.0, policy_features=()):
     return SimpleNamespace(
         action=SimpleNamespace(identity=SimpleNamespace(kind=kind)),
         delta=SimpleNamespace(total=value, components=()),
@@ -14,7 +14,10 @@ def candidate(kind, value, *, preserved=(), consumed=(), allowances=(), zones=()
             allowances_consumed=tuple(allowances),
             zones_replaced=tuple(zones),
             immediately_usable_outputs=tuple(outputs),
-            opportunities_created=tuple(created)))
+            opportunities_created=tuple(created),
+            action_opportunity=opportunity,
+            policy_components=tuple(SimpleNamespace(key=feature)
+                                    for feature in policy_features)))
 
 
 def test_preservation_cannot_hide_a_more_valuable_resolved_compound_action():
@@ -22,6 +25,15 @@ def test_preservation_cannot_hide_a_more_valuable_resolved_compound_action():
     draw = candidate("draw", 1.0, preserved=("fetch",))
 
     assert preservation_frontier((fetch, draw)) == (fetch, draw)
+
+
+def test_mutually_exclusive_targets_keep_the_best_policy_value():
+    bench = candidate("attach", 0.35, consumed=("attach",))
+    active = candidate(
+        "attach", 0.02, consumed=("attach",), opportunity=0.53,
+        policy_features=("action.survival_tool_target",))
+
+    assert preservation_frontier((bench, active)) == (active,)
 
 
 def test_preservation_defers_a_lower_value_action_when_order_keeps_both():

@@ -995,7 +995,9 @@ def _attack_impact(attack, facts, body, side, opponent, ctx, board, *,
             attack, facts, body, side, opponent, ctx, board)
     reach = float(bench_reach(attack))
     any_target = attack.clause("bench_snipe")
-    bench_targets = tuple(opponent.bench)
+    bench_targets = tuple(
+        target for target in opponent.bench
+        if not getattr(ctx.facts(target.card.card_id), "tera", False))
     if any_target is not None and any_target.restriction == "ex_or_v_only":
         bench_targets = tuple(
             target for target in bench_targets

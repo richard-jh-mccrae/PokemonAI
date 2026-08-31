@@ -337,6 +337,15 @@ def preservation_frontier(candidates, noise_tolerance=0.0):
             0.0 if continuation is None else
             getattr(continuation, "action_opportunity", 0.0))
 
+    def policy_features(candidate):
+        continuation = (getattr(candidate, "continuation", None)
+                        or getattr(candidate, "footprint", None))
+        components = getattr(
+            continuation, "policy_components",
+            getattr(continuation, "policy_contributions", ()))
+        return {getattr(component, "key", getattr(component, "feature", None))
+                for component in components}
+
     deferred = set()
     for candidate in candidates:
         continuation = (getattr(candidate, "continuation", None)
@@ -361,6 +370,17 @@ def preservation_frontier(candidates, noise_tolerance=0.0):
                 other_continuation, "immediately_usable_outputs", ())
             other_allowances_consumed = getattr(
                 other_continuation, "allowances_consumed", ())
+            same_exclusive_spend = (
+                consumed
+                and consumed == set(getattr(
+                    other_continuation, "opportunities_consumed", ()))
+                and candidate.action.identity.kind == other.action.identity.kind
+                and "action.survival_tool_target" in {
+                    *policy_features(candidate), *policy_features(other)}
+                and value(other) > value(candidate) + noise_tolerance)
+            if same_exclusive_spend:
+                deferred.add(id(candidate))
+                break
             refresh_after_preparation = (
                 "supporter_played" in allowances_consumed
                 and "hand" in zones_replaced
@@ -477,9 +497,12 @@ class GreedyDecisionPolicy:
                 candidate.continuation.realized_outcomes)
             ready_winning_enders = tuple(
                 candidate for candidate in ready_knockout_enders
-                if any(component.key in {"result.win", "active.terminal_liability"}
-                       and component.value > 0
-                       for component in candidate.delta.components))
+                if candidate.continuation is not None
+                and (RealizedOutcome.GAME_WIN in
+                     candidate.continuation.realized_outcomes
+                     or any(component.key in {"result.win", "active.terminal_liability"}
+                            and component.value > 0
+                            for component in candidate.delta.components)))
             continuation_threshold = (
                 0.0 if explicit_end or ready_knockout_enders
                 else min(0.0, best_ender_value))
@@ -487,6 +510,28 @@ class GreedyDecisionPolicy:
             def meaningful(candidate):
                 return (policy_value(candidate)
                         > continuation_threshold + configuration.noise_tolerance)
+
+            def repays_action_cost(candidate):
+                continuation = candidate.continuation
+                components = getattr(
+                    continuation, "policy_components",
+                    getattr(continuation, "policy_contributions", ()))
+                cost = -sum(component.value for component in components
+                            if getattr(component, "key", getattr(
+                                component, "feature", None)) == "action.opportunity_cost")
+                return continuation.action_opportunity > cost + configuration.noise_tolerance
+
+            def worth_before_knockout(candidate):
+                if not meaningful(candidate):
+                    return False
+                continuation = candidate.continuation
+                refresh = ("supporter_played" in continuation.allowances_consumed
+                           and "hand" in continuation.zones_replaced)
+                if not refresh:
+                    return True
+                knockout_value = max(
+                    ready.delta.total for ready in ready_knockout_enders)
+                return policy_value(candidate) > knockout_value + configuration.noise_tolerance
 
             continuing = tuple(
                 candidate for candidate in candidates
@@ -504,6 +549,7 @@ class GreedyDecisionPolicy:
                 and candidate.action.identity.kind == "ability"
                 and candidate.continuation is not None
                 and not candidate.continuation.allowances_consumed
+                and "attach" not in candidate.continuation.opportunities_consumed
                 and {"deck", "hand"}.issubset(
                     candidate.continuation.zones_replaced)
                 and ("in_play" in candidate.continuation.zones_replaced
@@ -518,6 +564,7 @@ class GreedyDecisionPolicy:
                 candidate for candidate in candidates
                 if candidate.disposition is CandidateDisposition.CONTINUES_TURN
                 and candidate.continuation is not None
+                and repays_action_cost(candidate)
                 and "in_play" in candidate.continuation.immediately_usable_outputs
                 and ((candidate.action.identity.kind == "play")
                      or (candidate.action.identity.kind == "evolve"
@@ -590,20 +637,17 @@ class GreedyDecisionPolicy:
                 continuing = winning_preparation
             elif ready_knockout_enders:
                 continuing = tuple(candidate for candidate in continuing
-                                   if meaningful(candidate))
+                                   if worth_before_knockout(candidate))
             if continuing:
                 candidates = preservation_frontier(
                     continuing, configuration.noise_tolerance)
                 reason = DecisionReason.POSITIVE_CONTINUATION
             else:
                 if enders:
-                    if ready_knockout_enders:
-                        action_enders = tuple(
-                            candidate for candidate in enders
-                            if candidate.continuation is not None
-                            and RealizedOutcome.ACTION_ENDED_TURN in
-                            candidate.continuation.realized_outcomes)
-                        candidates = action_enders or ready_knockout_enders
+                    if ready_winning_enders:
+                        candidates = ready_winning_enders
+                    elif ready_knockout_enders:
+                        candidates = ready_knockout_enders
                     else:
                         candidates = enders
                     reason = DecisionReason.BEST_TURN_ENDER

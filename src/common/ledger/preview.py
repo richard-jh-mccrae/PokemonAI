@@ -16,17 +16,18 @@ from dataclasses import dataclass, replace
 from common.algebra import (Actor, Chance, Choice, Deterministic, Refresh, RevealChoice,
                             Terminal, Unknown)
 from common.cards import card_clauses
-from common.cards.card_facts import SUPPORTER, PokemonCard, TrainerCard
+from common.cards.card_facts import SUPPORTER, EnergyCard, PokemonCard, TrainerCard
 from common.decision import (ContinuationOpportunity, EvaluationStatus, RealizedOutcome,
                              SearchConfiguration, SuccessorResult)
 from common.observation import ObservationState, ObservationStateBuilder, TransitionTrace
 from common.strategy.context import (_ACTIVE, _BENCH, _DAMAGE, _DAMAGE_COUNTER_ANY, _DECK,
                                      _DISCARD, _EVOLVE, _HAND, _LOOKING, _MAIN, _PLAY,
-                                     _ATTACH_FROM, _TO_BENCH, _TO_HAND)
+                                     _ATTACH_FROM, _ATTACH_TO, _TO_BENCH, _TO_HAND)
 
 from .activation import ActivationCompiler, ActivationEnvironment
 from .capabilities import (DAMAGE_COUNTER_HP, DAMAGE_UNIT_HP, attack_damage,
-                           creates_lethal_damage_boost, hand_dependency_reach_units)
+                           best_energy_marginal, creates_lethal_damage_boost,
+                           hand_dependency_reach_units, knockout_exposure_units)
 from .chance import RefreshSummary, refresh_outcomes
 from .decision import state_valuation_from_ledger
 from .evaluate import (_active_doomed, FeatureActivation, FeatureContribution,
@@ -770,6 +771,12 @@ def _local_action_events(board, action, ctx=None):
         return (("play_before_refresh", play_before_refresh),)
     if ctx is not None and _spends_gust(board, action, ctx):
         return (("gust_spend", 1.0),)
+    if ctx is not None and (opportunity := _ability_rider_energy_opportunity(
+            board, action, ctx)):
+        return (("rider_energy_opportunity", opportunity),)
+    if ctx is not None and (exposure := _survival_tool_target(
+            board, action, ctx)):
+        return (("survival_tool_target", exposure),)
     if ctx is not None and _body_ability_ready(board, action, ctx):
         commitment = _evolution_target_commitment(board, action)
         if commitment:
@@ -783,6 +790,14 @@ def _local_action_events(board, action, ctx=None):
     if ctx is not None and _retreats_doomed_denial(board, action, ctx):
         return (("retreat_doomed_denial", 1.0),)
     select = board.select
+    if ctx is not None and select is not None and select.context == _ATTACH_TO:
+        selected_energy = sum(
+            isinstance(ctx.facts(card_id), EnergyCard)
+            for _serial, card_id in _selected_cards(board, action)
+            if card_id is not None)
+        if selected_energy:
+            return (("acceleration_phase_fit",
+                     selected_energy * ctx.configuration["option.acceleration"]),)
     if ctx is not None and select is not None and select.context == _ATTACH_FROM:
         return _acceleration_phase_events(board, action, ctx)
     if select is None or select.context not in {_DAMAGE, _DAMAGE_COUNTER_ANY}:
@@ -801,6 +816,8 @@ def _local_action_events(board, action, ctx=None):
             return (("overkill_counter", 1.0),)
         if ctx is not None:
             facts = ctx.facts(target.card.card_id)
+            if select.context == _DAMAGE and getattr(facts, "tera", False):
+                return ()
             prize_value = int(getattr(facts, "prize_value", 1) or 1)
             target_commitment = (
                 1 + DAMAGE_TARGET_EVOLUTION_COMMITMENT * len(target.pre_evolution)
@@ -818,6 +835,43 @@ def _spends_gust(board, action, ctx):
         for _serial, card_id in _selected_cards(board, action)
         if card_id is not None
         for clause in card_clauses(ctx.facts(card_id)))
+
+
+def _ability_rider_energy_opportunity(board, action, ctx):
+    if action.identity.kind != "ability":
+        return 0.0
+    body = _selected_body(board, action)
+    if body is None:
+        return 0.0
+    facts = ctx.facts(body.card.card_id)
+    energy_types = {
+        clause.rider_energy_type
+        for ability in getattr(facts, "abilities", ())
+        for clause in ability.clauses
+        if str(clause.rider or "").startswith("discard_basic_")
+    }
+    candidates = tuple(
+        energy
+        for card in board.me.hand
+        if isinstance((energy := ctx.facts(card.card_id)), EnergyCard)
+        and (None in energy_types or energy.provides in energy_types))
+    return max((best_energy_marginal(
+        energy, board.me, board.them, board, ctx) for energy in candidates), default=0.0)
+
+
+def _survival_tool_target(board, action, ctx):
+    if action.identity.kind != "attach":
+        return 0.0
+    if not any(
+            clause.kind == "hp_bonus"
+            for _serial, card_id in _selected_cards(board, action)
+            if card_id is not None
+            for clause in card_clauses(ctx.facts(card_id))):
+        return 0.0
+    target = _selected_body(board, action)
+    if target is None or target is not board.me.active:
+        return 0.0
+    return knockout_exposure_units(target, ctx)
 
 
 def _evolution_target_commitment(board, action):
@@ -962,8 +1016,13 @@ def _body_ability_ready(board, action, ctx):
 
 
 def _acceleration_phase_events(board, action, ctx):
+    from .capabilities import energy_marginal
     from .worth import _forward_lines
 
+    context_card = board.select.context_card
+    energy = None if context_card is None else ctx.facts(context_card.card_id)
+    if not isinstance(energy, EnergyCard):
+        return ()
     values = []
     for selection in action.selection:
         if not 0 <= selection < len(board.select.options):
@@ -974,7 +1033,9 @@ def _acceleration_phase_events(board, action, ctx):
         side = board.me if option.playerIndex == board.seat else board.them
         if not 0 <= option.index < len(side.bench):
             continue
-        facts = ctx.facts(side.bench[option.index].card.card_id)
+        body = side.bench[option.index]
+        opponent = board.them if side is board.me else board.me
+        facts = ctx.facts(body.card.card_id)
         line = (facts, *(ctx.facts(card_id)
                          for card_id in _forward_lines().get(facts.name, ())))
         route_prizes = max((int(getattr(card, "prize_value", 1) or 1)
@@ -983,9 +1044,15 @@ def _acceleration_phase_events(board, action, ctx):
             float(attack.damage or attack.damage_fix or attack.damage_max or 0)
             / DAMAGE_UNIT_HP / max(1, len(attack.cost))
             for card in line if card is not None for attack in card.attacks), default=0.0)
-        matches = ((route_prizes > 1) == (side is board.me
-                    and board.them.prize_count <= PRIZE_PHASE_PIVOT))
-        values.append((1.0 if matches else -1.0) * damage_per_energy)
+        typed_route = any(
+            energy.provides in attack.cost
+            for card in line if card is not None for attack in card.attacks)
+        phase_match = ((route_prizes > 1) == (
+            side is board.me and board.them.prize_count <= PRIZE_PHASE_PIVOT))
+        route_fit = damage_per_energy if typed_route else 0.0
+        phase_fit = (1.0 if phase_match else -1.0) * route_fit
+        marginal = energy_marginal(body, energy, side, opponent, board, ctx)
+        values.append(marginal + route_fit + phase_fit)
     return (("acceleration_phase_fit", sum(values)),) if values else ()
 
 
@@ -1118,7 +1185,12 @@ def _realized_outcomes(board, action, landings, ctx, *, ends_turn=False):
     lethal_without_serial = (
         active_serial is None and _selected_attack_is_lethal(board, action, ctx))
     knockout_probability = 0.0
+    win_probability = 0.0
     for probability, _state, successor, _ended, _path in landings:
+        result = successor.turn.result
+        if (isinstance(result, int) and not isinstance(result, bool)
+                and result >= 0 and result == board.seat):
+            win_probability += probability
         if successor.me.prize_count >= board.me.prize_count:
             continue
         if active_serial is None:
@@ -1133,6 +1205,8 @@ def _realized_outcomes(board, action, landings, ctx, *, ends_turn=False):
             knockout_probability += probability
     outcomes = (() if not math.isclose(knockout_probability, 1.0) else
                 (RealizedOutcome.OPPONENT_ACTIVE_KNOCKOUT,))
+    if math.isclose(win_probability, 1.0):
+        outcomes = (*outcomes, RealizedOutcome.GAME_WIN)
     if ends_turn:
         outcomes = (*outcomes, RealizedOutcome.ACTION_ENDED_TURN)
     return outcomes

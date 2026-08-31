@@ -30,6 +30,7 @@ class ContinuationOpportunity(str, Enum):
 class RealizedOutcome(str, Enum):
     ACTION_ENDED_TURN = "action_ended_turn"
     EXPLICIT_TURN_END = "explicit_turn_end"
+    GAME_WIN = "game_win"
     OPPONENT_ACTIVE_KNOCKOUT = "opponent_active_knockout"
 
 

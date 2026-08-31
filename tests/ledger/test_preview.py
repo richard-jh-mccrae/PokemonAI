@@ -20,11 +20,13 @@ from common.ledger import DeckOverlay, EvaluationModel, LedgerDecider
 from common.ledger.evaluate import FeatureActivation, FeatureContribution, Valuation, evaluate
 from common.ledger.preview import (_body_ability_ready, _body_copy_overflow,
                                    _discard_spend_contributions,
-                                   _RawFootprint, _realized_outcomes,
+                                   _local_action_events, _RawFootprint, _realized_outcomes,
                                    _realized_portfolio_contributions,
                                    _with_hand_evolution_opportunity, _expected_valuation,
                                    price_actions)
+from common.ledger.worth import pokemon_copy_capacity
 from common.observation import ObservationStateBuilder
+from common.strategy.context import _DAMAGE, _DAMAGE_COUNTER_ANY
 from deprecated.bellman.state import DecisionState
 
 DECK = (DRAGAPULT, FIRE_E) * 20
@@ -169,6 +171,43 @@ def test_missing_serial_knockout_proof_excludes_unplayed_hand_boosts():
     assert outcomes == ()
 
 
+def test_realized_outcomes_reads_an_engine_game_win_directly():
+    root = ObservationStateBuilder(DECK).root(printout(
+        me=player(active=body(DRAGAPULT, 1), prizes=1),
+        them=player(own=False, active=body(DREEPY, 2), prizes=1)))
+    landing_observation = printout(
+        me=player(active=body(DRAGAPULT, 1), prizes=0),
+        them=player(own=False, active=body(DREEPY, 2), prizes=1))
+    landing_observation["current"]["result"] = 0
+    landing = ObservationStateBuilder(DECK).root(landing_observation)
+
+    outcomes = _realized_outcomes(
+        root, action("attack", (0,)), ((1.0, None, landing, True, ()),),
+        EvaluationModel.build())
+
+    assert RealizedOutcome.GAME_WIN in outcomes
+
+
+@pytest.mark.parametrize(("context", "expected"), (
+    (_DAMAGE, ()),
+    (_DAMAGE_COUNTER_ANY, "damage_counter_progress"),
+))
+def test_tera_bench_blocks_attack_damage_but_not_damage_counters(context, expected):
+    select = {"context": context, "minCount": 1, "maxCount": 1,
+              "option": [{"area": 5, "index": 0, "playerIndex": 1, "type": 3}]}
+    board = ObservationStateBuilder(DECK).root(printout(
+        me=player(active=body(DRAGAPULT, 1)),
+        them=player(own=False, active=body(DREEPY, 2),
+                    bench=[body(DRAGAPULT, 3)]), select=select))
+
+    events = _local_action_events(board, action("card", (0,)), EvaluationModel.build())
+
+    if expected:
+        assert events[0][0] == expected
+    else:
+        assert events == expected
+
+
 def test_body_ability_readiness_stops_after_the_line_is_fully_developed():
     select = {"context": 0, "minCount": 1, "maxCount": 1,
               "option": [{"cardId": DRAKLOAK, "serial": 800, "type": 7}]}
@@ -213,6 +252,13 @@ def test_forced_singleton_fetch_does_not_price_unavailable_body_alternatives():
         me=player(active=body(DRAGAPULT, 1), hand=[DREEPY, DREEPY]), select=select))
 
     assert _body_copy_overflow(board, action("card", (0,)), EvaluationModel.build()) == 0
+
+
+def test_named_shared_ability_caps_only_a_non_attacker_copy():
+    context = EvaluationModel.build()
+
+    assert pokemon_copy_capacity(context.facts(675)) == 1
+    assert pokemon_copy_capacity(context.facts(756)) == 2
 
 
 def test_terminal_action_delta_is_independent_of_the_end_counterfactual():
