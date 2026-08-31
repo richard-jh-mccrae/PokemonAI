@@ -148,7 +148,13 @@ def _sample_seed(seed: int, index: int) -> int:
 def _sample(rng: random.Random, pool: list, count: int) -> list:
     if count >= len(pool):
         return list(pool)
-    return rng.sample(pool, count)
+    # Rank positions with a stable digest because `random.sample` varies by Python version.
+    seed = rng.getrandbits(64)
+    ranked = sorted(
+        range(len(pool)),
+        key=lambda index: hashlib.blake2b(
+            f"{seed}:{index}".encode("ascii"), digest_size=SEED_DIGEST_BYTES).digest())
+    return [pool[index] for index in ranked[:count]]
 
 
 def _player(observation, seat: int) -> dict:
