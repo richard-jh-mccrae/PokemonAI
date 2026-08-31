@@ -1,7 +1,11 @@
+import json
+
 import pytest
 
 from common.api import ActionIdentity
-from cgpy.experiment import (BoundaryReason, ChanceSampleKey, NodeKind,
+from common.observation import KnownDeckTop, LegalKnowledge
+from cgpy.experiment import (BoundaryReason, ChanceExpansionRequest,
+                             ChanceExpansionStatus, ChanceSampleKey, NodeKind,
                              PrimitiveTransition, TurnSearchEnvironment)
 from cgpy.rng import SeededRng
 from cgpy.schema import SelectContext
@@ -57,12 +61,12 @@ def test_ultra_ball_play_is_one_primitive_transition_to_a_forced_discard_node():
         action for action in environment.legal_actions(fetched)
         if option_card_id(direct, direct.gs.pending.options[action.selection[0]]) == 120)
     boundary = environment.transition(fetched, fetch.identity).node
-    assert environment.node_kind(boundary) is NodeKind.INFORMATION_BOUNDARY
+    assert environment.node_kind(boundary) is NodeKind.CHANCE
     assert boundary.boundary_reason is BoundaryReason.SHUFFLE_DRAW
     assert environment.observation(boundary).me.hand.count(120) == 1
 
 
-def test_pokegear_hidden_reveal_stops_at_an_information_boundary():
+def test_pokegear_hidden_reveal_stops_at_a_chance_node():
     engine, _agent = scenario(
         "mega_starmie", me_active=BodySpec((1030,)), me_hand=(1122,),
         me_top=(1227, 3, 1223, 3, 1030, 3),
@@ -75,9 +79,9 @@ def test_pokegear_hidden_reveal_stops_at_an_information_boundary():
 
     transition = environment.transition(root, play.identity)
 
-    assert environment.node_kind(transition.node) is NodeKind.INFORMATION_BOUNDARY
+    assert environment.node_kind(transition.node) is NodeKind.CHANCE
     assert transition.boundary_reason is BoundaryReason.RANDOM_REVEAL
-    assert environment.is_information_boundary(transition.node)
+    assert not environment.is_information_boundary(transition.node)
     assert environment.legal_actions(transition.node) == ()
     assert environment.state_key(transition.node) != environment.state_key(root)
     assert engine.gs.pending.context == int(SelectContext.MAIN)
@@ -98,11 +102,16 @@ def test_intercepted_coin_resumes_from_a_reproducible_chance_sample():
 
     first = environment.sample(chance, sample_key)
     second = environment.sample(chance, sample_key)
+    expansion = environment.expand(
+        chance, ChanceExpansionRequest(experiment_seed=604))
 
     assert environment.node_kind(chance) is NodeKind.CHANCE
     assert first == second
     assert first.node is not None
     assert first.result_kind in (NodeKind.PLAYER_DECISION, NodeKind.FORCED_DECISION)
+    assert expansion.status is ChanceExpansionStatus.COMPLETE
+    assert expansion.support_size == 2
+    assert [transition.probability for transition in expansion.transitions] == [0.5, 0.5]
     forged = ChanceSampleKey(
         603, root.state_key.digest, chance.state_key.digest,
         ActionIdentity("forged"), 0)
@@ -220,8 +229,262 @@ def test_poffin_multi_select_is_atomic_before_its_shuffle_boundary():
                 if len(action.selection) == 2)
     boundary = environment.transition(choose_bench, both.identity).node
 
-    assert environment.node_kind(boundary) is NodeKind.INFORMATION_BOUNDARY
+    assert environment.node_kind(boundary) is NodeKind.CHANCE
     assert boundary.boundary_reason is BoundaryReason.SHUFFLE_DRAW
+
+
+def test_lillies_expands_to_reproducible_whole_hand_main_successors():
+    engine, _agent = scenario(
+        "mega_starmie", me_active=BodySpec((1030,)),
+        me_hand=(1227, 3), me_top=(1223, 1121, 3, 1030, 1031, 17, 1225, 1086),
+        them_active=BodySpec((1030, 1031), energies=(3, 17)))
+    lock_main_allowances(engine, supporter=False)
+    environment = TurnSearchEnvironment.from_engine(engine, perspective_seat=0)
+    root = environment.root
+    play = next(
+        action for action in environment.legal_actions(root)
+        if action.identity.kind == "play"
+        and engine.gs.card_id(engine.gs.players[0].hand[
+            engine.gs.pending.options[action.selection[0]]["index"]]) == 1227)
+    played_serial = engine.gs.players[0].hand[
+        engine.gs.pending.options[play.selection[0]]["index"]]
+    original_hand = set(engine.gs.players[0].hand)
+    chance = environment.transition(root, play.identity).node
+
+    first = environment.expand(
+        chance, ChanceExpansionRequest(
+            experiment_seed=604, exact_outcome_limit=1, sample_count=4))
+    extended = environment.expand(
+        chance, ChanceExpansionRequest(
+            experiment_seed=604, exact_outcome_limit=1, sample_count=6))
+
+    assert environment.node_kind(chance) is NodeKind.CHANCE
+    assert chance.boundary_reason is BoundaryReason.SHUFFLE_DRAW
+    assert first.status is ChanceExpansionStatus.ESTIMATED
+    assert first.requested_count == first.produced_count == 4
+    assert first.probability_mass == pytest.approx(1.0)
+    assert tuple(item.branch_key for item in first.transitions) == tuple(
+        item.branch_key for item in extended.transitions[:4])
+    assert tuple(item.result_state_key for item in first.transitions) == tuple(
+        item.result_state_key for item in extended.transitions[:4])
+    for successor in first.successors:
+        observation = environment.observation(successor.node)
+        assert environment.node_kind(successor.node) is NodeKind.PLAYER_DECISION
+        assert observation.turn.supporter_played
+        assert len(observation.me.hand) == 8
+        assert observation.me.deck_count == root.observation.me.deck_count - 7
+        assert any(card.serial not in original_hand for card in observation.me.hand)
+        assert all(card.serial != played_serial for card in observation.me.hand)
+        assert any(card.serial == played_serial for card in observation.me.discard)
+        assert environment.legal_actions(successor.node)
+
+
+def test_harlequin_resolves_both_hidden_hands_then_allows_later_traversal():
+    engine, _agent = scenario(
+        "mega_starmie", me_active=BodySpec((1030,)), me_hand=(1223, 3),
+        them_active=BodySpec((1030, 1031), energies=(3, 17)))
+    lock_main_allowances(engine, supporter=False)
+    environment = TurnSearchEnvironment.from_engine(engine, perspective_seat=0)
+    root = environment.root
+    play = next(
+        action for action in environment.legal_actions(root)
+        if action.identity.kind == "play"
+        and engine.gs.card_id(engine.gs.players[0].hand[
+            engine.gs.pending.options[action.selection[0]]["index"]]) == 1223)
+    chance = environment.transition(root, play.identity).node
+
+    expansion = environment.expand(
+        chance, ChanceExpansionRequest(
+            experiment_seed=604, exact_outcome_limit=1, sample_count=8))
+
+    assert expansion.status is ChanceExpansionStatus.ESTIMATED
+    assert expansion.requested_count == expansion.produced_count == 8
+    assert expansion.probability_mass == pytest.approx(1.0)
+    encoded = expansion.dumps()
+    trace = json.loads(encoded)
+    assert trace["schema"] == "cgpy-chance-expansion"
+    assert trace["status"] == "estimated"
+    assert trace["exact_outcome_limit"] == 1
+    assert trace["sample_count"] == 8
+    assert trace["requested_count"] == trace["produced_count"] == 8
+    assert len(trace["branches"]) == 8
+    assert all({"branch_key", "probability", "result_state_key", "result_kind",
+                "boundary_reason", "failure"} <= branch.keys()
+               for branch in trace["branches"])
+    assert "card_id" not in encoded
+    assert "deck_order" not in encoded
+    assert "rng" not in encoded
+    for successor in expansion.successors:
+        observation = environment.observation(successor.node)
+        assert isinstance(observation.them.hand, type(root.observation.them.hand))
+        assert (len(observation.me.hand), observation.them.hand.count) in {
+            (5, 3), (3, 5)}
+        end = next(action for action in environment.legal_actions(successor.node)
+                   if action.identity.kind == "end")
+        later = environment.transition(successor.node, end.identity)
+        assert later.result_kind is NodeKind.TURN_BOUNDARY
+    assert engine.gs.pending.context == int(SelectContext.MAIN)
+    assert not engine.gs.supporter_played
+
+
+def test_small_shuffle_support_is_exact_and_equivalent_states_coalesce():
+    engine, _agent = scenario(
+        "dragapult_ex", me_active=BodySpec((119,)),
+        me_hand=(1121, 2, 5, 121),
+        them_active=BodySpec((119, 120, 121), energies=(2, 5)))
+    board = engine.gs.players[0]
+    kept = []
+    for card_id in (120, 1086, 1086):
+        serial = next(serial for serial in board.deck
+                      if engine.gs.card_id(serial) == card_id)
+        board.deck.remove(serial)
+        kept.append(serial)
+    board.discard.extend(board.deck)
+    board.deck = kept
+    lock_main_allowances(engine)
+    environment = TurnSearchEnvironment.from_engine(engine, perspective_seat=0)
+    root = environment.root
+    play = next(
+        action for action in environment.legal_actions(root)
+        if action.identity.kind == "play"
+        and engine.gs.card_id(engine.gs.players[0].hand[
+            engine.gs.pending.options[action.selection[0]]["index"]]) == 1121)
+    discard = environment.transition(root, play.identity).node
+    paid = next(
+        action for action in environment.legal_actions(discard)
+        if len(action.selection) == 2)
+    fetch_node = environment.transition(discard, paid.identity).node
+    fetch = next(
+        action for action in environment.legal_actions(fetch_node)
+        if environment.observation(fetch_node).select.deck[
+            action.selection[0]].card_id == 120)
+    chance = environment.transition(fetch_node, fetch.identity).node
+
+    expansion = environment.expand(
+        chance, ChanceExpansionRequest(
+            experiment_seed=604, exact_outcome_limit=16, sample_count=3))
+
+    assert expansion.status is ChanceExpansionStatus.COMPLETE
+    assert expansion.support_size == 2
+    assert expansion.requested_count == expansion.produced_count == 2
+    assert [transition.probability for transition in expansion.transitions] == [0.5, 0.5]
+    assert len({transition.result_state_key for transition in expansion.transitions}) == 1
+    assert len(expansion.successors) == 1
+    assert expansion.successors[0].probability == pytest.approx(1.0)
+    assert len(expansion.successors[0].branch_keys) == 2
+    assert environment.node_kind(expansion.successors[0].node) is NodeKind.PLAYER_DECISION
+    for transition in expansion.transitions:
+        persisted = type(transition).loads(transition.dumps())
+        assert environment.replay_chance(chance, persisted) == transition
+
+
+def test_sampled_draw_honors_legal_known_top_over_private_deck_order():
+    engine, _agent = scenario(
+        "mega_starmie", me_active=BodySpec((1030,)), me_hand=(3,),
+        them_active=BodySpec((1030, 1031), energies=(3, 17)))
+    board = engine.gs.players[0]
+    enriching_energy = board.hand[0]
+    engine.gs.cards[enriching_energy].card_id = 13
+    known_serial = board.deck[0]
+    assert known_serial != board.deck[-1]
+    lock_main_allowances(engine, energy=False)
+    environment = TurnSearchEnvironment.from_engine(
+        engine, perspective_seat=0,
+        knowledge=LegalKnowledge(known_top=KnownDeckTop((
+            (known_serial, engine.gs.card_id(known_serial)),))))
+    blind = TurnSearchEnvironment.from_engine(engine, perspective_seat=0)
+    assert environment.root.state_key != blind.root.state_key
+    attach = next(action for action in environment.legal_actions(environment.root)
+                  if action.identity.kind == "attach")
+    chance = environment.transition(environment.root, attach.identity).node
+
+    expansion = environment.expand(
+        chance, ChanceExpansionRequest(
+            experiment_seed=604, exact_outcome_limit=1, sample_count=6))
+    blind_chance = blind.transition(blind.root, attach.identity).node
+    blind_expansion = blind.expand(
+        blind_chance, ChanceExpansionRequest(
+            experiment_seed=604, exact_outcome_limit=1, sample_count=6))
+
+    assert expansion.status is ChanceExpansionStatus.ESTIMATED
+    assert all(any(card.serial == known_serial
+                   for card in environment.observation(successor.node).me.hand)
+               for successor in expansion.successors)
+    private_top = board.deck[-1]
+    assert any(all(card.serial != private_top
+                   for card in blind.observation(successor.node).me.hand)
+               for successor in blind_expansion.successors)
+
+
+def test_known_top_is_consumed_when_drakloak_moves_it_into_looking():
+    engine, _agent = scenario(
+        "dragapult_ex", me_active=BodySpec((119,)),
+        me_bench=(BodySpec((119, 120)),),
+        them_active=BodySpec((119, 120, 121), energies=(2, 5)))
+    lock_main_allowances(engine)
+    board = engine.gs.players[0]
+    known_serial = board.deck[0]
+    known = KnownDeckTop(((known_serial, engine.gs.card_id(known_serial)),))
+    environment = TurnSearchEnvironment.from_engine(
+        engine, perspective_seat=0,
+        knowledge=LegalKnowledge(known_top=known))
+    ability = next(action for action in environment.legal_actions(environment.root)
+                   if action.identity.kind == "ability")
+    chance = environment.transition(environment.root, ability.identity).node
+
+    expansion = environment.expand(
+        chance, ChanceExpansionRequest(
+            experiment_seed=604, exact_outcome_limit=1, sample_count=2))
+
+    for successor in expansion.successors:
+        observation = environment.observation(successor.node)
+        assert successor.node.kind is NodeKind.FORCED_DECISION
+        assert known_serial in {card.serial for card in observation.looking.cards}
+        assert observation.knowledge.known_top != known
+
+
+def test_expansion_fold_can_reverse_single_hit_ranking_for_a_whole_hand_combo():
+    engine, _agent = scenario(
+        "mega_starmie", me_active=BodySpec((1030,)),
+        me_hand=(1227, 1223, 3),
+        me_top=(1121, 3, 1030, 1031, 17, 1225, 1086),
+        them_active=BodySpec((1030, 1031), energies=(3, 17)))
+    lock_main_allowances(engine, supporter=False)
+    environment = TurnSearchEnvironment.from_engine(engine, perspective_seat=0)
+    root = environment.root
+    plays = {
+        engine.gs.card_id(engine.gs.players[0].hand[
+            engine.gs.pending.options[action.selection[0]]["index"]]): action
+        for action in environment.legal_actions(root)
+        if action.identity.kind == "play"
+    }
+    request = ChanceExpansionRequest(
+        experiment_seed=604, exact_outcome_limit=1, sample_count=12)
+    expansions = {
+        card_id: environment.expand(
+            environment.transition(root, plays[card_id].identity).node, request)
+        for card_id in (1227, 1223)
+    }
+
+    def hand(successor):
+        return tuple(card.card_id
+                     for card in environment.observation(successor.node).me.hand)
+
+    hit_rate = {
+        card_id: sum(successor.probability
+                     for successor in expansion.successors
+                     if 1121 in hand(successor))
+        for card_id, expansion in expansions.items()
+    }
+    expected_combo_value = {
+        card_id: sum(successor.probability
+                     for successor in expansion.successors
+                     if hand(successor).count(1145) >= 2)
+        for card_id, expansion in expansions.items()
+    }
+
+    assert hit_rate[1227] > hit_rate[1223]
+    assert expected_combo_value[1223] > expected_combo_value[1227]
 
 
 @pytest.mark.parametrize(

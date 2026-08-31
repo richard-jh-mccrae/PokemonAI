@@ -9,7 +9,7 @@ import pytest
 from common.api import ActionIdentity
 from common.observation.nodes import HiddenHand
 from cgpy.engine import Engine
-from cgpy.experiment import (ChanceSampleKey, ExperimentParityManifest,
+from cgpy.experiment import (ChanceBranchKey, ChanceSampleKey, ExperimentParityManifest,
                              ExperimentSnapshot, PairedSeedCase, PairedSeedMatch,
                              SnapshotCompatibilityError)
 from cgpy.rng import SeededRng
@@ -183,6 +183,12 @@ def test_chance_samples_do_not_depend_on_traversal_order():
     }
     assert baseline not in variants
     assert len(variants) == 6
+
+    first_sample = ChanceSampleKey(602, "root", "node", actions[0], 0)
+    second_sample = ChanceSampleKey(603, "root", "node", actions[0], 0)
+    first_branch = ChanceBranchKey.sampled(first_sample, method="shuffle")
+    second_branch = ChanceBranchKey.sampled(second_sample, method="shuffle")
+    assert first_branch.digest != second_branch.digest
 
 
 def test_paired_seed_case_relaunches_the_declared_roots():

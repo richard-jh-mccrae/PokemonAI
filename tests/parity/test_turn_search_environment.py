@@ -1,14 +1,17 @@
 from pathlib import Path
 import copy
+from dataclasses import replace
 
 import pytest
 
 from common.api import ActionIdentity
 from common.observation.nodes import HiddenHand
 from cgpy.engine import Engine
-from cgpy.experiment import (ChanceSampleKey, ChanceTransition, ExperimentSnapshot,
-                             NodeKind, PrimitiveTransition, SearchContractError,
-                             TurnSearchEnvironment)
+from cgpy.experiment import (ChanceBranchKind, ChanceExpansion,
+                             ChanceExpansionRequest, ChanceExpansionStatus,
+                             ChanceSampleKey, ChanceSuccessor, ChanceTransition,
+                             ExperimentSnapshot, NodeKind, PrimitiveTransition,
+                             SearchContractError, TurnSearchEnvironment)
 from cgpy.rng import SeededRng
 from cgpy.schema import AreaType, OptionType, SelectContext
 from cgpy.state import CardInstance, PendingSelect
@@ -252,6 +255,95 @@ def test_nondecision_node_kinds_have_no_strategic_actor():
     assert first.sample == sample
     assert first.outcome.kind in ("yes", "no")
     assert first.node is not None
+
+
+def test_unresolvable_exact_coin_expansion_is_replayable_and_unavailable():
+    engine = _start_of_turn()
+    engine.gs.pending = PendingSelect(
+        seat=0, type=9, context=int(SelectContext.COIN_HEAD),
+        min_count=1, max_count=1,
+        options=[{"type": int(OptionType.YES)}, {"type": int(OptionType.NO)}],
+    )
+    environment = TurnSearchEnvironment.from_engine(engine, perspective_seat=0)
+
+    expansion = environment.expand(
+        environment.root, ChanceExpansionRequest(experiment_seed=604))
+
+    assert expansion.status is ChanceExpansionStatus.UNAVAILABLE
+    assert expansion.support_size == 2
+    assert expansion.requested_count == 2
+    assert expansion.produced_count == 0
+    assert expansion.probability_mass == pytest.approx(0.0)
+    assert len(expansion.transitions) == 2
+    assert len(expansion.successors) == 0
+    assert {transition.probability for transition in expansion.transitions} == {0.5}
+    assert {transition.method for transition in expansion.transitions} == {"coin"}
+    assert {transition.branch_key.kind for transition in expansion.transitions} == {
+        ChanceBranchKind.EXACT}
+    for transition in expansion.transitions:
+        persisted = ChanceTransition.loads(transition.dumps())
+        assert persisted == transition
+        assert environment.replay_chance(environment.root, persisted) == transition
+        assert '"schema_version":2' in transition.dumps()
+        assert '"sample"' not in transition.dumps()
+
+
+def test_chance_expansion_request_defaults_are_bounded():
+    request = ChanceExpansionRequest(experiment_seed=604)
+
+    assert request.exact_outcome_limit == 16
+    assert request.sample_count == 12
+
+
+def test_schema_v1_chance_transition_still_loads_and_replays():
+    engine = _start_of_turn()
+    engine.gs.pending = PendingSelect(
+        seat=0, type=9, context=int(SelectContext.COIN_HEAD),
+        min_count=1, max_count=1,
+        options=[{"type": int(OptionType.YES)}, {"type": int(OptionType.NO)}],
+    )
+    environment = TurnSearchEnvironment.from_engine(engine, perspective_seat=0)
+    sample = ChanceSampleKey(
+        603, environment.root.state_key.digest,
+        environment.root.state_key.digest, ActionIdentity("coin"), 0)
+    current = environment.sample(environment.root, sample)
+    legacy = ChanceTransition(
+        current.parent_state_key, current.sample, current.outcome,
+        current.result_state_key, current.result_kind, current.boundary_reason,
+        current.failure, current.node, schema_version=1)
+
+    persisted = ChanceTransition.loads(legacy.dumps())
+    replayed = environment.replay_chance(environment.root, persisted)
+
+    assert persisted == legacy
+    assert replayed == legacy
+    assert persisted.schema_version == 1
+    assert '"sample"' in persisted.dumps()
+
+
+def test_incomplete_expansion_preserves_missing_probability_mass():
+    engine = _start_of_turn()
+    engine.gs.pending = PendingSelect(
+        seat=0, type=9, context=int(SelectContext.COIN_HEAD),
+        min_count=1, max_count=1,
+        options=[{"type": int(OptionType.YES)}, {"type": int(OptionType.NO)}],
+    )
+    environment = TurnSearchEnvironment.from_engine(engine, perspective_seat=0)
+    failed = environment.expand(
+        environment.root, ChanceExpansionRequest(experiment_seed=604))
+    resolved = replace(
+        failed.transitions[0], result_state_key=environment.root.state_key,
+        result_kind=NodeKind.CHANCE, failure=None, node=environment.root)
+
+    incomplete = ChanceExpansion(
+        environment.root.state_key, "coin", ChanceExpansionStatus.INCOMPLETE,
+        (resolved, failed.transitions[1]),
+        (ChanceSuccessor(
+            0.5, (resolved.branch_key,), environment.root),),
+        16, 12, 2, 2, 1)
+
+    assert incomplete.probability_mass == pytest.approx(0.5)
+    assert '"probability_mass":0.5' in incomplete.dumps()
 
 
 def test_environment_rejects_a_root_without_an_exact_randomness_epoch():

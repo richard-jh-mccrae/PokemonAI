@@ -1,39 +1,98 @@
-"""Primitive, hidden-safe turn-search traversal over exact cgpy roots."""
+"""Hidden-safe deterministic and chance traversal over exact cgpy roots."""
 from __future__ import annotations
 
 from dataclasses import dataclass, replace
+from itertools import permutations
+from math import factorial, perm
 
 from common.api import ActionIdentity
-from common.observation import ObservationState, ObservationStateBuilder
+from common.observation import (KnownDeckTop, LegalKnowledge, ObservationState,
+                                ObservationStateBuilder, UnknownDeckTop)
 
 from .. import render
 from ..engine import Engine
 from ..execution import before_begin_turn
 from ..rng import SeededRng
 from ..schema import SelectContext
-from .chance import ChanceSampleKey
-from .contracts import (BoundaryReason, ChanceTransition, NodeKind, PrimitiveTransition,
-                        SearchContractError, SearchNode, SearchStateKey)
+from .chance import ChanceBranchKey, ChanceBranchKind, ChanceSampleKey
+from .contracts import (BoundaryReason, ChanceExpansion, ChanceExpansionRequest,
+                        ChanceExpansionStatus, ChanceSuccessor, ChanceTransition,
+                        NodeKind, PrimitiveTransition, SearchContractError,
+                        SearchNode, SearchStateKey)
 from .snapshot import ExperimentSnapshot
 from .state_key import search_state_key, unavailable_state_key
 
 
+@dataclass(frozen=True, slots=True)
+class _ChanceEvent:
+    method: str
+    seat: int | None
+    values: tuple[int, ...] = ()
+    count: int = 0
+    from_bottom: bool = False
+    prefix: tuple[int, ...] = ()
+
+
+@dataclass(frozen=True, slots=True)
+class _ExactChoice:
+    method: str
+    payload: object
+    probability: float
+
+
 class _RandomBoundary(Exception):
-    def __init__(self, kind: NodeKind, reason: BoundaryReason):
+    def __init__(self, kind: NodeKind, reason: BoundaryReason,
+                 event: _ChanceEvent):
         self.kind = kind
         self.reason = reason
+        self.event = event
+
+    @property
+    def method(self) -> str:
+        return self.event.method
 
 
 _RANDOM_METHODS = {
-    "shuffle": (NodeKind.INFORMATION_BOUNDARY, BoundaryReason.SHUFFLE_DRAW),
-    "draw_bind": (NodeKind.INFORMATION_BOUNDARY, BoundaryReason.SHUFFLE_DRAW),
-    "prize_bind": (NodeKind.INFORMATION_BOUNDARY, BoundaryReason.SHUFFLE_DRAW),
+    "shuffle": (NodeKind.CHANCE, BoundaryReason.SHUFFLE_DRAW),
+    "draw_bind": (NodeKind.CHANCE, BoundaryReason.SHUFFLE_DRAW),
+    "prize_bind": (NodeKind.CHANCE, BoundaryReason.SHUFFLE_DRAW),
     "coin": (NodeKind.CHANCE, BoundaryReason.RANDOM_REVEAL),
-    "hand_pick": (NodeKind.INFORMATION_BOUNDARY, BoundaryReason.RANDOM_REVEAL),
-    "look_bind": (NodeKind.INFORMATION_BOUNDARY, BoundaryReason.RANDOM_REVEAL),
-    "mill_bind": (NodeKind.INFORMATION_BOUNDARY, BoundaryReason.RANDOM_REVEAL),
-    "prize_take": (NodeKind.INFORMATION_BOUNDARY, BoundaryReason.RANDOM_REVEAL),
+    "hand_pick": (NodeKind.CHANCE, BoundaryReason.RANDOM_REVEAL),
+    "look_bind": (NodeKind.CHANCE, BoundaryReason.RANDOM_REVEAL),
+    "mill_bind": (NodeKind.CHANCE, BoundaryReason.RANDOM_REVEAL),
+    "prize_take": (NodeKind.CHANCE, BoundaryReason.RANDOM_REVEAL),
 }
+
+
+def _chance_event(method: str, args: tuple, kwargs: dict) -> _ChanceEvent:
+    if method == "shuffle":
+        return _ChanceEvent(method, int(kwargs["seat"]), tuple(args[0]))
+    if method == "coin":
+        seat = args[0] if args else kwargs.get("seat")
+        return _ChanceEvent(method, None if seat is None else int(seat))
+    if method in ("draw_bind", "hand_pick"):
+        return _ChanceEvent(method, int(args[0]), tuple(args[1]), 1)
+    if method == "prize_bind":
+        return _ChanceEvent(method, int(args[0]), tuple(args[1]), int(args[2]))
+    if method == "look_bind":
+        return _ChanceEvent(
+            method, int(args[0]), tuple(args[1]), int(args[2]),
+            bool(kwargs.get("from_bottom", False)))
+    if method == "mill_bind":
+        return _ChanceEvent(method, int(args[0]), tuple(args[1]), int(args[3]))
+    if method == "prize_take":
+        return _ChanceEvent(method, int(args[0]), tuple(kwargs["prize"]), 1)
+    return _ChanceEvent(method, None)
+
+
+def _consume_known_top(known_top: list[tuple[int, int]], values) -> None:
+    for serial in values:
+        if not known_top:
+            return
+        if serial != known_top[0][0]:
+            known_top.clear()
+            return
+        known_top.pop(0)
 
 
 class _BoundaryProbeRng:
@@ -48,7 +107,9 @@ class _BoundaryProbeRng:
 
     def coin(self, *_args, **_kwargs) -> bool:
         if self._outcome_index >= len(self._outcomes):
-            raise _RandomBoundary(NodeKind.CHANCE, BoundaryReason.RANDOM_REVEAL)
+            raise _RandomBoundary(
+                NodeKind.CHANCE, BoundaryReason.RANDOM_REVEAL,
+                _chance_event("coin", _args, _kwargs))
         outcome = self._outcomes[self._outcome_index]
         self._outcome_index += 1
         return outcome
@@ -60,12 +121,218 @@ class _BoundaryProbeRng:
         ))
 
         def stop(*_args, **_kwargs):
+            event = _chance_event(name, _args, _kwargs)
             if self._turn_changed():
                 raise _RandomBoundary(
-                    NodeKind.TURN_BOUNDARY, BoundaryReason.TURN_TRANSITION)
-            raise _RandomBoundary(kind, reason)
+                    NodeKind.TURN_BOUNDARY, BoundaryReason.TURN_TRANSITION, event)
+            raise _RandomBoundary(kind, reason, event)
 
         return stop
+
+
+class _SegmentRng:
+    def __init__(self, seed: int, outcomes: tuple[bool, ...] = (), *,
+                 perspective_seat: int, knowledge: LegalKnowledge):
+        self.delegate = SeededRng(seed)
+        self._outcomes = outcomes
+        self._outcome_index = 0
+        self._shuffled: set[int] = set()
+        self._perspective_seat = perspective_seat
+        self._knowledge = knowledge
+        self._known_top = list(
+            knowledge.known_top.cards
+            if isinstance(knowledge.known_top, KnownDeckTop) else ())
+
+    @property
+    def knowledge(self) -> LegalKnowledge:
+        known_top = (KnownDeckTop(tuple(self._known_top))
+                     if self._known_top else UnknownDeckTop())
+        return replace(self._knowledge, known_top=known_top)
+
+    def _sample(self, values, count: int, *, seat: int) -> list[int]:
+        candidates = list(values)
+        self.delegate.shuffle(candidates, seat=seat)
+        return candidates[:min(max(0, count), len(candidates))]
+
+    def shuffle(self, seq: list, *, seat: int) -> None:
+        self.delegate.shuffle(seq, seat=seat)
+        self._shuffled.add(id(seq))
+        if seat == self._perspective_seat:
+            self._known_top.clear()
+
+    def coin(self, seat: int | None = None) -> bool:
+        if self._outcome_index < len(self._outcomes):
+            outcome = self._outcomes[self._outcome_index]
+            self._outcome_index += 1
+            return outcome
+        return self.delegate.coin(seat)
+
+    def draw_bind(self, seat: int, deck: list[int],
+                  *, prize: list[int] | None = None) -> int:
+        if id(deck) in self._shuffled:
+            return deck[-1]
+        if seat == self._perspective_seat and self._known_top:
+            serial = self._known_top.pop(0)[0]
+            if serial in deck:
+                return serial
+            self._known_top.clear()
+        return self._sample(deck, 1, seat=seat)[0]
+
+    def prize_bind(self, seat: int, deck: list[int], count: int) -> list[int]:
+        return self._sample(deck, count, seat=seat)
+
+    def hand_pick(self, seat: int, hand: list[int]) -> int:
+        return self._sample(hand, 1, seat=seat)[0]
+
+    def hand_pick_expect(self, *_args, **_kwargs) -> None:
+        return None
+
+    def look_bind(self, seat: int, deck: list[int], n: int,
+                  *, from_bottom: bool = False) -> list[int]:
+        if id(deck) in self._shuffled:
+            result = (list(deck[:n]) if from_bottom
+                      else [deck[-1 - index] for index in range(min(n, len(deck)))])
+        elif (seat == self._perspective_seat and not from_bottom
+              and self._known_top):
+            known = [serial for serial, _card_id in self._known_top
+                     if serial in deck][:n]
+            remainder = [serial for serial in deck if serial not in known]
+            result = known + self._sample(remainder, n - len(known), seat=seat)
+        else:
+            result = self._sample(deck, n, seat=seat)
+        if seat == self._perspective_seat and not from_bottom:
+            _consume_known_top(self._known_top, result)
+        return result
+
+    def mill_bind(self, seat: int, deck: list[int], prize: list[int],
+                  n: int) -> list[int]:
+        if id(deck) in self._shuffled:
+            return [deck[-1 - index] for index in range(min(n, len(deck)))]
+        if seat == self._perspective_seat and self._known_top:
+            known = [serial for serial, _card_id in self._known_top[:n]]
+            known = [serial for serial in known if serial in deck]
+            remainder = [serial for serial in deck if serial not in known]
+            result = known + self._sample(remainder, n - len(known), seat=seat)
+        else:
+            result = self._sample(deck, n, seat=seat)
+        if seat == self._perspective_seat:
+            _consume_known_top(self._known_top, result)
+        return result
+
+    def prize_take(self, seat: int, _serial: int, *, deck: list[int],
+                   prize: list[int]) -> int:
+        return self._sample(prize, 1, seat=seat)[0]
+
+
+class _PrescribedRng:
+    def __init__(self, choices: tuple[_ExactChoice, ...],
+                 outcomes: tuple[bool, ...] = (), *, perspective_seat: int,
+                 knowledge: LegalKnowledge):
+        self.delegate = SeededRng(0)
+        self._choices = choices
+        self._choice_index = 0
+        self._outcomes = outcomes
+        self._outcome_index = 0
+        self._perspective_seat = perspective_seat
+        self._knowledge = knowledge
+        self._known_top = list(
+            knowledge.known_top.cards
+            if isinstance(knowledge.known_top, KnownDeckTop) else ())
+
+    @property
+    def knowledge(self) -> LegalKnowledge:
+        known_top = (KnownDeckTop(tuple(self._known_top))
+                     if self._known_top else UnknownDeckTop())
+        return replace(self._knowledge, known_top=known_top)
+
+    def _constrain(self, event: _ChanceEvent) -> _ChanceEvent:
+        if event.seat != self._perspective_seat or not self._known_top:
+            return event
+        if event.method == "draw_bind":
+            serial = self._known_top[0][0]
+            if serial in event.values:
+                return replace(event, values=(serial,))
+        if event.method in ("look_bind", "mill_bind"):
+            if event.method == "look_bind" and event.from_bottom:
+                return event
+            prefix = tuple(
+                serial for serial, _card_id in self._known_top
+                if serial in event.values)[:event.count]
+            return replace(event, prefix=prefix)
+        return event
+
+    def _take(self, event: _ChanceEvent):
+        event = self._constrain(event)
+        if self._choice_index >= len(self._choices):
+            kind, reason = _RANDOM_METHODS[event.method]
+            raise _RandomBoundary(kind, reason, event)
+        choice = self._choices[self._choice_index]
+        if choice.method != event.method:
+            raise SearchContractError("exact Chance Branch method diverged")
+        self._choice_index += 1
+        return choice.payload
+
+    def shuffle(self, seq: list, *, seat: int) -> None:
+        event = _chance_event("shuffle", (seq,), {"seat": seat})
+        order = tuple(self._take(event))
+        if sorted(order) != sorted(seq):
+            raise SearchContractError("exact shuffle branch changed the deck multiset")
+        seq[:] = order
+        if seat == self._perspective_seat:
+            self._known_top.clear()
+
+    def coin(self, seat: int | None = None) -> bool:
+        if self._outcome_index < len(self._outcomes):
+            outcome = self._outcomes[self._outcome_index]
+            self._outcome_index += 1
+            return outcome
+        return bool(self._take(_chance_event("coin", (seat,), {})))
+
+    def draw_bind(self, seat: int, deck: list[int],
+                  *, prize: list[int] | None = None) -> int:
+        serial = int(self._take(_chance_event("draw_bind", (seat, deck), {})))
+        if serial not in deck:
+            raise SearchContractError("exact draw branch selected a missing card")
+        if seat == self._perspective_seat and self._known_top:
+            if serial == self._known_top[0][0]:
+                self._known_top.pop(0)
+            else:
+                self._known_top.clear()
+        return serial
+
+    def prize_bind(self, seat: int, deck: list[int], count: int) -> list[int]:
+        return list(self._take(
+            _chance_event("prize_bind", (seat, deck, count), {})))
+
+    def hand_pick(self, seat: int, hand: list[int]) -> int:
+        serial = int(self._take(_chance_event("hand_pick", (seat, hand), {})))
+        if serial not in hand:
+            raise SearchContractError("exact hand branch selected a missing card")
+        return serial
+
+    def hand_pick_expect(self, *_args, **_kwargs) -> None:
+        return None
+
+    def look_bind(self, seat: int, deck: list[int], n: int,
+                  *, from_bottom: bool = False) -> list[int]:
+        result = list(self._take(_chance_event(
+            "look_bind", (seat, deck, n), {"from_bottom": from_bottom})))
+        if seat == self._perspective_seat and not from_bottom:
+            _consume_known_top(self._known_top, result)
+        return result
+
+    def mill_bind(self, seat: int, deck: list[int], prize: list[int],
+                  n: int) -> list[int]:
+        result = list(self._take(_chance_event(
+            "mill_bind", (seat, deck, prize, n), {})))
+        if seat == self._perspective_seat:
+            _consume_known_top(self._known_top, result)
+        return result
+
+    def prize_take(self, seat: int, serial: int, *, deck: list[int],
+                   prize: list[int]) -> int:
+        return int(self._take(_chance_event(
+            "prize_take", (seat, serial), {"deck": deck, "prize": prize})))
 
 
 @dataclass(slots=True)
@@ -80,10 +347,14 @@ class _ReplayPlan:
 class _NodeState:
     engine: Engine
     replay_plan: _ReplayPlan | None = None
+    chance_method: str | None = None
+    chance_event: _ChanceEvent | None = None
 
 
 def _stop_before_turn(_gs, _seat) -> None:
-    raise _RandomBoundary(NodeKind.TURN_BOUNDARY, BoundaryReason.TURN_TRANSITION)
+    raise _RandomBoundary(
+        NodeKind.TURN_BOUNDARY, BoundaryReason.TURN_TRANSITION,
+        _ChanceEvent("turn", None))
 
 
 def _decklist(engine: Engine, seat: int) -> tuple[int, ...]:
@@ -91,7 +362,12 @@ def _decklist(engine: Engine, seat: int) -> tuple[int, ...]:
     return tuple(card.card_id for card in cards if card.owner == seat)
 
 
-def _observation(engine: Engine, seat: int, *, include_select: bool) -> ObservationState:
+def _failure_type(failure: str | None) -> str | None:
+    return None if failure is None else failure.split(":", 1)[0]
+
+
+def _observation(engine: Engine, seat: int, *, include_select: bool,
+                 knowledge: LegalKnowledge | None = None) -> ObservationState:
     gs = engine.gs
     printout = {
         "select": render.select_dict(gs) if include_select else None,
@@ -99,7 +375,8 @@ def _observation(engine: Engine, seat: int, *, include_select: bool) -> Observat
         "current": render.current_dict(gs, seat),
         "search_begin_input": None,
     }
-    observation = ObservationStateBuilder(_decklist(engine, seat)).root(printout)
+    observation = ObservationStateBuilder(_decklist(engine, seat)).root(
+        printout, knowledge=knowledge)
     return observation if include_select else replace(observation, legal_actions=())
 
 
@@ -124,7 +401,8 @@ def _classification(engine: Engine, perspective_seat: int,
 
 
 class TurnSearchEnvironment:
-    def __init__(self, engine: Engine, *, perspective_seat: int):
+    def __init__(self, engine: Engine, *, perspective_seat: int,
+                 knowledge: LegalKnowledge | None = None):
         if perspective_seat not in (0, 1):
             raise ValueError("Perspective Seat must be 0 or 1")
         if not isinstance(engine.gs.rng, SeededRng):
@@ -133,18 +411,21 @@ class TurnSearchEnvironment:
         self._states: dict[object, _NodeState] = {}
         root_engine = engine.fork()
         self._root_turn = root_engine.gs.turn
-        self._root = self._make_node(root_engine)
+        self._root = self._make_node(root_engine, knowledge=knowledge)
 
     @classmethod
     def from_snapshot(cls, snapshot: ExperimentSnapshot, *,
                       perspective_seat: int | None = None) -> "TurnSearchEnvironment":
         seat = snapshot.observation.seat if perspective_seat is None else perspective_seat
-        return cls(snapshot.fork_engine(), perspective_seat=seat)
+        return cls(
+            snapshot.fork_engine(), perspective_seat=seat,
+            knowledge=snapshot.observation.knowledge)
 
     @classmethod
     def from_engine(cls, engine: Engine, *,
-                    perspective_seat: int) -> "TurnSearchEnvironment":
-        return cls(engine, perspective_seat=perspective_seat)
+                    perspective_seat: int,
+                    knowledge: LegalKnowledge | None = None) -> "TurnSearchEnvironment":
+        return cls(engine, perspective_seat=perspective_seat, knowledge=knowledge)
 
     @property
     def root(self) -> SearchNode:
@@ -158,43 +439,57 @@ class TurnSearchEnvironment:
     def _register(self, engine: Engine, kind: NodeKind, actor: int | None,
                   reason: BoundaryReason | None, observation: ObservationState,
                   key: SearchStateKey, *, failure: str | None = None,
-                  replay_plan: _ReplayPlan | None = None) -> SearchNode:
+                  replay_plan: _ReplayPlan | None = None,
+                  chance_method: str | None = None,
+                  chance_event: _ChanceEvent | None = None) -> SearchNode:
         handle = object()
-        self._states[handle] = _NodeState(engine, replay_plan)
+        self._states[handle] = _NodeState(
+            engine, replay_plan, chance_method, chance_event)
         return SearchNode(
             kind, actor, self.perspective_seat, observation, key, self._root_turn,
             reason, failure, handle)
 
-    def _make_node(self, engine: Engine) -> SearchNode:
+    def _make_node(self, engine: Engine, *,
+                   knowledge: LegalKnowledge | None = None) -> SearchNode:
         kind, actor, reason = _classification(
             engine, self.perspective_seat, self._root_turn)
         observation = _observation(
             engine, self.perspective_seat,
             include_select=kind not in (
-                NodeKind.INFORMATION_BOUNDARY, NodeKind.TURN_BOUNDARY))
+                NodeKind.INFORMATION_BOUNDARY, NodeKind.TURN_BOUNDARY),
+            knowledge=knowledge)
         key = search_state_key(
-            engine, kind, actor, self.perspective_seat, self._root_turn, reason)
+            engine, kind, actor, self.perspective_seat, self._root_turn, reason,
+            observation_key=observation.position_key)
         return self._register(engine, kind, actor, reason, observation, key)
 
     def _boundary_node(self, engine: Engine, kind: NodeKind,
                        reason: BoundaryReason, *,
-                       replay_plan: _ReplayPlan | None = None) -> SearchNode:
-        observation = _observation(engine, self.perspective_seat, include_select=False)
+                       replay_plan: _ReplayPlan | None = None,
+                       chance_method: str | None = None,
+                       chance_event: _ChanceEvent | None = None,
+                       knowledge: LegalKnowledge | None = None) -> SearchNode:
+        observation = _observation(
+            engine, self.perspective_seat, include_select=False,
+            knowledge=knowledge)
         continuation = None
         if replay_plan is not None:
             continuation = (
                 replay_plan.action.kind, replay_plan.action.parts,
-                len(replay_plan.outcomes))
+                len(replay_plan.outcomes), chance_method)
         key = search_state_key(
             engine, kind, None, self.perspective_seat, self._root_turn, reason,
-            continuation=continuation)
+            continuation=continuation, observation_key=observation.position_key)
         return self._register(
-            engine, kind, None, reason, observation, key, replay_plan=replay_plan)
+            engine, kind, None, reason, observation, key, replay_plan=replay_plan,
+            chance_method=chance_method, chance_event=chance_event)
 
     def _unavailable_node(self, parent: SearchNode, engine: Engine,
                           action: ActionIdentity, exc: Exception) -> SearchNode:
         failure = f"{type(exc).__name__}: {exc}"
-        observation = _observation(engine, self.perspective_seat, include_select=False)
+        observation = _observation(
+            engine, self.perspective_seat, include_select=False,
+            knowledge=parent.observation.knowledge)
         key = unavailable_state_key(parent.state_key, action, type(exc).__name__)
         return self._register(
             engine, NodeKind.UNAVAILABLE, None, None, observation, key, failure=failure)
@@ -204,7 +499,8 @@ class TurnSearchEnvironment:
         return self._register(
             state.engine.fork(), node.kind, node.actor_seat, node.boundary_reason,
             node.observation, node.state_key, failure=node.failure,
-            replay_plan=state.replay_plan)
+            replay_plan=state.replay_plan, chance_method=state.chance_method,
+            chance_event=state.chance_event)
 
     def _run_plan(self, parent: SearchNode, plan: _ReplayPlan) -> SearchNode:
         child_engine = plan.source.fork()
@@ -220,15 +516,153 @@ class TurnSearchEnvironment:
             replay_plan = plan if boundary.kind is NodeKind.CHANCE else None
             child = self._boundary_node(
                 child_engine, boundary.kind, boundary.reason,
-                replay_plan=replay_plan)
+                replay_plan=replay_plan, chance_method=boundary.method,
+                chance_event=boundary.event,
+                knowledge=parent.observation.knowledge)
         except Exception as exc:
             child = self._unavailable_node(parent, child_engine, plan.action, exc)
         else:
-            child = self._make_node(child_engine)
+            child = self._make_node(
+                child_engine, knowledge=parent.observation.knowledge)
         finally:
             child_engine.gs.rng = probe.delegate
             before_begin_turn.reset(hook_token)
         return child
+
+    def _run_sampled_plan(self, parent: SearchNode, plan: _ReplayPlan,
+                          seed: int) -> SearchNode:
+        child_engine = plan.source.fork()
+        rng = _SegmentRng(
+            seed, plan.outcomes, perspective_seat=self.perspective_seat,
+            knowledge=parent.observation.knowledge)
+        child_engine.gs.rng = rng
+        hook_token = before_begin_turn.set(_stop_before_turn)
+        try:
+            child_engine.step(list(plan.selection))
+        except _RandomBoundary as boundary:
+            child = self._boundary_node(
+                child_engine, boundary.kind, boundary.reason,
+                chance_method=boundary.method, chance_event=boundary.event,
+                knowledge=rng.knowledge)
+        except Exception as exc:
+            child = self._unavailable_node(parent, child_engine, plan.action, exc)
+        else:
+            child = self._make_node(child_engine, knowledge=rng.knowledge)
+        finally:
+            child_engine.gs.rng = rng.delegate
+            before_begin_turn.reset(hook_token)
+        return child
+
+    def _probe_exact_plan(
+            self, parent: SearchNode, plan: _ReplayPlan,
+            choices: tuple[_ExactChoice, ...]) -> tuple[SearchNode | None,
+                                                        _ChanceEvent | None]:
+        child_engine = plan.source.fork()
+        rng = _PrescribedRng(
+            choices, plan.outcomes, perspective_seat=self.perspective_seat,
+            knowledge=parent.observation.knowledge)
+        child_engine.gs.rng = rng
+        hook_token = before_begin_turn.set(_stop_before_turn)
+        child = None
+        event = None
+        try:
+            child_engine.step(list(plan.selection))
+        except _RandomBoundary as boundary:
+            if boundary.kind is NodeKind.CHANCE:
+                event = boundary.event
+            else:
+                child = self._boundary_node(
+                    child_engine, boundary.kind, boundary.reason,
+                    knowledge=rng.knowledge)
+        except Exception as exc:
+            child = self._unavailable_node(parent, child_engine, plan.action, exc)
+        else:
+            child = self._make_node(
+                child_engine, knowledge=rng.knowledge)
+        finally:
+            child_engine.gs.rng = rng.delegate
+            before_begin_turn.reset(hook_token)
+        return child, event
+
+    @staticmethod
+    def _exact_choices(event: _ChanceEvent,
+                       limit: int | None) -> tuple[_ExactChoice, ...] | None:
+        values = event.values
+        if event.method == "coin":
+            return (
+                _ExactChoice("coin", False, 0.5),
+                _ExactChoice("coin", True, 0.5),
+            ) if limit is None or limit >= 2 else None
+        if event.method == "shuffle":
+            support = factorial(len(values))
+            if limit is not None and support > limit:
+                return None
+            probability = 1.0 / support
+            return tuple(_ExactChoice("shuffle", value, probability)
+                         for value in permutations(values))
+        if event.method in ("draw_bind", "hand_pick", "prize_take"):
+            support = len(values)
+            if support == 0 or (limit is not None and support > limit):
+                return None
+            probability = 1.0 / support
+            return tuple(_ExactChoice(event.method, value, probability)
+                         for value in values)
+        if event.method in ("prize_bind", "look_bind", "mill_bind"):
+            count = min(max(0, event.count), len(values))
+            prefix = event.prefix[:count]
+            remaining = tuple(value for value in values if value not in prefix)
+            remainder_count = count - len(prefix)
+            support = perm(len(remaining), remainder_count)
+            if limit is not None and support > limit:
+                return None
+            probability = 1.0 / support
+            return tuple(_ExactChoice(
+                event.method, prefix + value, probability)
+                         for value in permutations(remaining, remainder_count))
+        return None
+
+    def _exact_transitions(
+            self, node: SearchNode,
+            limit: int | None) -> tuple[ChanceTransition, ...] | None:
+        state = self._node_state(node)
+        plan = state.replay_plan
+        if plan is None:
+            return None
+        leaves: list[tuple[tuple[_ExactChoice, ...], float, SearchNode]] = []
+        aborted = False
+
+        def visit(choices: tuple[_ExactChoice, ...], probability: float) -> None:
+            nonlocal aborted
+            if aborted:
+                return
+            child, event = self._probe_exact_plan(node, plan, choices)
+            if child is not None:
+                leaves.append((choices, probability, child))
+                if limit is not None and len(leaves) > limit:
+                    aborted = True
+                return
+            options = self._exact_choices(event, limit)
+            if options is None:
+                aborted = True
+                return
+            for option in options:
+                visit(choices + (option,), probability * option.probability)
+
+        visit((), 1.0)
+        if aborted or not leaves:
+            return None
+        method = state.chance_method or leaves[0][0][0].method
+        return tuple(
+            ChanceTransition(
+                node.state_key, None, None, child.state_key, child.kind,
+                child.boundary_reason, _failure_type(child.failure), child,
+                branch_key=ChanceBranchKey.exact(
+                    method=method, index=index,
+                    root_state_key=self.root.state_key.digest,
+                    node_state_key=node.state_key.digest, action=plan.action),
+                method=method, probability=probability)
+            for index, (_choices, probability, child) in enumerate(leaves)
+        )
 
     def transition(self, node: SearchNode,
                    action: ActionIdentity) -> PrimitiveTransition:
@@ -269,7 +703,28 @@ class TurnSearchEnvironment:
         if (state.replay_plan is not None
                 and sample.action != state.replay_plan.action):
             raise SearchContractError("Chance Sample action does not match")
-        head = SeededRng(sample.seed).coin()
+        method = state.chance_method or "coin"
+        branch = ChanceBranchKey.sampled(sample, method=method)
+        if method == "coin":
+            return self._resolve_coin(node, SeededRng(sample.seed).coin(), branch, 1.0)
+        return self._resolve_sampled_segment(node, branch, 1.0)
+
+    def _resolve_sampled_segment(self, node: SearchNode,
+                                 branch: ChanceBranchKey,
+                                 probability: float) -> ChanceTransition:
+        state = self._node_state(node)
+        if state.replay_plan is None or branch.sample is None:
+            raise SearchContractError("Chance Node has no replayable stochastic segment")
+        child = self._run_sampled_plan(
+            node, state.replay_plan, branch.sample.seed)
+        return ChanceTransition(
+            node.state_key, branch.sample, None, child.state_key, child.kind,
+            child.boundary_reason, _failure_type(child.failure), child,
+            branch_key=branch, method=branch.method, probability=probability)
+
+    def _resolve_coin(self, node: SearchNode, head: bool,
+                      branch: ChanceBranchKey, probability: float) -> ChanceTransition:
+        state = self._node_state(node)
         outcome = ActionIdentity("coin", (("head", head),))
         if state.replay_plan is not None:
             plan = replace(
@@ -286,13 +741,126 @@ class TurnSearchEnvironment:
                 state.engine, tuple(matching[0].selection), outcome, ())
         child = self._run_plan(node, plan)
         return ChanceTransition(
-            node.state_key, sample, outcome, child.state_key, child.kind,
-            child.boundary_reason, child.failure, child)
+            node.state_key, branch.sample, outcome, child.state_key, child.kind,
+            child.boundary_reason, _failure_type(child.failure), child,
+            branch_key=branch, method="coin", probability=probability)
+
+    def expand(self, node: SearchNode,
+               request: ChanceExpansionRequest) -> ChanceExpansion:
+        state = self._node_state(node)
+        if node.kind is not NodeKind.CHANCE:
+            raise SearchContractError(f"cannot expand a {node.kind.value} Search Node")
+        if not isinstance(request, ChanceExpansionRequest):
+            raise TypeError("expand requires a Chance Expansion Request")
+        method = state.chance_method or "coin"
+        action = (state.replay_plan.action if state.replay_plan is not None
+                  else ActionIdentity("coin"))
+        exact = self._exact_transitions(node, request.exact_outcome_limit)
+        if exact is not None:
+            successors = self._coalesce_successors(exact)
+            produced = sum(transition.result_kind is not NodeKind.UNAVAILABLE
+                           for transition in exact)
+            status = (ChanceExpansionStatus.COMPLETE
+                      if produced == len(exact) else
+                      ChanceExpansionStatus.INCOMPLETE if produced else
+                      ChanceExpansionStatus.UNAVAILABLE)
+            return ChanceExpansion(
+                node.state_key, method, status, exact, successors,
+                request.exact_outcome_limit, request.sample_count, len(exact),
+                len(exact), produced,
+                None if produced else "no exact branch resolved")
+        if state.replay_plan is not None or request.exact_outcome_limit < 2:
+            def resolve_sample(index: int) -> ChanceTransition:
+                branch = ChanceBranchKey.sampled(ChanceSampleKey(
+                    request.experiment_seed, self.root.state_key.digest,
+                    node.state_key.digest, action, index), method=method)
+                if state.replay_plan is None:
+                    return self._resolve_coin(
+                        node, SeededRng(branch.sample.seed).coin(), branch,
+                        1.0 / request.sample_count)
+                return self._resolve_sampled_segment(
+                    node, branch, 1.0 / request.sample_count)
+
+            transitions = tuple(resolve_sample(index)
+                                for index in range(request.sample_count))
+            successors = self._coalesce_successors(transitions)
+            produced = sum(
+                transition.result_kind is not NodeKind.UNAVAILABLE
+                for transition in transitions)
+            status = (ChanceExpansionStatus.ESTIMATED
+                      if produced == request.sample_count else
+                      ChanceExpansionStatus.INCOMPLETE if produced else
+                      ChanceExpansionStatus.UNAVAILABLE)
+            return ChanceExpansion(
+                node.state_key, method, status, transitions, successors,
+                request.exact_outcome_limit, request.sample_count, None,
+                request.sample_count, produced,
+                None if produced else "no sampled branch resolved")
+        branches = tuple(ChanceBranchKey.exact(
+            method="coin", index=index,
+            root_state_key=self.root.state_key.digest,
+            node_state_key=node.state_key.digest, action=action)
+                         for index in range(2))
+        transitions = tuple(
+            self._resolve_coin(node, bool(index), branch, 0.5)
+            for index, branch in enumerate(branches))
+        successors = self._coalesce_successors(transitions)
+        produced = sum(transition.result_kind is not NodeKind.UNAVAILABLE
+                       for transition in transitions)
+        status = (ChanceExpansionStatus.COMPLETE if produced == 2 else
+                  ChanceExpansionStatus.INCOMPLETE if produced else
+                  ChanceExpansionStatus.UNAVAILABLE)
+        return ChanceExpansion(
+            node.state_key, "coin", status,
+            transitions, successors, request.exact_outcome_limit,
+            request.sample_count, 2, 2, produced,
+            None if produced else "no exact branch resolved")
+
+    @staticmethod
+    def _coalesce_successors(
+            transitions: tuple[ChanceTransition, ...]) -> tuple[ChanceSuccessor, ...]:
+        grouped = {}
+        for transition in transitions:
+            if transition.node is None or transition.result_kind is NodeKind.UNAVAILABLE:
+                continue
+            key = transition.result_state_key
+            if key not in grouped:
+                grouped[key] = [0.0, [], transition.node]
+            grouped[key][0] += transition.probability
+            grouped[key][1].append(transition.branch_key)
+        return tuple(
+            ChanceSuccessor(probability, tuple(branches), node)
+            for probability, branches, node in grouped.values())
 
     def replay_chance(self, node: SearchNode,
                       recorded: ChanceTransition) -> ChanceTransition:
         self._assert_replay(node, recorded, ChanceTransition, "Chance Transition")
-        replayed = self.sample(node, recorded.sample)
+        if recorded.schema_version == 1:
+            current = self.sample(node, recorded.sample)
+            replayed = ChanceTransition(
+                current.parent_state_key, current.sample, current.outcome,
+                current.result_state_key, current.result_kind,
+                current.boundary_reason, current.failure, current.node,
+                schema_version=1)
+        elif recorded.branch_key.kind is ChanceBranchKind.SAMPLED:
+            if recorded.method == "coin":
+                replayed = self._resolve_coin(
+                    node, SeededRng(recorded.branch_key.sample.seed).coin(),
+                    recorded.branch_key, recorded.probability)
+            else:
+                replayed = self._resolve_sampled_segment(
+                    node, recorded.branch_key, recorded.probability)
+        else:
+            state = self._node_state(node)
+            if state.replay_plan is None:
+                replayed = self._resolve_coin(
+                    node, bool(recorded.branch_key.index),
+                    recorded.branch_key, recorded.probability)
+            else:
+                exact = self._exact_transitions(node, None)
+                if exact is None or recorded.branch_key.index >= len(exact):
+                    raise SearchContractError("exact Chance Branch is unavailable")
+                replayed = exact[recorded.branch_key.index]
         if replayed != recorded:
             raise SearchContractError("Chance Transition replay diverged")
         return replayed
@@ -301,7 +869,8 @@ class TurnSearchEnvironment:
         self._node_state(node)
         if not isinstance(recorded, expected):
             raise TypeError(f"replay requires a {label}")
-        if recorded.schema_version != 1:
+        supported = ((1, 2) if expected is ChanceTransition else (1,))
+        if recorded.schema_version not in supported:
             raise SearchContractError(f"{label} schema is unsupported")
         if recorded.parent_state_key != node.state_key:
             raise SearchContractError(f"{label} parent key does not match")
