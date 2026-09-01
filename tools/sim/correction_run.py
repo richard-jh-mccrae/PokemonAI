@@ -80,8 +80,11 @@ def plan_correction_run(*, focal: str, opponents: tuple[str, ...], episodes: int
         raise ValueError("heldout must be between zero and episodes")
 
     rng = random.Random(int(seed))
-    scheduled_opponents = [opponents[index % len(opponents)] for index in range(episodes)]
-    rng.shuffle(scheduled_opponents)
+    scheduled_opponents = []
+    while len(scheduled_opponents) < episodes:
+        cycle = list(opponents)
+        rng.shuffle(cycle)
+        scheduled_opponents.extend(cycle[:episodes - len(scheduled_opponents)])
     focal_seats = [index % 2 for index in range(episodes)]
     rng.shuffle(focal_seats)
     heldout_indices = set(rng.sample(range(episodes), heldout))
@@ -668,6 +671,10 @@ def _discover_agents(root: Path) -> tuple[str, ...]:
                         if (path / "main.py").is_file() and (path / "deck.csv").is_file()))
 
 
+def discover_opponents(root: Path, focal: str) -> tuple[str, ...]:
+    return tuple(name for name in _discover_agents(root) if name != focal)
+
+
 def main(argv=None) -> int:
     sys.path[:0] = [str(REPO / "tools"), str(REPO / "src")]
     parser = argparse.ArgumentParser(description="Run one focal agent for Ledger correction")
@@ -676,7 +683,7 @@ def main(argv=None) -> int:
     parser.add_argument("--jobs", type=int, default=_default_jobs())
     parser.add_argument("--opponents", nargs="*")
     parser.add_argument("--heldout", type=int, default=0)
-    parser.add_argument("--seed", type=int, default=1)
+    parser.add_argument("--seed", type=int)
     parser.add_argument("--engine", choices=("native", "cgpy"), default="native")
     parser.add_argument("--decision-timeout", type=float, default=120.0)
     parser.add_argument("--episode-timeout", type=float, default=1800.0)
@@ -690,7 +697,9 @@ def main(argv=None) -> int:
     if args.resume:
         run_dir = args.out / args.resume
     else:
-        opponents = tuple(args.opponents or _discover_agents(args.agents_root))
+        seed = args.seed if args.seed is not None else random.SystemRandom().getrandbits(63)
+        opponents = (tuple(args.opponents) if args.opponents
+                     else discover_opponents(args.agents_root, args.focal))
         known = set(_discover_agents(args.agents_root))
         unknown = {args.focal, *opponents} - known
         if unknown:
@@ -709,7 +718,7 @@ def main(argv=None) -> int:
         run_id = f"{created:%Y%m%d-%H%M%S}_{source['commit'][:8]}_{args.focal}"
         run_dir = create_correction_run(
             output_root=args.out, run_id=run_id, created_at=created.isoformat(),
-            focal=args.focal, opponents=opponents, episodes=args.episodes, seed=args.seed,
+            focal=args.focal, opponents=opponents, episodes=args.episodes, seed=seed,
             heldout=args.heldout, jobs=args.jobs, engine=args.engine,
             source_identity=source, contestant_identities=contestants,
             execution=ExecutionConfig(
