@@ -8,7 +8,7 @@ from .capabilities import OptionUnits
 
 DEFAULT_TURN_PORTFOLIO_MEMO_ENTRIES = 1_024
 EXECUTION_GUARD_CHECK_INTERVAL = 256
-DOMINANCE_FRONTIER_ENTRIES = 1
+DOMINANCE_FRONTIER_ENTRIES = 8
 
 
 @dataclass(frozen=True, slots=True)
@@ -157,104 +157,6 @@ def _score_units(units: OptionUnits, coefficients: tuple[float, ...]) -> float:
     )
 
 
-def _realize_fetches(opportunity: Opportunity, usage, capacities):
-    if not opportunity.fetches:
-        return (), (), opportunity.units
-    requirements = []
-    reservations = []
-    claimed = Counter()
-    bench_claim = 0
-    local_usage = dict(usage)
-    used_groups = set()
-    bench_available = capacities.get("bench", 0.0) - usage.get("bench", 0.0)
-    for fetch in sorted(opportunity.fetches, key=lambda item: len(item.eligible)):
-        wanted = min(fetch.amount, int(bench_available) if fetch.to_bench else fetch.amount)
-        for card_id in fetch.eligible:
-            group = next((value for target, value in fetch.distinct_groups
-                          if target == card_id), None)
-            if group is not None and group in used_groups:
-                continue
-            source_key = f"{fetch.zone}:{card_id}"
-            available = capacities.get(source_key, 0.0) - local_usage.get(source_key, 0.0)
-            target_keys = tuple(key for target, key in fetch.target_resources
-                                if target == card_id)
-            reservation_keys = tuple(
-                key for target, key in fetch.target_reservations
-                if target == card_id)
-            for target_key in target_keys:
-                available = min(
-                    available,
-                    capacities.get(target_key, 0.0) - local_usage.get(target_key, 0.0))
-            for reservation_key in reservation_keys:
-                available = min(available, capacities.get(reservation_key, 0.0))
-            take = min(wanted, available)
-            if group is not None:
-                take = min(take, 1.0)
-            if take:
-                if fetch.consumes:
-                    requirements.append((source_key, float(take)))
-                    local_usage[source_key] = local_usage.get(source_key, 0.0) + take
-                for target_key in target_keys:
-                    requirements.append((target_key, float(take)))
-                    local_usage[target_key] = local_usage.get(target_key, 0.0) + take
-                reservations.extend(
-                    (reservation_key, float(take))
-                    for reservation_key in reservation_keys)
-                wanted -= take
-                claimed[fetch.field] += take
-                if group is not None:
-                    used_groups.add(group)
-                if fetch.to_bench:
-                    bench_available -= take
-                    bench_claim += take
-            if not wanted:
-                break
-    if bench_claim:
-        requirements.append(("bench", float(bench_claim)))
-    realized = opportunity.units
-    for field in {fetch.field for fetch in opportunity.fetches}:
-        amount = claimed.get(field, 0.0)
-        realized = with_unit(
-            realized, field, min(getattr(realized, field), float(amount)))
-    return tuple(requirements), tuple(reservations), realized
-
-
-def _advance(problem: PortfolioProblem, state: _SolverState,
-             opportunity: Opportunity, keys: tuple[str, ...], capacities: dict[str, float]):
-    if state.exhausted:
-        return None
-    usage = dict(zip(keys, state.used))
-    reservation = dict(zip(keys, state.reserved))
-    fetch_requirements, fetch_reservations, realized_units = _realize_fetches(
-        opportunity, usage, capacities)
-    for requirement, amount in (*opportunity.requirements, *fetch_requirements):
-        if usage.get(requirement, 0.0) + amount > capacities.get(requirement, 0.0):
-            return None
-        usage[requirement] = usage.get(requirement, 0.0) + amount
-    for requirement, amount in (*opportunity.reservations, *fetch_reservations):
-        reserved_amount = reservation.get(requirement, 0.0) + amount
-        if reserved_amount > capacities.get(requirement, 0.0):
-            return None
-        reservation[requirement] = reserved_amount
-    hand_resources_used = sum(
-        max(amount, reservation.get(name, 0.0))
-        for name, amount in usage.items() if name.startswith("hand:"))
-    next_discards = (
-        max(state.discards, problem.hand_size - hand_resources_used)
-        if opportunity.discards_hand else state.discards + opportunity.discard_cost)
-    if hand_resources_used + next_discards > problem.hand_size:
-        return None
-    return (
-        _SolverState(
-            tuple(usage.get(name, 0.0) for name in keys),
-            tuple(reservation.get(name, 0.0) for name in keys),
-            next_discards,
-            opportunity.discards_hand,
-        ),
-        realized_units,
-    )
-
-
 def _uses_no_more(left: tuple[float, ...], right: tuple[float, ...]) -> bool:
     return all(first <= second for first, second in zip(left, right))
 
@@ -268,15 +170,137 @@ def solve_portfolio(problem: PortfolioProblem, *, execution_guard=None
     capacities = dict(problem.capacities)
     keys = tuple(name for name, _amount in problem.capacities)
     initial = _SolverState(tuple(0.0 for _key in keys), tuple(0.0 for _key in keys))
+    coefficients = problem.coefficients
+
+    def optimistic_worth(opportunity):
+        return sum(
+            max(0.0, getattr(opportunity.units, field) * coefficient)
+            for field, coefficient in zip(OptionUnits.__dataclass_fields__, coefficients)
+        ) + max(0.0, opportunity.direct_worth)
+
     opportunities = problem.opportunities
+    key_indexes = {name: index for index, name in enumerate(keys)}
+    capacity_values = tuple(capacities[name] for name in keys)
+    hand_indexes = tuple(
+        index for index, name in enumerate(keys) if name.startswith("hand:"))
+    bench_index = key_indexes.get("bench")
+
+    def indexed(items):
+        return tuple((key_indexes[name], amount) for name, amount in items)
+
+    compiled = []
+    for opportunity in opportunities:
+        fetches = []
+        for fetch in sorted(opportunity.fetches, key=lambda item: len(item.eligible)):
+            groups = dict(fetch.distinct_groups)
+            target_resources = {}
+            for card_id, name in fetch.target_resources:
+                target_resources.setdefault(card_id, []).append(key_indexes[name])
+            target_reservations = {}
+            for card_id, name in fetch.target_reservations:
+                target_reservations.setdefault(card_id, []).append(key_indexes[name])
+            fetches.append((
+                fetch,
+                tuple((card_id, key_indexes[f"{fetch.zone}:{card_id}"],
+                       groups.get(card_id), tuple(target_resources.get(card_id, ())),
+                       tuple(target_reservations.get(card_id, ())))
+                      for card_id in fetch.eligible),
+            ))
+        compiled.append((
+            indexed(opportunity.requirements),
+            indexed(opportunity.reservations),
+            tuple(fetches),
+        ))
+
+    def advance(state: _SolverState, opportunity: Opportunity, compiled_opportunity):
+        if state.exhausted:
+            return None
+        requirements, reservations, fetches = compiled_opportunity
+        fetch_requirements = []
+        fetch_reservations = []
+        local_usage = list(state.used)
+        claimed = Counter()
+        used_groups = set()
+        bench_available = (
+            capacity_values[bench_index] - state.used[bench_index]
+            if bench_index is not None else 0.0)
+        bench_claim = 0.0
+        for fetch, eligible in fetches:
+            wanted = min(
+                fetch.amount,
+                int(bench_available) if fetch.to_bench else fetch.amount,
+            )
+            for _card_id, source_index, group, target_indexes, reservation_indexes in eligible:
+                if group is not None and group in used_groups:
+                    continue
+                available = capacity_values[source_index] - local_usage[source_index]
+                for target_index in target_indexes:
+                    available = min(
+                        available,
+                        capacity_values[target_index] - local_usage[target_index],
+                    )
+                for reservation_index in reservation_indexes:
+                    available = min(available, capacity_values[reservation_index])
+                take = min(wanted, available, 1.0 if group is not None else available)
+                if take:
+                    if fetch.consumes:
+                        fetch_requirements.append((source_index, float(take)))
+                        local_usage[source_index] += take
+                    for target_index in target_indexes:
+                        fetch_requirements.append((target_index, float(take)))
+                        local_usage[target_index] += take
+                    fetch_reservations.extend(
+                        (reservation_index, float(take))
+                        for reservation_index in reservation_indexes)
+                    wanted -= take
+                    claimed[fetch.field] += take
+                    if group is not None:
+                        used_groups.add(group)
+                    if fetch.to_bench:
+                        bench_available -= take
+                        bench_claim += take
+                if not wanted:
+                    break
+        if bench_claim and bench_index is not None:
+            fetch_requirements.append((bench_index, bench_claim))
+
+        usage = list(state.used)
+        reservation = list(state.reserved)
+        for requirement, amount in (*requirements, *fetch_requirements):
+            if usage[requirement] + amount > capacity_values[requirement]:
+                return None
+            usage[requirement] += amount
+        for requirement, amount in (*reservations, *fetch_reservations):
+            reserved_amount = reservation[requirement] + amount
+            if reserved_amount > capacity_values[requirement]:
+                return None
+            reservation[requirement] = reserved_amount
+        hand_resources_used = sum(
+            max(usage[index], reservation[index]) for index in hand_indexes)
+        next_discards = (
+            max(state.discards, problem.hand_size - hand_resources_used)
+            if opportunity.discards_hand else state.discards + opportunity.discard_cost)
+        if hand_resources_used + next_discards > problem.hand_size:
+            return None
+
+        realized = opportunity.units
+        for field in {fetch.field for fetch, _eligible in fetches}:
+            realized = with_unit(
+                realized,
+                field,
+                min(getattr(realized, field), float(claimed.get(field, 0.0))),
+            )
+        return (
+            _SolverState(
+                tuple(usage), tuple(reservation), next_discards,
+                opportunity.discards_hand,
+            ),
+            realized,
+        )
     upper = [0.0] * (len(opportunities) + 1)
     for index in range(len(opportunities) - 1, -1, -1):
         opportunity = opportunities[index]
-        optimistic = sum(
-            max(0.0, getattr(opportunity.units, field) * coefficient)
-            for field, coefficient in zip(
-                OptionUnits.__dataclass_fields__, problem.coefficients))
-        optimistic += max(0.0, opportunity.direct_worth)
+        optimistic = optimistic_worth(opportunity)
         copies = int(capacities.get(f"copy:{opportunity.entry_index}", 1.0))
         upper[index] = upper[index + 1] + optimistic * copies
 
@@ -334,13 +358,14 @@ def solve_portfolio(problem: PortfolioProblem, *, execution_guard=None
             return
 
         opportunity = opportunities[index]
+        compiled_opportunity = compiled[index]
         next_state = state
         next_units = units
         next_direct = direct_worth
         next_score = score
         next_selections = selections
         while True:
-            advanced = _advance(problem, next_state, opportunity, keys, capacities)
+            advanced = advance(next_state, opportunity, compiled_opportunity)
             if advanced is None:
                 break
             next_state, realized = advanced

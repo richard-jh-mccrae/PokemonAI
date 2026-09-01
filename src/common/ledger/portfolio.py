@@ -9,7 +9,8 @@ from common.cards.card_facts import EnergyCard, PokemonCard, TrainerCard, STADIU
 from common.cards.functions.fetch import DEADNESS, WINDOW, fetch_target_matches
 
 from .capabilities import (DAMAGE_UNIT_HP, OptionUnits, _heal_rider_cost,
-                           _heal_targets, _healed_hp, clause_cost_units)
+                           _heal_targets, _healed_hp, card_option_units,
+                           clause_cost_units)
 from .portfolio_solver import (
     Fetch as _Fetch,
     Opportunity as _Opportunity,
@@ -24,6 +25,7 @@ from .worth import FUTURE_TURN_DISCOUNT
 
 
 HAND_POKEMON_REALIZATION_DISCOUNT = 0.25
+FETCHED_POKEMON_REALIZATION_DISCOUNT = FUTURE_TURN_DISCOUNT
 
 
 @dataclass(frozen=True, slots=True)
@@ -43,8 +45,8 @@ def _requirements(facts, side, board, ctx) -> tuple[tuple[str, float], ...] | No
         return ((allowance, 1.0), (f"hand:{facts.card_id}", 1.0))
     if isinstance(facts, PokemonCard):
         if facts.evolves_from is None:
-            return (("bench", 1.0), (f"hand:{facts.card_id}", 1.0)) \
-                if len(side.bench) < side.bench_max else None
+            allowance = "bench" if len(side.bench) < side.bench_max else "future_bench"
+            return ((allowance, 1.0), (f"hand:{facts.card_id}", 1.0))
         mature_predecessor = any(
             not body.appeared_this_turn
             and getattr(ctx.facts(body.card.card_id), "name", None) == facts.evolves_from
@@ -78,6 +80,7 @@ def _capacities(side, board, ctx) -> dict[str, float]:
         "future_energy": int(board.turn.energy_attached),
         "stadium": int(not board.turn.stadium_played),
         "bench": max(0, side.bench_max - len(side.bench)),
+        "future_bench": 1,
         "tool": sum(not body.tools for body in side.bodies),
     }
     for body in side.bodies:
@@ -115,6 +118,16 @@ def _scale(units: OptionUnits, multiplier: float) -> OptionUnits:
     })
 
 
+def _fielded_line_count(facts, side, ctx) -> int:
+    return sum(
+        facts.name in {
+            getattr(ctx.facts(body.card.card_id), "name", None),
+            *(getattr(ctx.facts(card.card_id), "name", None)
+              for card in body.pre_evolution),
+        }
+        for body in side.bodies)
+
+
 def _weighted_worth(units: OptionUnits, ctx) -> float:
     return sum(value * ctx.configuration[feature]
                for feature, value in units.activations())
@@ -138,8 +151,11 @@ def _source_counts(zone, side, board):
     return Counter(card.card_id for card in cards)
 
 
-def _preserved_hand_resources(facts, side, ctx):
+def _preserved_hand_resources(facts, side, board, ctx):
     reservations = []
+    if isinstance(facts, TrainerCard) and facts.kind == SUPPORTER:
+        allowance = "future_supporter" if board.turn.supporter_played else "supporter"
+        reservations.append((allowance, 1.0))
     required_energy = {
         clause.condition_energy_type for clause in card_clauses(facts)
         if clause.condition_energy_type is not None}
@@ -173,13 +189,24 @@ def _fetch_variants(facts, units, requirements, side, board, ctx):
     def fetch(clause):
         source_counts = _source_counts(clause.zone, side, board)
         reading = DEADNESS if clause.target == "any" else WINDOW
+        field_names = {
+            getattr(ctx.facts(body.card.card_id), "name", None)
+            for body in side.bodies}
+        deployable_names = ({
+            candidate.name
+            for card in tuple(side.hand)
+            if isinstance((candidate := ctx.facts(card.card_id)), PokemonCard)
+            and candidate.evolves_from is None}
+            if len(side.bench) < side.bench_max else set())
 
         def evolution_base(candidate):
             if clause.dest != "in_play":
                 return None
-            names = {getattr(ctx.facts(body.card.card_id), "name", None)
-                     for body in side.bodies
-                     if not clause.target_condition or not body.appeared_this_turn}
+            names = {
+                getattr(ctx.facts(body.card.card_id), "name", None)
+                for body in side.bodies
+                if not clause.target_condition or not body.appeared_this_turn}
+            names.update(deployable_names)
             if candidate.evolves_from in names:
                 return candidate.evolves_from
             if clause.rider != "skip_stage1":
@@ -210,14 +237,16 @@ def _fetch_variants(facts, units, requirements, side, board, ctx):
             (card_id, key)
             for card_id in eligible
             if (base := evolution_base(ctx.facts(card_id))) is not None
-            for key in ((f"evolve:any:{base}",)
+            for key in ((f"evolve:future:{base}",)
+                        if base not in field_names else
+                        (f"evolve:any:{base}",)
                         if not clause.target_condition else (
                 f"evolve:any:{base}", f"evolve:mature:{base}")))
         target_reservations = tuple(
             (card_id, key)
             for card_id in eligible
             for key, _amount in _preserved_hand_resources(
-                ctx.facts(card_id), side, ctx))
+                ctx.facts(card_id), side, board, ctx))
         if distinct:
             cap = min(cap, len({group for _card_id, group in distinct}))
         amount = min(cap, copies)
@@ -229,6 +258,51 @@ def _fetch_variants(facts, units, requirements, side, board, ctx):
                       target_resources, target_reservations)
 
     fetches = tuple(fetch(clause) for clause in clauses)
+    if (len(fetches) == 1 and fetches[0].amount == 1
+            and clauses[0].dest != "in_play"
+            and isinstance(facts, TrainerCard)):
+        item = fetches[0]
+        target_variants = []
+        mature_names = {
+            getattr(ctx.facts(body.card.card_id), "name", None)
+            for body in side.bodies if not body.appeared_this_turn}
+        for card_id in item.eligible:
+            candidate = ctx.facts(card_id)
+            if (not isinstance(candidate, PokemonCard)
+                    or candidate.evolves_from not in mature_names):
+                continue
+            target = _scale(
+                card_option_units(candidate, side, board.them, board, ctx),
+                FETCHED_POKEMON_REALIZATION_DISCOUNT)
+            target = _with_unit(target, "search", 0.0)
+            if _weighted_worth(target, ctx) <= 0.0:
+                continue
+            specific = replace(
+                item,
+                eligible=(card_id,),
+                consumes=False,
+                target_resources=tuple(
+                    pair for pair in item.target_resources if pair[0] == card_id),
+                target_reservations=tuple(
+                    pair for pair in item.target_reservations if pair[0] == card_id),
+            )
+            target_variants.append((
+                _weighted_worth(target, ctx),
+                _Opportunity(
+                    _add(_with_unit(units, "search", min(units.search, 1.0)), target),
+                    (*requirements, (f"{item.zone}:{card_id}", 1.0)),
+                    0,
+                    (specific,),
+                ),
+            ))
+        if target_variants:
+            target_variants.sort(key=lambda row: row[0], reverse=True)
+            generic = _Opportunity(
+                _with_unit(units, "search", min(units.search, 1.0)),
+                requirements, 0, fetches)
+            return tuple(
+                opportunity for _worth, opportunity
+                in target_variants) + (generic,)
     if any(clause.choice for clause in clauses):
         declared_amounts = {clause.amount or 1 for clause in clauses}
         if len(declared_amounts) == 1:
@@ -409,10 +483,13 @@ def feasible_option_portfolio_result(entries, side, board, ctx, *, hand_size: in
             future_evolution = any(
                 requirement.startswith("evolve:future:")
                 for requirement, _amount in requirements)
+            equivalent_lines = (1 + _fielded_line_count(facts, side, ctx)
+                                if facts.evolves_from is None else 1)
             units = _scale(
                 units,
-                FUTURE_TURN_DISCOUNT if future_evolution
-                else HAND_POKEMON_REALIZATION_DISCOUNT)
+                (FUTURE_TURN_DISCOUNT if future_evolution
+                 else HAND_POKEMON_REALIZATION_DISCOUNT)
+                / equivalent_lines)
         elif isinstance(facts, EnergyCard) and board.turn.energy_attached:
             units = _scale(units, FUTURE_TURN_DISCOUNT)
         elif (isinstance(facts, TrainerCard) and facts.kind == SUPPORTER
@@ -427,7 +504,7 @@ def feasible_option_portfolio_result(entries, side, board, ctx, *, hand_size: in
             opportunity.requirements, discard_cost,
             (*opportunity.fetches, *energy_claims), discards_hand),
             direct_worth=direct_worth,
-            reservations=_preserved_hand_resources(facts, side, ctx))
+            reservations=_preserved_hand_resources(facts, side, board, ctx))
             for opportunity in variants)
         if realized_opportunities:
             compiled_entries.append((

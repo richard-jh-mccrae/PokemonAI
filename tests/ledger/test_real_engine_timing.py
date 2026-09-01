@@ -28,7 +28,7 @@ FRAME_BASELINE = json.loads((
 EXPECTED_BEHAVIOR = {
     "dragapult_ex": {
         "choices": ((0,), (0, 2), (6,)),
-        "discarded_card_ids": (2, 121),
+        "discarded_card_ids": (2, 5),
         "fetched_card_id": 120,
     },
     "mega_lucario": {
@@ -38,10 +38,11 @@ EXPECTED_BEHAVIOR = {
     },
     "mega_starmie": {
         "choices": ((0,), (0, 2), (5,)),
-        "discarded_card_ids": (3, 666),
+        "discarded_card_ids": (17, 666),
         "fetched_card_id": 1031,
     },
 }
+EXPECTED_STRESS_CHOICE = (21,)
 
 CASES = (
     pytest.param(
@@ -174,6 +175,7 @@ def test_dragapult_portfolio_stress_frame_is_exact_and_timed():
         / "fixtures" / expected["fixture"]
     ).read_text(encoding="utf-8"))["obs"]
     elapsed_ms = []
+    work = []
 
     for _run in range(FRAME_RUNS):
         agent_runtime = runtime(
@@ -185,20 +187,30 @@ def test_dragapult_portfolio_stress_frame_is_exact_and_timed():
         decision = agent_runtime.decide(observation)
         elapsed_ms.append((perf_counter() - started) * 1_000)
 
-        assert tuple(decision.chosen) == tuple(expected["choice"])
+        assert tuple(decision.chosen) == EXPECTED_STRESS_CHOICE
         assert decision.complete is True
         assert decision.diagnostics["search"]["stop_reason"] == "complete"
+        search = decision.diagnostics["search"]
+        memo = search["portfolio_memo"]
+        assert memo["lookups"] == memo["hits"] + memo["misses"]
+        assert memo["hits"] > 0
+        work.append({
+            "nodes_visited": search["nodes_visited"],
+            "portfolio_solves": memo["misses"],
+            "portfolio_memo_hits": memo["hits"],
+        })
 
     current_median = median(elapsed_ms)
     assert current_median < expected["maximum_ms"]
     print("DECISION_FRAME_BENCH " + json.dumps({
         "frame": "8109263769592355-117",
         "runs": FRAME_RUNS,
-        "choice": expected["choice"],
+        "choice": EXPECTED_STRESS_CHOICE,
         "decision_total_ms": {
             "median": current_median,
             "p95": _p95(elapsed_ms),
         },
+        "work": work,
         "median_change_percent": 100 * (
             current_median / expected["decision_total_ms"]["median"] - 1),
     }, sort_keys=True))

@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import dataclasses
 import base64
+import copy
 import hashlib
 import json
 import math
@@ -28,7 +29,7 @@ _CAPTURE: ContextVar[list[dict] | None] = ContextVar("telemetry_capture", defaul
 _SUPPRESS_OUTPUT: ContextVar[bool] = ContextVar("telemetry_suppress_output", default=False)
 _EPISODE_CONTEXT: ContextVar[str | None] = ContextVar("telemetry_episode", default=None)
 SCHEMA = "ledger.telemetry"
-SCHEMA_VERSION = 2
+SCHEMA_VERSION = 3
 _DECISION_FIELDS = {
     "schema", "schema_version", "record_type", "record_id", "episode", "decision",
     "observation", "opponent_snapshot", "actions", "root", "candidates", "search",
@@ -194,7 +195,28 @@ def _validate_candidate(value) -> None:
             "state_delta", "action_opportunity", "continues_turn", "zones_created",
             "zones_replaced", "allowances_consumed", "immediately_usable_outputs",
             "opportunities_created", "opportunities_preserved", "opportunities_consumed",
+            "executed_opportunity",
         }, "continuation")
+        for field in (
+                "opportunities_created", "opportunities_preserved",
+                "opportunities_consumed"):
+            for opportunity in value["continuation"][field]:
+                _exact_fields(opportunity, {"kind", "source"}, "opportunity")
+                if not isinstance(opportunity["kind"], str) or not opportunity["kind"]:
+                    raise ValueError("opportunity kind is required")
+                if opportunity["source"] is not None and (
+                        not isinstance(opportunity["source"], str)
+                        or not opportunity["source"]):
+                    raise ValueError("invalid opportunity source")
+        executed = value["continuation"]["executed_opportunity"]
+        if executed is not None:
+            _exact_fields(executed, {"kind", "source"}, "executed opportunity")
+            if not isinstance(executed["kind"], str) or not executed["kind"]:
+                raise ValueError("executed opportunity kind is required")
+            if executed["source"] is not None and (
+                    not isinstance(executed["source"], str)
+                    or not executed["source"]):
+                raise ValueError("invalid executed opportunity source")
     if value["policy_evidence"] is not None:
         _exact_fields(value["policy_evidence"], {
             "kind", "remaining", "route", "printed_prizes", "overrun",
@@ -447,11 +469,29 @@ def validate_record(record: dict) -> dict:
 def migrate_record(record: dict, *, target_version: int = SCHEMA_VERSION) -> dict:
     if record.get("bellman") is True:
         raise ValueError("Bellman telemetry is diagnostic-only and cannot migrate")
-    if record.get("schema_version") != SCHEMA_VERSION:
-        raise ValueError("legacy telemetry is diagnostic-only and cannot migrate")
     if target_version != SCHEMA_VERSION:
         raise ValueError("no one-step telemetry migration is registered")
-    return validate_record(record)
+    source_version = record.get("schema_version")
+    if source_version == SCHEMA_VERSION:
+        return validate_record(record)
+    if source_version != 2 or record.get("schema") != SCHEMA:
+        raise ValueError("legacy telemetry is diagnostic-only and cannot migrate")
+    migrated = copy.deepcopy(record)
+    migrated["schema_version"] = SCHEMA_VERSION
+    if migrated.get("record_type") == "decision":
+        for candidate in migrated.get("candidates", ()):
+            continuation = candidate.get("continuation")
+            if continuation is None:
+                continue
+            for field in (
+                    "opportunities_created", "opportunities_preserved",
+                    "opportunities_consumed"):
+                continuation[field] = [
+                    {"kind": value, "source": None}
+                    for value in continuation.get(field, ())]
+            continuation["executed_opportunity"] = None
+    migrated["record_id"] = _record_identifier(migrated)
+    return validate_record(migrated)
 
 
 @contextmanager
@@ -711,9 +751,15 @@ def _continuation(value) -> dict | None:
         "zones_replaced": list(value.zones_replaced),
         "allowances_consumed": list(value.allowances_consumed),
         "immediately_usable_outputs": list(value.immediately_usable_outputs),
-        "opportunities_created": list(value.opportunities_created),
-        "opportunities_preserved": list(value.opportunities_preserved),
-        "opportunities_consumed": list(value.opportunities_consumed),
+        "opportunities_created": [opportunity.wire()
+                                  for opportunity in value.opportunities_created],
+        "opportunities_preserved": [opportunity.wire()
+                                    for opportunity in value.opportunities_preserved],
+        "opportunities_consumed": [opportunity.wire()
+                                   for opportunity in value.opportunities_consumed],
+        "executed_opportunity": (
+            None if value.executed_opportunity is None
+            else value.executed_opportunity.wire()),
     }
 
 

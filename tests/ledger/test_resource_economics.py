@@ -1,10 +1,12 @@
 from dataclasses import replace
 
 from ledger_helpers import (DARK_E, DARKNESS, DRAGAPULT, DRAKLOAK, DREEPY, FIRE, FIRE_E,
-                            IGNITION, MEGA_STARMIE, STARYU, body, player, printout)
+                            IGNITION, MEGA_STARMIE, STARYU, WATER_E,
+                            body, player, printout)
 
 from common.ledger import EvaluationModel, evaluate
 from common.ledger.capabilities import OptionUnits
+from common.ledger.capabilities import card_option_units
 from common.ledger.portfolio import feasible_option_portfolio_result
 from common.ledger.worth import payoff_usable_units
 from common.observation import ObservationStateBuilder
@@ -16,6 +18,8 @@ ULTRA_BALL = 1121
 ENERGY_RETRIEVAL = 1118
 NIGHT_STRETCHER = 1097
 DUDUNSPARCE = 66
+RIOLU = 677
+MEGA_LUCARIO = 678
 
 
 def board(**kwargs):
@@ -41,6 +45,33 @@ def test_multi_provision_energy_is_live_for_a_reachable_evolution_line():
     assert activation(state, "interaction.kind.special_energy.in_hand_setup", context) == 1
 
 
+def test_basic_option_only_includes_forward_evolutions_in_visible_reach():
+    context = EvaluationModel.build()
+    absent = replace(
+        board(me=player(active=body(DREEPY, 1), hand=[STARYU])),
+        deck_counts=())
+    reachable = replace(absent, deck_counts=((MEGA_STARMIE, 1),))
+
+    absent_units = card_option_units(
+        context.facts(STARYU), absent.me, absent.them, absent, context)
+    reachable_units = card_option_units(
+        context.facts(STARYU), reachable.me, reachable.them, reachable, context)
+
+    assert absent_units.hp < reachable_units.hp
+    assert absent_units.attack < reachable_units.attack
+
+
+def test_energy_for_a_deployable_basic_in_hand_is_setup_not_dead():
+    context = EvaluationModel.build()
+    state = board(me=player(
+        active=body(DREEPY, 1), hand=[STARYU, WATER_E]))
+
+    assert activation(state, "demand.dead", context) == 0
+    assert activation(state, "demand.setup", context) == 1
+    assert card_option_units(
+        context.facts(WATER_E), state.me, state.them, state, context).energy > 0
+
+
 def portfolio_search(hand, deck_card):
     context = EvaluationModel.build()
     state = replace(
@@ -50,6 +81,24 @@ def portfolio_search(hand, deck_card):
         [(context.facts(ULTRA_BALL), OptionUnits(search=1))],
         state.me, state, context, hand_size=len(hand))
     return result.units.search
+
+
+def test_pokemon_search_carries_the_ready_evolution_it_can_fetch():
+    context = EvaluationModel.build()
+    state = replace(
+        board(me=player(
+            active=body(DUNSPARCE, 1),
+            bench=[body(RIOLU, 2), body(RIOLU, 3)],
+            hand=[ULTRA_BALL, FIRE_E, DARK_E])),
+        deck_counts=((MEGA_LUCARIO, 2),))
+    facts = context.facts(ULTRA_BALL)
+    result = feasible_option_portfolio_result(
+        [(facts, OptionUnits(search=1))],
+        state.me, state, context, hand_size=3)
+
+    assert result.units.search > 0
+    assert result.units.hp > 0
+    assert result.units.attack > 0
 
 
 def test_scarce_fire_attachment_beats_generic_colorless_absorption():

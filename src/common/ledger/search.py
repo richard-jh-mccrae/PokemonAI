@@ -3,6 +3,7 @@ from __future__ import annotations
 import hashlib
 import math
 import re
+from collections import Counter
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -39,6 +40,7 @@ from .preview import price_actions
 
 
 LOTTERY_DIGEST_BYTES = 8
+MIN_COMPARATIVE_RETREAT_ATTACHMENTS = 2
 SEARCH_SEMANTICS_IDENTITY = evaluator_semantics_identity((
     Path(__file__),
     Path(__file__).with_name("chance.py"),
@@ -300,6 +302,7 @@ class LedgerOnePlySearch:
                 footprint.opportunities_consumed,
                 value_components(footprint.policy_contributions),
                 footprint.realized_outcomes,
+                footprint.executed_opportunity,
             )
             successors = price.successors
             if any(successor.valuation.scale != baseline.scale for successor in successors):
@@ -329,6 +332,20 @@ class LedgerOnePlySearch:
         )
 
 
+def _opportunity_sources_match(left, right, kind):
+    left = tuple(value for value in left if str(value) == kind)
+    right = tuple(value for value in right if str(value) == kind)
+    if not left:
+        return False
+    if not right:
+        return any(getattr(value, "source", None) is None for value in left)
+    left_sources = {getattr(value, "source", None) for value in left}
+    right_sources = {getattr(value, "source", None) for value in right}
+    if None in left_sources or None in right_sources:
+        return True
+    return bool(left_sources.intersection(right_sources))
+
+
 def preservation_frontier(candidates, noise_tolerance=0.0):
     def value(candidate):
         continuation = (getattr(candidate, "continuation", None)
@@ -345,6 +362,40 @@ def preservation_frontier(candidates, noise_tolerance=0.0):
             getattr(continuation, "policy_contributions", ()))
         return {getattr(component, "key", getattr(component, "feature", None))
                 for component in components}
+
+    def realized_source_value(candidate):
+        continuation = (getattr(candidate, "continuation", None)
+                        or getattr(candidate, "footprint", None))
+        components = getattr(
+            continuation, "policy_components",
+            getattr(continuation, "policy_contributions", ()))
+        return sum(
+            max(0.0, component.value) for component in components
+            if getattr(component, "provenance", ())[:1]
+            == ("action.realized_portfolio",))
+
+    def destructive_spend(candidate):
+        continuation = (getattr(candidate, "continuation", None)
+                        or getattr(candidate, "footprint", None))
+        components = getattr(
+            continuation, "policy_components",
+            getattr(continuation, "policy_contributions", ()))
+        return any(
+            component.value < -noise_tolerance
+            and getattr(component, "provenance", ())[:1] in {
+                ("action.compound_discard_spend",), ("action.discard_spend",)}
+            for component in components)
+
+    def realized_recovery(candidate):
+        continuation = (getattr(candidate, "continuation", None)
+                        or getattr(candidate, "footprint", None))
+        components = getattr(
+            continuation, "policy_components",
+            getattr(continuation, "policy_contributions", ()))
+        return any(
+            component.value > noise_tolerance
+            and "action.recovery" in getattr(component, "provenance", ())
+            for component in components)
 
     deferred = set()
     for candidate in candidates:
@@ -379,6 +430,29 @@ def preservation_frontier(candidates, noise_tolerance=0.0):
                     *policy_features(candidate), *policy_features(other)}
                 and value(other) > value(candidate) + noise_tolerance)
             if same_exclusive_spend:
+                deferred.add(id(candidate))
+                break
+            spare_scarce_attachment = (
+                candidate.action.identity.kind == "attach"
+                and other.action.identity.kind == "attach"
+                and consumed == set(getattr(
+                    other_continuation, "opportunities_consumed", ()))
+                and getattr(continuation, "opportunities_created", ())
+                == getattr(other_continuation, "opportunities_created", ())
+                and getattr(continuation, "opportunities_preserved", ())
+                == getattr(other_continuation, "opportunities_preserved", ())
+                and realized_source_value(candidate)
+                > realized_source_value(other) + noise_tolerance)
+            if spare_scarce_attachment:
+                deferred.add(id(candidate))
+                break
+            recover_before_destructive_search = (
+                candidate.action.identity.kind == "play"
+                and other.action.identity.kind == "play"
+                and destructive_spend(candidate)
+                and realized_recovery(other)
+                and "play" in preserved)
+            if recover_before_destructive_search:
                 deferred.add(id(candidate))
                 break
             refresh_after_preparation = (
@@ -429,30 +503,81 @@ def preservation_frontier(candidates, noise_tolerance=0.0):
             if prepare_before_retreat:
                 deferred.add(id(candidate))
                 break
-            use_free_ability = (
-                other.action.identity.kind == "ability"
-                and other.delta.total > noise_tolerance
-                and candidate.action.identity.kind == "play"
-                and candidate.action.identity.kind in preserved)
-            if use_free_ability:
+            live_attachment_before_optional_body = (
+                candidate.action.identity.kind == "play"
+                and "in_play" in getattr(
+                    continuation, "immediately_usable_outputs", ())
+                and other.action.identity.kind == "attach"
+                and ("option.energy" in policy_features(other)
+                     or "retreat" in opportunities_created)
+                and "play" in preserved
+                and "discard" not in getattr(
+                    continuation, "immediately_usable_outputs", ())
+                and "attach" in getattr(
+                    continuation, "opportunities_preserved", ()))
+            if live_attachment_before_optional_body:
+                deferred.add(id(candidate))
+                break
+            compound_development_before_attachment = (
+                candidate.action.identity.kind == "attach"
+                and other.action.identity.kind == "play"
+                and "discard" in immediately_usable_outputs
+                and "in_play" in immediately_usable_outputs
+                and "attach" in opportunities_created
+                and "attach" in preserved)
+            if compound_development_before_attachment:
                 deferred.add(id(candidate))
                 break
             if not consumed:
                 continue
+            live_attachment = (
+                candidate.action.identity.kind == "attach"
+                and ("retreat" in getattr(
+                    continuation, "opportunities_created", ())
+                     or "option.energy" in policy_features(candidate)))
             create_before_consume = (
                 candidate.action.identity.kind in opportunities_created
-                and candidate.action.identity.kind in preserved)
+                and candidate.action.identity.kind in preserved
+                and _opportunity_sources_match(
+                    consumed, opportunities_created,
+                    candidate.action.identity.kind)
+                and not live_attachment)
             if create_before_consume:
                 deferred.add(id(candidate))
                 break
             use_expiring_ability = (
                 other.action.identity.kind == "ability"
                 and candidate.action.identity.kind == "evolve"
-                and other.delta.total > noise_tolerance)
-            if (not use_expiring_ability
-                    and other.delta.total + noise_tolerance < candidate.delta.total):
+                and other.delta.total > noise_tolerance
+                and _opportunity_sources_match(
+                    consumed,
+                    getattr(other_continuation,
+                            "opportunities_consumed", ()),
+                    "ability"))
+            if use_expiring_ability:
+                deferred.add(id(candidate))
+                break
+            if other.delta.total + noise_tolerance < candidate.delta.total:
                 continue
-            if (other.action.identity.kind in consumed
+            other_kind = other.action.identity.kind
+            consumed_inventory = Counter(
+                (str(opportunity), getattr(opportunity, "source", None))
+                for opportunity in consumed if str(opportunity) == other_kind)
+            executed = getattr(other_continuation, "executed_opportunity", None)
+            executed_key = (
+                other_kind,
+                (getattr(executed, "source", None)
+                 if executed is not None and str(executed) == other_kind else None))
+            at_risk = Counter({executed_key: consumed_inventory[executed_key]})
+            created_inventory = Counter(
+                (str(opportunity), getattr(opportunity, "source", None))
+                for opportunity in getattr(
+                    continuation, "opportunities_created", ())
+                if str(opportunity) == other_kind)
+            consumed_count = sum(at_risk.values())
+            replacement_count = sum((created_inventory & at_risk).values())
+            if (other_kind in consumed
+                    and replacement_count < consumed_count
                     and candidate.action.identity.kind in preserved):
                 deferred.add(id(candidate))
                 break
@@ -493,8 +618,9 @@ class GreedyDecisionPolicy:
             ready_knockout_enders = tuple(
                 candidate for candidate in enders
                 if candidate.continuation is not None
-                and RealizedOutcome.OPPONENT_ACTIVE_KNOCKOUT in
-                candidate.continuation.realized_outcomes)
+                and {RealizedOutcome.OPPONENT_ACTIVE_KNOCKOUT,
+                     RealizedOutcome.OPPONENT_BODY_KNOCKOUT}.intersection(
+                         candidate.continuation.realized_outcomes))
             ready_winning_enders = tuple(
                 candidate for candidate in ready_knockout_enders
                 if candidate.continuation is not None
@@ -511,11 +637,30 @@ class GreedyDecisionPolicy:
                 return (policy_value(candidate)
                         > continuation_threshold + configuration.noise_tolerance)
 
-            def repays_action_cost(candidate):
-                continuation = candidate.continuation
-                components = getattr(
+            def continuation_components(continuation):
+                return getattr(
                     continuation, "policy_components",
                     getattr(continuation, "policy_contributions", ()))
+
+            def eligible_attachment(candidate):
+                if candidate.action.identity.kind != "attach":
+                    return True
+                components = continuation_components(candidate.continuation)
+                if any(
+                        component.provenance[:1] == ("action.realized_portfolio",)
+                        and component.key.startswith("function.cost_reduction")
+                        for component in components):
+                    return False
+                immediate = {"attack", "retreat"}.intersection(
+                    candidate.continuation.opportunities_created)
+                return (candidate.delta.total
+                        > best_ender_value + configuration.noise_tolerance
+                        or candidate.delta.total > configuration.noise_tolerance
+                        or bool(immediate))
+
+            def repays_action_cost(candidate):
+                continuation = candidate.continuation
+                components = continuation_components(continuation)
                 cost = -sum(component.value for component in components
                             if getattr(component, "key", getattr(
                                 component, "feature", None)) == "action.opportunity_cost")
@@ -527,7 +672,10 @@ class GreedyDecisionPolicy:
                 continuation = candidate.continuation
                 refresh = ("supporter_played" in continuation.allowances_consumed
                            and "hand" in continuation.zones_replaced)
-                if not refresh:
+                transient_play = (
+                    candidate.action.identity.kind == "play"
+                    and "in_play" not in continuation.immediately_usable_outputs)
+                if not refresh and not transient_play:
                     return True
                 knockout_value = max(
                     ready.delta.total for ready in ready_knockout_enders)
@@ -537,7 +685,8 @@ class GreedyDecisionPolicy:
                 candidate for candidate in candidates
                 if candidate.disposition is CandidateDisposition.CONTINUES_TURN
                 and candidate.delta is not None
-                and meaningful(candidate))
+                and meaningful(candidate)
+                and eligible_attachment(candidate))
             ability_would_be_consumed = any(
                 candidate.disposition is CandidateDisposition.CONTINUES_TURN
                 and candidate.continuation is not None
@@ -592,9 +741,98 @@ class GreedyDecisionPolicy:
                 if candidate.disposition is CandidateDisposition.CONTINUES_TURN
                 and candidate.continuation is not None
                 and "attack" in candidate.continuation.opportunities_created
-                and "retreat" in candidate.continuation.opportunities_preserved)
+                and "retreat" in {
+                    *candidate.continuation.opportunities_created,
+                    *candidate.continuation.opportunities_preserved})
             continuing_ids = {id(candidate) for candidate in continuing}
             continuing = (*continuing, *(candidate for candidate in attack_preparation
+                                          if id(candidate) not in continuing_ids))
+            realized_attachments = tuple(
+                candidate for candidate in candidates
+                if candidate.disposition is CandidateDisposition.CONTINUES_TURN
+                and candidate.continuation is not None
+                and candidate.action.identity.kind == "attach"
+                and {"end", "play"}.issubset(
+                    candidate.continuation.opportunities_preserved)
+                and any(
+                    component.value > configuration.noise_tolerance
+                    and component.key == "option.energy"
+                    and component.provenance[:1] == ("action.realized_portfolio",)
+                    for component in continuation_components(candidate.continuation)))
+            continuing_ids = {id(candidate) for candidate in continuing}
+            continuing = (*continuing, *(candidate for candidate in realized_attachments
+                                          if id(candidate) not in continuing_ids))
+            def has_policy_provenance(candidate, marker, *, negative=False):
+                continuation = candidate.continuation
+                return continuation is not None and any(
+                    (component.value < -configuration.noise_tolerance
+                     if negative else component.value > configuration.noise_tolerance)
+                    and marker in component.provenance
+                    for component in continuation_components(continuation))
+
+            destructive_play_available = any(
+                candidate.action.identity.kind == "play"
+                and (has_policy_provenance(
+                    candidate, "action.compound_discard_spend", negative=True)
+                     or has_policy_provenance(
+                         candidate, "action.discard_spend", negative=True))
+                for candidate in candidates)
+            realized_plays = tuple(
+                candidate for candidate in candidates
+                if candidate.disposition is CandidateDisposition.CONTINUES_TURN
+                and candidate.continuation is not None
+                and candidate.action.identity.kind == "play"
+                and (policy_value(candidate) > (
+                        min(0.0, best_ender_value) + configuration.noise_tolerance)
+                     or (destructive_play_available
+                         and has_policy_provenance(
+                             candidate, "action.recovery")))
+                and "in_play" not in
+                    candidate.continuation.immediately_usable_outputs
+                and {"end", "play"}.issubset(
+                    candidate.continuation.opportunities_preserved)
+                and any(
+                    component.value > configuration.noise_tolerance
+                    and component.provenance[:1]
+                    == ("action.realized_portfolio",)
+                    for component in continuation_components(candidate.continuation)))
+            continuing_ids = {id(candidate) for candidate in continuing}
+            continuing = (*continuing, *(candidate for candidate in realized_plays
+                                          if id(candidate) not in continuing_ids))
+            retreat_attachments = tuple(
+                candidate for candidate in candidates
+                if candidate.disposition is CandidateDisposition.CONTINUES_TURN
+                and candidate.continuation is not None
+                and candidate.action.identity.kind == "attach"
+                and "retreat" in candidate.continuation.opportunities_created
+                and {"end", "play"}.issubset(
+                    candidate.continuation.opportunities_preserved))
+            retreat_attachments = tuple(
+                candidate for candidate in retreat_attachments
+                if not any(
+                    component.provenance[:1] == ("action.realized_portfolio",)
+                    and component.key.startswith("function.cost_reduction")
+                    for component in continuation_components(candidate.continuation)))
+            if (len(retreat_attachments) < MIN_COMPARATIVE_RETREAT_ATTACHMENTS
+                    or not any(any(
+                        component.key == "option.energy"
+                        and component.value > configuration.noise_tolerance
+                        and component.provenance[:1]
+                        == ("action.realized_portfolio",)
+                        for component in continuation_components(candidate.continuation))
+                        for candidate in retreat_attachments)):
+                retreat_attachments = ()
+            accelerating_attachments = tuple(
+                candidate for candidate in candidates
+                if candidate.disposition is CandidateDisposition.CONTINUES_TURN
+                and candidate.continuation is not None
+                and candidate.action.identity.kind == "attach"
+                and candidate.delta is not None
+                and candidate.delta.total > configuration.noise_tolerance
+                and {"attack", "retreat"}.intersection(
+                    candidate.continuation.opportunities_created))
+            continuing_ids = {id(candidate) for candidate in continuing}
+            continuing = (*continuing, *(candidate for candidate in retreat_attachments
                                           if id(candidate) not in continuing_ids))
             winning_preparation = tuple(
                 candidate for candidate in candidates
@@ -609,7 +847,7 @@ class GreedyDecisionPolicy:
                 candidate for candidate in candidates
                 if candidate.disposition is CandidateDisposition.CONTINUES_TURN
                 and candidate.continuation is not None
-                and candidate.delta.total > configuration.noise_tolerance
+                and policy_value(candidate) > configuration.noise_tolerance
                 and "supporter_played" in candidate.continuation.allowances_consumed
                 and "hand" in candidate.continuation.zones_replaced
                 and "hand" in candidate.continuation.immediately_usable_outputs)
@@ -626,8 +864,10 @@ class GreedyDecisionPolicy:
                     candidate for candidate in candidates
                     if candidate.disposition is CandidateDisposition.CONTINUES_TURN
                     and candidate.continuation is not None
-                    and "in_play" in candidate.continuation.immediately_usable_outputs
-                    and candidate.continuation.opportunities_created
+                and "in_play" in candidate.continuation.immediately_usable_outputs
+                and (candidate.continuation.opportunities_created
+                     or candidate.action.identity.kind == "evolve"
+                     or meaningful(candidate))
                     and "play" in candidate.continuation.opportunities_preserved
                     and candidate not in continuing)
                 continuing = (*continuing, *durable_preparation)
@@ -636,8 +876,15 @@ class GreedyDecisionPolicy:
             elif winning_preparation:
                 continuing = winning_preparation
             elif ready_knockout_enders:
-                continuing = tuple(candidate for candidate in continuing
-                                   if worth_before_knockout(candidate))
+                continuing = tuple(
+                    candidate for candidate in continuing
+                    if ((candidate.action.identity.kind != "attach"
+                         or not accelerating_attachments
+                         or candidate in accelerating_attachments)
+                        and (worth_before_knockout(candidate)
+                             or candidate in lethal_preparation)))
+            elif retreat_attachments:
+                continuing = retreat_attachments
             if continuing:
                 candidates = preservation_frontier(
                     continuing, configuration.noise_tolerance)
@@ -647,13 +894,25 @@ class GreedyDecisionPolicy:
                     if ready_winning_enders:
                         candidates = ready_winning_enders
                     elif ready_knockout_enders:
-                        candidates = ready_knockout_enders
+                        active_knockouts = tuple(
+                            candidate for candidate in ready_knockout_enders
+                            if RealizedOutcome.OPPONENT_ACTIVE_KNOCKOUT in
+                            candidate.continuation.realized_outcomes)
+                        candidates = tuple(
+                            candidate for candidate in enders
+                            if candidate.continuation is not None
+                            and RealizedOutcome.ACTION_ENDED_TURN in
+                            candidate.continuation.realized_outcomes
+                            and (not active_knockouts
+                                 or candidate in active_knockouts
+                                 or not candidate.delta.components))
                     else:
                         candidates = enders
                     reason = DecisionReason.BEST_TURN_ENDER
         return DecisionChoice(self._ranked(
             candidates, configuration,
-            include_action_opportunity=roster.forced,
+            include_action_opportunity=(
+                roster.forced or reason is DecisionReason.POSITIVE_CONTINUATION),
             include_dependency_opportunity=(
                 reason is DecisionReason.POSITIVE_CONTINUATION))[
                     0].action,

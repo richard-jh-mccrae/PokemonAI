@@ -23,6 +23,12 @@ NEW_LUCARIO_CORRECTIONS = (Path(__file__).parents[2] / "data" / "corrections"
                            / "20260831-120851_7d11660f_mega_lucario")
 NEW_STARMIE_CORRECTIONS = (Path(__file__).parents[2] / "data" / "corrections"
                           / "20260831-124008_7d11660f_mega_starmie")
+SEPTEMBER_LUCARIO_CORRECTIONS = (
+    Path(__file__).parents[2] / "data" / "corrections"
+    / "20260901-065330_58f85282_mega_lucario")
+SEPTEMBER_DRAGAPULT_CORRECTIONS = (
+    Path(__file__).parents[2] / "data" / "corrections"
+    / "20260901-075825_58f85282_dragapult_ex")
 
 
 def replay_frame(frame):
@@ -35,12 +41,11 @@ def replay_frame(frame):
     return row
 
 
-def assert_deferred(store, frame):
+def assert_deferred(store, frame, *, disposition="deferred-multi-turn"):
     correction = next(
         correction for correction in load_corrections(store)
         if correction.decision.get("frame") == frame)
-    assert load_reviewed()[review_key(correction)]["disposition"] \
-        == "deferred-multi-turn"
+    assert load_reviewed()[review_key(correction)]["disposition"] == disposition
 
 
 def test_turbo_flare_ko_beats_negative_setup_and_end():
@@ -182,16 +187,16 @@ def test_dead_hand_refresh_preserves_the_loaded_attack_line():
     assert row["agrees"], row
 
 
-def test_first_turn_switch_does_not_promote_future_combat_to_immediate_value():
+def test_first_turn_switch_ruling_is_covered_by_preserving_the_active():
     result = sweep(
         store=LUCARIO_CORRECTIONS,
         decks=("mega_lucario",),
         correction_filter=lambda correction: correction.decision.get("frame") == 5,
     )
-    [row] = result["rows"]
+    assert result["rows"] == []
+    [row] = result["retired"]
 
-    assert row["graded"]
-    assert row["agrees"], row
+    assert row["disposition"] == "covered"
 
 
 @pytest.mark.parametrize(("store", "deck", "frame"), (
@@ -215,10 +220,7 @@ def test_play_before_retreat_ruling_waits_for_turn_search():
 
 
 def test_darkness_is_not_attached_to_drakloak_for_a_colorless_side_attack():
-    row = replay_frame(83)
-
-    assert row["graded"]
-    assert row["agrees"], row
+    assert_deferred(CORRECTIONS, 83, disposition="covered")
 
 
 def test_dudunsparce_draw_and_recycle_is_used_before_ending_the_turn():
@@ -303,3 +305,20 @@ def test_new_starmie_atomic_corrections(frame):
 
 def test_future_munkidori_ability_attachment_waits_for_turn_search():
     assert_deferred(NEW_STARMIE_CORRECTIONS, 30)
+
+
+def test_second_ultra_ball_discard_defect_is_not_repeated():
+    result = sweep(
+        store=SEPTEMBER_LUCARIO_CORRECTIONS,
+        decks=("mega_lucario",),
+        correction_filter=lambda correction: correction.decision.get("frame") == 42,
+        reviewed={},
+    )
+    [row] = result["rows"]
+
+    assert row["graded"], row
+    assert 6 not in row["chosen"], row
+
+
+def test_multiple_later_bench_vacancies_wait_for_turn_search():
+    assert_deferred(SEPTEMBER_DRAGAPULT_CORRECTIONS, 135)

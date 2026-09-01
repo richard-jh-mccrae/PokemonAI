@@ -1332,7 +1332,7 @@ def _perturb_zero_observation(identity, board):
             them, active=replace(them.active, card=card)))
     if identity == "ObservationState.turn":
         return board, replace(board, turn=replace(
-            board.turn, first_player=1 - int(board.turn.first_player or 0)))
+            board.turn, stadium_played=not board.turn.stadium_played))
     if identity == "ObservationState.looking":
         return board, replace(board, looking=Looking(1, None))
     if identity == "ObservationState.select":

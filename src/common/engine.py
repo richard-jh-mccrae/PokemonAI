@@ -5,7 +5,7 @@ from collections import Counter
 import copy
 
 from .algebra import (
-    Actor, Chance, Deterministic, Edge, RevealChoice, RevealOutcome, Terminal, Unknown,
+    Actor, Chance, Choice, Deterministic, Edge, RevealChoice, RevealOutcome, Terminal, Unknown,
     WeightedEdge,
 )
 from .cards import card_store, play_clauses
@@ -29,6 +29,7 @@ AREA_PRIZE = 6
 COIN_BRANCH_PROBABILITY = 0.5
 ENERGY_REMOVAL_INDEX_SLOT = 2
 DEFAULT_REVEAL_AMOUNT = 1
+TRIGGERED_ABILITY_CONTEXT = 43
 
 
 def _option_in_play_source_id(option, frame, seat):
@@ -434,7 +435,45 @@ class CgpyTransitionProvider:
             current = obs.get("current") or {}
             players = current.get("players") or []
             context = int(select.get("context", -1))
-            if context == BENCH_DAMAGE_CONTEXT:
+            if context == TRIGGERED_ABILITY_CONTEXT:
+                if len(picked) != 1:
+                    raise ValueError("triggered Ability gate requires one answer")
+                answer = int(picked[0].get("type", -1))
+                if answer == _YES:
+                    context_card = select.get("contextCard") or {}
+                    facts = self.cards.get(int(context_card.get("id", 0)))
+                    gust = next((
+                        clause for clause in play_clauses(facts)
+                        if clause.kind == "gust"), None)
+                    opponent_seat = 1 - state.root_seat
+                    bench = players[opponent_seat].get("bench") or []
+                    if gust is None:
+                        return Unknown(
+                            "historical triggered Ability unavailable",
+                            f"card {context_card.get('id')}")
+                    if bench:
+                        children = []
+                        for index in range(len(bench)):
+                            branch = copy.deepcopy(obs)
+                            branch_players = branch["current"]["players"]
+                            target = branch_players[opponent_seat]["bench"].pop(index)
+                            old = next((body for body in
+                                        branch_players[opponent_seat].get("active", ())
+                                        if body), None)
+                            branch_players[opponent_seat]["active"] = [target]
+                            if old:
+                                branch_players[opponent_seat]["bench"].append(old)
+                            branch["current"]["turnActionCount"] = int(
+                                branch["current"].get("turnActionCount", 0)) + 1
+                            branch["select"] = None
+                            successor = self._bind(state, branch)
+                            children.append(Edge(
+                                f"gust:{index}",
+                                Terminal(successor, "isolated triggered Ability")))
+                        return Choice(Actor.OURS, tuple(children))
+                elif answer != _NO:
+                    raise ValueError("triggered Ability answer is neither yes nor no")
+            elif context == BENCH_DAMAGE_CONTEXT:
                 effect = select.get("effect") or {}
                 facts = self.registry.facts.get(int(effect.get("id", 0))) if self.registry else None
                 amount = int(getattr(facts, "bench_damage", 0) or 0)

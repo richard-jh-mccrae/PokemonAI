@@ -7,21 +7,28 @@ the same scripts, never recomputed by hand, so the assertions read pure arithmet
 from __future__ import annotations
 
 import math
+from collections import Counter
+from dataclasses import replace
 from types import SimpleNamespace
 import pytest
 
 from ledger_helpers import (DRAKLOAK, DRAGAPULT, DREEPY, FIRE_E, LUNATONE, MAKUHITA,
                             ScriptedProvider, action, body, player, printout)
 
-from common.algebra import (Actor, Chance, Choice, Deterministic, Edge, RevealChoice,
+from common.algebra import (Actor, Chance, Choice, Deterministic, Edge, Refresh, RevealChoice,
                             RevealOutcome, Terminal, WeightedEdge)
 from common.decision import EvaluationStatus, RealizedOutcome, SearchConfiguration
 from common.ledger import DeckOverlay, EvaluationModel, LedgerDecider
 from common.ledger.evaluate import FeatureActivation, FeatureContribution, Valuation, evaluate
 from common.ledger.preview import (_body_ability_ready, _body_copy_overflow,
+                                   _action_opportunity,
+                                   _compound_discard_spend_contributions,
                                    _discard_spend_contributions,
+                                   _duplicate_body_deployment,
                                    _local_action_events, _RawFootprint, _realized_outcomes,
                                    _realized_portfolio_contributions,
+                                   _remap_body_sources,
+                                   _refresh_spend_contributions,
                                    _with_hand_evolution_opportunity, _expected_valuation,
                                    price_actions)
 from common.ledger.worth import pokemon_copy_capacity
@@ -33,6 +40,12 @@ DECK = (DRAGAPULT, FIRE_E) * 20
 INFORMATION_VALUE = EvaluationModel.build().configuration["continuation.information_value"]
 HARIYAMA = 674
 RIOLU = 677
+ULTRA_BALL = 1121
+POKE_PAD = 1152
+POKEGEAR = 1122
+SALVATORE = 1189
+STARYU = 1030
+MEGA_STARMIE = 1031
 
 
 def test_playing_a_held_parent_creates_a_future_evolution_opportunity():
@@ -49,6 +62,137 @@ def test_playing_a_held_parent_creates_a_future_evolution_opportunity():
 
     assert footprint.opportunities_created == ("future_evolve",)
     assert ("opportunity_created", 1.0) in footprint.activations
+
+
+def test_real_evolution_contract_consumes_only_its_body_ability_source():
+    root_obs = printout(
+        me=player(
+            active=body(DREEPY, 9),
+            bench=[body(DRAKLOAK, 1, under=(DREEPY,)),
+                   body(DRAKLOAK, 2, under=(DREEPY,))]),
+        select={"context": 0, "minCount": 1, "maxCount": 1, "option": [
+            {"type": 9, "area": 2, "index": DRAGAPULT,
+             "inPlayArea": 5, "inPlayIndex": 0},
+            {"type": 10, "area": 5, "index": 0},
+            {"type": 10, "area": 5, "index": 1},
+            {"type": 14},
+        ]})
+    landing_obs = printout(
+        me=player(
+            active=body(DREEPY, 9),
+            bench=[body(DRAGAPULT, 1, under=(DREEPY, DRAKLOAK)),
+                   body(DRAKLOAK, 2, under=(DREEPY,))]),
+        select={"context": 0, "minCount": 1, "maxCount": 1, "option": [
+            {"type": 10, "area": 5, "index": 0},
+            {"type": 10, "area": 5, "index": 1},
+            {"type": 14},
+        ]})
+    root_state = state_of(root_obs)
+    landing_state = state_of(landing_obs)
+    evolve, first, second, end = (
+        action("evolve", (0,)), action("ability", (1,)),
+        action("ability", (2,)), action("end", (3,)))
+    evolved_ability, remaining_ability, landing_end = (
+        action("ability", (0,)), action("ability", (1,)), action("end", (2,)))
+    provider = ScriptedProvider(
+        menus={
+            "root": (evolve, first, second, end),
+            landing_state.semantic_key: (
+                evolved_ability, remaining_ability, landing_end),
+        },
+        nodes={
+            ("root", evolve.identity): Deterministic(landing_state),
+            ("root", first.identity): Terminal(root_state, "ability"),
+            ("root", second.identity): Terminal(root_state, "ability"),
+        })
+
+    decision = LedgerDecider(
+        DECK, "test", EvaluationModel.build(),
+        provider_factory=lambda _state, **_kwargs: provider).decide(root_obs)
+    priced = next(
+        candidate for candidate in decision.decision_result.roster.candidates
+        if candidate.action.identity == evolve.identity)
+    consumed = {
+        opportunity.source for opportunity in priced.continuation.opportunities_consumed
+        if str(opportunity) == "ability"}
+    preserved = {
+        opportunity.source for opportunity in priced.continuation.opportunities_preserved
+        if str(opportunity) == "ability"}
+    created = {
+        opportunity.source for opportunity in priced.continuation.opportunities_created
+        if str(opportunity) == "ability"}
+
+    assert consumed == {"seat:0:body:120:0:ability:120"}
+    assert preserved == {"seat:0:body:120:1:ability:120"}
+    assert created == {"seat:0:body:120:0:ability:121"}
+
+
+def test_ability_source_survives_active_to_bench_movement():
+    active = ObservationStateBuilder().root(printout(
+        me=player(active=body(DRAKLOAK, 1, under=(DREEPY,))),
+        select={"context": 0, "minCount": 1, "maxCount": 1,
+                "option": [{"type": 10, "area": 4, "index": 0}]}))
+    benched = ObservationStateBuilder().root(printout(
+        me=player(active=body(DREEPY, 9),
+                  bench=[body(DRAKLOAK, 1, under=(DREEPY,))]),
+        select={"context": 0, "minCount": 1, "maxCount": 1,
+                "option": [{"type": 10, "area": 5, "index": 0}]}))
+
+    assert _action_opportunity(action("ability", (0,)), active) \
+        == _action_opportunity(action("ability", (0,)), benched)
+
+
+def test_identical_body_sources_survive_peer_mutation():
+    before = ObservationStateBuilder().root(printout(
+        me=player(bench=[body(DRAKLOAK, 1), body(DRAKLOAK, 2)]),
+        select={"context": 0, "minCount": 1, "maxCount": 1,
+                "option": [{"type": 10, "area": 5, "index": 0},
+                           {"type": 10, "area": 5, "index": 1}]}))
+    after = ObservationStateBuilder().root(printout(
+        me=player(bench=[body(DRAKLOAK, 1, energies=(FIRE_E,)),
+                         body(DRAKLOAK, 2)]),
+        select={"context": 0, "minCount": 1, "maxCount": 1,
+                "option": [{"type": 10, "area": 5, "index": 0},
+                           {"type": 10, "area": 5, "index": 1}]}))
+
+    assert tuple(_action_opportunity(action("ability", (index,)), before)
+                 for index in range(2)) == tuple(
+        _action_opportunity(action("ability", (index,)), after)
+        for index in range(2))
+
+
+def test_body_sources_do_not_expose_tracking_serials():
+    first = ObservationStateBuilder().root(printout(
+        me=player(bench=[body(DRAKLOAK, 11), body(DRAKLOAK, 12)]),
+        select={"context": 0, "minCount": 1, "maxCount": 1,
+                "option": [{"type": 10, "area": 5, "index": 0},
+                           {"type": 10, "area": 5, "index": 1}]}))
+    second = ObservationStateBuilder().root(printout(
+        me=player(bench=[body(DRAKLOAK, 91), body(DRAKLOAK, 92)]),
+        select={"context": 0, "minCount": 1, "maxCount": 1,
+                "option": [{"type": 10, "area": 5, "index": 0},
+                           {"type": 10, "area": 5, "index": 1}]}))
+
+    assert tuple(_action_opportunity(action("ability", (index,)), first)
+                 for index in range(2)) == tuple(
+        _action_opportunity(action("ability", (index,)), second)
+        for index in range(2))
+
+
+def test_twin_body_source_survives_active_bench_exchange():
+    before = ObservationStateBuilder().root(printout(
+        me=player(active=body(DRAKLOAK, 1), bench=[body(DRAKLOAK, 2)]),
+        select={"context": 0, "minCount": 1, "maxCount": 1,
+                "option": [{"type": 10, "area": 4, "index": 0}]}))
+    after = ObservationStateBuilder().root(printout(
+        me=player(active=body(DRAKLOAK, 2), bench=[body(DRAKLOAK, 1)]),
+        select={"context": 0, "minCount": 1, "maxCount": 1,
+                "option": [{"type": 10, "area": 5, "index": 0}]}))
+    original = _action_opportunity(action("ability", (0,)), before)
+    moved = _action_opportunity(action("ability", (0,)), after)
+
+    assert moved.source != original.source
+    assert _remap_body_sources(Counter((moved,)), before, after) == Counter((original,))
 
 
 def state_of(observation):
@@ -151,6 +295,22 @@ def test_missing_serial_does_not_turn_an_unrelated_prize_into_active_knockout():
     assert outcomes == ()
 
 
+def test_bench_knockout_is_a_realized_body_knockout():
+    root = ObservationStateBuilder(DECK).root(printout(
+        me=player(active=body(DRAGAPULT, 1), prizes=6),
+        them=player(own=False, active=body(DRAGAPULT, 2),
+                    bench=[body(DREEPY, 3, hp=10)], prizes=6)))
+    landing = ObservationStateBuilder(DECK).root(printout(
+        me=player(active=body(DRAGAPULT, 1), prizes=5),
+        them=player(own=False, active=body(DRAGAPULT, 2), prizes=6)))
+
+    outcomes = _realized_outcomes(
+        root, action("attack", (0,)), ((1.0, None, landing, True, ()),),
+        EvaluationModel.build())
+
+    assert outcomes == (RealizedOutcome.OPPONENT_BODY_KNOCKOUT,)
+
+
 def test_missing_serial_knockout_proof_excludes_unplayed_hand_boosts():
     select = {"context": 0, "minCount": 1, "maxCount": 1,
               "option": [{"attackId": 977, "type": 13}]}
@@ -170,7 +330,7 @@ def test_missing_serial_knockout_proof_excludes_unplayed_hand_boosts():
         root, action("attack", (0,)), ((1.0, None, landing, True, ()),),
         EvaluationModel.build())
 
-    assert outcomes == ()
+    assert outcomes == (RealizedOutcome.OPPONENT_BODY_KNOCKOUT,)
 
 
 def test_realized_outcomes_reads_an_engine_game_win_directly():
@@ -267,6 +427,16 @@ def test_compound_fetch_prices_only_copies_above_total_body_capacity():
 
     assert _body_copy_overflow(board, action("card", (0,)), EvaluationModel.build()) == 0
     assert _body_copy_overflow(board, action("card", (0, 1)), EvaluationModel.build()) == 1
+
+
+def test_playing_a_second_copy_of_an_in_play_basic_spends_bench_flexibility():
+    select = {"context": 0, "minCount": 1, "maxCount": 1,
+              "option": [{"area": 2, "index": 0, "type": 7}]}
+    board = ObservationStateBuilder(DECK).root(printout(
+        me=player(active=body(DREEPY, 1), hand=[DREEPY]), select=select))
+
+    assert _duplicate_body_deployment(
+        board, action("play", (0,)), EvaluationModel.build())
 
 
 def test_forced_singleton_fetch_does_not_price_unavailable_body_alternatives():
@@ -553,6 +723,20 @@ def test_reveal_choice_honors_its_actor_in_both_directions():
     assert theirs == pytest.approx(bad_swing, abs=1e-9)
 
 
+def test_reveal_choice_has_no_standalone_entropy_bonus_beyond_its_chosen_leg():
+    choices = (Edge("good", Deterministic(GOOD)), Edge("bad", Deterministic(BAD)))
+    outcomes = (RevealOutcome(1.0, ("good", "bad")),)
+
+    _swing, _ends, decision = price_of(
+        RevealChoice(Actor.OURS, choices, outcomes))
+    price = next(row for row in decision.diagnostics["prices"]
+                 if row["selection"] == [0])
+
+    assert not [component for component in
+                price["continuation"]["policy_contributions"]
+                if component["feature"] == "continuation.information_value"]
+
+
 def test_reveal_choice_weights_outcomes_and_chooses_within_each():
     good_swing, _, _ = price_of(Deterministic(GOOD))
     bad_swing, _, _ = price_of(Deterministic(BAD))
@@ -757,38 +941,173 @@ def test_realization_resolves_main_options_through_their_hand_index(kind):
     assert [(item.activation, item.value) for item in realized] == [(2.0, 0.2)]
 
 
+def test_realization_prices_an_executed_source_not_owned_by_the_baseline_portfolio():
+    board = replace(
+        ObservationStateBuilder().root(printout(
+            me=player(active=body(DRAGAPULT, 1), hand=[ULTRA_BALL]),
+            select={"context": 0, "minCount": 1, "maxCount": 1,
+                    "option": [{"area": 2, "index": 0, "type": 7}]})),
+        deck_counts=((DREEPY, 1),))
+
+    realized = _realized_portfolio_contributions(
+        Valuation(0.0, (), ()), board, action("play", (0,)),
+        EvaluationModel.build())
+
+    assert any(item.feature == "option.search" and item.value > 0
+               for item in realized)
+
+
 def test_discard_spend_charges_selected_live_portfolio_sources_only():
-    first = "feasible_option_portfolio:serial:11"
-    second = "feasible_option_portfolio:serial:12"
-    baseline = Valuation(0.5, (), (), contributions=(
-        FeatureContribution("option.draw", 1.0, 0.2, 0.2, (first,)),
-        FeatureContribution("option.draw", 1.5, 0.2, 0.3, (second,)),
-    ))
-    board = SimpleNamespace(
-        select=SimpleNamespace(context=8, options=(
-            SimpleNamespace(serial=11, cardId=100),
-            SimpleNamespace(serial=12, cardId=101))),
-        me=SimpleNamespace(hand=()))
-    selected = SimpleNamespace(
-        identity=SimpleNamespace(kind="card"), selection=(0,))
+    root_player = player(active=body(DRAGAPULT, 1), hand=[POKE_PAD])
+    root_player["hand"][0]["serial"] = 11
+    board = replace(ObservationStateBuilder().root(printout(
+        me=root_player,
+        select={"context": 8, "minCount": 1, "maxCount": 1,
+                "option": [{"cardId": POKE_PAD, "serial": 11, "type": 3}]})),
+        deck_counts=((DREEPY, 1),))
+    context = EvaluationModel.build()
 
-    spent = _discard_spend_contributions(baseline, board, selected)
+    spent = _discard_spend_contributions(
+        evaluate(board, context), board, action("card", (0,)), context,
+        lambda value: evaluate(value, context))
 
-    assert [(item.activation, item.value) for item in spent] == [(-1.0, -0.2)]
-    assert "action.discard_spend" in spent[0].provenance
+    assert sum(item.value for item in spent) < 0
+    assert all(item.provenance == ("action.discard_spend",) for item in spent)
+
+
+def test_discard_spend_uses_the_exact_portfolio_counterfactual():
+    root_player = player(active=body(DRAGAPULT, 1), hand=[POKE_PAD])
+    root_player["hand"][0]["serial"] = 11
+    board = ObservationStateBuilder().root(printout(
+        me=root_player,
+        select={"context": 8, "minCount": 1, "maxCount": 1,
+                "option": [{"cardId": POKE_PAD, "serial": 11, "type": 3}]}))
+    context = EvaluationModel.build()
+    baseline = evaluate(board, context)
+
+    spent = _discard_spend_contributions(
+        baseline, board, action("card", (0,)), context,
+        lambda _counterfactual: baseline)
+
+    assert spent == ()
+
+
+def test_dead_discard_rechecks_liveness_after_the_forced_continuation():
+    root_player = player(active=body(DRAGAPULT, 1), hand=[SALVATORE])
+    root_player["hand"][0]["serial"] = 11
+    root = ObservationStateBuilder().root(printout(
+        me=root_player,
+        select={"context": 8, "minCount": 1, "maxCount": 1,
+                "option": [{"cardId": SALVATORE, "serial": 11, "type": 3}]}))
+    root = replace(root, deck_counts=((FIRE_E, 40),))
+    successor = replace(
+        ObservationStateBuilder().root(printout(
+            me=player(active=body(DRAGAPULT, 1), hand=[STARYU]))),
+        deck_counts=((MEGA_STARMIE, 1),))
+    selected = action("card", (0,))
+    context = EvaluationModel.build()
+
+    assert _local_action_events(root, selected, context) == (("dead_discard", 1.0),)
+    assert _local_action_events(
+        root, selected, context,
+        ((1.0, None, successor, False, ()),)) == ()
+
+
+def test_playing_a_setup_only_supporter_is_a_dead_play_now():
+    root_player = player(active=body(DRAGAPULT, 1), hand=[SALVATORE])
+    root_player["hand"][0]["serial"] = 11
+    root = replace(
+        ObservationStateBuilder().root(printout(
+            me=root_player,
+            select={"context": 0, "minCount": 1, "maxCount": 1,
+                    "option": [{"area": 2, "index": 0, "type": 7}]})),
+        deck_counts=((STARYU, 1), (MEGA_STARMIE, 1)))
+
+    assert _local_action_events(
+        root, action("play", (0,)), EvaluationModel.build()) == (
+            ("dead_play", 1.0),)
 
 
 def test_discard_spend_does_not_charge_a_portfolio_source_with_a_held_replacement():
-    owner = "feasible_option_portfolio:serial:11"
-    baseline = Valuation(0.2, (), (), contributions=(
-        FeatureContribution("option.draw", 1.0, 0.2, 0.2, (owner,)),))
-    board = SimpleNamespace(
-        select=SimpleNamespace(context=8, options=(
-            SimpleNamespace(serial=11, cardId=100),)),
-        me=SimpleNamespace(hand=(
-            SimpleNamespace(serial=11, card_id=100),
-            SimpleNamespace(serial=12, card_id=100))))
-    selected = SimpleNamespace(
-        identity=SimpleNamespace(kind="card"), selection=(0,))
+    root_player = player(active=body(DRAGAPULT, 1), hand=[POKE_PAD, POKE_PAD])
+    root_player["hand"][0]["serial"] = 11
+    root_player["hand"][1]["serial"] = 12
+    board = replace(ObservationStateBuilder().root(printout(
+        me=root_player,
+        select={"context": 8, "minCount": 1, "maxCount": 1,
+                "option": [{"cardId": POKE_PAD, "serial": 11, "type": 3}]})),
+        deck_counts=((DREEPY, 1),))
+    context = EvaluationModel.build()
 
-    assert _discard_spend_contributions(baseline, board, selected) == ()
+    assert _discard_spend_contributions(
+        evaluate(board, context), board, action("card", (0,)), context,
+        lambda value: evaluate(value, context)) == ()
+
+
+def test_discard_spend_prices_one_bounded_option_across_duplicate_cards():
+    root_player = player(active=body(DRAGAPULT, 1), hand=[POKE_PAD, POKE_PAD])
+    root_player["hand"][0]["serial"] = 11
+    root_player["hand"][1]["serial"] = 12
+    board = replace(ObservationStateBuilder().root(printout(
+        me=root_player,
+        select={"context": 8, "minCount": 2, "maxCount": 2,
+                "option": [
+                    {"cardId": POKE_PAD, "serial": 11, "type": 3},
+                    {"cardId": POKE_PAD, "serial": 12, "type": 3},
+                ]})), deck_counts=((DREEPY, 1),))
+    context = EvaluationModel.build()
+
+    spent = _discard_spend_contributions(
+        evaluate(board, context), board, action("card", (0, 1)), context,
+        lambda value: evaluate(value, context))
+
+    assert sum(item.value for item in spent) < 0
+    assert any(item.feature == "option.search" for item in spent)
+
+
+def test_compound_play_charges_live_cards_forced_from_hand_into_discard():
+    root_player = player(active=body(DRAGAPULT, 1), hand=[ULTRA_BALL, POKE_PAD])
+    root_player["hand"][0]["serial"] = 11
+    root_player["hand"][1]["serial"] = 12
+    root = replace(ObservationStateBuilder().root(printout(
+        me=root_player,
+        select={"context": 0, "minCount": 1, "maxCount": 1,
+                "option": [{"area": 2, "index": 0, "type": 7}]})),
+        deck_counts=((DREEPY, 1),))
+    landing_player = player(
+        active=body(DRAGAPULT, 1), hand=[], discard=[ULTRA_BALL, POKE_PAD])
+    landing_player["discard"][0]["serial"] = 11
+    landing_player["discard"][1]["serial"] = 12
+    landing = ObservationStateBuilder().root(printout(me=landing_player))
+    context = EvaluationModel.build()
+
+    spent = _compound_discard_spend_contributions(
+        evaluate(root, context), root, action("play", (0,)),
+        ((1.0, None, landing, False, ()),), context,
+        lambda value: evaluate(value, context))
+
+    assert sum(item.value for item in spent) < 0
+    assert any(item.feature == "option.search" for item in spent)
+
+
+def test_refresh_charges_current_options_removed_with_the_hand():
+    root_player = player(active=body(DRAGAPULT, 1), hand=[ULTRA_BALL, POKE_PAD])
+    root_player["hand"][0]["serial"] = 11
+    root_player["hand"][1]["serial"] = 12
+    root = ObservationStateBuilder().root(printout(
+        me=root_player,
+        select={"context": 0, "minCount": 1, "maxCount": 1,
+                "option": [{"area": 2, "index": 0, "type": 7}]}))
+    played = "feasible_option_portfolio:serial:11"
+    shuffled = "feasible_option_portfolio:serial:12"
+    baseline = Valuation(0.3, (), (), contributions=(
+        FeatureContribution("option.search", 1.0, 0.1, 0.1, (played,)),
+        FeatureContribution("option.search", 2.0, 0.1, 0.2, (shuffled,)),
+    ))
+
+    spent = _refresh_spend_contributions(
+        baseline, root, action("play", (0,)),
+        Refresh(ULTRA_BALL, ((5, 0),), False))
+
+    assert [(item.feature, item.value) for item in spent] == [
+        ("option.search", -0.2)]

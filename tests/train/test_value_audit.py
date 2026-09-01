@@ -74,6 +74,18 @@ def test_audit_finds_a_duplicate_card_through_its_equivalent_selection():
     assert audit["gradeable"] is True
 
 
+def test_audit_accepts_the_current_equivalent_copy_of_the_ruled_card():
+    row = _row()
+    row["chosen"] = [4]
+    row["correct"] = [1]
+    row["acceptable"] = [[1]]
+    row["candidates"][1]["equivalent_selections"] = [[1], [4]]
+
+    audit = build_value_audit([row])["audits"][0]
+
+    assert [4] in audit["acceptable_selections"]
+
+
 def test_value_audit_compares_the_ruled_and_original_committed_paths_at_the_locus():
     artifact = build_value_audit([_row()])
     audit = artifact["audits"][0]

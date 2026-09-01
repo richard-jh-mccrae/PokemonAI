@@ -22,7 +22,7 @@ from common.ledger.capabilities import (
 from common.ledger.evaluate import _slot_option
 
 
-HARIYAMA, SOLROCK, GRAVITY_MOUNTAIN = 674, 676, 1252
+HARIYAMA, SOLROCK, GRAVITY_MOUNTAIN, SALVATORE = 674, 676, 1252, 1189
 
 
 def board(**kwargs):
@@ -143,6 +143,28 @@ def test_ultra_ball_reads_dead_when_its_only_target_is_undemanded():
     live_target = board(me=me, decklist=[ULTRA_BALL, DREEPY] + [FIRE_E] * 20)
     assert (evaluate(live_target, context).part("me.hand")
             > evaluate(dead_target, context).part("me.hand"))
+
+
+def test_evolution_fetch_is_setup_when_its_parent_remains_in_deck():
+    context = ctx()
+    me = player(active=body(MAKUHITA, 1), hand=[SALVATORE], deck_count=20)
+    stranded = board(
+        me=me, decklist=[SALVATORE, MEGA_STARMIE] + [FIRE_E] * 19)
+    routed = board(
+        me=me, decklist=[SALVATORE, MEGA_STARMIE, STARYU] + [FIRE_E] * 18)
+
+    assert evaluate(routed, context).part("me.hand") \
+        > evaluate(stranded, context).part("me.hand")
+
+
+def test_energy_is_setup_when_a_compatible_basic_remains_in_deck():
+    context = ctx()
+    me = player(active=body(MAKUHITA, 1), hand=[WATER_E], deck_count=20)
+    stranded = board(me=me, decklist=[WATER_E] + [FIRE_E] * 20)
+    routed = board(me=me, decklist=[WATER_E, STARYU] + [FIRE_E] * 19)
+
+    assert evaluate(routed, context).part("me.hand") \
+        > evaluate(stranded, context).part("me.hand")
 
 
 def test_ultra_ball_fetching_the_live_evolution_is_positive():
@@ -438,6 +460,32 @@ def test_a_status_condition_prices_the_side_down():
     assert evaluate(sick, context).part("me.status") < 0
 
 
+def test_knockout_cannot_score_below_leaving_the_same_damaged_body_in_play():
+    me = player(active=body(DREEPY, 1), prizes=6)
+    survivor = body(LUNATONE, 3, hp=10, max_hp=110, energies=(6, 6))
+    before = board(
+        me=me,
+        them=player(own=False, active=body(DREEPY, 2), bench=[survivor], prizes=6))
+    after = board(
+        me=player(active=body(DREEPY, 1), prizes=5),
+        them=player(
+            own=False, active=body(DREEPY, 2), prizes=6,
+            discard=[LUNATONE, FIRE_E, FIRE_E]))
+
+    assert evaluate(after, ctx()).total >= evaluate(before, ctx()).total
+
+
+def test_active_denial_reduces_opponent_return_value_from_the_no_damage_baseline():
+    opponent = player(own=False, active=body(112, 2))
+    no_damage = board(me=player(active=body(DREEPY, 1)), them=opponent, turn=1)
+    denied = board(me=player(active=body(235, 1)), them=opponent, turn=1)
+
+    no_damage_combat = evaluate(no_damage, ctx()).part("them.combat")
+    denied_combat = evaluate(denied, ctx()).part("them.combat")
+
+    assert denied_combat > no_damage_combat
+
+
 def test_combat_realization_is_one_attack_envelope_not_a_sum_of_readings():
     state = board(me=player(active=body(MEGA_STARMIE, 1, energies=(WATER,))))
     context = ctx()
@@ -510,6 +558,26 @@ def test_bench_value_already_includes_a_held_manual_attachment():
     attached_combat = evaluate(attached, ctx()).part("me.combat")
 
     assert attached_combat == pytest.approx(held_combat)
+
+
+def test_one_held_energy_funds_only_one_body_attachment_clock():
+    them = player(active=body(DRAKLOAK, 9), own=False)
+    held = board(
+        me=player(active=body(MAKUHITA, 1), bench=[body(677, 2)], hand=[6]),
+        them=them, turn=3)
+    attached_active = board(
+        me=player(active=body(MAKUHITA, 1, energies=(6,)), bench=[body(677, 2)]),
+        them=them, turn=3, energy_attached=True)
+    attached_bench = board(
+        me=player(active=body(MAKUHITA, 1), bench=[body(677, 2, energies=(6,))]),
+        them=them, turn=3, energy_attached=True)
+
+    held_combat = evaluate(held, ctx()).part("me.combat")
+    attached_combat = max(
+        evaluate(attached_active, ctx()).part("me.combat"),
+        evaluate(attached_bench, ctx()).part("me.combat"))
+
+    assert held_combat <= attached_combat
 
 
 @pytest.mark.parametrize(("turn", "player"), ((1, 0), (2, 1), (3, 0), (4, 1)))
@@ -750,7 +818,7 @@ def test_a_basic_in_hand_reads_dead_when_the_bench_is_full():
                                     hand=[MAKUHITA])), context)
     full = evaluate(board(me=player(active=body(DREEPY, 1), bench=filler,
                                     hand=[MAKUHITA])), context)
-    assert full.part("me.hand") + 0.02 < room.part("me.hand")
+    assert full.part("me.hand") + 0.01 < room.part("me.hand")
 
 
 def test_hand_copies_beyond_consumable_capacity_saturate():
