@@ -246,9 +246,20 @@ def _board_body_count(environment, rule):
 def _stadium_board_fit(environment, rule):
     if environment.clause is None:
         return _board_body_count(environment, rule)
-    if bool(getattr(environment.clause, "symmetric", False)):
-        return SYMMETRIC_STADIUM_FIT
-    return _board_body_count(environment, rule)
+    from .capabilities import body_matches_clause_target
+
+    symmetric = bool(getattr(environment.clause, "symmetric", False))
+    if environment.clause.applies_to in {"benched", "own_bench"}:
+        bodies = ((*environment.side.bench, *environment.opponent.bench)
+                  if symmetric else environment.side.bench)
+        return SYMMETRIC_STADIUM_FIT * bool(bodies) if symmetric else len(bodies)
+    bodies = ((*environment.side.bodies, *environment.opponent.bodies)
+              if symmetric else environment.side.bodies)
+    matches = sum(body_matches_clause_target(
+        environment.clause.applies_to, environment.clause, body,
+        environment.evaluation_model.facts(body.card.card_id))
+        for body in bodies)
+    return SYMMETRIC_STADIUM_FIT * bool(matches) if symmetric else matches
 
 
 def _opponent_deck_count(environment, rule):

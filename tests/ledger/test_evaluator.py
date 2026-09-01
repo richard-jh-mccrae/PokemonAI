@@ -22,6 +22,9 @@ from common.ledger.capabilities import (
 from common.ledger.evaluate import _slot_option
 
 
+HARIYAMA, SOLROCK, GRAVITY_MOUNTAIN = 674, 676, 1252
+
+
 def board(**kwargs):
     decklist = kwargs.pop("decklist", None)
     return ObservationStateBuilder(decklist).root(printout(**kwargs))
@@ -294,6 +297,23 @@ def test_a_named_synergy_partner_in_play_makes_the_held_half_live():
     synergy = next(item for item in paired.activations
                    if item.feature == "interaction.synergy.in_hand")
     assert synergy.provenance == ("feasible_option_portfolio:serial:800",)
+
+
+def test_synergy_in_hand_is_not_recredited_after_both_halves_are_in_play():
+    valuation = evaluate(board(me=player(
+        active=body(SOLROCK, 1), bench=[body(LUNATONE, 2)], hand=[SOLROCK])), ctx())
+
+    assert not any(item.feature == "interaction.synergy.in_hand"
+                   for item in valuation.activations)
+
+
+def test_hand_link_is_not_recredited_after_its_terminal_is_in_play():
+    valuation = evaluate(board(me=player(
+        active=body(SOLROCK, 1), bench=[body(HARIYAMA, 2)],
+        hand=[MAKUHITA, HARIYAMA])), ctx())
+
+    assert not any(item.feature == "development.basic_hand_link"
+                   for item in valuation.activations)
 
 
 def test_duplicate_supporter_has_less_marginal_hand_value():
@@ -602,6 +622,23 @@ def test_symmetric_stadium_fit_does_not_scale_with_current_body_count():
 
     assert sum(item.value for item in evaluate(state, ctx()).activations
                if item.feature == "function.stadium.board_fit") == 0.2
+
+
+def test_stage_two_stadium_fit_requires_a_current_stage_two():
+    printed = printout(
+        me=player(active=body(DREEPY, 1)),
+        them=player(active=body(MAKUHITA, 2), own=False))
+    printed["current"]["stadium"] = [
+        {"id": GRAVITY_MOUNTAIN, "serial": 700, "playerIndex": 0}]
+    inactive = ObservationStateBuilder().root(printed)
+    printed["current"]["players"][1]["active"] = [
+        body(DRAGAPULT, 3, under=(DREEPY, DRAKLOAK))]
+    active = ObservationStateBuilder().root(printed)
+
+    assert sum(item.value for item in evaluate(inactive, ctx()).activations
+               if item.feature == "function.stadium.board_fit") == 0
+    assert sum(item.value for item in evaluate(active, ctx()).activations
+               if item.feature == "function.stadium.board_fit") > 0
 
 
 def test_confusion_reduces_expected_attack_and_retreat_cures_it():

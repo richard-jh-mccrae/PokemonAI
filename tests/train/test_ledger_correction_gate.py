@@ -94,14 +94,60 @@ def test_august_31_round_routes_atomic_work_into_ledger():
         "27ff682acbf9", "01829144bf52", "bad1216e2270", "0e4fca2eaaab",
         "7261225c513f",
         "4ec3475fe67b", "50964bb238cc", "ebfbe1fc1516",
-        "611817dff74b",
+        "611817dff74b", "026997e92f18",
     }
     assert active == {
         "b491be50b188", "8ffb66fdfce6", "09737c564e45",
         "e11e5bf11353",
-        "026997e92f18", "42e7d5365817", "cd3dd713f99b",
+        "42e7d5365817", "cd3dd713f99b",
         "945ecbcd0b9c", "ed7107a58fc7", "2fd2f96def47",
     }
+
+
+def test_final_august_31_round_routes_atomic_work_and_retires_turn_plans():
+    names = {
+        "20260831-181615_38c3a828_mega_starmie",
+        "20260831-185152_38c3a828_dragapult_ex",
+        "20260831-191734_38c3a828_mega_lucario",
+        "20260831-192940_38c3a828_mega_lucario",
+    }
+    corrections = [
+        correction
+        for source in ledger_correction_sources()
+        if source.parent.name in names
+        for correction in load_corrections(source, dedup=False)
+    ]
+    reviewed = load_reviewed()
+    dispositions = {
+        correction.id: reviewed[review_key(correction)]["disposition"]
+        for correction in corrections if review_key(correction) in reviewed
+    }
+    active = {correction.id for correction in corrections
+              if review_key(correction) not in reviewed}
+
+    assert active == {
+        "6f86e8a0faac",
+        "268f690e3fb3", "bb4ee02e777c",
+        "40fc86ecdb18", "dc2214ab4ea7",
+        "d5e34b130cb4", "4c122070586d",
+    }
+    assert {key for key, value in dispositions.items()
+            if value == "deferred-multi-turn"} == {
+        "b9a3a37d59db", "dc5b4227e1c1", "7929ef0ad966",
+        "a5dc721adfb2", "68c683185021",
+        "aebab11a2ee9", "1c65f9566247", "7a34293becdd",
+        "b248f84f8550", "bdeeef41fd69", "5836c77add69",
+        "27e839579fba", "6d0ca6b68956", "4e513362c088",
+        "9ca0a7446b63", "28ab52428cfe", "02de0e231807",
+    }
+    assert {key for key, value in dispositions.items()
+            if value == "off-policy"} == {
+        "473c2a2053ac", "2bf2826658ed", "faa6a73cf61f",
+        "fdd9eebae604", "bac3cd0cda7e", "ea642fdf3c5e",
+        "85b117ef20fc", "839cd8db60aa", "5db8358c0703",
+    }
+    assert {key for key, value in dispositions.items()
+            if value == "covered"} == {"bbdfb595b710"}
 
 
 def test_gate_fails_any_unreplayed_record_or_violated_preference():
