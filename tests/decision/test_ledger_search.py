@@ -470,6 +470,27 @@ def test_positive_end_transition_does_not_hide_a_positive_continuation():
     assert chosen.action is continuing.action
 
 
+def test_positive_raw_refresh_does_not_hide_its_negative_policy_value():
+    refresh = ValuedCandidate(
+        action("play", (0,)), DecisionDelta(0.1, LEDGER_VALUE_SCALE),
+        CandidateDisposition.CONTINUES_TURN, EvaluationStatus.COMPLETE,
+        continuation=ContinuationResult(
+            0.1, -0.2, True,
+            zones_replaced=("hand",),
+            allowances_consumed=("supporter_played",),
+            immediately_usable_outputs=("hand",)),
+    )
+    ending = ValuedCandidate(
+        action("attack", (1,)), DecisionDelta(0.0, LEDGER_VALUE_SCALE),
+        CandidateDisposition.ENDS_TURN, EvaluationStatus.COMPLETE,
+    )
+
+    chosen = GreedyDecisionPolicy().choose(
+        CandidateRoster((refresh, ending)), PolicyConfiguration())
+
+    assert chosen.action is ending.action
+
+
 def test_forced_policy_includes_local_action_opportunity_when_ranking_choices():
     costly = ValuedCandidate(
         action("card", (0,)), DecisionDelta(0.1, LEDGER_VALUE_SCALE),
@@ -486,6 +507,205 @@ def test_forced_policy_includes_local_action_opportunity_when_ranking_choices():
         CandidateRoster((costly, cheaper), forced=True), PolicyConfiguration())
 
     assert chosen.action is cheaper.action
+
+
+def test_positive_continuations_rank_by_state_plus_action_opportunity():
+    destructive = ValuedCandidate(
+        action("play", (0,)), DecisionDelta(0.2, LEDGER_VALUE_SCALE),
+        CandidateDisposition.CONTINUES_TURN, EvaluationStatus.COMPLETE,
+        continuation=ContinuationResult(0.2, -0.15, True),
+    )
+    preserving = ValuedCandidate(
+        action("play", (1,)), DecisionDelta(0.1, LEDGER_VALUE_SCALE),
+        CandidateDisposition.CONTINUES_TURN, EvaluationStatus.COMPLETE,
+        continuation=ContinuationResult(0.1, 0.0, True),
+    )
+    ending = ValuedCandidate(
+        action("end", (2,)), DecisionDelta(0.0, LEDGER_VALUE_SCALE),
+        CandidateDisposition.ENDS_TURN, EvaluationStatus.COMPLETE,
+    )
+
+    chosen = GreedyDecisionPolicy().choose(
+        CandidateRoster((destructive, preserving, ending)),
+        PolicyConfiguration())
+
+    assert chosen.action is preserving.action
+
+
+def test_greedy_policy_takes_an_attachment_that_creates_a_legal_attack():
+    attaching = ValuedCandidate(
+        action("attach", (0,)), DecisionDelta(-0.4, LEDGER_VALUE_SCALE),
+        CandidateDisposition.CONTINUES_TURN, EvaluationStatus.COMPLETE,
+        continuation=ContinuationResult(
+            -0.4, 0.2, True,
+            opportunities_created=("attack", "retreat"),
+            opportunities_preserved=("end", "play")),
+    )
+    ending = ValuedCandidate(
+        action("end", (1,)), DecisionDelta(0.1, LEDGER_VALUE_SCALE),
+        CandidateDisposition.ENDS_TURN, EvaluationStatus.COMPLETE,
+    )
+
+    chosen = GreedyDecisionPolicy().choose(
+        CandidateRoster((attaching, ending)), PolicyConfiguration())
+
+    assert chosen.action is attaching.action
+
+
+def test_greedy_policy_develops_an_attacker_before_spending_the_attachment():
+    attaching = ValuedCandidate(
+        action("attach", (0,)), DecisionDelta(0.35, LEDGER_VALUE_SCALE),
+        CandidateDisposition.CONTINUES_TURN, EvaluationStatus.COMPLETE,
+        continuation=ContinuationResult(
+            0.35, 0.19, True, opportunities_created=("attack",),
+            opportunities_preserved=("end", "play", "retreat")),
+    )
+    development = ValuedCandidate(
+        action("play", (1,)), DecisionDelta(0.30, LEDGER_VALUE_SCALE),
+        CandidateDisposition.CONTINUES_TURN, EvaluationStatus.COMPLETE,
+        continuation=ContinuationResult(
+            0.30, 0.18, True, immediately_usable_outputs=("discard", "in_play"),
+            opportunities_created=("attach",),
+            opportunities_preserved=("attach", "end", "play", "retreat")),
+    )
+    ending = ValuedCandidate(
+        action("end", (2,)), DecisionDelta(2.15, LEDGER_VALUE_SCALE),
+        CandidateDisposition.ENDS_TURN, EvaluationStatus.COMPLETE,
+        continuation=ContinuationResult(
+            2.15, 0.0, False,
+            realized_outcomes=(RealizedOutcome.EXPLICIT_TURN_END,)),
+    )
+
+    chosen = GreedyDecisionPolicy().choose(
+        CandidateRoster((attaching, development, ending)),
+        PolicyConfiguration())
+
+    assert chosen.action is development.action
+
+
+def test_greedy_policy_realizes_a_live_attachment_before_ending():
+    attaching = ValuedCandidate(
+        action("attach", (0,)), DecisionDelta(-0.3, LEDGER_VALUE_SCALE),
+        CandidateDisposition.CONTINUES_TURN, EvaluationStatus.COMPLETE,
+        continuation=ContinuationResult(
+            -0.3, -0.02, True,
+            opportunities_preserved=("end", "play"),
+            policy_components=(ValueComponent(
+                "option.energy", 0.25, 0.1, 0.025,
+                ("action.realized_portfolio", "source")),)),
+    )
+    ending = ValuedCandidate(
+        action("end", (1,)), DecisionDelta(-0.1, LEDGER_VALUE_SCALE),
+        CandidateDisposition.ENDS_TURN, EvaluationStatus.COMPLETE,
+        continuation=ContinuationResult(
+            -0.1, 0.0, False,
+            realized_outcomes=(RealizedOutcome.EXPLICIT_TURN_END,)),
+    )
+
+    chosen = GreedyDecisionPolicy().choose(
+        CandidateRoster((attaching, ending)), PolicyConfiguration())
+
+    assert chosen.action is attaching.action
+
+
+def test_greedy_policy_realizes_a_recovery_play_before_ending():
+    recovery = ValuedCandidate(
+        action("play", (0,)), DecisionDelta(-0.15, LEDGER_VALUE_SCALE),
+        CandidateDisposition.CONTINUES_TURN, EvaluationStatus.COMPLETE,
+        continuation=ContinuationResult(
+            -0.15, 0.08, True, opportunities_preserved=("end", "play"),
+            policy_components=(ValueComponent(
+                "option.search", 1.0, 0.1, 0.1,
+                ("action.realized_portfolio", "source")),)),
+    )
+    ending = ValuedCandidate(
+        action("end", (1,)), DecisionDelta(-0.1, LEDGER_VALUE_SCALE),
+        CandidateDisposition.ENDS_TURN, EvaluationStatus.COMPLETE,
+        continuation=ContinuationResult(
+            -0.1, 0.0, False,
+            realized_outcomes=(RealizedOutcome.EXPLICIT_TURN_END,)),
+    )
+
+    chosen = GreedyDecisionPolicy().choose(
+        CandidateRoster((recovery, ending)), PolicyConfiguration())
+
+    assert chosen.action is recovery.action
+
+
+def test_negative_recovery_does_not_preempt_a_stronger_attack():
+    recovery = ValuedCandidate(
+        action("play", (0,)), DecisionDelta(-0.2, LEDGER_VALUE_SCALE),
+        CandidateDisposition.CONTINUES_TURN, EvaluationStatus.COMPLETE,
+        continuation=ContinuationResult(
+            -0.2, 0.0, True, opportunities_preserved=("end", "play"),
+            policy_components=(ValueComponent(
+                "option.search", 1.0, 0.1, 0.1,
+                ("action.realized_portfolio", "action.recovery")),)))
+    attack = ValuedCandidate(
+        action("attack", (1,)), DecisionDelta(1.0, LEDGER_VALUE_SCALE),
+        CandidateDisposition.ENDS_TURN, EvaluationStatus.COMPLETE,
+        continuation=ContinuationResult(
+            1.0, 0.0, False,
+            realized_outcomes=(RealizedOutcome.ACTION_ENDED_TURN,)))
+
+    chosen = GreedyDecisionPolicy().choose(
+        CandidateRoster((recovery, attack)), PolicyConfiguration())
+
+    assert chosen.action is attack.action
+
+
+def test_greedy_policy_unlocks_retreat_with_the_less_scarce_attachment_first():
+    generic = ValuedCandidate(
+        action("attach", (0,)), DecisionDelta(-0.3, LEDGER_VALUE_SCALE),
+        CandidateDisposition.CONTINUES_TURN, EvaluationStatus.COMPLETE,
+        continuation=ContinuationResult(
+            -0.3, 0.0, True, opportunities_created=("retreat",),
+            opportunities_preserved=("end", "play"),
+            opportunities_consumed=("attach",)),
+    )
+    scarce = ValuedCandidate(
+        action("attach", (1,)), DecisionDelta(0.1, LEDGER_VALUE_SCALE),
+        CandidateDisposition.CONTINUES_TURN, EvaluationStatus.COMPLETE,
+        continuation=ContinuationResult(
+            0.1, 0.2, True, opportunities_created=("retreat",),
+            opportunities_preserved=("end", "play"),
+            opportunities_consumed=("attach",),
+            policy_components=(ValueComponent(
+                "option.energy", 2.0, 0.1, 0.2,
+                ("action.realized_portfolio", "scarce")),)),
+    )
+    basic = ValuedCandidate(
+        action("play", (2,)), DecisionDelta(0.4, LEDGER_VALUE_SCALE),
+        CandidateDisposition.CONTINUES_TURN, EvaluationStatus.COMPLETE,
+        continuation=ContinuationResult(
+            0.4, 0.0, True, immediately_usable_outputs=("in_play",),
+            opportunities_created=("attach",),
+            opportunities_preserved=("attach", "end", "play")),
+    )
+    bench_attach = ValuedCandidate(
+        action("attach", (4,)), DecisionDelta(0.5, LEDGER_VALUE_SCALE),
+        CandidateDisposition.CONTINUES_TURN, EvaluationStatus.COMPLETE,
+        continuation=ContinuationResult(
+            0.5, 0.1, True, opportunities_created=("attack",),
+            opportunities_preserved=("end", "play"),
+            opportunities_consumed=("attach",),
+            policy_components=(ValueComponent(
+                "option.energy", 1.0, 0.1, 0.1,
+                ("action.realized_portfolio", "bench")),)),
+    )
+    ending = ValuedCandidate(
+        action("end", (3,)), DecisionDelta(0.2, LEDGER_VALUE_SCALE),
+        CandidateDisposition.ENDS_TURN, EvaluationStatus.COMPLETE,
+        continuation=ContinuationResult(
+            0.2, 0.0, False,
+            realized_outcomes=(RealizedOutcome.EXPLICIT_TURN_END,)),
+    )
+
+    chosen = GreedyDecisionPolicy().choose(
+        CandidateRoster((generic, scarce, basic, bench_attach, ending)),
+        PolicyConfiguration())
+
+    assert chosen.action is generic.action
 
 
 def test_greedy_policy_prepares_a_body_before_an_eligible_hand_refresh():
@@ -508,12 +728,47 @@ def test_greedy_policy_prepares_a_body_before_an_eligible_hand_refresh():
     ending = ValuedCandidate(
         action("end", (2,)), DecisionDelta(-0.1, LEDGER_VALUE_SCALE),
         CandidateDisposition.ENDS_TURN, EvaluationStatus.COMPLETE,
+        continuation=ContinuationResult(
+            -0.1, 0.0, False,
+            realized_outcomes=(RealizedOutcome.EXPLICIT_TURN_END,)),
     )
 
     chosen = GreedyDecisionPolicy().choose(
         CandidateRoster((refresh, basic, ending)), PolicyConfiguration())
 
     assert chosen.action is basic.action
+
+
+def test_greedy_policy_uses_a_visible_evolution_before_refreshing_it_away():
+    refresh = ValuedCandidate(
+        action("play", (0,)), DecisionDelta(0.7, LEDGER_VALUE_SCALE),
+        CandidateDisposition.CONTINUES_TURN, EvaluationStatus.COMPLETE,
+        continuation=ContinuationResult(
+            0.7, 0.0, True, zones_replaced=("hand",),
+            allowances_consumed=("supporter_played",),
+            immediately_usable_outputs=("hand",),
+            opportunities_consumed=("play",)),
+    )
+    evolution = ValuedCandidate(
+        action("evolve", (1,)), DecisionDelta(-0.05, LEDGER_VALUE_SCALE),
+        CandidateDisposition.CONTINUES_TURN, EvaluationStatus.COMPLETE,
+        continuation=ContinuationResult(
+            -0.05, 0.0, True, zones_replaced=("hand",),
+            immediately_usable_outputs=("in_play",),
+            opportunities_preserved=("end", "play")),
+    )
+    ending = ValuedCandidate(
+        action("end", (2,)), DecisionDelta(-0.1, LEDGER_VALUE_SCALE),
+        CandidateDisposition.ENDS_TURN, EvaluationStatus.COMPLETE,
+        continuation=ContinuationResult(
+            -0.1, 0.0, False,
+            realized_outcomes=(RealizedOutcome.EXPLICIT_TURN_END,)),
+    )
+
+    chosen = GreedyDecisionPolicy().choose(
+        CandidateRoster((refresh, evolution, ending)), PolicyConfiguration())
+
+    assert chosen.action is evolution.action
 
 
 def test_greedy_policy_recognizes_knockout_only_from_observable_state_change():

@@ -692,5 +692,85 @@
     "disposition": "deferred-multi-turn",
     "reason": "the ruling values Lillie's Determination for drawing Mega Lucario ex and evolving Riolu afterward; that payoff lies beyond the immediate shuffle-draw action",
     "round": "2026-09-01"
+  },
+  "53230395781565713-53": {
+    "disposition": "off-policy",
+    "reason": "frame 52's corrected attachment changes the available recipient state before this second Energy-routing menu",
+    "round": "2026-09-01"
+  },
+  "53230395781565713-70": {
+    "disposition": "deferred-multi-turn",
+    "reason": "the snipe target is justified by a later primary-attacker route; that future attack plan is outside the one-ply target choice",
+    "round": "2026-09-01"
+  },
+  "53230395781565713-85": {
+    "disposition": "deferred-multi-turn",
+    "reason": "the ruling composes promotion, attack, sacrifice, and next-turn Starmie charging; PUCT must grade the complete maneuver",
+    "round": "2026-09-01"
+  },
+  "53230395781565713-113": {
+    "disposition": "deferred-multi-turn",
+    "reason": "the Poke Pad choice is justified by a later three-Prize win route rather than its immediate one-ply outcome",
+    "round": "2026-09-01"
+  },
+  "14789614378652353-42": {
+    "disposition": "covered",
+    "reason": "the rationale only condemns discarding the second Ultra Ball; current replay discards Solrock and one of two Basic Fighting Energy while preserving Ultra Ball and its second Mega Lucario fetch, so the stated defect is fixed",
+    "round": "2026-09-01"
+  },
+  "14789614378652353-69": {
+    "disposition": "off-policy",
+    "reason": "frame 66's corrected Hariyama gust changes the opposing Active before this attachment-and-attack decision",
+    "round": "2026-09-01"
+  },
+  "18474897401381404-54": {
+    "disposition": "deferred-multi-turn",
+    "reason": "the Drakloak-over-Dreepy damage target depends on later evolution and attack routes rather than the immediate counter placement",
+    "round": "2026-09-01"
+  },
+  "18474897401381404-55": {
+    "disposition": "off-policy",
+    "reason": "frame 54's corrected first damage-counter target changes the HP state before this second placement",
+    "round": "2026-09-01"
+  },
+  "18474897401381404-56": {
+    "disposition": "off-policy",
+    "reason": "frame 54's corrected first damage-counter target changes the HP state before this third placement",
+    "round": "2026-09-01"
+  },
+  "18474897401381404-129": {
+    "disposition": "covered",
+    "reason": "current replay uses Munkidori's Ability instead of evolving Drakloak, so the Drakloak draw Ability named by the rationale remains available",
+    "round": "2026-09-01"
+  },
+  "18474897401381404-133": {
+    "disposition": "deferred-multi-turn",
+    "reason": "the damage move is justified by a later Phantom Dive knockout; PUCT must grade the complete Ability-then-attack line",
+    "round": "2026-09-01"
+  },
+  "18474897401381404-135": {
+    "disposition": "deferred-multi-turn",
+    "reason": "with a full Bench, the exact Dreepy-over-Dunsparce discard depends on preserving several distinct bodies across later Bench vacancies; one-ply Ledger can price only the best visible next deployment",
+    "round": "2026-09-01"
+  },
+  "18474897401381404-161": {
+    "disposition": "deferred-multi-turn",
+    "reason": "the ruling orders Munkidori, Drakloak, and Crispin before attacking; those independent MAIN actions require complete turn search",
+    "round": "2026-09-01"
+  },
+  "35242136578908572-83": {
+    "disposition": "covered",
+    "reason": "current replay uses a separate Drakloak Ability and avoids the wasteful attachment named by the rationale; source-aware opportunity ownership does not require the unrelated evolution first",
+    "round": "2026-09-01"
+  },
+  "52182892931977890-5": {
+    "disposition": "covered",
+    "reason": "the rationale only forbids Switch so Solrock stays Active; the current replay attaches Energy to the Benched Riolu without moving Solrock and therefore satisfies the stated ruling",
+    "round": "2026-09-01"
+  },
+  "53230395781565713-131": {
+    "disposition": "refuted",
+    "reason": "the stored correct selection is identical to the agent's chosen Lunatone target, so the correction asserts no blunder preference",
+    "round": "2026-09-01"
   }
 }

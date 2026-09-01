@@ -19,6 +19,7 @@ from common.decision import (
     DecisionReason,
     DecisionResult,
     EvaluationStatus,
+    OpportunityRef,
     SearchResult,
     SearchTrace,
     StateValuation,
@@ -137,7 +138,7 @@ def test_decision_record_keeps_the_complete_typed_candidate_roster():
     )
 
     assert record["schema"] == "ledger.telemetry"
-    assert record["schema_version"] == 2
+    assert record["schema_version"] == 3
     assert record["record_type"] == "decision"
     assert record["episode"]["key"] == "episode-7"
     assert record["decision"]["index"] == 4
@@ -237,7 +238,8 @@ def test_decision_record_keeps_every_successor_and_continuation_component():
         0.75, -0.1, True,
         zones_created=("hand",),
         allowances_consumed=("energy_attachment",),
-        opportunities_created=("attack",),
+        opportunities_created=(OpportunityRef("attack", "seat:0:active"),),
+        executed_opportunity=OpportunityRef("attach", "seat:0:active"),
     )
     candidate = ValuedCandidate(
         action,
@@ -271,7 +273,18 @@ def test_decision_record_keeps_every_successor_and_continuation_component():
 
     saved = record["candidates"][0]
     assert saved["continuation"]["allowances_consumed"] == ["energy_attachment"]
-    assert saved["continuation"]["opportunities_created"] == ["attack"]
+    assert saved["continuation"]["opportunities_created"] == [
+        {"kind": "attack", "source": "seat:0:active"}]
+    assert saved["continuation"]["executed_opportunity"] == {
+        "kind": "attach", "source": "seat:0:active"}
+    legacy = json.loads(json.dumps(record))
+    legacy["schema_version"] = 2
+    legacy["record_id"] = "legacy"
+    legacy["candidates"][0]["continuation"]["opportunities_created"] = ["attack"]
+    migrated = migrate_record(legacy)
+    assert migrated["candidates"][0]["continuation"]["opportunities_created"] == [
+        {"kind": "attack", "source": None}]
+    assert migrated["candidates"][0]["continuation"]["executed_opportunity"] is None
     assert saved["successors"][0]["probability"] == 1.0
     assert saved["successors"][0]["valuation"]["total"] == 1.75
     assert saved["successors"][0]["action_path"][0]["identity"]["kind"] == "attach"
@@ -355,7 +368,7 @@ def test_outcome_record_links_the_exact_episode_decision_set():
 
     assert record == {
         "schema": "ledger.telemetry",
-        "schema_version": 2,
+        "schema_version": 3,
         "record_type": "outcome",
         "record_id": record["record_id"],
         "episode": {"key": "episode-9", "external_id": "kaggle-44"},
@@ -412,7 +425,7 @@ def test_episode_receipt_accounts_for_every_reservation_before_outcome_certifica
 
     receipt = session.close_episode()
 
-    assert receipt["schema_version"] == 2
+    assert receipt["schema_version"] == 3
     assert receipt["record_type"] == "telemetry_receipt"
     assert receipt["certified"] is True
     assert receipt["reservations"] == [{
@@ -526,7 +539,7 @@ def test_schema_rejects_unknown_fields_versions_and_bellman_migration():
     with pytest.raises(ValueError, match="unsupported telemetry schema version"):
         validate_record({**record, "schema_version": 1})
     with pytest.raises(ValueError, match="unsupported telemetry schema version"):
-        validate_record({**record, "schema_version": 3})
+        validate_record({**record, "schema_version": 4})
     with pytest.raises(ValueError, match="diagnostic-only"):
         migrate_record({**record, "schema_version": 1})
     with pytest.raises(ValueError, match="diagnostic-only"):

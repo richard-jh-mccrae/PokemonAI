@@ -27,11 +27,40 @@ class ContinuationOpportunity(str, Enum):
     WINNING_ATTACK = "winning_attack"
 
 
+class OpportunityRef(str):
+    def __new__(cls, kind, source=None):
+        value = str(getattr(kind, "value", kind))
+        instance = super().__new__(cls, value)
+        instance.source = None if source is None else str(source)
+        return instance
+
+    def __eq__(self, other):
+        if isinstance(other, OpportunityRef):
+            return str(self) == str(other) and self.source == other.source
+        return str(self) == str(getattr(other, "value", other))
+
+    __hash__ = str.__hash__
+
+    @classmethod
+    def decode(cls, value):
+        if isinstance(value, cls):
+            return value
+        if isinstance(value, str):
+            return cls(value)
+        if isinstance(value, dict) and set(value) == {"kind", "source"}:
+            return cls(value["kind"], value["source"])
+        raise TypeError(f"invalid opportunity reference {value!r}")
+
+    def wire(self):
+        return {"kind": str(self), "source": self.source}
+
+
 class RealizedOutcome(str, Enum):
     ACTION_ENDED_TURN = "action_ended_turn"
     EXPLICIT_TURN_END = "explicit_turn_end"
     GAME_WIN = "game_win"
     OPPONENT_ACTIVE_KNOCKOUT = "opponent_active_knockout"
+    OPPONENT_BODY_KNOCKOUT = "opponent_body_knockout"
 
 
 class DecisionFailureStage(str, Enum):
@@ -181,11 +210,23 @@ class ContinuationResult:
     zones_replaced: tuple[str, ...] = ()
     allowances_consumed: tuple[str, ...] = ()
     immediately_usable_outputs: tuple[str, ...] = ()
-    opportunities_created: tuple[str, ...] = ()
-    opportunities_preserved: tuple[str, ...] = ()
-    opportunities_consumed: tuple[str, ...] = ()
+    opportunities_created: tuple[OpportunityRef, ...] = ()
+    opportunities_preserved: tuple[OpportunityRef, ...] = ()
+    opportunities_consumed: tuple[OpportunityRef, ...] = ()
     policy_components: tuple[ValueComponent, ...] = ()
     realized_outcomes: tuple[RealizedOutcome, ...] = ()
+    executed_opportunity: OpportunityRef | None = None
+
+    def __post_init__(self):
+        for field in (
+                "opportunities_created", "opportunities_preserved",
+                "opportunities_consumed"):
+            object.__setattr__(self, field, tuple(
+                OpportunityRef.decode(value) for value in getattr(self, field)))
+        if self.executed_opportunity is not None:
+            object.__setattr__(
+                self, "executed_opportunity",
+                OpportunityRef.decode(self.executed_opportunity))
 
 
 @dataclass(frozen=True, slots=True)
@@ -351,7 +392,7 @@ class DecisionPolicy(Protocol):
 
 
 __all__ = (
-    "CandidateDisposition", "CandidateRoster", "ContinuationOpportunity",
+    "CandidateDisposition", "CandidateRoster", "ContinuationOpportunity", "OpportunityRef",
     "ContinuationResult", "DecisionChoice",
     "DecisionDelta", "DecisionFailure", "DecisionFailureStage", "DecisionReason",
     "FailSafeRequest",

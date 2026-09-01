@@ -3,20 +3,25 @@ from __future__ import annotations
 from dataclasses import replace
 from types import MappingProxyType
 
-from ledger_helpers import (DARKNESS, DARK_E, DRAKLOAK, DREEPY, FIRE_E, LILLIES, LUNATONE,
+import pytest
+
+from ledger_helpers import (DARKNESS, DARK_E, DRAGAPULT, DRAKLOAK, DREEPY, FIRE_E, LILLIES,
+                            LUNATONE, MAKUHITA,
                             PSYCHIC_E, body, player, printout)
 
 from common.ledger import EvaluationModel, evaluate
 from common.ledger.capabilities import (OptionUnits, body_capability, card_option_units,
-                                        card_option_value)
+                                        card_option_value, energy_marginal)
 from common.ledger.portfolio import feasible_option_portfolio_result
 from common.ledger.portfolio_solver import TurnPortfolioMemo
+from common.ledger.worth import legal_line_reach, line_reach
 from common.observation import ObservationStateBuilder
-from common.cards.card_facts import (BASIC, STAGE1, Clause, ITEM, SUPPORTER,
+from common.cards.card_facts import (BASIC, STAGE1, Ability, Clause, ITEM, SUPPORTER,
                                      PokemonCard, TrainerCard)
 
 
 DUNSPARCE = 65
+HARIYAMA = 674
 ENERGY_RETRIEVAL = 1118
 MUNKIDORI = 112
 SOLROCK = 676
@@ -90,6 +95,134 @@ def test_feasible_portfolio_counts_one_supporter_but_compatible_items():
     assert activation(one, "option.draw", context) == 2
     assert activation(duplicates, "option.draw", context) == 2
     assert activation(compatible, "option.draw", context) == 4
+
+
+def test_full_bench_basic_keeps_discounted_future_body_option():
+    state = board(me=player(
+        active=body(DUNSPARCE, 1),
+        bench=[body(DUNSPARCE, serial) for serial in range(2, 7)],
+        hand=[MAKUHITA]))
+
+    assert activation(state, "option.hp") > 0
+
+
+def test_full_bench_ko_trigger_is_not_discounted_twice_with_the_future_slot():
+    context = EvaluationModel.build()
+    conditional_id, plain_id = 9_999_132, 9_999_133
+    conditional = PokemonCard(
+        conditional_id, "Conditional Basic", 100, 5, BASIC,
+        abilities=(Ability("Comeback", clauses=(
+            Clause("draw", amount=2, condition="pokemon_ko_last_turn"),)),))
+    plain = replace(conditional, card_id=plain_id, name="Plain Basic",
+                    abilities=(Ability("Draw", clauses=(Clause("draw", amount=2),)),))
+    context = replace(context, store=MappingProxyType({
+        **context.store, conditional_id: conditional, plain_id: plain}))
+    state = board(me=player(
+        active=body(DUNSPARCE, 1),
+        bench=[body(DUNSPARCE, serial) for serial in range(2, 7)]))
+
+    conditional_units = card_option_units(
+        conditional, state.me, state.them, state, context)
+    plain_units = card_option_units(plain, state.me, state.them, state, context)
+
+    assert conditional_units.draw == plain_units.draw
+
+
+def test_future_self_recycling_draw_does_not_preprice_body_loss():
+    context = EvaluationModel.build()
+    card_id = 9_999_134
+    recycling = PokemonCard(
+        card_id, "Recycling Basic", 100, 5, BASIC,
+        abilities=(Ability("Recycle", clauses=(
+            Clause("draw", amount=2, rider="shuffle_self_in"),)),))
+    context = replace(context, store=MappingProxyType({**context.store, card_id: recycling}))
+    state = board(me=player(active=body(DUNSPARCE, 1)))
+
+    units = card_option_units(recycling, state.me, state.them, state, context)
+
+    assert units.draw > 0
+    assert units.cost == 0
+
+
+def test_full_bench_portfolio_keeps_only_best_visible_replacement_body():
+    context = EvaluationModel.build()
+    first_id, second_id = 9_999_135, 9_999_136
+    first = PokemonCard(
+        first_id, "First Reserve", 100, 5, BASIC,
+        abilities=(Ability("Draw One", clauses=(Clause("draw", amount=1),)),))
+    second = replace(
+        first, card_id=second_id, name="Second Reserve",
+        abilities=(Ability("Draw Two", clauses=(Clause("draw", amount=2),)),))
+    context = replace(context, store=MappingProxyType({
+        **context.store, first_id: first, second_id: second}))
+    full = [body(DUNSPARCE, serial) for serial in range(2, 7)]
+    one = board(me=player(active=body(DUNSPARCE, 1), bench=full, hand=[first_id]))
+    best = board(me=player(
+        active=body(DUNSPARCE, 1), bench=full, hand=[second_id]))
+    two = board(me=player(
+        active=body(DUNSPARCE, 1), bench=full, hand=[first_id, second_id]))
+
+    assert activation(two, "option.draw", context) == activation(
+        best, "option.draw", context)
+    assert activation(two, "option.draw", context) > activation(
+        one, "option.draw", context)
+
+
+def test_redundant_basic_reserve_is_discounted_by_fielded_line_count():
+    context = EvaluationModel.build()
+    one_line = board(me=player(
+        active=body(DRAGAPULT, 1, under=(DREEPY, DRAKLOAK)), hand=[DREEPY]))
+    three_lines = board(me=player(
+        active=body(DRAGAPULT, 1, under=(DREEPY, DRAKLOAK)),
+        bench=[body(DRAGAPULT, 2, under=(DREEPY, DRAKLOAK)),
+               body(DRAKLOAK, 3, under=(DREEPY,))], hand=[DREEPY]))
+
+    def reserve_attack(state):
+        facts = context.facts(DREEPY)
+        result = feasible_option_portfolio_result(
+            [(facts, card_option_units(
+                facts, state.me, state.them, state, context))],
+            state.me, state, context, hand_size=1)
+        return result.units.attack
+
+    assert reserve_attack(three_lines) < reserve_attack(one_line)
+
+
+def test_duplicate_pokegear_fetches_share_the_one_supporter_allowance():
+    context = EvaluationModel.build()
+    state = replace(
+        board(me=player(
+            active=body(DUNSPARCE, 1), hand=[POKEGEAR, POKEGEAR])),
+        deck_counts=((LILLIES, 2),))
+
+    chosen = feasible_option_portfolio(
+        [(context.facts(POKEGEAR), OptionUnits(search=1))] * 2,
+        state.me, state, context, hand_size=2)
+
+    assert chosen.search == 1
+
+
+def test_knockout_condition_preserves_discounted_future_option_value():
+    context = EvaluationModel.build()
+    conditional_id, unconditional_id = 9_999_130, 9_999_131
+    conditional = TrainerCard(
+        conditional_id, "Conditional Probe", ITEM,
+        clauses=(Clause("draw", amount=5, condition="pokemon_ko_last_turn"),),
+        covers="full")
+    unconditional = replace(
+        conditional, card_id=unconditional_id, name="Unconditional Probe",
+        clauses=(Clause("draw", amount=5),))
+    context = replace(context, store=MappingProxyType({
+        **context.store, conditional_id: conditional, unconditional_id: unconditional}))
+    state = board(me=player(
+        active=body(DUNSPARCE, 1), hand=[conditional_id, unconditional_id]))
+
+    conditional_units = card_option_units(
+        conditional, state.me, state.them, state, context)
+    unconditional_units = card_option_units(
+        unconditional, state.me, state.them, state, context)
+
+    assert 0 < conditional_units.draw < unconditional_units.draw
 
 
 def test_feasible_portfolio_canonicalizes_equivalent_sources_losslessly():
@@ -433,6 +566,39 @@ def test_salvatore_can_evolve_a_pokemon_played_this_turn():
     assert chosen.search == 1
 
 
+def test_salvatore_can_follow_a_deployable_basic_from_hand():
+    context = EvaluationModel.build()
+    state = replace(
+        board(me=player(
+            active=body(DUNSPARCE, 1), hand=[SALVATORE, 1030])),
+        deck_counts=((1031, 1),))
+
+    chosen = feasible_option_portfolio(
+        [(context.facts(SALVATORE), OptionUnits(search=1))],
+        state.me, state, context, hand_size=2)
+
+    units = card_option_units(
+        context.facts(SALVATORE), state.me, state.them, state, context)
+    assert units.search == 1
+    assert units.hp > 0
+    assert units.attack > 0
+    assert chosen.search == 1
+
+
+def test_salvatore_target_payoff_is_not_counted_twice():
+    context = EvaluationModel.build()
+    state = replace(
+        board(me=player(active=body(1030, 1), hand=[SALVATORE])),
+        deck_counts=((1031, 1),))
+    facts = context.facts(SALVATORE)
+    units = card_option_units(facts, state.me, state.them, state, context)
+
+    chosen = feasible_option_portfolio(
+        [(facts, units)], state.me, state, context, hand_size=1)
+
+    assert chosen == units
+
+
 def test_acceleration_requires_an_eligible_recipient():
     context = EvaluationModel.build()
     wondrous = board(me=player(
@@ -591,6 +757,21 @@ def test_known_valuable_prize_is_an_explicit_locked_option():
                for item in valuation.activations)
 
 
+def test_locked_option_value_does_not_move_when_a_hand_resource_is_spent():
+    held_printout = printout(
+        me=player(active=body(119, 1), hand=[DARK_E]), turn=3)
+    attached_printout = printout(
+        me=player(active=body(119, 1, energies=(DARKNESS,))), turn=3)
+    for printed in (held_printout, attached_printout):
+        printed["own_prizes"] = {str(MUNKIDORI): 1}
+    context = EvaluationModel.build()
+
+    held = evaluate(ObservationStateBuilder().root(held_printout), context)
+    attached = evaluate(ObservationStateBuilder().root(attached_printout), context)
+
+    assert held.part("me.prizes") == pytest.approx(attached.part("me.prizes"))
+
+
 def test_basic_pokemon_option_includes_its_complete_evolution_line():
     state = board(me=player(active=body(DUNSPARCE, 1)))
     context = EvaluationModel.build()
@@ -598,7 +779,38 @@ def test_basic_pokemon_option_includes_its_complete_evolution_line():
     assert card_option_units(
         context.facts(119), state.me, state.them, state, context).attack \
         > card_option_units(
-            context.facts(DUNSPARCE), state.me, state.them, state, context).attack
+        context.facts(DUNSPARCE), state.me, state.them, state, context).attack
+
+
+def test_basic_pokemon_keeps_discounted_future_value_when_the_bench_is_full():
+    context = EvaluationModel.build()
+    open_state = board(me=player(active=body(DREEPY, 1)))
+    full_state = board(me=player(
+        active=body(DREEPY, 1),
+        bench=[body(MUNKIDORI, 2), body(LUNATONE, 3), body(SOLROCK, 4),
+               body(ABRA, 5), body(APPLIN, 6)]))
+    facts = context.facts(DUNSPARCE)
+
+    open_units = card_option_units(
+        facts, open_state.me, open_state.them, open_state, context)
+    full_units = card_option_units(
+        facts, full_state.me, full_state.them, full_state, context)
+
+    assert 0 < full_units.total < open_units.total
+
+
+def test_evolution_keeps_discounted_future_value_with_its_parent_in_hand():
+    context = EvaluationModel.build()
+    future = board(me=player(active=body(DREEPY, 1), hand=[MAKUHITA]))
+    ready = board(me=player(active=body(DREEPY, 1), bench=[body(MAKUHITA, 2)]))
+    facts = context.facts(HARIYAMA)
+
+    future_units = card_option_units(
+        facts, future.me, future.them, future, context)
+    ready_units = card_option_units(
+        facts, ready.me, ready.them, ready, context)
+
+    assert 0 < future_units.total < ready_units.total
 
 
 def test_coin_flip_energy_denial_uses_its_expected_outcome():
@@ -637,6 +849,56 @@ def test_energy_option_has_diminishing_value_for_interchangeable_hand_copies():
 
     assert card_option_value(facts, one.me, one.them, one, context) \
         > card_option_value(facts, two.me, two.them, two, context)
+
+
+def test_hand_portfolio_keeps_one_attachment_option_across_duplicate_energy_copies():
+    one = board(me=player(active=body(119, 1), hand=[FIRE_E]))
+    two = board(me=player(active=body(119, 1), hand=[FIRE_E, FIRE_E]))
+    context = EvaluationModel.build()
+
+    def energy_option(state):
+        source = tuple(state.me.hand)[0]
+        return sum(
+            item.activation for item in evaluate(state, context).contributions
+            if item.feature == "option.energy"
+            and item.provenance[:1] == (
+                f"feasible_option_portfolio:serial:{source.serial}",))
+
+    assert energy_option(two) == energy_option(one)
+
+
+def test_energy_marginal_includes_legal_forward_evolution_attack_reach():
+    context = EvaluationModel.build()
+    riolu, mega_lucario = 677, 678
+    state = board(
+        me=player(active=body(riolu, 1),
+                  hand=[mega_lucario, BASIC_FIGHTING_ENERGY]),
+        them=player(own=False, active=body(DUNSPARCE, 2)), turn=5)
+    energy = context.facts(BASIC_FIGHTING_ENERGY)
+    reach = line_reach(
+        {context.facts(mega_lucario).name: 1}, state.deck_counts, context,
+        hand=state.me.hand, turn=state.turn)
+    legal = legal_line_reach(
+        state.me.active, reach, context, state.me.hand, state.turn)
+
+    assert energy_marginal(
+        state.me.active, energy, state.me, state.them, state, context,
+        reach=legal) > energy_marginal(
+            state.me.active, energy, state.me, state.them, state, context)
+
+
+def test_basic_option_carries_discounted_hp_of_its_forward_evolution_line():
+    context = EvaluationModel.build()
+    state = replace(
+        board(me=player(active=body(DUNSPARCE, 1))),
+        deck_counts=((1030, 1), (1031, 1)))
+
+    basic = card_option_units(
+        context.facts(1030), state.me, state.them, state, context)
+    evolution = card_option_units(
+        context.facts(1031), state.me, state.them, state, context)
+
+    assert basic.hp >= evolution.hp
 
 
 def test_spent_supporter_allowance_discounts_instead_of_erasing_next_turn_option():
@@ -723,6 +985,34 @@ def test_restricted_heals_accept_eligible_benched_targets():
     assert card_option_units(
         context.facts(WALLYS_COMPASSION), mega.me, mega.them, mega,
         context).healing > 0
+
+
+def test_eligible_heal_keeps_discounted_future_value_before_damage_arrives():
+    healthy = board(me=player(active=body(1031, 1, hp=330, max_hp=330)))
+    damaged = board(me=player(active=body(1031, 1, hp=100, max_hp=330)))
+    context = EvaluationModel.build()
+    facts = context.facts(WALLYS_COMPASSION)
+
+    future = card_option_units(
+        facts, healthy.me, healthy.them, healthy, context).healing
+    current = card_option_units(
+        facts, damaged.me, damaged.them, damaged, context).healing
+
+    assert 0 < future < current
+
+
+def test_restricted_future_heal_requires_the_eligible_evolution_in_reach():
+    context = EvaluationModel.build()
+    absent = replace(
+        board(me=player(active=body(1030, 1, hp=70, max_hp=70))),
+        deck_counts=())
+    reachable = replace(absent, deck_counts=((1031, 1),))
+    facts = context.facts(WALLYS_COMPASSION)
+
+    assert card_option_units(
+        facts, absent.me, absent.them, absent, context).healing == 0
+    assert card_option_units(
+        facts, reachable.me, reachable.them, reachable, context).healing > 0
 
 
 def test_arvens_sandwich_uses_only_the_active_pokemon_and_not_both_modes():

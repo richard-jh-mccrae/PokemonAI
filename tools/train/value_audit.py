@@ -119,6 +119,12 @@ def _audit(row) -> dict:
     committed_selection = list(row.get("recorded_chosen", row.get("chosen", ())))
     acceptable = [list(selection or ()) for selection in row.get(
         "acceptable", (row.get("correct") or (),))]
+    for candidate in row.get("candidates", ()):
+        equivalents = [list(selection) for selection in candidate.get(
+            "equivalent_selections", ())]
+        if any(selection in acceptable for selection in equivalents):
+            acceptable.extend(selection for selection in equivalents
+                              if selection not in acceptable)
     satisfied_by_committed = committed_selection in acceptable
     committed = _candidate(row, committed_selection)
     ruled_candidates = tuple(_candidate(row, selection) for selection in acceptable)

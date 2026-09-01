@@ -16,7 +16,7 @@ ROLES = Roles({
 STRATEGY = Strategy(
     name="mega_starmie",
     roles=ROLES,
-    ledger_overlay={"demand.dead": 0.15, "kind.special_energy": 0.05,
+    ledger_overlay={"kind.special_energy": 0.05,
                     "energy.concentration": 0.02},
     starter_priority=(CINDERACE, STARYU),
     prize_plan=PrizePlan(protect=(MEGA_STARMIE_EX,), offer=(CINDERACE,)),

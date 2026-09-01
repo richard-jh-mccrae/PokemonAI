@@ -17,8 +17,8 @@ from common.algebra import (Actor, Chance, Choice, Deterministic, Refresh, Revea
                             Terminal, Unknown)
 from common.cards import card_clauses
 from common.cards.card_facts import SUPPORTER, EnergyCard, PokemonCard, TrainerCard
-from common.decision import (ContinuationOpportunity, EvaluationStatus, RealizedOutcome,
-                             SearchConfiguration, SuccessorResult)
+from common.decision import (ContinuationOpportunity, EvaluationStatus, OpportunityRef,
+                             RealizedOutcome, SearchConfiguration, SuccessorResult)
 from common.observation import ObservationState, ObservationStateBuilder, TransitionTrace
 from common.strategy.context import (_ACTIVE, _BENCH, _DAMAGE, _DAMAGE_COUNTER_ANY, _DECK,
                                      _DISCARD, _EVOLVE, _HAND, _LOOKING, _MAIN, _PLAY,
@@ -37,9 +37,13 @@ from .prizes import PrizeMap
 from .worth import EvaluationModel, any_attack_payable
 
 LOTTERY_DIGEST_BYTES = 8
-PRIZE_PHASE_PIVOT = 4
 PRIZE_AREA = 6
 FORCED_FOOTPRINT_SLOT = 3
+CONSUMED_OPPORTUNITY_INDEX = 2
+BODY_SOURCE_PREFIX_GROUP = 1
+EVOLUTION_SOURCE_CARD_GROUP = 2
+OPPORTUNITY_SOURCE_KIND_GROUP = 2
+OPPORTUNITY_SOURCE_CARD_GROUP = 3
 
 
 @dataclass(frozen=True)
@@ -51,13 +55,14 @@ class ContinuationFootprint:
     zones_replaced: tuple[str, ...] = ()
     allowances_consumed: tuple[str, ...] = ()
     immediately_usable_outputs: tuple[str, ...] = ()
-    opportunities_created: tuple[str, ...] = ()
-    opportunities_preserved: tuple[str, ...] = ()
-    opportunities_consumed: tuple[str, ...] = ()
+    opportunities_created: tuple[OpportunityRef, ...] = ()
+    opportunities_preserved: tuple[OpportunityRef, ...] = ()
+    opportunities_consumed: tuple[OpportunityRef, ...] = ()
     activations: tuple[FeatureActivation, ...] = ()
     contributions: tuple[FeatureContribution, ...] = ()
     policy_contributions: tuple[FeatureContribution, ...] = ()
     realized_outcomes: tuple[RealizedOutcome, ...] = ()
+    executed_opportunity: OpportunityRef | None = None
 
 
 @dataclass(frozen=True)
@@ -80,10 +85,11 @@ class _RawFootprint:
     zones_replaced: tuple[str, ...] = ()
     allowances_consumed: tuple[str, ...] = ()
     immediately_usable_outputs: tuple[str, ...] = ()
-    opportunities_created: tuple[str, ...] = ()
-    opportunities_preserved: tuple[str, ...] = ()
-    opportunities_consumed: tuple[str, ...] = ()
+    opportunities_created: tuple[OpportunityRef, ...] = ()
+    opportunities_preserved: tuple[OpportunityRef, ...] = ()
+    opportunities_consumed: tuple[OpportunityRef, ...] = ()
     activations: tuple[tuple[str, float], ...] = ()
+    executed_opportunity: OpportunityRef | None = None
 
 
 def price_actions(state, board: ObservationState, baseline: float, provider,
@@ -178,13 +184,16 @@ def price_actions(state, board: ObservationState, baseline: float, provider,
         walk = _Walk(
             provider, ctx, board.decklist, compute, budget, valuation_fn)
         node = provider.transition(state, action)
-        information_value, information_capped = _immediate_information_value(
+        _information_value, information_capped = _immediate_information_value(
             node, compute.path_node_budget)
         if information_capped:
             walk.gaps.append("information branches capped")
         successor, end_probability, landings = walk.node(
             state, board, node, compute.depth_budget)
         landings = _coalesce_landings(landings)
+        local_action_contribution = _event_contributions(
+            "action", _local_action_events(board, action, ctx, landings),
+            ctx, "action")
         ends_turn = end_probability >= 1.0
         state_delta = successor.total - baseline_valuation.total
         activation = -(1.0 - end_probability)
@@ -194,9 +203,15 @@ def price_actions(state, board: ObservationState, baseline: float, provider,
         state_contributions = _state_contributions(
             baseline_valuation, successor, ctx)
         realization_contributions = _realized_portfolio_contributions(
-            baseline_valuation, board, action)
-        discard_contributions = _discard_spend_contributions(
             baseline_valuation, board, action, ctx)
+        discard_contributions = (
+            *_discard_spend_contributions(
+                baseline_valuation, board, action, ctx, valuation_fn),
+            *_compound_discard_spend_contributions(
+                baseline_valuation, board, action, landings, ctx, valuation_fn),
+            *_refresh_spend_contributions(
+                baseline_valuation, board, action, node),
+        )
         track_opportunities = not isinstance(node, (Chance, Refresh, RevealChoice))
         footprint_landings = landings
         footprint_values = _root_footprint(
@@ -220,24 +235,23 @@ def price_actions(state, board: ObservationState, baseline: float, provider,
                 immediately_usable_outputs=tuple(sorted(set((
                     *footprint_values.immediately_usable_outputs, "hand")))),
                 opportunities_consumed=tuple(sorted(set((
-                    *footprint_values.opportunities_consumed, "play")))))
+                    *footprint_values.opportunities_consumed,
+                    OpportunityRef("play"))), key=_opportunity_sort_key)))
         footprint_values = _with_portfolio_opportunity_losses(
             footprint_values, state_contributions, original_actions)
         footprint_contributions = _footprint_contributions(footprint_values, ctx)
-        information_contributions = _event_contributions(
-            "continuation", (("information_value", information_value),),
-            ctx, "continuation.information")
         dependency_contributions = _dependency_reach_contributions(
-            board, landings, ctx)
+            board, action, landings, ctx)
         if sum(item.value for item in dependency_contributions) > 0.0:
             footprint_values = replace(
                 footprint_values,
                 opportunities_created=tuple(sorted(set((
                     *footprint_values.opportunities_created,
-                    ContinuationOpportunity.DEPENDENCY_REACH)))))
+                    OpportunityRef(ContinuationOpportunity.DEPENDENCY_REACH))),
+                    key=_opportunity_sort_key)))
         policy_contributions = (
             *action_contribution, *local_action_contribution,
-            *footprint_contributions, *information_contributions,
+            *footprint_contributions,
             *realization_contributions, *discard_contributions,
             *dependency_contributions)
         opportunity_cost = sum(item.value for item in policy_contributions)
@@ -251,7 +265,8 @@ def price_actions(state, board: ObservationState, baseline: float, provider,
             footprint_values.immediately_usable_outputs,
             footprint_values.opportunities_created,
             footprint_values.opportunities_preserved,
-            footprint_values.opportunities_consumed, activations, contributions)
+            footprint_values.opportunities_consumed, activations, contributions,
+            executed_opportunity=footprint_values.executed_opportunity)
         footprint = replace(
             footprint,
             policy_contributions=policy_contributions,
@@ -438,10 +453,11 @@ class _Walk:
                 break
             result = self.node(
                 state, board, self.provider.transition(state, action), depth - 1)
-            local = sum(item.value for item in _event_contributions(
-                "action", _local_action_events(board, action, self.ctx),
-                self.ctx, "action"))
             valuation, end_probability, landings = result
+            local = sum(item.value for item in _event_contributions(
+                "action", _local_action_events(
+                    board, action, self.ctx, landings),
+                self.ctx, "action"))
             footprint = _root_footprint(
                 board, self.provider, state, action, landings, self.gaps,
                 self.ctx,
@@ -643,9 +659,9 @@ def _root_footprint(board: ObservationState, provider, state, action, landings, 
         "zone_created", "zone_replaced", "allowance_consumed", "usable_output",
         "opportunity_created", "opportunity_preserved", "opportunity_consumed")}
     before = zones(board)
-    before_actions = (_legal_inventory(provider, state, gaps)
+    before_actions = (_legal_inventory(provider, state, board, gaps)
                       if track_opportunities else Counter())
-    executed_kind = _action_key(action)
+    executed_kind = _action_opportunity(action, board)
     if before_actions[executed_kind] > 0:
         before_actions[executed_kind] -= 1
         if before_actions[executed_kind] == 0:
@@ -663,12 +679,20 @@ def _root_footprint(board: ObservationState, provider, state, action, landings, 
         branch_outputs.update(development_outputs(board, successor))
         after_actions = (Counter() if ended or not track_opportunities
                          else _legal_inventory(
-                             provider, landing_state, gaps, report_missing=False))
+                             provider, landing_state, successor, gaps,
+                             report_missing=False))
+        after_actions = _remap_body_sources(
+            after_actions, board, successor)
+        after_actions = _remap_evolution_sources(
+            before_actions, after_actions, executed_kind, board, successor)
         branch_opportunities = ((Counter(), Counter(), Counter())
                                 if ended or not track_opportunities or not after_actions else (
                                     after_actions - before_actions,
                                     after_actions & before_actions,
                                     before_actions - after_actions))
+        if (not ended and track_opportunities
+                and str(executed_kind) == "ability"):
+            branch_opportunities[CONSUMED_OPPORTUNITY_INDEX][executed_kind] += 1
         branch_groups = (branch_created, branch_replaced, branch_allowances, branch_outputs,
                          *branch_opportunities)
         for label, feature, items in zip(labels, activations, branch_groups):
@@ -676,12 +700,128 @@ def _root_footprint(board: ObservationState, provider, state, action, landings, 
             units = sum(items.values()) if isinstance(items, Counter) else len(items)
             activations[feature] += probability * units
     return _RawFootprint(
-        *(tuple(sorted(labels[name])) for name in labels),
-        tuple((feature, value) for feature, value in activations.items() if value))
+        *(tuple(sorted(labels[name], key=_opportunity_sort_key)) for name in labels),
+        tuple((feature, value) for feature, value in activations.items() if value),
+        executed_kind)
 
 
 def _action_key(action) -> str:
     return str(action.identity.kind)
+
+
+def _opportunity_sort_key(value):
+    return str(value), getattr(value, "source", None) or ""
+
+
+def _action_opportunity(action, board) -> OpportunityRef:
+    source = None
+    if board.select is not None:
+        for index in action.selection:
+            if not isinstance(index, int) or not 0 <= index < len(board.select.options):
+                continue
+            option = board.select.options[index]
+            area = option.inPlayArea if option.inPlayArea is not None else option.area
+            position = option.inPlayIndex if option.inPlayIndex is not None else option.index
+            seat = board.seat if option.playerIndex in {None, board.seat} else 1 - board.seat
+            if area in {_ACTIVE, _BENCH}:
+                source = _body_opportunity_source(
+                    board, seat, area, position, _action_key(action))
+            if source is not None:
+                break
+    return OpportunityRef(_action_key(action), source)
+
+
+def _body_opportunity_source(board, seat, area, position, kind):
+    side = board.me if seat == board.seat else board.them
+    target = (side.active if area == _ACTIVE else
+              side.bench[position] if isinstance(position, int)
+              and 0 <= position < len(side.bench) else None)
+    if target is None:
+        return None
+    prefix = _body_source_prefix(side, seat, target)
+    return f"{prefix}:{kind}:{target.card.card_id}"
+
+
+def _remap_body_sources(after, board, successor):
+    prefixes = {}
+    for before_side, after_side, seat in (
+            (board.me, successor.me, board.seat),
+            (board.them, successor.them, 1 - board.seat)):
+        before_by_serial = {
+            body.card.serial: _body_source_prefix(before_side, seat, body)
+            for body in before_side.bodies if body.card.serial is not None}
+        for body in after_side.bodies:
+            serial = body.card.serial
+            if serial is None or serial not in before_by_serial:
+                continue
+            prefixes[_body_source_prefix(after_side, seat, body)] = before_by_serial[serial]
+    remapped = Counter()
+    for opportunity, count in after.items():
+        match = re.fullmatch(
+            r"(seat:\d+:body:\d+:\d+):([^:]+):(\d+)",
+            opportunity.source or "")
+        if match is None or match.group(BODY_SOURCE_PREFIX_GROUP) not in prefixes:
+            remapped[opportunity] += count
+            continue
+        prefix = prefixes[match.group(BODY_SOURCE_PREFIX_GROUP)]
+        kind = match.group(OPPORTUNITY_SOURCE_KIND_GROUP)
+        card_id = match.group(OPPORTUNITY_SOURCE_CARD_GROUP)
+        remapped[OpportunityRef(kind, f"{prefix}:{kind}:{card_id}")] += count
+    return remapped
+
+
+def _body_source_prefix(side, seat, target):
+    card_id = target.card.card_id
+    peers = [body for body in side.bodies if body.card.card_id == card_id]
+    ordinal = next(index for index, body in enumerate(peers) if body is target)
+    return f"seat:{seat}:body:{card_id}:{ordinal}"
+
+
+def _remap_evolution_sources(before, after, executed, board, successor):
+    if str(executed) != "evolve" or executed.source is None:
+        return after
+    match = re.fullmatch(
+        r"(seat:\d+:body:(\d+):\d+):evolve:\d+", executed.source)
+    if match is None:
+        return after
+    selected_prefix = match.group(BODY_SOURCE_PREFIX_GROUP)
+    old_card_id = int(match.group(EVOLUTION_SOURCE_CARD_GROUP))
+    before_counts = Counter(body.card.card_id for body in board.me.bodies)
+    after_counts = Counter(body.card.card_id for body in successor.me.bodies)
+    evolved_ids = {
+        card_id for card_id, count in (after_counts - before_counts).items()
+        if count > 0}
+    available = {}
+    for opportunity in sorted(before, key=_opportunity_sort_key):
+        source_match = re.fullmatch(
+            r"(seat:\d+:body:\d+:\d+):([^:]+):(\d+)",
+            opportunity.source or "")
+        if (source_match is None
+                or int(source_match.group(OPPORTUNITY_SOURCE_CARD_GROUP)) != old_card_id
+                or source_match.group(BODY_SOURCE_PREFIX_GROUP) == selected_prefix):
+            continue
+        available.setdefault(str(opportunity), []).extend(
+            [source_match.group(BODY_SOURCE_PREFIX_GROUP)] * before[opportunity])
+    remapped = Counter()
+    for opportunity, count in sorted(after.items(), key=lambda item: _opportunity_sort_key(item[0])):
+        source_match = re.fullmatch(
+            r"(seat:\d+:body:\d+:\d+):([^:]+):(\d+)",
+            opportunity.source or "")
+        if source_match is None:
+            remapped[opportunity] += count
+            continue
+        kind = source_match.group(OPPORTUNITY_SOURCE_KIND_GROUP)
+        card_id = int(source_match.group(OPPORTUNITY_SOURCE_CARD_GROUP))
+        for _copy in range(count):
+            if card_id in evolved_ids:
+                prefix = selected_prefix
+            elif card_id == old_card_id and available.get(str(opportunity)):
+                prefix = available[str(opportunity)].pop(0)
+            else:
+                remapped[opportunity] += 1
+                continue
+            remapped[OpportunityRef(kind, f"{prefix}:{kind}:{card_id}")] += 1
+    return remapped
 
 
 def _action_roster_key(action):
@@ -711,7 +851,8 @@ def _with_hand_evolution_opportunity(footprint, board, action, ctx):
     return replace(
         footprint,
         opportunities_created=tuple(sorted((
-            *footprint.opportunities_created, "future_evolve"))),
+            *footprint.opportunities_created, OpportunityRef("future_evolve")),
+            key=_opportunity_sort_key)),
         activations=tuple(activations.items()))
 
 
@@ -736,15 +877,16 @@ def _with_lethal_attack_opportunity(footprint, board, action, ctx, landings=()):
         return footprint
     opportunities = set(footprint.opportunities_created)
     if damage_boost_lethal:
-        opportunities.add(ContinuationOpportunity.LETHAL_ATTACK)
+        opportunities.add(OpportunityRef(ContinuationOpportunity.LETHAL_ATTACK))
     if successor_winning:
-        opportunities.add(ContinuationOpportunity.WINNING_ATTACK)
+        opportunities.add(OpportunityRef(ContinuationOpportunity.WINNING_ATTACK))
     activations = Counter(dict(footprint.activations))
     activations["opportunity_created"] += (
         len(opportunities) - len(footprint.opportunities_created))
     return replace(
         footprint,
-        opportunities_created=tuple(sorted(opportunities)),
+        opportunities_created=tuple(sorted(
+            opportunities, key=_opportunity_sort_key)),
         activations=tuple(activations.items()))
 
 
@@ -756,16 +898,13 @@ def _attack_wins_game(board, ctx):
     return prizes >= board.them.prize_count or not board.them.bench
 
 
-def _local_action_events(board, action, ctx=None):
-    dead_discard = _dead_discard(board, action, ctx)
+def _local_action_events(board, action, ctx=None, landings=()):
+    dead_discard = _dead_discard(board, action, ctx, landings)
     if dead_discard:
         return (("dead_discard", dead_discard),)
     dead_play = _dead_play(board, action, ctx)
     if dead_play:
         return (("dead_play", dead_play),)
-    draw_before_refresh = _draw_before_refresh(board, action, ctx)
-    if draw_before_refresh:
-        return (("draw_before_refresh", draw_before_refresh),)
     play_before_refresh = _play_before_refresh(board, action, ctx)
     if play_before_refresh:
         return (("play_before_refresh", play_before_refresh),)
@@ -785,6 +924,8 @@ def _local_action_events(board, action, ctx=None):
         return (("body_ability_ready", 1.0),)
     if commitment := _evolution_target_commitment(board, action):
         return (("evolution_target_commitment", commitment),)
+    if ctx is not None and _duplicate_body_deployment(board, action, ctx):
+        return (("duplicate_body_deployment", 1.0),)
     if ctx is not None and (overflow := _body_copy_overflow(board, action, ctx)):
         return (("body_copy_overflow", overflow),)
     if ctx is not None and _retreats_doomed_denial(board, action, ctx):
@@ -828,6 +969,18 @@ def _local_action_events(board, action, ctx=None):
                         * math.sqrt(prize_value) * (1.0 + threat))
             return (("damage_counter_progress", progress),)
     return ()
+
+
+def _duplicate_body_deployment(board, action, ctx):
+    if action.identity.kind != "play":
+        return False
+    selected = _selected_cards(board, action)
+    return len(selected) == 1 and any(
+        card_id is not None
+        and isinstance(ctx.facts(card_id), PokemonCard)
+        and body.card.card_id == card_id
+        for _serial, card_id in selected
+        for body in board.me.bodies)
 
 
 def _spends_gust(board, action, ctx):
@@ -902,22 +1055,28 @@ def _option_body(board, option):
     return None
 
 
-def _dead_discard(board, action, ctx):
+def _dead_discard(board, action, ctx, landings=()):
     if ctx is None or board.select is None or board.select.context != _DISCARD:
         return 0.0
     from .worth import Demand, DemandState, _liveness
 
-    demand = Demand.read(board.me, ctx, board.turn)
     expendability = {
         DemandState.DEAD: 1.0,
         DemandState.COLORLESS_ONLY: 1.0,
     }
+    cards = tuple(card_id for _serial, card_id in _selected_cards(board, action)
+                  if card_id is not None)
+    states = ((1.0, board),) if not landings else tuple(
+        (probability, successor)
+        for probability, _state, successor, _ended, _path in landings)
     return float(sum(
-        expendability.get(
-            _liveness(card_id, ctx.facts(card_id), demand, ctx, board.deck_counts)[0],
-            0.0)
-        for _serial, card_id in _selected_cards(board, action)
-        if card_id is not None))
+        probability * sum(
+            expendability.get(_liveness(
+                card_id, ctx.facts(card_id),
+                Demand.read(successor.me, ctx, successor.turn), ctx,
+                successor.deck_counts)[0], 0.0)
+            for card_id in cards)
+        for probability, successor in states))
 
 
 def _dead_play(board, action, ctx):
@@ -926,11 +1085,16 @@ def _dead_play(board, action, ctx):
     from .worth import Demand, DemandState, _liveness
 
     demand = Demand.read(board.me, ctx, board.turn)
-    return float(sum(
-        _liveness(card_id, ctx.facts(card_id), demand, ctx, board.deck_counts)[0]
-        is DemandState.DEAD
-        for _serial, card_id in _selected_cards(board, action)
-        if card_id is not None))
+    dead = 0
+    for _serial, card_id in _selected_cards(board, action):
+        if card_id is None:
+            continue
+        facts = ctx.facts(card_id)
+        state, _capacity = _liveness(
+            card_id, facts, demand, ctx, board.deck_counts)
+        dead += state is DemandState.DEAD or (
+            isinstance(facts, TrainerCard) and state is not DemandState.LIVE)
+    return float(dead)
 
 
 def _retreats_doomed_denial(board, action, ctx):
@@ -1026,12 +1190,17 @@ def _body_ability_ready(board, action, ctx):
 
 def _acceleration_phase_events(board, action, ctx):
     from .capabilities import energy_marginal
-    from .worth import _forward_lines
+    from .worth import Reach, legal_line_reach, line_reach
 
     context_card = board.select.context_card
     energy = None if context_card is None else ctx.facts(context_card.card_id)
     if not isinstance(energy, EnergyCard):
         return ()
+    hand_names = Counter(
+        facts.name for card in tuple(board.me.hand)
+        if (facts := ctx.facts(card.card_id)) is not None)
+    reach = line_reach(
+        hand_names, board.deck_counts, ctx, hand=board.me.hand, turn=board.turn)
     values = []
     for selection in action.selection:
         if not 0 <= selection < len(board.select.options):
@@ -1043,8 +1212,10 @@ def _acceleration_phase_events(board, action, ctx):
         side = board.me if option.playerIndex in {None, board.seat} else board.them
         opponent = board.them if side is board.me else board.me
         facts = ctx.facts(body.card.card_id)
-        line = (facts, *(ctx.facts(card_id)
-                         for card_id in _forward_lines().get(facts.name, ())))
+        body_reach = legal_line_reach(
+            body, reach, ctx, board.me.hand, board.turn)
+        line = (facts, *(ctx.facts(card_id) for card_id, status in body_reach.items()
+                         if status is not Reach.ABSENT))
         route_prizes = max((int(getattr(card, "prize_value", 1) or 1)
                             for card in line if card is not None), default=1)
         damage_per_energy = max((
@@ -1054,43 +1225,11 @@ def _acceleration_phase_events(board, action, ctx):
         typed_route = any(
             energy.provides in attack.cost
             for card in line if card is not None for attack in card.attacks)
-        phase_match = ((route_prizes > 1) == (
-            side is board.me and board.them.prize_count <= PRIZE_PHASE_PIVOT))
         route_fit = damage_per_energy if typed_route else 0.0
-        phase_fit = (1.0 if phase_match else -1.0) * route_fit
-        marginal = energy_marginal(body, energy, side, opponent, board, ctx)
-        values.append(marginal + route_fit + phase_fit)
+        marginal = energy_marginal(
+            body, energy, side, opponent, board, ctx, reach=body_reach)
+        values.append(route_prizes * marginal + route_fit)
     return (("acceleration_phase_fit", sum(values)),) if values else ()
-
-
-def _draw_before_refresh(board, action, ctx):
-    if ctx is None or action.identity.kind != "ability" or board.select is None \
-            or board.turn.supporter_played:
-        return 0.0
-    refresh_available = any(
-        isinstance(facts := ctx.facts(card.card_id), TrainerCard)
-        and facts.kind == SUPPORTER
-        and any(clause.kind == "draw" and clause.rider == "shuffle_own_hand_in"
-                for clause in card_clauses(facts))
-        for card in tuple(board.me.hand))
-    if not refresh_available or len(action.selection) != 1:
-        return 0.0
-    selected = action.selection[0]
-    if not 0 <= selected < len(board.select.options):
-        return 0.0
-    option = board.select.options[selected]
-    area = option.inPlayArea if option.inPlayArea is not None else option.area
-    index = option.inPlayIndex if option.inPlayIndex is not None else option.index
-    if area == _BENCH and isinstance(index, int) and 0 <= index < len(board.me.bench):
-        body = board.me.bench[index]
-    elif area == _ACTIVE and board.me.active is not None:
-        body = board.me.active
-    else:
-        return 0.0
-    facts = ctx.facts(body.card.card_id)
-    return max((float(clause.amount or 1)
-                for ability in getattr(facts, "abilities", ())
-                for clause in ability.clauses if clause.kind == "draw"), default=0.0)
 
 
 def _play_before_refresh(board, action, ctx):
@@ -1125,9 +1264,10 @@ def _payload(state):
     return found if found is not None else state.observation
 
 
-def _legal_inventory(provider, state, gaps, *, report_missing=True) -> Counter[str]:
+def _legal_inventory(provider, state, board, gaps, *, report_missing=True) -> Counter:
     try:
-        return Counter(_action_key(action) for action in provider.actions(state))
+        return Counter(
+            _action_opportunity(action, board) for action in provider.actions(state))
     except (KeyError, LookupError) as exc:
         if report_missing:
             gaps.append(f"continuation action inventory unavailable: {type(exc).__name__}")
@@ -1139,18 +1279,23 @@ def _footprint_contributions(values, ctx):
         "continuation", values.activations, ctx, "continuation.footprint")
 
 
-def _dependency_reach_contributions(board, landings, ctx):
-    before = dict(hand_dependency_reach_units(
-        board.me, board.them, board, ctx).activations())
-    after = Counter()
+def _dependency_reach_contributions(board, action, landings, ctx):
+    delta = Counter()
+    root_sources = _portfolio_sources(board, action)
     for probability, _state, successor, _ended, _path in landings:
-        units = hand_dependency_reach_units(
+        committed = _without_hand_sources(board, (
+            *root_sources, *_forced_hand_discard_sources(
+                board, action, successor)))
+        before = dict(hand_dependency_reach_units(
+            committed.me, committed.them, committed, ctx).activations())
+        after = dict(hand_dependency_reach_units(
             successor.me, successor.them, successor, ctx)
-        for feature, value in units.activations():
-            after[feature] += probability * value
+                     .activations())
+        for feature in set(before) | set(after):
+            delta[feature] += probability * (
+                after.get(feature, 0.0) - before.get(feature, 0.0))
     contributions = []
-    for feature in sorted(set(before) | set(after)):
-        activation = after[feature] - before.get(feature, 0.0)
+    for feature, activation in sorted(delta.items()):
         if not activation:
             continue
         coefficient = ctx.configuration[feature]
@@ -1192,7 +1337,11 @@ def _realized_outcomes(board, action, landings, ctx, *, ends_turn=False):
     lethal_without_serial = (
         active_serial is None and _selected_attack_is_lethal(board, action, ctx))
     knockout_probability = 0.0
+    body_knockout_probability = 0.0
     win_probability = 0.0
+    original_serials = {
+        body.card.serial for body in (board.them.active, *board.them.bench)
+        if body is not None and body.card.serial is not None}
     for probability, _state, successor, _ended, _path in landings:
         result = successor.turn.result
         if (isinstance(result, int) and not isinstance(result, bool)
@@ -1200,18 +1349,27 @@ def _realized_outcomes(board, action, landings, ctx, *, ends_turn=False):
             win_probability += probability
         if successor.me.prize_count >= board.me.prize_count:
             continue
+        bodies = tuple(body for body in (successor.them.active, *successor.them.bench)
+                       if body is not None)
+        surviving_serials = {
+            body.card.serial for body in bodies
+            if body.card.serial is not None and body.hp > 0}
         if active_serial is None:
             if lethal_without_serial:
                 knockout_probability += probability
+            elif original_serials - surviving_serials:
+                body_knockout_probability += probability
             continue
-        bodies = tuple(body for body in (successor.them.active, *successor.them.bench)
-                       if body is not None)
         original = next((body for body in bodies
                          if body.card.serial == active_serial), None)
         if original is None or original.hp <= 0:
             knockout_probability += probability
+        elif original_serials - surviving_serials:
+            body_knockout_probability += probability
     outcomes = (() if not math.isclose(knockout_probability, 1.0) else
                 (RealizedOutcome.OPPONENT_ACTIVE_KNOCKOUT,))
+    if not outcomes and math.isclose(body_knockout_probability, 1.0):
+        outcomes = (RealizedOutcome.OPPONENT_BODY_KNOCKOUT,)
     if math.isclose(win_probability, 1.0):
         outcomes = (*outcomes, RealizedOutcome.GAME_WIN)
     if ends_turn:
@@ -1234,7 +1392,8 @@ def _with_portfolio_opportunity_losses(values, contributions, root_actions):
     activations["opportunity_consumed"] = (
         activations.get("opportunity_consumed", 0.0) + added)
     return replace(
-        values, opportunities_consumed=tuple(sorted(consumed)),
+        values, opportunities_consumed=tuple(sorted(
+            consumed, key=_opportunity_sort_key)),
         activations=tuple(sorted(activations.items())))
 
 
@@ -1304,74 +1463,159 @@ def _portfolio_sources(board, action):
     return tuple(sources)
 
 
-def _realized_portfolio_contributions(baseline, board, action):
+def _realized_portfolio_contributions(baseline, board, action, ctx=None):
     if action.identity.kind not in {"play", "attach", "evolve"} or board.select is None:
         return ()
     tokens = _portfolio_tokens(board, action)
     if len(tokens) != 1:
         return ()
     token = tokens[0]
+    selected = tuple(card_id for _serial, card_id in _selected_cards(board, action)
+                     if card_id is not None)
+    recovery = bool(ctx is not None and len(selected) == 1 and any(
+        clause.kind in {"fetch", "energy_recur"}
+        and (clause.zone or clause.source) == "discard"
+        for clause in card_clauses(ctx.facts(selected[0]))))
+    marker = (("action.recovery",) if recovery else ())
     realized = tuple(FeatureContribution(
         item.feature, item.activation, item.coefficient, item.value,
-        ("action.realized_portfolio", *item.provenance))
+        ("action.realized_portfolio", *marker, *item.provenance))
         for item in baseline.contributions if token in item.provenance)
-    return realized
+    if realized or ctx is None:
+        return realized
+    from .capabilities import card_option_units
+
+    if len(selected) != 1:
+        return ()
+    selected_facts = ctx.facts(selected[0])
+    if not any(clause.cost for clause in card_clauses(selected_facts)):
+        return ()
+    units = card_option_units(
+        selected_facts, board.me, board.them, board, ctx)
+    return tuple(
+        FeatureContribution(
+            feature, activation, ctx.configuration[feature],
+            activation * ctx.configuration[feature],
+            ("action.realized_portfolio", *marker, token))
+        for feature, activation in units.activations()
+        if activation and activation * ctx.configuration[feature] > 0)
 
 
-def _discard_spend_contributions(baseline, board, action, ctx=None):
+def _discard_spend_contributions(
+        baseline, board, action, ctx=None, valuation_fn=None):
     if (action.identity.kind != "card" or board.select is None
             or board.select.context != _DISCARD):
         return ()
-    selected = _selected_cards(board, action)
-    remaining = Counter(card.card_id for card in tuple(board.me.hand))
-    for _serial, card_id in selected:
-        if card_id is not None:
-            remaining[card_id] -= 1
     sources = _portfolio_sources(board, action)
-    tokens = {
-        token for token, _serial, card_id in sources
-        if card_id is None or remaining[card_id] <= 0}
-    dead_tokens = set()
-    if ctx is not None:
-        from .worth import Demand, DemandState, _liveness
+    return _discard_source_contributions(
+        baseline, board, sources, ctx, valuation_fn)
 
-        demand = Demand.read(board.me, ctx, board.turn)
-        dead_tokens = {
-            token for token, _serial, card_id in sources
-            if card_id is not None
-            and _liveness(
-                card_id, ctx.facts(card_id), demand, ctx, board.deck_counts)[0]
-            in {DemandState.DEAD, DemandState.COLORLESS_ONLY}}
-    contributions = list(FeatureContribution(
-        item.feature, -item.activation, item.coefficient, -item.value,
-        ("action.discard_spend", *item.provenance))
-        for item in baseline.contributions
-        if item.value > 0 and tokens.intersection(item.provenance)
-        and not dead_tokens.intersection(item.provenance))
-    if ctx is not None:
-        from .capabilities import card_option_units
 
-        for token, _serial, card_id in sources:
-            if token not in tokens or token in dead_tokens or card_id is None:
-                continue
-            units = card_option_units(
-                ctx.facts(card_id), board.me, board.them, board, ctx)
-            owned_features = {
-                item.feature for item in baseline.contributions
-                if token in item.provenance and item.feature.startswith("option.")}
-            if owned_features:
-                continue
-            for feature, activation in units.activations():
-                if not activation or feature == "option.cost":
-                    continue
-                coefficient = ctx.configuration[feature]
-                spent_activation = -activation
-                value = spent_activation * coefficient
-                if value < 0:
-                    contributions.append(FeatureContribution(
-                        feature, spent_activation, coefficient, value,
-                        ("action.discard_spend", token)))
+def _discard_source_contributions(
+        baseline, board, sources, ctx=None, valuation_fn=None):
+    if ctx is None:
+        return ()
+
+    counterfactual = _without_hand_sources(board, sources)
+    value = (evaluate(counterfactual, ctx)
+             if valuation_fn is None else valuation_fn(counterfactual))
+    exact = tuple(replace(
+        item, provenance=("action.discard_spend",))
+        for item in _state_contributions(baseline, value, ctx)
+        if item.feature.startswith("option.") and item.value < 0.0)
+    return exact
+
+
+def _without_hand_sources(board, sources):
+    from common.observation.nodes import card_bag
+
+    serials = Counter(
+        serial for _token, serial, _card_id in sources if serial is not None)
+    card_ids = Counter(
+        card_id for _token, serial, card_id in sources
+        if serial is None and card_id is not None)
+    remaining = []
+    for card in tuple(board.me.hand):
+        if card.serial is not None and serials[card.serial] > 0:
+            serials[card.serial] -= 1
+            continue
+        if card_ids[card.card_id] > 0:
+            card_ids[card.card_id] -= 1
+            continue
+        remaining.append(card)
+    hand = replace(board.me.hand, bag=card_bag({
+        "id": card.card_id, "serial": card.serial, "playerIndex": card.owner,
+    } for card in remaining))
+    return replace(
+        board,
+        me=replace(board.me, hand=hand, hand_count=len(remaining)),
+    )
+
+
+def _compound_discard_spend_contributions(
+        baseline, board, action, landings, ctx, valuation_fn=None):
+    committed = _without_hand_sources(board, _portfolio_sources(board, action))
+    committed_value = (evaluate(committed, ctx)
+                       if valuation_fn is None else valuation_fn(committed))
+    contributions = []
+    for probability, _state, successor, _ended, _path in landings:
+        sources = _forced_hand_discard_sources(board, action, successor)
+        for item in _discard_source_contributions(
+                committed_value, committed, tuple(sources), ctx, valuation_fn):
+            contributions.append(replace(
+                item,
+                activation=probability * item.activation,
+                value=probability * item.value,
+                provenance=("action.compound_discard_spend", *item.provenance),
+            ))
     return tuple(contributions)
+
+
+def _forced_hand_discard_sources(board, action, successor):
+    before_discard = Counter(
+        _card_instance_key(card.serial, card.card_id) for card in board.me.discard)
+    root_spend = Counter(
+        _card_instance_key(serial, card_id)
+        for serial, card_id in _selected_cards(board, action)
+        if serial is not None or card_id is not None)
+    newly_discarded = Counter(
+        _card_instance_key(card.serial, card.card_id)
+        for card in successor.me.discard) - before_discard
+    newly_discarded.subtract(root_spend)
+    hand = {}
+    for card in board.me.hand:
+        hand.setdefault(_card_instance_key(card.serial, card.card_id), []).append(card)
+    sources = []
+    for key, count in newly_discarded.items():
+        if count <= 0:
+            continue
+        for card in hand.get(key, ())[:count]:
+            token = (f"feasible_option_portfolio:serial:{card.serial}"
+                     if card.serial is not None
+                     else f"feasible_option_portfolio:card:{card.card_id}")
+            sources.append((token, card.serial, card.card_id))
+    return tuple(sources)
+
+
+def _refresh_spend_contributions(baseline, board, action, node):
+    if not isinstance(node, Refresh):
+        return ()
+    played = set(_portfolio_tokens(board, action))
+    shuffled = {
+        (f"feasible_option_portfolio:serial:{card.serial}"
+         if card.serial is not None
+         else f"feasible_option_portfolio:card:{card.card_id}")
+        for card in tuple(board.me.hand)
+    } - played
+    return tuple(FeatureContribution(
+        item.feature, -item.activation, item.coefficient, -item.value,
+        ("action.refresh_spend", *item.provenance))
+        for item in baseline.contributions
+        if item.value > 0 and shuffled.intersection(item.provenance))
+
+
+def _card_instance_key(serial, card_id):
+    return ("serial", serial) if serial is not None else ("card", card_id)
 
 
 def _expected_valuation(weighted, ctx) -> Valuation:

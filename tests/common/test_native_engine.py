@@ -15,6 +15,7 @@ import pytest
 
 from common import (
     Chance,
+    Choice,
     Deterministic,
     NativeCgTransitionProvider,
     Terminal,
@@ -65,6 +66,39 @@ def test_partial_ability_that_resolves_as_a_noop_fails_closed():
 
     assert isinstance(result, Unknown)
     assert result.reason == "unsupported ability produced no observable effect"
+
+
+def test_isolated_triggered_gust_exposes_each_visible_bench_target():
+    observation = {
+        "current": {
+            "yourIndex": 0, "turnActionCount": 1,
+            "players": [
+                {"hand": [], "active": [{"id": 674}], "bench": [], "discard": []},
+                {"hand": None, "active": [{"id": 65}],
+                 "bench": [{"id": 119}, {"id": 235}], "discard": []},
+            ]},
+        "select": {
+            "type": 9, "context": 43, "minCount": 1, "maxCount": 1,
+            "contextCard": {"id": 674, "playerIndex": 0},
+            "option": [{"type": 1}, {"type": 2}]},
+    }
+    state = SimpleNamespace(
+        root_seat=0, observation=observation, provider_payload=observation,
+        with_observation=lambda value: SimpleNamespace(observation=value))
+    provider = object.__new__(CgpyTransitionProvider)
+    provider._local_nested = True
+    from common.cards import card_store
+    provider.cards = card_store()
+
+    yes = next(action for action in enumerate_legal_actions(observation)
+               if action.identity.kind == "yes")
+    result = provider.transition(state, yes)
+
+    assert isinstance(result, Choice)
+    assert {
+        edge.node.state.observation["current"]["players"][1]["active"][0]["id"]
+        for edge in result.children
+    } == {119, 235}
 
 
 def test_hidden_signature_tracks_world_contents_not_action_path():

@@ -357,11 +357,18 @@ class LedgerDecider:
                                      "immediately_usable_outputs":
                                          candidate.continuation.immediately_usable_outputs,
                                      "opportunities_created":
-                                         candidate.continuation.opportunities_created,
+                                         tuple(item.wire() for item in
+                                               candidate.continuation.opportunities_created),
                                      "opportunities_preserved":
-                                         candidate.continuation.opportunities_preserved,
+                                         tuple(item.wire() for item in
+                                               candidate.continuation.opportunities_preserved),
                                      "opportunities_consumed":
-                                         candidate.continuation.opportunities_consumed,
+                                         tuple(item.wire() for item in
+                                               candidate.continuation.opportunities_consumed),
+                                     "executed_opportunity": (
+                                         None
+                                         if candidate.continuation.executed_opportunity is None
+                                         else candidate.continuation.executed_opportunity.wire()),
                                      "policy_contributions": tuple({
                                          "feature": item.key,
                                          "activation": item.activation,

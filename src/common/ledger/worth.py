@@ -540,7 +540,10 @@ def _liveness(card_id, facts, demand: Demand, ctx: EvaluationModel, deck_counts)
             if line_capacity is None:
                 line_capacity = existing + max(0, demand.free_bench)
             capacity = min(existing + max(0, demand.free_bench), line_capacity)
-            return (DemandState.LIVE if live else DemandState.DEAD), max(1, capacity)
+            state = (DemandState.LIVE if live else
+                     DemandState.SETUP if line_capacity > existing else
+                     DemandState.DEAD)
+            return state, max(1, capacity if live else line_capacity)
         parent_stage = {"stage1": "basic", "stage2": "stage1"}.get(facts.stage)
 
         def direct_parent(candidate):
@@ -608,6 +611,25 @@ def _liveness(card_id, facts, demand: Demand, ctx: EvaluationModel, deck_counts)
                 marginal_energy_absorption(
                     ctx.facts(body.card.card_id), body.energies, facts, ctx,
                     body_reach))
+        if demand.free_bench:
+            for card in demand.hand:
+                candidate = ctx.facts(card.card_id)
+                if not isinstance(candidate, PokemonCard) \
+                        or candidate.evolves_from is not None:
+                    continue
+                fills = _slot_fill(facts.provides, candidate, (), ctx, reach)
+                if fills == "typed":
+                    return DemandState.SETUP, None
+                colorless_only = colorless_only or fills == "colorless"
+            for card_id, count in (deck_counts or ()):
+                candidate = ctx.facts(card_id)
+                if count <= 0 or not isinstance(candidate, PokemonCard) \
+                        or candidate.evolves_from is not None:
+                    continue
+                fills = _slot_fill(facts.provides, candidate, (), ctx, reach)
+                if fills == "typed":
+                    return DemandState.SETUP, None
+                colorless_only = colorless_only or fills == "colorless"
         return (DemandState.COLORLESS_ONLY if colorless_only
                 else DemandState.SETUP if future_absorption > 0
                 else DemandState.DEAD), None
@@ -694,7 +716,7 @@ def _fetch_liveness(fetches, demand: Demand, ctx: EvaluationModel, deck_counts) 
         if not any(fetch_target_matches(clause, target, reading=DEADNESS)
                    for clause in fetches):
             continue
-        state, _ = _liveness(target_id, target, demand, ctx, None)
+        state, _ = _liveness(target_id, target, demand, ctx, deck_counts)
         if _DEMAND_PRIORITY[state] > _DEMAND_PRIORITY[best]:
             best = state
         if best is DemandState.LIVE:

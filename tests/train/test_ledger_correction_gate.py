@@ -150,6 +150,52 @@ def test_final_august_31_round_routes_atomic_work_and_retires_turn_plans():
             if value == "covered"} == {"bbdfb595b710"}
 
 
+def test_september_1_round_routes_only_reachable_atomic_work_into_ledger():
+    names = {
+        "20260901-062151_58f85282_mega_starmie",
+        "20260901-065330_58f85282_mega_lucario",
+        "20260901-075825_58f85282_dragapult_ex",
+    }
+    corrections = [
+        correction
+        for source in ledger_correction_sources()
+        if source.parent.name in names
+        for correction in load_corrections(source, dedup=False)
+    ]
+    reviewed = load_reviewed()
+    dispositions = {
+        correction.id: reviewed[review_key(correction)]["disposition"]
+        for correction in corrections if review_key(correction) in reviewed
+    }
+    active = {correction.id for correction in corrections
+              if review_key(correction) not in reviewed}
+
+    assert active == {
+        "e598d882e201", "21f77c0c3058", "5a7d8853c008",
+        "19c8eadf67b7", "d554a8d1e5c9",
+        "5870378a1d69", "95e6bb2de897",
+        "3efb18f71eab", "c29d358968f6",
+        "cf39b4b8ab64", "c1e39d7e0e4e", "9084128b35f2",
+        "76f57680528c",
+        "18622cdb3a30",
+    }
+    assert {key for key, value in dispositions.items()
+            if value == "deferred-multi-turn"} == {
+        "73e3da9b4c9f", "3effc31887cc", "ea70a4764df9",
+        "8280ecb5a435", "42dc51739bc6", "46d3943209c9",
+        "b3441e706746",
+    }
+    assert {key for key, value in dispositions.items()
+            if value == "off-policy"} == {
+        "2c4c75912a7c", "8ea548ff2014",
+        "195f12f68fad", "48121bb4075e",
+    }
+    assert {key for key, value in dispositions.items()
+            if value == "refuted"} == {"d306aff494ef"}
+    assert {key for key, value in dispositions.items()
+            if value == "covered"} == {"2210829388a2", "021d78f90f97"}
+
+
 def test_gate_fails_any_unreplayed_record_or_violated_preference():
     report = {
         "rows": [{"id": "a", "grading_exclusion": None,

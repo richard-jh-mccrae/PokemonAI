@@ -28,6 +28,7 @@ DAMAGE_TRANSFER_SIDES = 2.0
 DAMAGE_RANGE_BOUND_COUNT = 2
 DEPENDENCY_REACH_DEPTH = 2
 EVOLUTION_HOP_DISCOUNT = 0.5
+FUTURE_EVOLUTION_DEPTH = 2
 STAGE_RANK = {"basic": 0, "stage1": 1, "stage2": 2}
 DISCARD_AREA = 3
 ACTIVE_AREA = 4
@@ -47,6 +48,7 @@ DAMAGE_PROTECTION_THRESHOLD_HP = 200
 ENERGY_COUNT_THRESHOLD = 3
 LOW_REMAINING_HP_THRESHOLD = 30
 HEAL_TARGET_HP = 30
+FUTURE_HEAL_EXPOSURE = 0.75
 TEAM_ROCKET_ENERGY_CARD_ID = 15
 ANCIENT_POKEMON_IDS = frozenset({56, 62, 63, 171, 226, 986})
 CLAUSE_COST_UNITS = {
@@ -621,6 +623,40 @@ def _restriction_targets(value, facts, side, ctx, *, body=None):
             target for target in side.bodies
             if predicates[value](ctx.facts(target.card.card_id)))
     return tuple(side.bodies)
+
+
+def _available_forward_ids(facts, side, board, ctx):
+    from .worth import _forward_lines
+
+    available = {card.card_id for card in tuple(side.hand)}
+    available.update(
+        card_id for card_id, count in (board.deck_counts or ()) if count > 0)
+    return tuple(
+        card_id for card_id in _forward_lines().get(facts.name, ())
+        if card_id in available)
+
+
+def _prospective_heal_target_hp(
+        clause, facts, side, board, ctx, *, future_only=False):
+    targets = _restriction_targets(clause.restriction, facts, side, ctx)
+    hit_points = [] if future_only else [target.max_hp for target in targets]
+    if clause.restriction not in {"mega_only", "psychic_only"}:
+        return max(hit_points, default=0.0)
+    for body in side.bodies:
+        source = ctx.facts(body.card.card_id)
+        if not isinstance(source, PokemonCard):
+            continue
+        for card_id in _available_forward_ids(source, side, board, ctx):
+            candidate = ctx.facts(card_id)
+            if not isinstance(candidate, PokemonCard):
+                continue
+            if clause.restriction == "mega_only" and "mega" not in candidate.name.casefold():
+                continue
+            if (clause.restriction == "psychic_only"
+                    and candidate.energy_type != PSYCHIC):
+                continue
+            hit_points.append(candidate.hp)
+    return max(hit_points, default=0.0)
 
 
 def _heal_targets(clause, facts, side, board, ctx, *, body=None):
@@ -1429,16 +1465,29 @@ def energy_marginal(body, energy_facts, side, opponent, board, ctx, *, reach=Non
     after = body_capability(
         after_body, after_side, opponent, board, ctx, reach=reach,
         include_hand_attach=False)
-    return max(
+    absorption = marginal_energy_absorption(
+        facts, body.energies, energy_facts, ctx, reach)
+    forward_payoff = max(
+        0.0,
         after.option_units() - before.option_units(),
-        marginal_energy_absorption(facts, body.energies, energy_facts, ctx, reach))
+        after.attachment_clock - before.attachment_clock,
+    )
+    return absorption + forward_payoff
 
 
 def best_energy_marginal(energy_facts, side, opponent, board, ctx, reaches=None) -> float:
     reaches = reaches or {}
-    return max((energy_marginal(
+    fielded = max((energy_marginal(
         body, energy_facts, side, opponent, board, ctx,
         reach=reaches.get(body.card.serial)) for body in side.bodies), default=0.0)
+    deployable = max((
+        FUTURE_TURN_DISCOUNT * marginal_energy_absorption(
+            facts, (), energy_facts, ctx)
+        for card in tuple(side.hand)
+        if len(side.bench) < side.bench_max
+        and isinstance((facts := ctx.facts(card.card_id)), PokemonCard)
+        and facts.evolves_from is None), default=0.0)
+    return max(fielded, deployable)
 
 
 def recoverable_discard_ids(side, ctx, deck_counts=()) -> frozenset[int]:
@@ -1473,6 +1522,19 @@ def recoverable_discard_ids(side, ctx, deck_counts=()) -> frozenset[int]:
 
 def card_option_units(facts, side, opponent, board, ctx, *, reaches=None) -> OptionUnits:
     if isinstance(facts, EnergyCard):
+        if reaches is None:
+            from .worth import legal_line_reach, line_reach
+
+            hand_names = Counter(
+                held.name for card in tuple(side.hand)
+                if (held := ctx.facts(card.card_id)) is not None)
+            line = line_reach(
+                hand_names, board.deck_counts, ctx,
+                hand=side.hand, turn=board.turn)
+            reaches = {
+                body.card.serial: legal_line_reach(
+                    body, line, ctx, side.hand, board.turn)
+                for body in side.bodies}
         hand = tuple(side.hand)
         copies = sum(
             isinstance(held, EnergyCard)
@@ -1481,16 +1543,29 @@ def card_option_units(facts, side, opponent, board, ctx, *, reaches=None) -> Opt
         return OptionUnits(energy=max(0.0, best_energy_marginal(
             facts, side, opponent, board, ctx, reaches=reaches)) / max(1, copies))
     if isinstance(facts, PokemonCard):
-        deployable = (facts.evolves_from is None and len(side.bench) < side.bench_max) \
-            or any(getattr(ctx.facts(body.card.card_id), "name", None) == facts.evolves_from
-                   for body in side.bodies)
-        if not deployable:
+        if facts.evolves_from is None:
+            availability = (1.0 if len(side.bench) < side.bench_max
+                            else FUTURE_TURN_DISCOUNT)
+        elif any(getattr(ctx.facts(body.card.card_id), "name", None) == facts.evolves_from
+                 for body in side.bodies):
+            availability = 1.0
+        elif any(getattr(ctx.facts(card.card_id), "name", None) == facts.evolves_from
+                 for card in tuple(side.hand)):
+            availability = FUTURE_TURN_DISCOUNT
+        elif any(count > 0 and getattr(ctx.facts(card_id), "name", None)
+                 == facts.evolves_from
+                 for card_id, count in (board.deck_counts or ())):
+            availability = FUTURE_TURN_DISCOUNT ** FUTURE_EVOLUTION_DEPTH
+        else:
             return OptionUnits()
-        from .worth import _forward_lines
-
         line = (facts, *(ctx.facts(card_id)
-                         for card_id in _forward_lines().get(facts.name, ())))
+                         for card_id in _available_forward_ids(
+                             facts, side, board, ctx)))
         line = tuple(card for card in line if isinstance(card, PokemonCard))
+        line_hp = max((
+            facts.hp,
+            *(FUTURE_TURN_DISCOUNT ** FUTURE_EVOLUTION_DEPTH * card.hp
+              for card in line if card is not facts)))
         attack = max(((float(item.damage or item.damage_fix or item.damage_max or 0)
                        + float(bench_reach(item)))
                       / DAMAGE_UNIT_HP / max(1, len(item.cost))
@@ -1498,7 +1573,9 @@ def card_option_units(facts, side, opponent, board, ctx, *, reaches=None) -> Opt
         clauses = tuple(clause for card in line for ability in card.abilities
                         for clause in ability.clauses)
         gate = lambda clause: (
-            _prospective_condition(clause.condition, side, board, ctx, clause)
+            (1.0 if clause.condition == "pokemon_ko_last_turn"
+             and len(side.bench) >= side.bench_max else
+             _prospective_condition(clause.condition, side, board, ctx, clause))
             * float(_restriction_satisfied(
                 clause.restriction, facts, side, opponent, board, ctx))
             * float(_rider_feasible(
@@ -1513,8 +1590,8 @@ def card_option_units(facts, side, opponent, board, ctx, *, reaches=None) -> Opt
             mine, theirs = expected_draw_counts(clause, side, opponent, ctx)
             return gate(clause) * mine, gate(clause) * theirs
 
-        return OptionUnits(
-            hp=facts.hp / DAMAGE_UNIT_HP,
+        units = OptionUnits(
+            hp=line_hp / DAMAGE_UNIT_HP,
             attack=attack,
             damage_move=max((
                 DAMAGE_TRANSFER_SIDES * gate(clause)
@@ -1535,22 +1612,32 @@ def card_option_units(facts, side, opponent, board, ctx, *, reaches=None) -> Opt
                          for clause in clauses if clause.kind == "heal"), default=0.0),
             mobility=max((gate(clause) for clause in clauses
                           if clause.kind in {"self_switch", "switch_self"}), default=0.0),
-            cost=(max((gate(clause) for clause in clauses
-                      if clause.rider in {"shuffle_self_in", "self_shuffle_in"}), default=0.0)
-                 + max((draw_units(clause)[1]
-                        for clause in clauses if clause.kind == "draw"), default=0.0)),
+            cost=max((draw_units(clause)[1]
+                      for clause in clauses if clause.kind == "draw"), default=0.0),
         )
+        return OptionUnits(**{
+            name: availability * getattr(units, name)
+            for name in OptionUnits.__dataclass_fields__})
     if isinstance(facts, TrainerCard):
         availability = (FUTURE_TURN_DISCOUNT
                         if facts.kind == SUPPORTER and board.turn.supporter_played else 1.0)
         values = {name: 0.0 for name in OptionUnits.__dataclass_fields__}
         for clause in facts.clauses:
+            restriction_satisfied = float(_restriction_satisfied(
+                clause.restriction, facts, side, opponent, board, ctx))
+            future_heal_target = (
+                _prospective_heal_target_hp(
+                    clause, facts, side, board, ctx, future_only=True)
+                if clause.kind == "heal" else 0.0)
+            restriction = restriction_satisfied
+            if (clause.kind == "heal" and not restriction
+                    and future_heal_target > 0.0):
+                restriction = 1.0
             gate = (_prospective_condition(
                         clause.condition, side, board, ctx, clause)
                     * _selection_feasibility(
                         clause, side, opponent, board, ctx)
-                    * float(_restriction_satisfied(
-                        clause.restriction, facts, side, opponent, board, ctx))
+                    * restriction
                     * float(_rider_feasible(
                         clause, facts, side, board, ctx)))
             values["cost"] += gate * (
@@ -1569,12 +1656,50 @@ def card_option_units(facts, side, opponent, board, ctx, *, reaches=None) -> Opt
                 values["draw"] += gate * target
             elif clause.kind == "fetch":
                 values["search"] += gate * _quantity(clause.amount, 1)
+                if clause.dest == "in_play":
+                    parent_names = {
+                        getattr(ctx.facts(body.card.card_id), "name", None)
+                        for body in side.bodies
+                        if not clause.target_condition or not body.appeared_this_turn}
+                    field_names = set(parent_names)
+                    if len(side.bench) < side.bench_max:
+                        parent_names.update(
+                            candidate.name for card in tuple(side.hand)
+                            if isinstance((candidate := ctx.facts(card.card_id)), PokemonCard)
+                            and candidate.evolves_from is None)
+                    candidates = tuple(
+                        candidate for candidate, count in _zone_fact_counts(
+                            clause.zone, side, board, ctx)
+                        if count > 0 and isinstance(candidate, PokemonCard)
+                        and candidate.evolves_from in parent_names
+                        and fetch_target_matches(clause, candidate, reading=DEADNESS))
+                    if candidates:
+                        target_candidate, target = max(
+                            ((candidate, card_option_units(
+                                candidate, side, opponent, board, ctx))
+                             for candidate in candidates),
+                            key=lambda row: _option_units_worth(row[1], ctx))
+                        scale = (1.0 if target_candidate.evolves_from in field_names
+                                 else 1.0 / FUTURE_TURN_DISCOUNT)
+                        for key in values:
+                            values[key] += gate * scale * getattr(target, key)
             elif clause.kind in {"accel", "energy_recur", "move_energy"}:
                 values["acceleration"] += gate * (
                     _quantity(clause.amount, 1) + _quantity(clause.to_hand))
             elif clause.kind == "heal":
                 _target, healed, rider_cost = _heal_selection(
                     clause, facts, side, board, ctx)
+                if (healed <= 0.0
+                        and (not restriction_satisfied
+                             or all(body.hp >= body.max_hp for body in side.bodies))):
+                    target_hp = (
+                        future_heal_target if not restriction_satisfied
+                        else _prospective_heal_target_hp(
+                            clause, facts, side, board, ctx))
+                    potential = (target_hp if clause.amount == "all"
+                                 else min(target_hp, _quantity(clause.amount)))
+                    healed = (FUTURE_TURN_DISCOUNT
+                              * FUTURE_HEAL_EXPOSURE * potential)
                 values["healing"] += gate * healed / DAMAGE_UNIT_HP
                 values["cost"] += gate * rider_cost
             elif clause.kind in {"self_switch", "switch_self"}:
@@ -1647,6 +1772,16 @@ def _fetch_dependency_units(facts, side, opponent, board, ctx, *, depth, seen,
             else best)
 
 
+def card_dependency_reach_units(
+        facts, side, opponent, board, ctx, *, depth=DEPENDENCY_REACH_DEPTH):
+    if (not isinstance(facts, TrainerCard)
+            or (facts.kind == SUPPORTER and board.turn.supporter_played)):
+        return OptionUnits()
+    return _fetch_dependency_units(
+        facts, side, opponent, board, ctx, depth=depth, seen=frozenset(),
+        supporter_spent=False)
+
+
 def hand_dependency_reach_units(
         side, opponent, board, ctx, *, depth=DEPENDENCY_REACH_DEPTH):
     items = OptionUnits()
@@ -1657,11 +1792,8 @@ def hand_dependency_reach_units(
         if not isinstance(facts, TrainerCard) or facts.card_id in seen:
             continue
         seen.add(facts.card_id)
-        if facts.kind == SUPPORTER and board.turn.supporter_played:
-            continue
-        line = _fetch_dependency_units(
-            facts, side, opponent, board, ctx, depth=depth, seen=frozenset(),
-            supporter_spent=False)
+        line = card_dependency_reach_units(
+            facts, side, opponent, board, ctx, depth=depth)
         if facts.kind != SUPPORTER:
             items = _combine_option_units(items, line)
         elif line.total > best_supporter.total:
@@ -1729,7 +1861,7 @@ def _prospective_condition(condition, side, board, ctx, clause=None) -> float:
         wanted = condition.removesuffix("_in_play").replace("_", " ").casefold()
         return float(any(name.casefold() == wanted for name in _side_names(side, ctx)))
     if condition == "pokemon_ko_last_turn":
-        return float(_knockout_visible(board))
+        return 1.0 if _knockout_visible(board) else FUTURE_TURN_DISCOUNT
     if condition in {"dark_energy_attached", "energy_type_attached"}:
         wanted = getattr(clause, "condition_energy_type", None)
         return float(

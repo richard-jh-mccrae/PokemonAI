@@ -2,6 +2,7 @@ from .contracts import (
     CandidateDisposition,
     CandidateRoster,
     ContinuationOpportunity,
+    OpportunityRef,
     ContinuationResult,
     DecisionDelta,
     DecisionFailure,
@@ -34,7 +35,7 @@ from .fail_safe import fail_safe_request, safe_legal_selection
 
 __all__ = (
     "BudgetController", "CandidateDisposition", "CandidateRoster", "ComputeConfiguration",
-    "ContinuationOpportunity", "ContinuationResult",
+    "ContinuationOpportunity", "ContinuationResult", "OpportunityRef",
     "DecisionChoice", "DecisionCoordinator", "DecisionDelta", "DecisionFailure",
     "DecisionDeadlineExceeded", "DecisionExecutionGuard", "DecisionFailureStage",
     "DecisionReason",
