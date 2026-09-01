@@ -38,6 +38,39 @@ def test_correction_run_plan_is_reproducible_balanced_and_focal_owned():
         slot.episode_id for slot in other)
 
 
+def test_correction_run_manifest_randomizes_a_single_opponent_from_the_pool(tmp_path):
+    from sim.correction_run import create_correction_run
+
+    run_dir = create_correction_run(
+        output_root=tmp_path, run_id="random-opponent",
+        created_at="2026-09-01T00:00:00+00:00", focal="mega_starmie",
+        opponents=("dragapult_ex", "mega_lucario"), episodes=1, seed=1,
+        heldout=0, jobs=1, engine="native",
+        source_identity={"commit": "abc", "dirty": False},
+        contestant_identities={
+            "mega_starmie": {"deck_sha256": "starmie"},
+            "dragapult_ex": {"deck_sha256": "dragapult"},
+            "mega_lucario": {"deck_sha256": "lucario"},
+        },
+    )
+
+    manifest = json.loads((run_dir / "manifest.json").read_text(encoding="utf-8"))
+    assert manifest["slots"][0]["opponent"] == "mega_lucario"
+
+
+def test_correction_run_default_opponent_pool_excludes_the_focal_agent(tmp_path):
+    from sim.correction_run import discover_opponents
+
+    for name in ("dragapult_ex", "mega_lucario", "mega_starmie"):
+        agent = tmp_path / name
+        agent.mkdir()
+        (agent / "main.py").touch()
+        (agent / "deck.csv").touch()
+
+    assert discover_opponents(tmp_path, "mega_starmie") == (
+        "dragapult_ex", "mega_lucario")
+
+
 def test_correction_run_plan_rejects_an_invalid_request():
     from sim.correction_run import plan_correction_run
 
@@ -273,6 +306,38 @@ def test_correction_run_direct_cli_exposes_the_focal_parallel_contract():
     assert "--opponents" in completed.stdout
     assert "--heldout" in completed.stdout
     assert "--episodes" in completed.stdout
+
+
+def test_correction_run_cli_generates_a_fresh_default_seed_per_run(tmp_path, monkeypatch):
+    import sim.correction_run as correction_run
+
+    seeds = iter((17, 29))
+
+    class Entropy:
+        def getrandbits(self, _bits):
+            return next(seeds)
+
+    manifests = []
+
+    def complete_without_playing(*, run_dir, **_kwargs):
+        manifest = json.loads((run_dir / "manifest.json").read_text(encoding="utf-8"))
+        manifests.append(manifest)
+        manifest["status"] = "complete"
+        manifest["totals"]["complete"] = manifest["totals"]["planned"]
+        return manifest
+
+    monkeypatch.setattr(correction_run.random, "SystemRandom", Entropy)
+    monkeypatch.setattr(
+        correction_run, "_git_source_identity",
+        lambda *_args, **_kwargs: {"commit": "abc", "dirty": False})
+    monkeypatch.setattr(correction_run, "execute_correction_run", complete_without_playing)
+
+    for output in (tmp_path / "one", tmp_path / "two"):
+        assert correction_run.main([
+            "mega_starmie", "-n", "1", "--jobs", "1", "--out", str(output),
+        ]) == 0
+
+    assert [manifest["seed"] for manifest in manifests] == [17, 29]
 
 
 def test_correction_run_completion_reports_focal_decision_timing():
