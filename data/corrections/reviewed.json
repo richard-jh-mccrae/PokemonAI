@@ -733,6 +733,11 @@
     "reason": "frame 54's corrected first damage-counter target changes the HP state before this second placement",
     "round": "2026-09-01"
   },
+  "18474897401381404-84": {
+    "disposition": "covered",
+    "reason": "current replay uses Drakloak's free Ability and no longer spends Ultra Ball or two discards to fetch Drakloak",
+    "round": "2026-09-02"
+  },
   "18474897401381404-56": {
     "disposition": "off-policy",
     "reason": "frame 54's corrected first damage-counter target changes the HP state before this third placement",
@@ -771,6 +776,106 @@
   "53230395781565713-131": {
     "disposition": "refuted",
     "reason": "the stored correct selection is identical to the agent's chosen Lunatone target, so the correction asserts no blunder preference",
+    "round": "2026-09-01"
+  },
+  "16110717069958674-16": {
+    "disposition": "deferred-multi-turn",
+    "reason": "the ruling orders separate Hammer plays before this decision; PUCT must grade the resulting turn sequence",
+    "round": "2026-09-01"
+  },
+  "16110717069958674-17": {
+    "disposition": "covered",
+    "reason": "current gap-free replay already chooses the ruled Mega Signal play",
+    "round": "2026-09-02"
+  },
+  "16110717069958674-30": {
+    "disposition": "deferred-multi-turn",
+    "reason": "playing Mega Signal first is an action-ordering claim whose payoff occurs in later turn actions",
+    "round": "2026-09-01"
+  },
+  "16110717069958674-147": {
+    "disposition": "deferred-multi-turn",
+    "reason": "the ruling composes healing, attachment, and Jetting Blow; PUCT must grade the complete line",
+    "round": "2026-09-01"
+  },
+  "69995210353750341-10": {
+    "disposition": "deferred-multi-turn",
+    "reason": "the ruling orders evolution before Lillie's Determination, two independent MAIN actions",
+    "round": "2026-09-01"
+  },
+  "69995210353750341-23": {
+    "disposition": "deferred-multi-turn",
+    "reason": "the ruling composes evolving Riolu with a later Lillie's Determination play",
+    "round": "2026-09-01"
+  },
+  "69995210353750341-41": {
+    "disposition": "deferred-multi-turn",
+    "reason": "gusting away the Item lock is justified by the later Item actions it enables; PUCT owns that continuation",
+    "round": "2026-09-01"
+  },
+  "69995210353750341-136": {
+    "disposition": "deferred-multi-turn",
+    "reason": "the ruling orders Premium Power Pro plays before a later hand shuffle",
+    "round": "2026-09-01"
+  },
+  "69995210353750341-173": {
+    "disposition": "off-policy",
+    "reason": "frame 169's corrected Ultra Ball target changes the available attacker before this retreat decision",
+    "round": "2026-09-01"
+  },
+  "15479115077245684-9": {
+    "disposition": "deferred-multi-turn",
+    "reason": "the Dreepy attachment is justified by a next-turn evolution and free-retreat route",
+    "round": "2026-09-01"
+  },
+  "15479115077245684-39": {
+    "disposition": "deferred-multi-turn",
+    "reason": "the Water attachment is justified by the later Jetting Blow target; PUCT must grade the full line",
+    "round": "2026-09-01"
+  },
+  "15479115077245684-45": {
+    "disposition": "deferred-multi-turn",
+    "reason": "the ruling composes attachment, Crispin, a second attachment, and Phantom Dive",
+    "round": "2026-09-01"
+  },
+  "55840798725146903-16": {
+    "disposition": "deferred-multi-turn",
+    "reason": "the Dreepy attachment is justified by a next-turn Dudunsparce evolution and free-retreat route",
+    "round": "2026-09-01"
+  },
+  "55840798725146903-47": {
+    "disposition": "refuted",
+    "reason": "the stored ruling supplies no selection for a mandatory Energy menu and cannot express the later attachment target named by its rationale",
+    "round": "2026-09-01"
+  },
+  "55840798725146903-66": {
+    "disposition": "refuted",
+    "reason": "current chained replay gusts the unenergized Benched Mega Starmie, not the free-retreat Cinderace condemned by the rationale",
+    "round": "2026-09-01"
+  },
+  "55840798725146903-76": {
+    "disposition": "deferred-multi-turn",
+    "reason": "the attachment target is condemned because of a later retreat and Starmie attack; PUCT owns that sequence",
+    "round": "2026-09-01"
+  },
+  "55840798725146903-108": {
+    "disposition": "refuted",
+    "reason": "Rosa is legal and meaningful: Dragapult ex is a Stage-2 in play, basic Energy is in the discard, and the player has more Prizes remaining",
+    "round": "2026-09-01"
+  },
+  "55840798725146903-116": {
+    "disposition": "covered",
+    "reason": "current replay uses Crushing Hammer and no longer repeats the condemned Poffin-to-Dunsparce play",
+    "round": "2026-09-01"
+  },
+  "55840798725146903-134": {
+    "disposition": "deferred-multi-turn",
+    "reason": "the promotion is justified by a later Ability, evolution, Rosa, and Phantom Dive sequence",
+    "round": "2026-09-01"
+  },
+  "55840798725146903-168": {
+    "disposition": "deferred-multi-turn",
+    "reason": "the gust ruling compares later knockout and follow-up attack routes rather than the immediate board transition",
     "round": "2026-09-01"
   }
 }

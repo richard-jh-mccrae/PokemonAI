@@ -12,7 +12,7 @@ from dataclasses import replace
 from types import SimpleNamespace
 import pytest
 
-from ledger_helpers import (DRAKLOAK, DRAGAPULT, DREEPY, FIRE_E, LUNATONE, MAKUHITA,
+from ledger_helpers import (DRAKLOAK, DRAGAPULT, DREEPY, FIRE_E, IGNITION, LUNATONE, MAKUHITA,
                             ScriptedProvider, action, body, player, printout)
 
 from common.algebra import (Actor, Chance, Choice, Deterministic, Edge, Refresh, RevealChoice,
@@ -46,6 +46,7 @@ POKEGEAR = 1122
 SALVATORE = 1189
 STARYU = 1030
 MEGA_STARMIE = 1031
+MEGA_LUCARIO = 678
 
 
 def test_playing_a_held_parent_creates_a_future_evolution_opportunity():
@@ -198,6 +199,19 @@ def test_twin_body_source_survives_active_bench_exchange():
 def state_of(observation):
     return DecisionState.from_observation(observation, deck=DECK, deck_name="test",
                                           value_registry_identity="preview-tests")
+
+
+def price_selected_action(observation, selected, *, deck_counts=None):
+    root = state_of(observation)
+    board = ObservationStateBuilder(DECK).root(observation)
+    if deck_counts is not None:
+        board = replace(board, deck_counts=deck_counts)
+    provider = ScriptedProvider(
+        menus={root.semantic_key: (selected,)},
+        nodes={(root.semantic_key, selected.identity): Terminal(root, "resolved")})
+    context = EvaluationModel.build()
+    return price_actions(
+        root, board, evaluate(board, context).total, provider, context)[0]
 
 
 ROOT_OBS = printout(me=player(active=body(DRAGAPULT, 1), hand=[FIRE_E]),
@@ -392,6 +406,32 @@ def test_damage_counter_target_uses_live_threat_not_sunk_evolution_stack():
     assert riolu[0][1] > hariyama[0][1]
 
 
+def test_each_damage_counter_has_equal_progress_before_overkill():
+    select = {"context": _DAMAGE_COUNTER_ANY, "minCount": 1, "maxCount": 1,
+              "option": [
+                  {"area": 5, "index": 0, "playerIndex": 1, "type": 3},
+                  {"area": 5, "index": 1, "playerIndex": 1, "type": 3},
+              ]}
+    observation = printout(
+        me=player(active=body(DRAGAPULT, 1)),
+        them=player(
+            own=False, active=body(DREEPY, 2),
+            bench=[body(RIOLU, 3, hp=80, max_hp=80),
+                   body(RIOLU, 4, hp=40, max_hp=80)]),
+        select=select)
+
+    healthy = price_selected_action(observation, action("card", (0,)))
+    damaged = price_selected_action(observation, action("card", (1,)))
+    healthy_progress = next(
+        item.value for item in healthy.footprint.policy_contributions
+        if item.feature == "action.damage_counter_progress")
+    damaged_progress = next(
+        item.value for item in damaged.footprint.policy_contributions
+        if item.feature == "action.damage_counter_progress")
+
+    assert healthy_progress == damaged_progress
+
+
 def test_body_ability_readiness_stops_after_the_line_is_fully_developed():
     select = {"context": 0, "minCount": 1, "maxCount": 1,
               "option": [{"cardId": DRAKLOAK, "serial": 800, "type": 7}]}
@@ -416,6 +456,25 @@ def test_deck_selection_reads_the_deck_card_before_an_overlapping_hand_index():
 
     assert _body_ability_ready(
         board, action("card", (0,)), EvaluationModel.build())
+
+
+def test_future_evolution_ability_does_not_override_a_one_prize_backup_race():
+    select = {"context": 7, "minCount": 0, "maxCount": 1,
+              "deck": [{"id": HARIYAMA, "serial": 800, "playerIndex": 0}],
+              "option": [{"area": 1, "index": 0, "playerIndex": 0, "type": 3}]}
+    observation = printout(
+        me=player(
+            active=body(MEGA_LUCARIO, 1, hp=20, max_hp=340),
+            bench=[body(MAKUHITA, 2)], prizes=3),
+        them=player(
+            own=False,
+            active=body(DRAGAPULT, 3, energies=(FIRE_E, 5)), prizes=4),
+        select=select)
+
+    price = price_selected_action(observation, action("card", (0,)))
+
+    assert all(item.feature != "action.body_ability_ready"
+               for item in price.footprint.policy_contributions)
 
 
 def test_compound_fetch_prices_only_copies_above_total_body_capacity():
@@ -1026,6 +1085,51 @@ def test_playing_a_setup_only_supporter_is_a_dead_play_now():
     assert _local_action_events(
         root, action("play", (0,)), EvaluationModel.build()) == (
             ("dead_play", 1.0),)
+
+
+def test_playing_a_setup_only_item_is_not_a_dead_play():
+    active = body(DREEPY, 1)
+    active["appearThisTurn"] = True
+    root_player = player(active=active, hand=[POKE_PAD])
+    root_player["hand"][0]["serial"] = 11
+    observation = printout(
+        me=root_player,
+        select={"context": 0, "minCount": 1, "maxCount": 1,
+                "option": [{"area": 2, "index": 0, "type": 7}]})
+    price = price_selected_action(
+        observation, action("play", (0,)), deck_counts=((DRAKLOAK, 1),))
+
+    assert all(item.feature != "action.dead_play"
+               for item in price.footprint.policy_contributions)
+
+
+def test_manual_ignition_attachment_penalizes_the_bench_rental_target():
+    root_player = player(
+        active=body(MEGA_STARMIE, 1, under=(STARYU,)),
+        bench=[body(MEGA_STARMIE, 2, under=(STARYU,))],
+        hand=[IGNITION])
+    root_player["hand"][0]["serial"] = 11
+    observation = printout(
+        me=root_player,
+        select={"context": 0, "minCount": 1, "maxCount": 1,
+                "option": [
+                    {"area": 2, "index": 0, "inPlayArea": 4,
+                     "inPlayIndex": 0, "type": 8},
+                    {"area": 2, "index": 0, "inPlayArea": 5,
+                     "inPlayIndex": 0, "type": 8},
+                ]})
+
+    active = price_selected_action(observation, action("attach", (0,)))
+    benched = price_selected_action(observation, action("attach", (1,)))
+    active_fit = sum(
+        item.value for item in active.footprint.policy_contributions
+        if item.feature == "action.attachment_target_fit")
+    bench_fit = sum(
+        item.value for item in benched.footprint.policy_contributions
+        if item.feature == "action.attachment_target_fit")
+
+    assert active_fit == 0
+    assert bench_fit < 0
 
 
 def test_discard_spend_does_not_charge_a_portfolio_source_with_a_held_replacement():

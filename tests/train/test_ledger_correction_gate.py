@@ -176,7 +176,6 @@ def test_september_1_round_routes_only_reachable_atomic_work_into_ledger():
         "5870378a1d69", "95e6bb2de897",
         "3efb18f71eab", "c29d358968f6",
         "cf39b4b8ab64", "c1e39d7e0e4e", "9084128b35f2",
-        "76f57680528c",
         "18622cdb3a30",
     }
     assert {key for key, value in dispositions.items()
@@ -193,7 +192,9 @@ def test_september_1_round_routes_only_reachable_atomic_work_into_ledger():
     assert {key for key, value in dispositions.items()
             if value == "refuted"} == {"d306aff494ef"}
     assert {key for key, value in dispositions.items()
-            if value == "covered"} == {"2210829388a2", "021d78f90f97"}
+            if value == "covered"} == {
+        "2210829388a2", "021d78f90f97", "76f57680528c",
+    }
 
 
 def test_gate_fails_any_unreplayed_record_or_violated_preference():
@@ -390,3 +391,50 @@ def test_refresh_supporter_ordering_is_deferred_to_full_turn_search():
 
     assert review["disposition"] == "deferred-multi-turn"
     assert "PUCT" in review["reason"]
+
+
+def test_september_first_round_routes_only_atomic_work_into_ledger():
+    names = {
+        "20260901-184936_a108caf3_mega_starmie",
+        "20260901-191713_a108caf3_mega_lucario",
+        "20260901-194308_78bd10b5_dragapult_ex",
+        "20260901-200023_78bd10b5_dragapult_ex",
+    }
+    corrections = [
+        correction
+        for source in ledger_correction_sources()
+        if source.parent.name in names
+        for correction in load_corrections(source, dedup=False)
+    ]
+    reviewed = load_reviewed()
+    dispositions = {
+        disposition: {
+            correction.id for correction in corrections
+            if reviewed.get(review_key(correction), {}).get("disposition")
+            == disposition
+        }
+        for disposition in (
+            "deferred-multi-turn", "off-policy", "covered", "refuted")
+    }
+    active = {
+        correction.id for correction in corrections
+        if review_key(correction) not in reviewed
+    }
+
+    assert len(corrections) == 29
+    assert len({review_key(correction) for correction in corrections}) == 29
+    assert active == {
+        "8c6bd79dc00e", "81e3a4f5d34c", "85ccb3a44b74",
+        "13442baa4142", "34953a435d72", "98c3c6c7738c",
+        "7f2db096a48a", "3512e17f2df1", "c12a113407c3",
+    }
+    assert dispositions["deferred-multi-turn"] == {
+        "f98af2674334", "4926802462b3", "1f371e66c8fe",
+        "08480c9326a0", "7c74b2e28e91", "0bd8b1093405", "345ad17b6d63",
+        "927628e9a93b", "a515940eac6b", "f97e69888629",
+        "2ce4deebd101", "75023fb33a5a", "5c6635c7af6e", "efcf1a2698cd",
+    }
+    assert dispositions["off-policy"] == {"c86245dfaf0b"}
+    assert dispositions["covered"] == {"ac3fea90cd56", "2ba24bfa625f"}
+    assert dispositions["refuted"] == {
+        "acf55fd5a3c3", "d8d665930cc4", "a991808154a6"}

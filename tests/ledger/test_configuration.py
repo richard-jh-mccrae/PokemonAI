@@ -576,3 +576,12 @@ def test_schema_25_recording_acquires_default_duplicate_body_value():
     migrated = ValuationConfiguration.from_recorded(old, schema_version=25)
 
     assert migrated["action.duplicate_body_deployment"] == -0.065
+
+
+def test_schema_26_recording_acquires_default_attachment_target_value():
+    old = dict(ValuationConfiguration.general().values)
+    old.pop("action.attachment_target_fit")
+
+    migrated = ValuationConfiguration.from_recorded(old, schema_version=26)
+
+    assert migrated["action.attachment_target_fit"] == 0.15

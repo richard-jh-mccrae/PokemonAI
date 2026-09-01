@@ -29,6 +29,21 @@ SEPTEMBER_LUCARIO_CORRECTIONS = (
 SEPTEMBER_DRAGAPULT_CORRECTIONS = (
     Path(__file__).parents[2] / "data" / "corrections"
     / "20260901-075825_58f85282_dragapult_ex")
+EARLY_SEPTEMBER_STARMIE_CORRECTIONS = (
+    Path(__file__).parents[2] / "data" / "corrections"
+    / "20260901-062151_58f85282_mega_starmie")
+FINAL_DRAGAPULT_CORRECTIONS = (
+    Path(__file__).parents[2] / "data" / "corrections"
+    / "20260901-200023_78bd10b5_dragapult_ex")
+FINAL_FIRST_DRAGAPULT_CORRECTIONS = (
+    Path(__file__).parents[2] / "data" / "corrections"
+    / "20260901-194308_78bd10b5_dragapult_ex")
+FINAL_STARMIE_CORRECTIONS = (
+    Path(__file__).parents[2] / "data" / "corrections"
+    / "20260901-184936_a108caf3_mega_starmie")
+FINAL_LUCARIO_CORRECTIONS = (
+    Path(__file__).parents[2] / "data" / "corrections"
+    / "20260901-191713_a108caf3_mega_lucario")
 
 
 def replay_frame(frame):
@@ -322,3 +337,111 @@ def test_second_ultra_ball_discard_defect_is_not_repeated():
 
 def test_multiple_later_bench_vacancies_wait_for_turn_search():
     assert_deferred(SEPTEMBER_DRAGAPULT_CORRECTIONS, 135)
+
+
+def test_free_drakloak_ability_covers_the_condemned_ultra_ball_play():
+    assert_deferred(SEPTEMBER_DRAGAPULT_CORRECTIONS, 84, disposition="covered")
+
+
+def test_gap_free_mega_signal_play_is_covered_and_preserved():
+    assert_deferred(FINAL_STARMIE_CORRECTIONS, 17, disposition="covered")
+    result = sweep(
+        store=FINAL_STARMIE_CORRECTIONS,
+        decks=("mega_starmie",),
+        reviewed={},
+        correction_filter=lambda correction: correction.decision.get("frame") == 17,
+    )
+    [row] = result["rows"]
+
+    assert row["graded"], row
+    assert row["agrees"], row
+
+
+def test_damage_counter_knockout_beats_partial_damage_on_a_larger_threat():
+    result = sweep(
+        store=EARLY_SEPTEMBER_STARMIE_CORRECTIONS,
+        decks=("mega_starmie",),
+        correction_filter=lambda correction: correction.decision.get("frame") == 87,
+    )
+    [row] = result["rows"]
+
+    assert row["graded"], row
+    assert row["agrees"], row
+
+
+def test_phantom_dive_counters_target_the_live_mega_starmie_threat():
+    result = sweep(
+        store=FINAL_DRAGAPULT_CORRECTIONS,
+        decks=("dragapult_ex",),
+        correction_filter=lambda correction: correction.decision.get("frame") == 93,
+    )
+    [row] = result["rows"]
+
+    assert row["graded"], row
+    assert row["agrees"], row
+
+
+def test_multi_provision_energy_beats_one_basic_for_the_open_mega_starmie():
+    result = sweep(
+        store=FINAL_STARMIE_CORRECTIONS,
+        decks=("mega_starmie",),
+        correction_filter=lambda correction: correction.decision.get("frame") == 121,
+    )
+    [row] = result["rows"]
+
+    assert row["graded"], row
+    assert row["agrees"], row
+
+
+def test_ultra_ball_fetches_the_needed_three_prize_backup_attacker():
+    result = sweep(
+        store=FINAL_LUCARIO_CORRECTIONS,
+        decks=("mega_lucario",),
+        correction_filter=lambda correction: correction.decision.get("frame") == 169,
+    )
+    [row] = result["rows"]
+
+    assert row["graded"], row
+    assert row["agrees"], row
+
+
+def test_poke_pad_fetches_setup_before_ending_the_turn():
+    result = sweep(
+        store=FINAL_STARMIE_CORRECTIONS,
+        decks=("dragapult_ex",),
+        correction_filter=lambda correction: correction.decision.get("frame") == 28,
+    )
+    [row] = result["rows"]
+
+    assert row["graded"], row
+    assert row["agrees"], row
+
+
+def test_realized_energy_attachment_is_taken_before_ending_the_turn():
+    result = sweep(
+        store=FINAL_FIRST_DRAGAPULT_CORRECTIONS,
+        decks=("dragapult_ex",),
+        correction_filter=lambda correction: correction.decision.get("frame") == 38,
+    )
+    [row] = result["rows"]
+
+    assert row["graded"], row
+    assert row["agrees"], row
+
+
+@pytest.mark.parametrize(("store", "deck", "frame"), (
+    (FINAL_STARMIE_CORRECTIONS, "mega_starmie", 9),
+    (FINAL_STARMIE_CORRECTIONS, "mega_starmie", 122),
+    (FINAL_DRAGAPULT_CORRECTIONS, "dragapult_ex", 42),
+    (FINAL_DRAGAPULT_CORRECTIONS, "mega_starmie", 161),
+))
+def test_final_round_existing_atomic_agreements_stay_fixed(store, deck, frame):
+    result = sweep(
+        store=store,
+        decks=(deck,),
+        correction_filter=lambda correction: correction.decision.get("frame") == frame,
+    )
+    [row] = result["rows"]
+
+    assert row["graded"], row
+    assert row["agrees"], row
