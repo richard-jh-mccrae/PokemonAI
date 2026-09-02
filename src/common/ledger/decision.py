@@ -21,6 +21,20 @@ from .evaluate import (EvaluationSnapshot, FeatureActivation, FeatureContributio
 
 LEDGER_VALUE_SCALE = ValueScale("ledger-worth", 1)
 EVALUATOR_ID_DIGEST_BYTES = 16
+_AST_EMPTY_COMPATIBILITY_FIELDS = ("type_params",)
+
+
+def _semantics_ast_dump(tree: ast.AST) -> str:
+    for node in ast.walk(tree):
+        body = getattr(node, "body", None)
+        if isinstance(body, list) and body and isinstance(body[0], ast.Expr) \
+                and isinstance(body[0].value, ast.Constant) \
+                and isinstance(body[0].value.value, str):
+            node.body = body[1:]
+        for field in _AST_EMPTY_COMPATIBILITY_FIELDS:
+            if getattr(node, field, None) == []:
+                delattr(node, field)
+    return ast.dump(tree, include_attributes=False)
 
 
 def evaluator_semantics_identity(paths=None) -> str:
@@ -37,14 +51,8 @@ def evaluator_semantics_identity(paths=None) -> str:
     digest = hashlib.blake2b(digest_size=EVALUATOR_ID_DIGEST_BYTES)
     for path in paths:
         tree = ast.parse(Path(path).read_text(encoding="utf-8"))
-        for node in ast.walk(tree):
-            body = getattr(node, "body", None)
-            if isinstance(body, list) and body and isinstance(body[0], ast.Expr) \
-                    and isinstance(body[0].value, ast.Constant) \
-                    and isinstance(body[0].value.value, str):
-                node.body = body[1:]
         digest.update(Path(path).name.encode("utf-8"))
-        digest.update(ast.dump(tree, include_attributes=False).encode("utf-8"))
+        digest.update(_semantics_ast_dump(tree).encode("utf-8"))
     return digest.hexdigest()
 
 

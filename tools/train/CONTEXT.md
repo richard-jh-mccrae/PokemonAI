@@ -102,6 +102,12 @@ randomized opponent plan, produced for human Ledger review. It stages Episode Bu
 neither a Benchmark nor a Corpus Snapshot.
 _Avoid_: Self-play Corpus, Strategy Benchmark, Corpus Run
 
+**Teacher Review Run**:
+A bounded, manifested batch of Episodes where the Teacher controls one focal Deck against one-ply
+Ledger opponents, produced for human search-blunder review. It is not a Correction Run or training
+corpus.
+_Avoid_: Correction Run, Teacher Corpus, Self-play Run
+
 **Correction Corpus Manifest**:
 The immutable identity of the Human Corrections and their review dispositions used to compare
 Ledger behavior across revisions.

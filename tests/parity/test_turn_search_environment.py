@@ -129,6 +129,20 @@ def test_search_state_key_canonicalizes_serials_and_excludes_rng():
     assert baseline.state_key(baseline.root) != different.state_key(different.root)
 
 
+def test_information_key_excludes_hidden_opponent_deck_permutations():
+    source = _start_of_turn()
+    permuted = source.fork()
+    opponent = permuted.gs.players[1]
+    opponent.deck[0], opponent.deck[-1] = opponent.deck[-1], opponent.deck[0]
+
+    baseline = TurnSearchEnvironment.from_engine(source, perspective_seat=0)
+    hidden = TurnSearchEnvironment.from_engine(permuted, perspective_seat=0)
+
+    assert baseline.state_key(baseline.root) != hidden.state_key(hidden.root)
+    assert baseline.information_key(baseline.state_key(baseline.root)) == \
+        hidden.information_key(hidden.state_key(hidden.root))
+
+
 def test_search_state_key_excludes_diagnostic_logs_and_preserves_source_logs():
     clean = _start_of_turn()
     logged = clean.fork()

@@ -298,6 +298,20 @@ def test_post_pregame_forced_menu_is_a_complete_ledger_decision_without_preview(
     },)
 
 
+def test_runtime_can_observe_a_live_decision_without_running_the_ledger():
+    def forbidden_provider(_state, **_kwargs):
+        raise AssertionError("observe must not construct a transition provider")
+
+    runtime = _mega_starmie_runtime(provider_factory=forbidden_provider)
+    observation = _menu([engine_opt(type=14)], context=0, turn=2)
+
+    state = runtime.observe(observation)
+
+    assert state.turn.number == 2
+    assert runtime.last_state is state
+    assert runtime.ledger.last_valuation is None
+
+
 def test_live_runtime_captures_the_typed_ledger_record(monkeypatch):
     from common.telemetry import capture_records
 

@@ -146,7 +146,8 @@ jobs:
             targets: >-
               tests/sim/test_audit_attacks_engine.py tests/sim/test_battle.py
               tests/sim/test_check_agent.py tests/sim/test_correction_run.py
-              tests/sim/test_retreat_lock_engine.py tests/sim/test_transients_engine.py
+              tests/sim/test_retreat_lock_engine.py tests/sim/test_teacher_agent.py
+              tests/sim/test_teacher_review_run.py tests/sim/test_transients_engine.py
           - shard: analysis
             workers: auto
             targets: >-

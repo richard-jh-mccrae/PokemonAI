@@ -1,12 +1,16 @@
 import json
+from collections import Counter
 
 import pytest
 
 from common.api import ActionIdentity
-from common.observation import KnownDeckTop, LegalKnowledge
+from common.ledger import EvaluationModel
+from common.observation import KnownDeckTop, KnownOwnPrizes, LegalKnowledge
 from cgpy.experiment import (BoundaryReason, ChanceExpansionRequest,
                              ChanceExpansionStatus, ChanceSampleKey, NodeKind,
-                             PrimitiveTransition, TurnSearchEnvironment)
+                             PrimitiveTransition, TeacherCoverage,
+                             TeacherSearchConfiguration, TurnSearchEnvironment,
+                             WithinHorizonTeacher)
 from cgpy.rng import SeededRng
 from cgpy.schema import SelectContext
 
@@ -342,7 +346,11 @@ def test_small_shuffle_support_is_exact_and_equivalent_states_coalesce():
     board.discard.extend(board.deck)
     board.deck = kept
     lock_main_allowances(engine)
-    environment = TurnSearchEnvironment.from_engine(engine, perspective_seat=0)
+    prize_counts = Counter(engine.gs.card_id(serial) for serial in board.prize)
+    environment = TurnSearchEnvironment.from_engine(
+        engine, perspective_seat=0,
+        knowledge=LegalKnowledge(own_prizes=KnownOwnPrizes(
+            tuple(prize_counts.items()))))
     root = environment.root
     play = next(
         action for action in environment.legal_actions(root)
@@ -416,6 +424,271 @@ def test_sampled_draw_honors_legal_known_top_over_private_deck_order():
                for successor in blind_expansion.successors)
 
 
+def test_sampled_draw_is_invariant_to_unseen_deck_order():
+    engine, _agent = scenario(
+        "mega_starmie", me_active=BodySpec((1030,)), me_hand=(3,),
+        them_active=BodySpec((1030, 1031), energies=(3, 17)))
+    enriching_energy = engine.gs.players[0].hand[0]
+    engine.gs.cards[enriching_energy].card_id = 13
+    permuted = engine.fork()
+    deck = permuted.gs.players[0].deck
+    left = next(index for index, serial in enumerate(deck)
+                if permuted.gs.card_id(serial) != permuted.gs.card_id(deck[-1]))
+    deck[left], deck[-1] = deck[-1], deck[left]
+    lock_main_allowances(engine, energy=False)
+    lock_main_allowances(permuted, energy=False)
+
+    def expansion(source):
+        environment = TurnSearchEnvironment.from_engine(source, perspective_seat=0)
+        attach = next(action for action in environment.legal_actions(environment.root)
+                      if action.identity.kind == "attach")
+        chance = environment.transition(environment.root, attach.identity).node
+        result = environment.expand(
+            chance, ChanceExpansionRequest(
+                experiment_seed=604, exact_outcome_limit=1, sample_count=6))
+        visible = tuple(sorted(
+            (successor.probability, environment.observation(successor.node).decision_key)
+            for successor in result.successors))
+        return environment, result, visible
+
+    baseline, first, first_visible = expansion(engine)
+    hidden, second, second_visible = expansion(permuted)
+
+    assert baseline.root.observation.decision_key == hidden.root.observation.decision_key
+    assert baseline.root.state_key != hidden.root.state_key
+    assert tuple(item.branch_key for item in first.transitions) == \
+        tuple(item.branch_key for item in second.transitions)
+    assert first_visible == second_visible
+
+
+def test_sampled_draw_is_invariant_to_unseen_deck_prize_allocation():
+    engine, _agent = scenario(
+        "mega_starmie", me_active=BodySpec((1030,)), me_hand=(3,),
+        them_active=BodySpec((1030, 1031), energies=(3, 17)))
+    enriching_energy = engine.gs.players[0].hand[0]
+    engine.gs.cards[enriching_energy].card_id = 13
+    permuted = engine.fork()
+    board = permuted.gs.players[0]
+    deck_index, prize_index = next(
+        (deck_index, prize_index)
+        for deck_index, deck_serial in enumerate(board.deck)
+        for prize_index, prize_serial in enumerate(board.prize)
+        if permuted.gs.card_id(deck_serial) != permuted.gs.card_id(prize_serial))
+    board.deck[deck_index], board.prize[prize_index] = (
+        board.prize[prize_index], board.deck[deck_index])
+    lock_main_allowances(engine, energy=False)
+    lock_main_allowances(permuted, energy=False)
+
+    def expansion(source):
+        environment = TurnSearchEnvironment.from_engine(source, perspective_seat=0)
+        attach = next(action for action in environment.legal_actions(environment.root)
+                      if action.identity.kind == "attach")
+        chance = environment.transition(environment.root, attach.identity).node
+        result = environment.expand(
+            chance, ChanceExpansionRequest(
+                experiment_seed=604, exact_outcome_limit=16, sample_count=6))
+        visible = tuple(sorted(
+            (successor.probability, environment.observation(successor.node).decision_key)
+            for successor in result.successors))
+        return environment, result, visible
+
+    baseline, first, first_visible = expansion(engine)
+    hidden, second, second_visible = expansion(permuted)
+
+    assert baseline.root.observation.decision_key == hidden.root.observation.decision_key
+    assert baseline.root.state_key != hidden.root.state_key
+    assert tuple(item.branch_key for item in first.transitions) == \
+        tuple(item.branch_key for item in second.transitions)
+    assert first_visible == second_visible
+
+
+def test_bottom_look_reserves_known_top_across_deck_prize_allocations():
+    engine, _agent = scenario(
+        "mega_starmie", me_active=BodySpec((1030,)), me_hand=(3,),
+        them_active=BodySpec((1030, 1031), energies=(3, 17)))
+    dusk_ball = engine.gs.players[0].hand[0]
+    engine.gs.cards[dusk_ball].card_id = 1102
+    board = engine.gs.players[0]
+    known_serial = board.deck[-1]
+    knowledge = LegalKnowledge(known_top=KnownDeckTop((
+        (known_serial, engine.gs.card_id(known_serial)),)))
+    permuted = engine.fork()
+    hidden = permuted.gs.players[0]
+    prize_index = next(
+        index for index, serial in enumerate(hidden.prize)
+        if permuted.gs.card_id(serial) != permuted.gs.card_id(known_serial))
+    hidden.deck[hidden.deck.index(known_serial)], hidden.prize[prize_index] = (
+        hidden.prize[prize_index], known_serial)
+    lock_main_allowances(engine)
+    lock_main_allowances(permuted)
+
+    def expansion(source):
+        environment = TurnSearchEnvironment.from_engine(
+            source, perspective_seat=0, knowledge=knowledge)
+        play = next(action for action in environment.legal_actions(environment.root)
+                    if action.identity.kind == "play")
+        chance = environment.transition(environment.root, play.identity).node
+        result = environment.expand(
+            chance, ChanceExpansionRequest(
+                experiment_seed=604, exact_outcome_limit=1, sample_count=6))
+        visible = tuple(sorted(
+            (successor.probability, environment.observation(successor.node).decision_key)
+            for successor in result.successors))
+        assert any(successor.node.kind is NodeKind.FORCED_DECISION
+                   for successor in result.successors)
+        for successor in result.successors:
+            observation = environment.observation(successor.node)
+            if successor.node.kind is NodeKind.FORCED_DECISION:
+                assert known_serial not in {
+                    card.serial for card in observation.looking.cards}
+                assert observation.knowledge.known_top == knowledge.known_top
+        return environment, result, visible
+
+    baseline, first, first_visible = expansion(engine)
+    hidden_environment, second, second_visible = expansion(permuted)
+
+    assert baseline.root.observation.decision_key == \
+        hidden_environment.root.observation.decision_key
+    assert baseline.root.state_key != hidden_environment.root.state_key
+    assert tuple(item.branch_key for item in first.transitions) == \
+        tuple(item.branch_key for item in second.transitions)
+    assert first_visible == second_visible
+
+
+def test_prize_take_reserves_known_top_across_deck_prize_allocations():
+    engine, _agent = scenario(
+        "mega_starmie",
+        me_active=BodySpec((1030, 1031), energies=(3, 17)),
+        them_active=BodySpec((1030,), hp=10),
+        them_bench=(BodySpec((1030,)),))
+    board = engine.gs.players[0]
+    known_serial = board.deck[-1]
+    knowledge = LegalKnowledge(known_top=KnownDeckTop((
+        (known_serial, engine.gs.card_id(known_serial)),)))
+    permuted = engine.fork()
+    hidden = permuted.gs.players[0]
+    prize_index = next(
+        index for index, serial in enumerate(hidden.prize)
+        if permuted.gs.card_id(serial) != permuted.gs.card_id(known_serial))
+    hidden.deck[hidden.deck.index(known_serial)], hidden.prize[prize_index] = (
+        hidden.prize[prize_index], known_serial)
+    lock_main_allowances(engine)
+    lock_main_allowances(permuted)
+
+    def expansion(source):
+        environment = TurnSearchEnvironment.from_engine(
+            source, perspective_seat=0, knowledge=knowledge)
+        attack = next(action for action in environment.legal_actions(environment.root)
+                      if action.identity.kind == "attack")
+        target_node = environment.transition(environment.root, attack.identity).node
+        target = environment.legal_actions(target_node)[0]
+        prize_node = environment.transition(target_node, target.identity).node
+        assert prize_node.kind is NodeKind.FORCED_DECISION
+        choose = environment.legal_actions(prize_node)[0]
+        chance = environment.transition(prize_node, choose.identity).node
+        result = environment.expand(
+            chance, ChanceExpansionRequest(
+                experiment_seed=604, exact_outcome_limit=16, sample_count=6))
+        visible = tuple(sorted(
+            (successor.probability, environment.observation(successor.node).decision_key)
+            for successor in result.successors))
+        assert all(known_serial not in {
+            card.serial for card in environment.observation(successor.node).me.hand}
+                   for successor in result.successors)
+        assert all(environment.observation(successor.node).knowledge.known_top
+                   == knowledge.known_top for successor in result.successors)
+        return environment, result, visible
+
+    baseline, first, first_visible = expansion(engine)
+    hidden_environment, second, second_visible = expansion(permuted)
+
+    assert baseline.root.observation.decision_key == \
+        hidden_environment.root.observation.decision_key
+    assert baseline.root.state_key != hidden_environment.root.state_key
+    assert tuple(item.branch_key for item in first.transitions) == \
+        tuple(item.branch_key for item in second.transitions)
+    assert first_visible == second_visible
+
+
+def test_refresh_is_invariant_to_opponent_deck_hand_allocation():
+    engine, _agent = scenario(
+        "mega_starmie", me_active=BodySpec((1030,)), me_hand=(1223, 3),
+        them_active=BodySpec((1030, 1031), energies=(3, 17)))
+    opponent = engine.gs.players[1]
+    opponent.hand.append(opponent.deck.pop())
+    permuted = engine.fork()
+    board = permuted.gs.players[1]
+    deck_index, hand_index = next(
+        (deck_index, hand_index)
+        for deck_index, deck_serial in enumerate(board.deck)
+        for hand_index, hand_serial in enumerate(board.hand)
+        if permuted.gs.card_id(deck_serial) != permuted.gs.card_id(hand_serial))
+    board.deck[deck_index], board.hand[hand_index] = (
+        board.hand[hand_index], board.deck[deck_index])
+    lock_main_allowances(engine, supporter=False)
+    lock_main_allowances(permuted, supporter=False)
+
+    def expansion(source):
+        environment = TurnSearchEnvironment.from_engine(source, perspective_seat=0)
+        play = next(
+            action for action in environment.legal_actions(environment.root)
+            if action.identity.kind == "play"
+            and source.gs.card_id(source.gs.players[0].hand[
+                source.gs.pending.options[action.selection[0]]["index"]]) == 1223)
+        chance = environment.transition(environment.root, play.identity).node
+        result = environment.expand(
+            chance, ChanceExpansionRequest(
+                experiment_seed=604, exact_outcome_limit=16, sample_count=8))
+        visible = tuple(sorted(
+            (successor.probability, environment.observation(successor.node).decision_key)
+            for successor in result.successors))
+        return environment, result, visible
+
+    baseline, first, first_visible = expansion(engine)
+    hidden, second, second_visible = expansion(permuted)
+
+    assert baseline.root.observation.decision_key == hidden.root.observation.decision_key
+    assert baseline.root.state_key != hidden.root.state_key
+    assert tuple(item.branch_key for item in first.transitions) == \
+        tuple(item.branch_key for item in second.transitions)
+    assert first_visible == second_visible
+
+
+def test_teacher_choice_is_invariant_to_unseen_deck_order():
+    engine, _agent = scenario(
+        "mega_starmie", me_active=BodySpec((1030,)), me_hand=(3,),
+        them_active=BodySpec((1030, 1031), energies=(3, 17)))
+    enriching_energy = engine.gs.players[0].hand[0]
+    engine.gs.cards[enriching_energy].card_id = 13
+    for index, serial in enumerate(engine.gs.players[0].deck):
+        engine.gs.cards[serial].card_id = 3 if index % 2 else 17
+    permuted = engine.fork()
+    permuted.gs.players[0].deck.reverse()
+    lock_main_allowances(engine, energy=False)
+    lock_main_allowances(permuted, energy=False)
+    configuration = TeacherSearchConfiguration(
+        node_cap=1_000, path_node_cap=64, chance_branch_cap=1_000,
+        exact_outcome_limit=1, chance_sample_count=6, time_cap_seconds=10)
+
+    def search(source):
+        environment = TurnSearchEnvironment.from_engine(source, perspective_seat=0)
+        result = WithinHorizonTeacher().search_environment(
+            environment, evaluation_model=EvaluationModel.build(),
+            experiment_seed=654, configuration=configuration,
+            baseline_identity="hidden-order-test")
+        return environment, result
+
+    baseline, first = search(engine)
+    hidden, second = search(permuted)
+
+    assert baseline.root.observation.decision_key == hidden.root.observation.decision_key
+    assert baseline.root.state_key != hidden.root.state_key
+    assert first.coverage is second.coverage is TeacherCoverage.COMPLETE
+    assert first.preferred_action == second.preferred_action
+    assert tuple((item.action, item.expected_value) for item in first.root_actions) == \
+        tuple((item.action, item.expected_value) for item in second.root_actions)
+
+
 def test_known_top_is_consumed_when_drakloak_moves_it_into_looking():
     engine, _agent = scenario(
         "dragapult_ex", me_active=BodySpec((119,)),
@@ -459,7 +732,7 @@ def test_expansion_fold_can_reverse_single_hit_ranking_for_a_whole_hand_combo():
         if action.identity.kind == "play"
     }
     request = ChanceExpansionRequest(
-        experiment_seed=604, exact_outcome_limit=1, sample_count=12)
+        experiment_seed=47, exact_outcome_limit=1, sample_count=12)
     expansions = {
         card_id: environment.expand(
             environment.transition(root, plays[card_id].identity).node, request)

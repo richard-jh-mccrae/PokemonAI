@@ -1,3 +1,4 @@
+import ast
 from common.ledger import (
     ActivationCompiler,
     ActivationEnvironment,
@@ -328,6 +329,19 @@ def test_evaluator_identity_tracks_executable_semantics_but_not_prose(tmp_path):
 
     assert prose_only == first
     assert evaluator_semantics_identity((source,)) != first
+
+
+def test_evaluator_identity_ignores_empty_interpreter_ast_fields(monkeypatch):
+    from common.ledger.decision import _semantics_ast_dump
+
+    source = "def value():\n    return 1\n"
+    current = ast.parse(source)
+    simulated = ast.parse(source)
+    simulated.body[0].type_params = []
+    monkeypatch.setattr(
+        ast.FunctionDef, "_fields", (*ast.FunctionDef._fields, "type_params"))
+
+    assert _semantics_ast_dump(simulated) == _semantics_ast_dump(current)
 
 
 def test_evaluator_identity_tracks_catalog_rule_selection_semantics(tmp_path):

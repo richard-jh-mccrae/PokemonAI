@@ -9,8 +9,9 @@ import pytest
 from common.api import ActionIdentity
 from common.observation.nodes import HiddenHand
 from cgpy.engine import Engine
-from cgpy.experiment import (ChanceBranchKey, ChanceSampleKey, ExperimentParityManifest,
-                             ExperimentSnapshot, PairedSeedCase, PairedSeedMatch,
+from cgpy.experiment import (ChanceBranchKey, ChanceInformationKey, ChanceSampleKey,
+                             ExperimentParityManifest, ExperimentSnapshot,
+                             PairedSeedCase, PairedSeedMatch,
                              SnapshotCompatibilityError)
 from cgpy.rng import SeededRng
 from cgpy.verify.trace import Trace
@@ -189,6 +190,19 @@ def test_chance_samples_do_not_depend_on_traversal_order():
     first_branch = ChanceBranchKey.sampled(first_sample, method="shuffle")
     second_branch = ChanceBranchKey.sampled(second_sample, method="shuffle")
     assert first_branch.digest != second_branch.digest
+
+
+def test_chance_information_identity_is_typed_and_domain_separated():
+    action = ActionIdentity("play", ("alpha",))
+    baseline = ChanceInformationKey(
+        "observation", "chance", "shuffle_draw", action, 0, "shuffle")
+
+    assert baseline.digest == ChanceInformationKey(
+        "observation", "chance", "shuffle_draw", action, 0, "shuffle").digest
+    assert baseline.digest != ChanceInformationKey(
+        "observation", "chance", "shuffle_draw", action, 1, "shuffle").digest
+    assert baseline.digest != ChanceSampleKey(
+        0, "observation", "chance", action, 0).digest
 
 
 def test_paired_seed_case_relaunches_the_declared_roots():

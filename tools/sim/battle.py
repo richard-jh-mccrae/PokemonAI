@@ -392,9 +392,12 @@ def play_match(server_a: AgentServer, server_b: AgentServer,
                 break
             seat = cur.get("yourIndex", 0)
             remaining = max(0.0, deadline - monotonic()) if deadline is not None else None
-            timeout = (min(float(decision_timeout), remaining)
-                       if decision_timeout is not None and remaining is not None
-                       else float(decision_timeout) if decision_timeout is not None else remaining)
+            decision_limit = (decision_timeout[seat]
+                              if isinstance(decision_timeout, (tuple, list))
+                              else decision_timeout)
+            timeout = (min(float(decision_limit), remaining)
+                       if decision_limit is not None and remaining is not None
+                       else float(decision_limit) if decision_limit is not None else remaining)
             choice = servers[seat].act(obs, timeout=timeout)
             if choice is None:                     # seat crashed -> other seat wins
                 if (servers[seat].last_timeout and deadline is not None
