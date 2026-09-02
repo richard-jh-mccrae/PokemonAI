@@ -3,7 +3,7 @@ from __future__ import annotations
 
 import argparse
 import atexit
-from concurrent.futures import FIRST_COMPLETED, ProcessPoolExecutor, wait
+from concurrent.futures import ProcessPoolExecutor
 from dataclasses import asdict, dataclass
 from datetime import datetime, timezone
 import gzip
@@ -139,8 +139,8 @@ def create_teacher_review_run(*, output_root: Path, run_id: str, created_at: str
         "status": "planned", "focal": focal, "opponents": list(opponents),
         "seed": int(seed),
         "jobs": {
-            "requested": int(jobs), "effective": min(int(jobs), len(slots)),
-            "maximum": MAX_JOBS,
+            "requested": int(jobs), "effective": int(jobs),
+            "maximum": MAX_JOBS, "scope": "root_actions",
         },
         "engine": {"kind": "cgpy", "seeded": True},
         "baseline": dict(baseline),
@@ -282,41 +282,23 @@ def execute_teacher_review_run(*, run_dir: Path, verify_inputs: bool = True,
             "run_dir": str(run_dir), "manifest": manifest,
             "execution": execution.to_manifest(),
         }
-        jobs = min(int(manifest["jobs"]["requested"]), MAX_JOBS, len(pending))
         started = monotonic()
         with ProcessPoolExecutor(
-                max_workers=jobs, initializer=_initialize_worker,
+                max_workers=1, initializer=_initialize_worker,
                 initargs=(worker_config,)) as pool:
-            remaining = iter(pending)
-            active = {}
-            for _ in range(jobs):
-                slot = next(remaining, None)
-                if slot is not None:
-                    active[pool.submit(_run_review_slot, slot)] = slot
-            _log(log, started, len(active), manifest)
-            capped = False
-            while active:
-                done, _ = wait(active, timeout=1.0, return_when=FIRST_COMPLETED)
-                if not done:
-                    continue
-                for future in done:
-                    slot = active.pop(future)
-                    try:
-                        result = future.result()
-                    except Exception as error:
-                        result = _failed_result(slot, error)
-                    _write_json(_result_path(run_dir, int(slot["index"])), result)
-                    manifest = _reconcile(manifest, run_dir, validate_artifacts=True)
-                    _write_json(manifest_path, manifest)
-                    if execution.max_bytes and manifest["totals"]["bytes"] >= execution.max_bytes:
-                        capped = True
-                    else:
-                        next_slot = next(remaining, None)
-                        if next_slot is not None:
-                            active[pool.submit(_run_review_slot, next_slot)] = next_slot
-                    _log(log, started, len(active), manifest, slot=slot, result=result)
-            if capped:
-                manifest["status"] = "capped"
+            _log(log, started, 1, manifest)
+            for slot in pending:
+                try:
+                    result = pool.submit(_run_review_slot, slot).result()
+                except Exception as error:
+                    result = _failed_result(slot, error)
+                _write_json(_result_path(run_dir, int(slot["index"])), result)
+                manifest = _reconcile(manifest, run_dir, validate_artifacts=True)
+                _write_json(manifest_path, manifest)
+                _log(log, started, 0, manifest, slot=slot, result=result)
+                if execution.max_bytes and manifest["totals"]["bytes"] >= execution.max_bytes:
+                    manifest["status"] = "capped"
+                    break
     if manifest["status"] == "running":
         manifest["status"] = (
             "complete" if manifest["totals"]["complete"] == len(manifest["slots"])
@@ -453,7 +435,8 @@ def _run_review_slot(slot: dict) -> dict:
             model=TeacherModelRecord.from_model(runtime.ledger.ctx),
             search_configuration=search_configuration,
             baseline_identity=manifest["baseline"]["baseline_id"],
-            root_timeout_seconds=execution.root_timeout_seconds)
+            root_timeout_seconds=execution.root_timeout_seconds,
+            workers=int(manifest["jobs"]["requested"]))
 
         def save_search(index, result):
             _write_gzip_json(staging / "searches" / f"{index:04d}.json.gz", result.document())
@@ -577,7 +560,9 @@ def _parser() -> argparse.ArgumentParser:
         description="Run Teacher focal matches against one-ply Ledger opponents")
     parser.add_argument("focal")
     parser.add_argument("-n", "--matches", type=int, default=1)
-    parser.add_argument("--jobs", type=int, default=default_jobs())
+    parser.add_argument(
+        "--jobs", type=int, default=default_jobs(),
+        help="maximum parallel root-action branches; matches run sequentially")
     parser.add_argument("--opponents", nargs="*")
     parser.add_argument("--seed", type=int)
     parser.add_argument("--teacher-time-cap", type=float, default=600.0)
@@ -601,7 +586,7 @@ def _parser() -> argparse.ArgumentParser:
 
 
 def main(argv=None) -> int:
-    from cgpy.experiment import TeacherSearchConfiguration
+    from cgpy.experiment import TeacherSearchConfiguration, teacher_action_policy_for_agent
     from common.ledger import load_baseline
     from common.ledger.baseline import baseline_identities
     from sim.run_identity import (
@@ -636,7 +621,8 @@ def main(argv=None) -> int:
                 chance_sample_count=args.teacher_chance_samples,
                 time_cap_seconds=args.teacher_time_cap,
                 noise_tolerance=args.teacher_noise_tolerance,
-                tie_seed=args.teacher_tie_seed)
+                tie_seed=args.teacher_tie_seed,
+                action_policy=teacher_action_policy_for_agent(args.focal))
             execution = ReviewExecutionConfiguration(
                 root_timeout_seconds=args.teacher_root_timeout,
                 opponent_timeout_seconds=args.opponent_decision_timeout,

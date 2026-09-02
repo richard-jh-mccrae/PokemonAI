@@ -76,7 +76,8 @@ def test_teacher_review_manifest_persists_full_plan_before_play(tmp_path):
     manifest = json.loads((run_dir / "manifest.json").read_text(encoding="utf-8"))
     assert manifest["schema"] == "teacher.review-run"
     assert manifest["status"] == "planned"
-    assert manifest["jobs"] == {"requested": 8, "effective": 2, "maximum": 8}
+    assert manifest["jobs"] == {
+        "requested": 8, "effective": 8, "maximum": 8, "scope": "root_actions"}
     assert manifest["teacher"]["search"]["time_cap_seconds"] == 2.0
     assert manifest["execution"]["root_timeout_seconds"] == 3.0
     assert [slot["status"] for slot in manifest["slots"]] == ["planned", "planned"]
@@ -254,7 +255,7 @@ def test_teacher_review_cli_runs_a_match_and_feeds_the_blunder_viewer(tmp_path):
     agents = REPO / "tests" / "fixtures" / "teacher_review_agents"
     completed = subprocess.run([
         sys.executable, str(REPO / "tools" / "sim" / "teacher_review_run.py"),
-        "mega_starmie", "-n", "1", "--jobs", "1", "--opponents", "quick_opponent",
+        "mega_starmie", "-n", "1", "--jobs", "2", "--opponents", "quick_opponent",
         "--seed", "654", "--agents-root", str(agents), "--out", str(tmp_path),
         "--ledger-baseline", str(baseline), "--teacher-time-cap", "30",
         "--teacher-root-timeout", "40", "--teacher-node-cap", "2000",
@@ -267,6 +268,8 @@ def test_teacher_review_cli_runs_a_match_and_feeds_the_blunder_viewer(tmp_path):
     run_dir, = tuple(path for path in tmp_path.iterdir() if path.is_dir())
     manifest = json.loads((run_dir / "manifest.json").read_text(encoding="utf-8"))
     assert manifest["status"] == "complete"
+    assert manifest["jobs"] == {
+        "requested": 2, "effective": 2, "maximum": 8, "scope": "root_actions"}
     replay, = discover_replays(run_dir)
     summary = load_game_summary(replay)
     assert summary["agent"] == "mega_starmie"

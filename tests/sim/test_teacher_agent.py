@@ -5,7 +5,7 @@ from common.decision import EvaluationStatus
 from common.ledger import EvaluationModel
 from cgpy.experiment import (
     TeacherCoverage, TeacherModelRecord, TeacherSearchConfiguration,
-    TeacherStopReason,
+    TeacherStopReason, TurnSearchEnvironment,
 )
 from teacher_helpers import end_only_snapshot
 
@@ -241,4 +241,32 @@ def test_isolated_searcher_runs_a_live_engine_root_in_a_spawned_process():
     assert search.result.coverage is TeacherCoverage.COMPLETE
     assert search.result.preferred_action is not None
     assert dict(search.policy)[snapshot.observation.decision_key] == \
+        search.result.preferred_action
+
+
+def test_isolated_searcher_parallelizes_root_actions_and_merges_the_policy():
+    from sim.teacher_agent import IsolatedTeacherSearcher
+    from real_engine_helpers import BodySpec, lock_main_allowances, scenario
+
+    engine, runtime = scenario(
+        "mega_starmie", me_active=BodySpec((1030,)), me_hand=(3,),
+        them_active=BodySpec((1030, 1031), energies=(3, 17)))
+    lock_main_allowances(engine, energy=False)
+    environment = TurnSearchEnvironment.from_engine(
+        engine, perspective_seat=0, knowledge=runtime.knowledge)
+    assert len(environment.legal_actions(environment.root)) > 1
+    searcher = IsolatedTeacherSearcher(
+        model=TeacherModelRecord.from_model(runtime.ledger.ctx),
+        search_configuration=TeacherSearchConfiguration(),
+        baseline_identity="frozen-test-baseline",
+        root_timeout_seconds=30.0, workers=2,
+    )
+
+    search = searcher.search(
+        engine=engine, perspective_seat=0, knowledge=runtime.knowledge,
+        experiment_seed=654)
+
+    assert search.result.coverage is TeacherCoverage.COMPLETE
+    assert len(search.result.root_actions) > 1
+    assert dict(search.policy)[environment.root.observation.decision_key] == \
         search.result.preferred_action
