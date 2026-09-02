@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+from dataclasses import dataclass
 from pathlib import Path
 
 
@@ -19,6 +20,13 @@ REQUIRED_GATES = {
     "documentation", "correction_ci", "readiness", "performance",
 }
 _SHA256_HEX_LENGTH = hashlib.sha256().digest_size * len("00")
+
+
+@dataclass(frozen=True, slots=True)
+class LedgerBaselineIdentities:
+    baseline: str
+    evaluator: str
+    evaluation_models: tuple[str, ...]
 
 
 def _canonical(value) -> bytes:
@@ -148,6 +156,19 @@ def require_baseline(expected_id: str, path: Path | str) -> dict:
     return baseline
 
 
-__all__ = ("AUTHORITATIVE_DECKS", "BLUNDER_POLICY", "REQUIRED_GATES",
-           "certified_evidence", "load_baseline", "require_baseline", "validate_baseline",
-           "validate_certification")
+def baseline_identities(manifest: dict) -> LedgerBaselineIdentities:
+    manifest = validate_baseline(manifest)
+    evaluator = str(manifest["ledger"]["evaluator"])
+    behaviors = tuple(manifest["behavior_identities"])
+    if any(str(item["evaluator"]) != evaluator for item in behaviors):
+        raise ValueError("Ledger Baseline evaluator identities do not match")
+    return LedgerBaselineIdentities(
+        str(manifest["baseline_id"]),
+        evaluator,
+        tuple(sorted({str(item["evaluation_model"]) for item in behaviors})),
+    )
+
+
+__all__ = ("AUTHORITATIVE_DECKS", "BLUNDER_POLICY", "LedgerBaselineIdentities",
+           "REQUIRED_GATES", "baseline_identities", "certified_evidence", "load_baseline",
+           "require_baseline", "validate_baseline", "validate_certification")

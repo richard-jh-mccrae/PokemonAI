@@ -10,15 +10,21 @@ from common.decision import (
     DecisionDelta,
     EvaluationStatus,
     PolicyConfiguration,
+    PolicyRequest,
+    PolicySourceIdentity,
     SearchResult,
     StateValuation,
     ValueScale,
     ValuedCandidate,
     neutral_lottery_choice,
 )
+from common.observation import ObservationStateBuilder
+from ledger_helpers import DARK_E, DRAGAPULT, body, player, printout
 
 
 SCALE = ValueScale("ledger-worth", 1)
+OBSERVATION = ObservationStateBuilder((DRAGAPULT, DARK_E) * 30).root(
+    printout(me=player(active=body(DRAGAPULT, 1))))
 
 
 @dataclass(frozen=True)
@@ -44,10 +50,8 @@ class FakePolicyModel:
     def __init__(self):
         self.calls = []
 
-    def priors(self, state, actions):
-        self.calls.append((state, actions))
-        probability = 0.0 if not actions else 1.0 / len(actions)
-        return tuple(probability for _action in actions)
+    def priors(self, request):
+        self.calls.append(request)
 
 
 class FakeSearch:
@@ -60,8 +64,16 @@ class FakeSearch:
     def search(self, request, evaluator, policy_model, provider, configuration):
         self.calls.append((request, evaluator, policy_model, provider, configuration))
         evaluator.evaluate(request)
-        policy_model.priors(
-            request.state, tuple(candidate.action for candidate in self.result.roster.candidates))
+        policy_model.priors(PolicyRequest(
+            request.state,
+            self.result.roster,
+            PolicySourceIdentity(
+                request.baseline_identity,
+                evaluator.identity,
+                str(request.evaluation_model),
+                self.result.baseline.scale.identity,
+            ),
+        ))
         return self.result
 
 
@@ -101,7 +113,8 @@ def test_coordinator_keeps_search_evaluation_and_policy_contracts_separate():
             EvaluationStatus.COMPLETE,
         ),
     )
-    search_result = SearchResult(baseline, CandidateRoster(candidates))
+    search_result = SearchResult(
+        baseline, CandidateRoster.from_legal_actions((attach, end), candidates))
     search = FakeSearch(search_result)
     decision_policy = FakeDecisionPolicy(attach)
     evaluator = FakeEvaluator(baseline)
@@ -114,9 +127,10 @@ def test_coordinator_keeps_search_evaluation_and_policy_contracts_separate():
         policy_model=policy_model,
         decision_policy=decision_policy,
         policy_configuration="policy-configuration",
+        ledger_baseline_identity="frozen-ledger-v1",
     )
 
-    result = coordinator.decide("state", provider="provider")
+    result = coordinator.decide(OBSERVATION, provider="provider")
 
     assert result.chosen is attach
     assert result.baseline is baseline
@@ -124,15 +138,19 @@ def test_coordinator_keeps_search_evaluation_and_policy_contracts_separate():
     assert result.trace.chosen_action is attach
     assert result.policy_reason.value == "policy"
     request, passed_evaluator, passed_model, provider, search_config = search.calls[0]
-    assert request.state == "state"
+    assert request.state is OBSERVATION
     assert request.evaluation_model == "evaluation-model"
+    assert request.baseline_identity == "frozen-ledger-v1"
     assert passed_evaluator is evaluator
     assert passed_model is policy_model
     assert provider == "provider"
     assert search_config == "search-configuration"
     assert decision_policy.calls == [(search_result.roster, "policy-configuration")]
     assert evaluator.calls == [request]
-    assert policy_model.calls == [("state", (attach, end))]
+    assert len(policy_model.calls) == 1
+    assert policy_model.calls[0].observation is OBSERVATION
+    assert policy_model.calls[0].roster is search_result.roster
+    assert policy_model.calls[0].source.baseline_identity == "frozen-ledger-v1"
 
 
 def test_failure_containment_is_not_converted_to_a_fail_safe_decision():
@@ -202,8 +220,7 @@ def test_decision_result_exposes_the_chosen_candidate_as_the_projection_authorit
         evaluator=FakeEvaluator(baseline), evaluation_model="model",
         search=FakeSearch(search), search_configuration="search",
         policy_model=FakePolicyModel(), decision_policy=FakeDecisionPolicy(action),
-        policy_configuration="policy").decide(type("State", (), {
-            "legal_actions": (action,)})())
+        policy_configuration="policy").decide(OBSERVATION)
 
     assert result.chosen_candidate is candidate
 

@@ -4,7 +4,7 @@ import hashlib
 import math
 import re
 from collections import Counter
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from pathlib import Path
 
 from common.decision import (
@@ -22,6 +22,11 @@ from common.decision import (
     EvaluationStatus,
     EvaluationRequest,
     FailSafeRequest,
+    PolicyActionEvidence,
+    PolicyDistribution,
+    PolicyFallbackReason,
+    PolicyRequest,
+    PolicySourceIdentity,
     RealizedOutcome,
     SearchResult,
     SearchValue,
@@ -88,10 +93,28 @@ class TransitionProviderSource:
 class UniformPolicyModel:
     identity = f"uniform-policy-model-v1:{SEARCH_SEMANTICS_IDENTITY}"
 
-    def priors(self, state, actions):
-        del state
-        probability = 0.0 if not actions else 1.0 / len(actions)
-        return tuple(probability for _action in actions)
+    def priors(self, request: PolicyRequest) -> PolicyDistribution:
+        probability = 1.0 / len(request.roster.candidates)
+        reason = PolicyFallbackReason.REQUESTED_UNIFORM
+        actions = tuple(PolicyActionEvidence(
+            identity,
+            None if candidate.delta is None else candidate.delta.total,
+            probability,
+            probability,
+            candidate.status,
+            reason,
+        ) for identity, candidate in zip(
+            request.roster.policy_action_identities, request.roster.candidates))
+        return PolicyDistribution(
+            self.identity,
+            self.identity,
+            request.source,
+            actions,
+            None,
+            1.0,
+            probability,
+            reason,
+        )
 
 
 class LedgerOnePlySearch:
@@ -163,6 +186,18 @@ class LedgerOnePlySearch:
         board = getattr(root, "observation", root)
         state_values = {}
         evaluation_states = {}
+        validate_source = getattr(policy_model, "validate_source", None)
+
+        if validate_source is not None:
+            value_scale = getattr(evaluator, "value_scale", None)
+            if value_scale is None:
+                raise ValueError("Ledger policy evaluator lacks a Value Scale")
+            validate_source(PolicySourceIdentity(
+                request.baseline_identity,
+                evaluator.identity,
+                request.evaluation_model.identity,
+                value_scale.identity,
+            ))
 
         def check_guard():
             if request.execution_guard is not None:
@@ -194,7 +229,8 @@ class LedgerOnePlySearch:
                 reusable_parent = evaluation_states.get(evaluation_key(parent_board))
             child_request = EvaluationRequest(
                 state, request.evaluation_model, parent, delta,
-                self._portfolio_memo, request.execution_guard)
+                self._portfolio_memo, request.execution_guard,
+                request.baseline_identity)
             key = evaluation_key(observed)
             if key not in state_values:
                 check_guard()
@@ -204,6 +240,13 @@ class LedgerOnePlySearch:
                     evaluation_states[key] = evaluation_state
                 else:
                     value = evaluator.evaluate(child_request)
+                if validate_source is not None:
+                    validate_source(PolicySourceIdentity(
+                        value.baseline_identity,
+                        value.evaluator_identity,
+                        value.evaluation_model_identity,
+                        value.scale.identity,
+                    ))
                 state_values[key] = value
                 check_guard()
             return state_values[key]
@@ -220,6 +263,12 @@ class LedgerOnePlySearch:
                 DecisionFailureStage.EVALUATION, exc)) from exc
         self._previous_evaluation_state = evaluation_states.get(evaluation_key(board))
         self._previous_evaluator_identity = evaluator.identity
+        policy_source = PolicySourceIdentity(
+            request.baseline_identity,
+            evaluator.identity,
+            request.evaluation_model.identity,
+            baseline.scale.identity,
+        )
         actions = tuple(root.legal_actions)
         cached_identity = self._cached_continuation(actions)
         if cached_identity is None:
@@ -233,11 +282,14 @@ class LedgerOnePlySearch:
             candidate = ValuedCandidate(
                 actions[0], None, CandidateDisposition.FORCED,
                 EvaluationStatus.UNAVAILABLE,
-                gaps=("forced action not priced",), prior=1.0)
+                gaps=("forced action not priced",))
+            roster = CandidateRoster.from_legal_actions(
+                actions, (candidate,), forced=True)
+            roster = _apply_policy(
+                board, roster, policy_source, policy_model)
             return SearchResult(
                 baseline,
-                CandidateRoster.from_legal_actions(
-                    actions, (candidate,), forced=True),
+                roster,
                 nodes_visited=budget.nodes,
                 stop_reason=budget.stop_reason,
                 frontier=tuple(budget.frontier),
@@ -267,18 +319,10 @@ class LedgerOnePlySearch:
         context_value = None if board.select is None else board.select.context
         forced = (cached_identity is not None
                   or (_MAIN if context_value is None else int(context_value)) != _MAIN)
-        prior_values = policy_model.priors(board, tuple(price.action for price in prices))
-        if len(prior_values) != len(prices):
-            raise ValueError("policy model must return one prior per candidate")
-        if (any(not math.isfinite(prior) or prior < 0.0 for prior in prior_values)
-                or (prior_values and not math.isclose(sum(prior_values), 1.0,
-                                                      rel_tol=configuration.noise_tolerance,
-                                                      abs_tol=configuration.noise_tolerance))):
-            raise ValueError("policy priors must be a finite normalized distribution")
         candidates = []
         self._last_continuation_policies = {
             price.action.identity: price.continuation_policy for price in prices}
-        for price, prior in zip(prices, prior_values):
+        for price in prices:
             rejected_by_cache = (cached_identity is not None
                                  and price.action.identity != cached_identity)
             disposition = (CandidateDisposition.FORCED if forced else
@@ -314,22 +358,42 @@ class LedgerOnePlySearch:
                  if rejected_by_cache else price.gaps), continuation,
                 None if delta is None else SearchValue(
                     baseline.total + delta.total, baseline.scale),
-                prior,
+                None,
                 (-sum(component.value for component in continuation.policy_components
                       if component.key == "action.evolution_target_commitment"),
                  *(() if price.prize_map is None else price.prize_map.plan_rank_key())),
                 price.prize_map))
         legal_actions = (actions if getattr(provider, "requires_observation_roster", False)
                          else tuple(price.action for price in prices))
+        priced_roster = CandidateRoster.from_legal_actions(
+            legal_actions, tuple(candidates), forced=forced)
+        if not priced_roster.candidates:
+            return SearchResult(
+                baseline,
+                priced_roster,
+                nodes_visited=budget.nodes,
+                stop_reason=("cached_continuation"
+                             if cached_identity is not None else budget.stop_reason),
+                frontier=tuple(budget.frontier),
+            )
+        priced_roster = _apply_policy(
+            board, priced_roster, policy_source, policy_model)
         return SearchResult(
             baseline,
-            CandidateRoster.from_legal_actions(
-                legal_actions, tuple(candidates), forced=forced),
+            priced_roster,
             nodes_visited=budget.nodes,
             stop_reason=("cached_continuation"
                          if cached_identity is not None else budget.stop_reason),
             frontier=tuple(budget.frontier),
         )
+
+
+def _apply_policy(board, roster, source, policy_model):
+    distribution = policy_model.priors(PolicyRequest(board, roster, source))
+    if not isinstance(distribution, PolicyDistribution):
+        raise TypeError("policy model must return a Policy Distribution")
+    priors = distribution.priors_for(roster)
+    return roster.with_priors(priors)
 
 
 def _opportunity_sources_match(left, right, kind):

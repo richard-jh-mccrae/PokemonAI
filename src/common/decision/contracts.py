@@ -2,10 +2,11 @@ from __future__ import annotations
 
 import math
 import traceback
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from enum import Enum
 from typing import Protocol
 
+from common.api import ActionIdentity
 from common.observation import ObservationState, TransitionTrace
 
 
@@ -87,6 +88,12 @@ class DecisionReason(str, Enum):
     EMPTY_ROSTER = "empty_roster"
 
 
+class PolicyFallbackReason(str, Enum):
+    REQUESTED_UNIFORM = "requested_uniform"
+    UNAVAILABLE_CANDIDATE = "unavailable_candidate"
+    UNACCEPTED_STATUS = "unaccepted_status"
+
+
 @dataclass(frozen=True, slots=True)
 class DecisionFailure:
     stage: DecisionFailureStage
@@ -125,6 +132,10 @@ class ValueScale:
                 and self.lower_bound >= self.upper_bound):
             raise ValueError("value scale bounds must increase")
 
+    @property
+    def identity(self) -> str:
+        return f"{self.name}:v{self.schema_version}"
+
 
 @dataclass(frozen=True, slots=True)
 class ValueComponent:
@@ -152,6 +163,8 @@ class StateValuation:
     gaps: tuple[str, ...] = ()
     evidence: object | None = None
     cache_key: str | None = None
+    baseline_identity: str | None = None
+    evaluation_model_identity: str | None = None
 
     def __post_init__(self):
         if not math.isfinite(self.total):
@@ -284,6 +297,19 @@ class CandidateRoster:
             raise ValueError("candidate roster order differs from legal actions")
         return cls(candidates, forced, legal, True)
 
+    @property
+    def policy_action_identities(self) -> tuple["PolicyActionIdentity", ...]:
+        return tuple(PolicyActionIdentity.from_action(candidate.action)
+                     for candidate in self.candidates)
+
+    def with_priors(self, priors) -> "CandidateRoster":
+        priors = tuple(priors)
+        if len(priors) != len(self.candidates):
+            raise ValueError("candidate prior count does not match roster")
+        return replace(self, candidates=tuple(
+            replace(candidate, prior=prior)
+            for candidate, prior in zip(self.candidates, priors)))
+
 
 def _roster_action_id(action):
     selection = getattr(action, "selection", None)
@@ -299,6 +325,228 @@ def _has_duplicates(values) -> bool:
 
 
 @dataclass(frozen=True, slots=True)
+class PolicyActionIdentity:
+    identity: object
+    selection: tuple[object, ...] = ()
+
+    @classmethod
+    def from_action(cls, action) -> "PolicyActionIdentity":
+        return cls(getattr(action, "identity", action),
+                   tuple(getattr(action, "selection", ())))
+
+    def as_dict(self) -> dict:
+        identity = self.identity
+        wire = ({"kind": str(identity.kind), "parts": _wire_value(identity.parts)}
+                if hasattr(identity, "kind") and hasattr(identity, "parts")
+                else _wire_value(identity))
+        return {"identity": wire, "selection": list(self.selection)}
+
+    @classmethod
+    def from_dict(cls, value: dict) -> "PolicyActionIdentity":
+        _exact_policy_fields(value, {"identity", "selection"}, "policy action identity")
+        identity = value["identity"]
+        if isinstance(identity, dict) and set(identity) == {"kind", "parts"}:
+            identity = ActionIdentity(str(identity["kind"]), _unwire_value(identity["parts"]))
+        return cls(identity, tuple(_unwire_value(value["selection"])))
+
+
+def _wire_value(value):
+    if isinstance(value, Enum):
+        return value.value
+    if isinstance(value, tuple):
+        return [_wire_value(item) for item in value]
+    if isinstance(value, list):
+        return [_wire_value(item) for item in value]
+    if isinstance(value, dict):
+        return {str(key): _wire_value(item) for key, item in value.items()}
+    return value
+
+
+def _unwire_value(value):
+    if isinstance(value, list):
+        return tuple(_unwire_value(item) for item in value)
+    if isinstance(value, dict):
+        return {str(key): _unwire_value(item) for key, item in value.items()}
+    return value
+
+
+def _exact_policy_fields(value, expected, label):
+    if not isinstance(value, dict) or set(value) != expected:
+        raise ValueError(f"invalid {label} fields")
+
+
+@dataclass(frozen=True, slots=True)
+class PolicySourceIdentity:
+    baseline_identity: str | None
+    evaluator_identity: str
+    evaluation_model_identity: str
+    value_scale_identity: str
+
+    def __post_init__(self):
+        for name in ("evaluator_identity", "evaluation_model_identity",
+                     "value_scale_identity"):
+            if not getattr(self, name):
+                raise ValueError(f"policy source {name} is required")
+
+    def as_dict(self) -> dict:
+        return {
+            "baseline_identity": self.baseline_identity,
+            "evaluator_identity": self.evaluator_identity,
+            "evaluation_model_identity": self.evaluation_model_identity,
+            "value_scale_identity": self.value_scale_identity,
+        }
+
+    @classmethod
+    def from_dict(cls, value: dict) -> "PolicySourceIdentity":
+        expected = {"baseline_identity", "evaluator_identity",
+                    "evaluation_model_identity", "value_scale_identity"}
+        _exact_policy_fields(value, expected, "policy source identity")
+        return cls(
+            value["baseline_identity"],
+            str(value["evaluator_identity"]),
+            str(value["evaluation_model_identity"]),
+            str(value["value_scale_identity"]),
+        )
+
+
+@dataclass(frozen=True, slots=True)
+class PolicyRequest:
+    observation: ObservationState
+    roster: CandidateRoster
+    source: PolicySourceIdentity
+
+    def __post_init__(self):
+        if not isinstance(self.observation, ObservationState):
+            raise TypeError("policy request requires an Observation State")
+        if not self.roster.candidates:
+            raise ValueError("policy request requires a candidate")
+        if not self.roster.legal_actions_proven:
+            raise ValueError("policy request requires a proven legal Candidate Roster")
+
+
+@dataclass(frozen=True, slots=True)
+class PolicyActionEvidence:
+    action_identity: PolicyActionIdentity
+    raw_delta: float | None
+    normalized_score: float
+    final_prior: float
+    source_status: EvaluationStatus
+    fallback_reason: PolicyFallbackReason | None = None
+
+    def __post_init__(self):
+        if self.raw_delta is not None and not math.isfinite(self.raw_delta):
+            raise ValueError("policy raw delta must be finite")
+        if not math.isfinite(self.normalized_score) or self.normalized_score < 0.0:
+            raise ValueError("policy normalized score must be finite and nonnegative")
+        if not math.isfinite(self.final_prior) or self.final_prior <= 0.0:
+            raise ValueError("policy prior must be finite and positive")
+
+    def as_dict(self) -> dict:
+        return {
+            "action": self.action_identity.as_dict(),
+            "raw_delta": self.raw_delta,
+            "normalized_score": self.normalized_score,
+            "final_prior": self.final_prior,
+            "source_status": self.source_status.value,
+            "fallback_reason": (None if self.fallback_reason is None
+                                else self.fallback_reason.value),
+        }
+
+    @classmethod
+    def from_dict(cls, value: dict) -> "PolicyActionEvidence":
+        expected = {"action", "raw_delta", "normalized_score", "final_prior",
+                    "source_status", "fallback_reason"}
+        _exact_policy_fields(value, expected, "policy action evidence")
+        reason = value["fallback_reason"]
+        return cls(
+            PolicyActionIdentity.from_dict(value["action"]),
+            None if value["raw_delta"] is None else float(value["raw_delta"]),
+            float(value["normalized_score"]),
+            float(value["final_prior"]),
+            EvaluationStatus(value["source_status"]),
+            None if reason is None else PolicyFallbackReason(reason),
+        )
+
+
+@dataclass(frozen=True, slots=True)
+class PolicyDistribution:
+    model_identity: str
+    configuration_identity: str
+    source: PolicySourceIdentity
+    actions: tuple[PolicyActionEvidence, ...]
+    temperature: float | None
+    uniform_mix: float
+    actual_floor: float
+    fallback_reason: PolicyFallbackReason | None = None
+    schema_version: int = 1
+
+    def __post_init__(self):
+        if self.schema_version != 1:
+            raise ValueError("unsupported policy distribution schema version")
+        if not self.model_identity or not self.configuration_identity or not self.actions:
+            raise ValueError("policy distribution identity and actions are required")
+        identities = tuple(item.action_identity for item in self.actions)
+        if _has_duplicates(identities):
+            raise ValueError("policy distribution contains duplicate actions")
+        priors = tuple(item.final_prior for item in self.actions)
+        normalized = tuple(item.normalized_score for item in self.actions)
+        if not math.isclose(math.fsum(priors), 1.0, rel_tol=1e-12, abs_tol=1e-12):
+            raise ValueError("policy priors must form a normalized distribution")
+        if not math.isclose(math.fsum(normalized), 1.0, rel_tol=1e-12, abs_tol=1e-12):
+            raise ValueError("policy scores must form a normalized distribution")
+        if not math.isclose(self.actual_floor, min(priors), rel_tol=1e-12, abs_tol=1e-12):
+            raise ValueError("policy floor must equal the smallest prior")
+        if (self.temperature is not None
+                and (not math.isfinite(self.temperature) or self.temperature <= 0.0)):
+            raise ValueError("policy temperature must be positive and finite")
+        if not math.isfinite(self.uniform_mix) or not 0.0 <= self.uniform_mix <= 1.0:
+            raise ValueError("policy uniform mix must be between zero and one")
+
+    @property
+    def action_identities(self) -> tuple[PolicyActionIdentity, ...]:
+        return tuple(item.action_identity for item in self.actions)
+
+    def priors_for(self, roster: CandidateRoster) -> tuple[float, ...]:
+        if self.action_identities != roster.policy_action_identities:
+            raise ValueError("policy distribution does not match Candidate Roster")
+        return tuple(item.final_prior for item in self.actions)
+
+    def as_dict(self) -> dict:
+        return {
+            "schema_version": self.schema_version,
+            "model_identity": self.model_identity,
+            "configuration_identity": self.configuration_identity,
+            "source": self.source.as_dict(),
+            "temperature": self.temperature,
+            "uniform_mix": self.uniform_mix,
+            "actual_floor": self.actual_floor,
+            "fallback_reason": (None if self.fallback_reason is None
+                                else self.fallback_reason.value),
+            "actions": [item.as_dict() for item in self.actions],
+        }
+
+    @classmethod
+    def from_dict(cls, value: dict) -> "PolicyDistribution":
+        expected = {"schema_version", "model_identity", "configuration_identity",
+                    "source", "temperature", "uniform_mix", "actual_floor",
+                    "fallback_reason", "actions"}
+        _exact_policy_fields(value, expected, "policy distribution")
+        reason = value["fallback_reason"]
+        temperature = value["temperature"]
+        return cls(
+            str(value["model_identity"]),
+            str(value["configuration_identity"]),
+            PolicySourceIdentity.from_dict(value["source"]),
+            tuple(PolicyActionEvidence.from_dict(item) for item in value["actions"]),
+            None if temperature is None else float(temperature),
+            float(value["uniform_mix"]),
+            float(value["actual_floor"]),
+            None if reason is None else PolicyFallbackReason(reason),
+            int(value["schema_version"]),
+        )
+
+
+@dataclass(frozen=True, slots=True)
 class EvaluationRequest:
     state: object
     evaluation_model: object
@@ -306,6 +554,7 @@ class EvaluationRequest:
     observation_delta: object | None = None
     reuse: object | None = None
     execution_guard: object | None = None
+    baseline_identity: str | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -376,7 +625,7 @@ class ValueEvaluator(Protocol):
 class PolicyModel(Protocol):
     identity: str
 
-    def priors(self, state, actions: tuple[object, ...]) -> tuple[float, ...]: ...
+    def priors(self, request: PolicyRequest) -> PolicyDistribution: ...
 
 
 class SearchAlgorithm(Protocol):
@@ -395,7 +644,8 @@ __all__ = (
     "CandidateDisposition", "CandidateRoster", "ContinuationOpportunity", "OpportunityRef",
     "ContinuationResult", "DecisionChoice",
     "DecisionDelta", "DecisionFailure", "DecisionFailureStage", "DecisionReason",
-    "FailSafeRequest",
+    "FailSafeRequest", "PolicyActionEvidence", "PolicyActionIdentity",
+    "PolicyDistribution", "PolicyFallbackReason", "PolicyRequest", "PolicySourceIdentity",
     "DecisionPolicy",
     "DecisionResult", "EvaluationRequest", "EvaluationStatus", "PolicyModel",
     "RealizedOutcome", "SearchAlgorithm", "SearchResult", "SearchTrace", "SearchValue",

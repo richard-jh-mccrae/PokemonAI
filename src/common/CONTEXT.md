@@ -164,6 +164,11 @@ _Avoid_: Gap string, silent zero, validity boolean
 The replaceable source of action priors P(a|s) used to order and allocate search effort.
 _Avoid_: Decision Policy, Search Value, action chooser
 
+**Policy Distribution**:
+A hidden-safe, versioned prior assignment covering every action in one authoritative Candidate
+Roster, with evidence naming its derivation and behavior identity.
+_Avoid_: Candidate score, Decision Policy, visit distribution
+
 **Decision Policy**:
 The replaceable rule that chooses from a Search Algorithm's completed candidate results.
 _Avoid_: Policy Model, Value Evaluator, transition provider

@@ -1,4 +1,4 @@
-"""Current-contract exhaustive within-turn teacher (ADR-TEMP-605)."""
+"""Current-contract exhaustive within-turn teacher (ADR-0198)."""
 from __future__ import annotations
 
 import hashlib
