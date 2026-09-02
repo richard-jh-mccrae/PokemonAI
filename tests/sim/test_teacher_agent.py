@@ -246,7 +246,7 @@ def test_isolated_searcher_runs_a_live_engine_root_in_a_spawned_process():
 
 def test_isolated_searcher_parallelizes_root_actions_and_merges_the_policy():
     from sim.teacher_agent import IsolatedTeacherSearcher
-    from real_engine_helpers import BodySpec, lock_main_allowances, scenario
+    from ledger.real_engine_helpers import BodySpec, lock_main_allowances, scenario
 
     engine, runtime = scenario(
         "mega_starmie", me_active=BodySpec((1030,)), me_hand=(3,),
