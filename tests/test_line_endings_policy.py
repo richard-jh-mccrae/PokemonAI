@@ -68,3 +68,16 @@ def test_windows_and_linux_python_writes_commit_to_the_same_blob(tmp_path: Path)
     lf_blob = _committed_probe_blob(tmp_path, "lf", b"print('same')\n")
 
     assert crlf_blob == lf_blob
+
+
+@pytest.mark.parametrize("native_eol", ["lf", "crlf"])
+def test_frozen_chain_bytes_are_independent_of_native_checkout(native_eol):
+    if GIT is None:
+        pytest.skip("git unavailable; cannot verify line-ending policy")
+    path = "src/cgpy/defs/chain_overrides.json"
+    assert _check_attr(path, "text", "eol") == {"text": "set", "eol": "crlf"}
+    checked_out = subprocess.run(
+        [GIT, "-c", f"core.eol={native_eol}", "cat-file", "--filters", f"HEAD:{path}"],
+        cwd=REPO, check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE).stdout
+
+    assert checked_out == (REPO / path).read_bytes()

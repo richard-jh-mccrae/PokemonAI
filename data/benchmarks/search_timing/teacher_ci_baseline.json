@@ -1,0 +1,201 @@
+{
+  "schema": "cgpy-search-timing-baseline",
+  "schema_version": 1,
+  "corpus_id": "546b82daaecc5bcef0f63c79cf1a3bd79c04060a24b60709bfd0837d53d22e43",
+  "method": "teacher_exhaustive",
+  "search_configuration": {
+    "chance_branch_cap": 100000,
+    "chance_sample_count": 12,
+    "exact_outcome_limit": 16,
+    "node_cap": 100000,
+    "noise_tolerance": 1e-9,
+    "path_node_cap": 512,
+    "schema_version": 1,
+    "tie_seed": 1178,
+    "time_cap_seconds": 120
+  },
+  "execution": {
+    "root_timeout_seconds": 140,
+    "schema_version": 1,
+    "workers": 1
+  },
+  "repetitions": 3,
+  "limits": {
+    "median_time_multiplier": 2,
+    "minimum_median_seconds": 0.25,
+    "batch_time_multiplier": 2
+  },
+  "measurement": {
+    "run_id": "c24d9de65bb3c55228b94749877e8a81b15835881ec89af8d0768ac38df45af1",
+    "generated_at": "2026-09-02T18:39:30.795592+02:00",
+    "source_identity": {
+      "commit": "5791a42dd71af0b79f50644638fa08bbae842c39",
+      "dirty": false
+    },
+    "host": {
+      "logical_cores": 12,
+      "machine": "AMD64",
+      "processor": "Intel64 Family 6 Model 186 Stepping 3, GenuineIntel",
+      "python": "3.11.9",
+      "system": "Windows"
+    },
+    "batch_elapsed_seconds": 76.6569999998901,
+    "scope": "Single-worker search medians exclude startup; batch time includes worker startup and IPC.",
+    "calibration": "Local serial bootstrap; retain CI artifacts for reviewed runner-specific calibration."
+  },
+  "roots": [
+    {
+      "root_id": "dragapult-opening",
+      "reference_target_id": "0b8f8f9c4335bd27547606620457ce8a88b64ab2105d14bb9bf9e52171775bf6",
+      "elapsed_seconds": [
+        0.01500000013038516,
+        0.015999999828636646,
+        0.030999999959021807
+      ],
+      "work": {
+        "nodes_visited": 4,
+        "leaf_evaluations": 2,
+        "chance_nodes": 0,
+        "chance_branches": 0,
+        "memo_entries": 4,
+        "cycles": 0
+      }
+    },
+    {
+      "root_id": "dragapult-search",
+      "reference_target_id": "267d92c6d37567dddfc7ecdb25999cefe8f40c808bbbe06518999272f4abc2fe",
+      "elapsed_seconds": [
+        0.4220000000204891,
+        0.4529999999795109,
+        0.5160000000614673
+      ],
+      "work": {
+        "nodes_visited": 161,
+        "leaf_evaluations": 69,
+        "chance_nodes": 1,
+        "chance_branches": 12,
+        "memo_entries": 161,
+        "cycles": 0
+      }
+    },
+    {
+      "root_id": "dragapult-tactical",
+      "reference_target_id": "b801674e64d9ecc959b1de4eadc35506ebe1582228758a432d4b100cff4b855c",
+      "elapsed_seconds": [
+        7.780999999959022,
+        7.843000000109896,
+        8.171000000089407
+      ],
+      "work": {
+        "nodes_visited": 1985,
+        "leaf_evaluations": 1190,
+        "chance_nodes": 123,
+        "chance_branches": 1206,
+        "memo_entries": 1985,
+        "cycles": 0
+      }
+    },
+    {
+      "root_id": "lucario-opening",
+      "reference_target_id": "c4597da2b1a9b3568349f583bc9390c66099fb6add8ad3a0e0051cc7e7497257",
+      "elapsed_seconds": [
+        0.23500000010244548,
+        0.2190000000409782,
+        0.21899999980814755
+      ],
+      "work": {
+        "nodes_visited": 53,
+        "leaf_evaluations": 40,
+        "chance_nodes": 6,
+        "chance_branches": 72,
+        "memo_entries": 53,
+        "cycles": 0
+      }
+    },
+    {
+      "root_id": "lucario-search",
+      "reference_target_id": "c52a91b8a569566a737e21c4c80fa8be915b21fa22f88c83a3bd7a485be379e4",
+      "elapsed_seconds": [
+        0.5940000000409782,
+        0.5940000000409782,
+        0.6410000000614673
+      ],
+      "work": {
+        "nodes_visited": 222,
+        "leaf_evaluations": 108,
+        "chance_nodes": 5,
+        "chance_branches": 60,
+        "memo_entries": 222,
+        "cycles": 0
+      }
+    },
+    {
+      "root_id": "lucario-tactical",
+      "reference_target_id": "5dc3baa2d2deb44157a82e0fa2244ac0a176a9a30395ac81b25cd991d6f0a7fe",
+      "elapsed_seconds": [
+        0.2970000000204891,
+        0.2970000000204891,
+        0.2970000000204891
+      ],
+      "work": {
+        "nodes_visited": 76,
+        "leaf_evaluations": 55,
+        "chance_nodes": 5,
+        "chance_branches": 60,
+        "memo_entries": 76,
+        "cycles": 0
+      }
+    },
+    {
+      "root_id": "starmie-opening",
+      "reference_target_id": "5c48dea944b5fa256cf7baa87e63e181be0b084c855ebb9bf49ab94f7f1b2436",
+      "elapsed_seconds": [
+        0.2660000000614673,
+        0.2660000000614673,
+        0.28199999989010394
+      ],
+      "work": {
+        "nodes_visited": 74,
+        "leaf_evaluations": 51,
+        "chance_nodes": 6,
+        "chance_branches": 72,
+        "memo_entries": 74,
+        "cycles": 0
+      }
+    },
+    {
+      "root_id": "starmie-search",
+      "reference_target_id": "6f43339160952988355f98cac3e4980dadad6453f4411e93c1a20f4143ba4afb",
+      "elapsed_seconds": [
+        0.5150000001303852,
+        0.5,
+        0.5630000000819564
+      ],
+      "work": {
+        "nodes_visited": 192,
+        "leaf_evaluations": 91,
+        "chance_nodes": 4,
+        "chance_branches": 48,
+        "memo_entries": 192,
+        "cycles": 0
+      }
+    },
+    {
+      "root_id": "starmie-tactical",
+      "reference_target_id": "afe0a6e2970e36c6a61aa4193437939b5cdee124f11e6f33e4c6eb3a8af58eb1",
+      "elapsed_seconds": [
+        8,
+        8.343999999808148,
+        10.905999999959022
+      ],
+      "work": {
+        "nodes_visited": 1994,
+        "leaf_evaluations": 1218,
+        "chance_nodes": 129,
+        "chance_branches": 1218,
+        "memo_entries": 1994,
+        "cycles": 0
+      }
+    }
+  ]
+}

@@ -34,6 +34,7 @@ from common.ledger import LedgerValueEvaluator  # noqa: E402
 from common.ledger.baseline import baseline_identities, load_baseline  # noqa: E402
 from sim.run_identity import git_source_identity  # noqa: E402
 from sim.scenario import BodySpec, deck, runtime, scenario  # noqa: E402
+from train.search_timing_gate import check_run, render_report  # noqa: E402
 
 
 CORPUS_SCHEMA = "cgpy-search-timing-corpus"
@@ -493,6 +494,8 @@ def _parser() -> argparse.ArgumentParser:
     run.add_argument("--noise-tolerance", type=float, default=1e-9)
     run.add_argument("--tie-seed", type=int, default=1178)
     run.add_argument("--out", type=Path, default=DEFAULT_RUNS)
+    run.add_argument("--assert-baseline", type=Path,
+                     help="fail on changed results, increased compute, or excessive median/batch time")
     return parser
 
 
@@ -522,6 +525,16 @@ def main(argv=None) -> int:
         search_configuration=configuration,
         root_timeout_seconds=args.root_timeout)
     print(output)
+    if args.assert_baseline:
+        report = check_run(
+            json.loads(output.read_text(encoding="utf-8")),
+            json.loads(args.assert_baseline.read_text(encoding="utf-8")))
+        output.with_suffix(".gate.json").write_bytes(
+            (json.dumps(report, indent=2, sort_keys=True) + "\n").encode("utf-8"))
+        rendered = render_report(report)
+        output.with_suffix(".gate.md").write_bytes(rendered.encode("utf-8"))
+        print(rendered)
+        return int(not report["passed"])
     return 0
 
 

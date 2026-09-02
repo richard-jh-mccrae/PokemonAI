@@ -4,6 +4,8 @@
 # Cross-platform source: keep Python blobs and checkouts LF on every OS.
 *.py text eol=lf
 src/common/scouting/briefs/*.json text eol=crlf
+# Frozen snapshot chain identities use CRLF bytes; checkout must match on every OS.
+src/cgpy/defs/chain_overrides.json text eol=crlf
 *.pyi text eol=lf
 
 # Repo control files should not drift by writer platform.
