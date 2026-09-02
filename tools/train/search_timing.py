@@ -499,7 +499,8 @@ def _parser() -> argparse.ArgumentParser:
 def main(argv=None) -> int:
     args = _parser().parse_args(argv)
     if args.command == "capture":
-        source = git_source_identity(REPO, allow_dirty=args.allow_dirty)
+        source = git_source_identity(
+            REPO, allow_dirty=args.allow_dirty, exclude_paths=(args.out,))
         print(capture_corpus(
             args.out, baseline_path=args.ledger_baseline,
             source_identity=source))
