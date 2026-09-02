@@ -34,13 +34,15 @@ class DecisionCoordinator:
     behavior_identity: object | None = None
     fail_safe_policy: object | None = None
     failure_handler: object | None = None
+    ledger_baseline_identity: str | None = None
 
     def decide(self, state, *, provider=None, parent_valuation=None,
                observation_delta=None, execution_guard=None,
                strict=False, failure=None) -> DecisionResult:
         request = EvaluationRequest(
             state, self.evaluation_model, parent_valuation, observation_delta,
-            execution_guard=execution_guard)
+            execution_guard=execution_guard,
+            baseline_identity=self.ledger_baseline_identity)
         if failure is not None:
             if self.failure_handler is None:
                 raise ValueError("decision failure requires a failure handler")

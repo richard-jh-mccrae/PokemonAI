@@ -66,6 +66,7 @@ APPROVED_DECLARATIONS = {
     "src/common/ledger/portfolio_solver.py": {
         "DEFAULT_TURN_PORTFOLIO_MEMO_ENTRIES", "DOMINANCE_FRONTIER_ENTRIES",
         "EXECUTION_GUARD_CHECK_INTERVAL"},
+    "src/common/ledger/policy.py": {"POLICY_CONFIG_ID_DIGEST_BYTES"},
     "src/common/ledger/readiness.py": {"REPORT_SCHEMA_VERSION"},
     "src/common/ledger/search.py": {
         "LOTTERY_DIGEST_BYTES", "MIN_COMPARATIVE_RETREAT_ATTACHMENTS"},

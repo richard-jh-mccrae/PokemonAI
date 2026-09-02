@@ -18,7 +18,12 @@ from common.decision import (
     ValueComponent,
     ValuedCandidate,
 )
-from common.ledger import EvaluationModel
+from common.ledger import (
+    EvaluationModel,
+    LedgerPolicyBaseline,
+    LedgerPolicyConfiguration,
+    LedgerPolicyModel,
+)
 from common.ledger.decision import LEDGER_VALUE_SCALE, LedgerValueEvaluator
 from common.ledger.evaluate import evaluate
 from common.ledger.preview import price_actions
@@ -70,10 +75,17 @@ def test_one_ply_search_retains_every_candidate_and_explicit_successor():
     evaluator = CountingLedgerEvaluator()
     model = EvaluationModel.build()
     configuration = SearchConfiguration()
+    policy_requests = []
+
+    class CapturingPolicy(UniformPolicyModel):
+        def priors(self, request):
+            policy_requests.append(request)
+            return super().priors(request)
+
     result = LedgerOnePlySearch().search(
         EvaluationRequest(root, model),
         evaluator,
-        UniformPolicyModel(),
+        CapturingPolicy(),
         provider,
         configuration,
     )
@@ -94,6 +106,12 @@ def test_one_ply_search_retains_every_candidate_and_explicit_successor():
     assert free_end.successors[0].state is board
     assert free_end.successors[0].action_path == (end.identity,)
     assert set(evaluator.calls.values()) == {1}
+    assert len(policy_requests) == 1
+    assert policy_requests[0].roster.legal_actions_proven
+    assert tuple(candidate.delta.total for candidate in
+                 policy_requests[0].roster.candidates) == pytest.approx(
+                     tuple(candidate.delta.total for candidate in result.roster.candidates))
+    assert result.policy_distribution.priors_for(result.roster) == (0.5, 0.5)
 
     legacy_prices = price_actions(
         root, board, evaluate(board, model).total, provider, model, configuration)
@@ -101,6 +119,40 @@ def test_one_ply_search_retains_every_candidate_and_explicit_successor():
     assert_decision_parity(
         legacy_prices, result, choice, forced=False,
         configuration=PolicyConfiguration())
+
+
+def test_search_builds_ledger_priors_from_the_already_priced_roster():
+    observation = printout(me=player(active=body(DRAGAPULT, 1), hand=[DARK_E]))
+    board = ObservationStateBuilder(DECK).root(observation)
+    root = PreviewState(observation, board, "root", deck=DECK,
+                        deck_counts=board.deck_counts or ())
+    attached = DecisionState.from_observation(
+        printout(me=player(active=body(DRAGAPULT, 1, energies=(8,)), hand=[])),
+        deck=DECK, deck_name="test", value_registry_identity="test")
+    attach, end = action("attach", (0,)), action("end", (1,))
+    provider = ScriptedProvider(
+        menus={"root": (attach, end)},
+        nodes={("root", attach.identity): Deterministic(attached)},
+    )
+    evaluator = CountingLedgerEvaluator()
+    evaluation_model = EvaluationModel.build()
+    policy = LedgerPolicyModel(
+        LedgerPolicyConfiguration(temperature=1.0, uniform_mix=0.1),
+        LedgerPolicyBaseline(
+            "frozen-v1", evaluator.identity, (evaluation_model.identity,),
+            LEDGER_VALUE_SCALE.identity),
+    )
+
+    result = LedgerOnePlySearch().search(
+        EvaluationRequest(root, evaluation_model, baseline_identity="frozen-v1"),
+        evaluator, policy, provider, SearchConfiguration())
+
+    deltas = tuple(candidate.delta.total for candidate in result.roster.candidates)
+    priors = tuple(candidate.prior for candidate in result.roster.candidates)
+    assert priors.index(max(priors)) == deltas.index(max(deltas))
+    assert all(prior > 0.0 for prior in priors)
+    assert result.policy_distribution.source.baseline_identity == "frozen-v1"
+    assert set(evaluator.calls.values()) == {1}
 
 
 def test_every_candidate_delta_is_expected_successor_ledger_minus_root_ledger():
@@ -142,8 +194,8 @@ def test_search_rejects_non_distribution_policy_priors():
     class InvalidPolicyModel:
         identity = "invalid-priors"
 
-        def priors(self, state, actions):
-            return tuple(0.75 for _action in actions)
+        def priors(self, request):
+            return tuple(0.75 for _candidate in request.roster.candidates)
 
     observation = printout(me=player(active=body(DRAGAPULT, 1)))
     board = ObservationStateBuilder(DECK).root(observation)
@@ -152,10 +204,37 @@ def test_search_rejects_non_distribution_policy_priors():
     provider = ScriptedProvider(menus={"root": (action("end", (0,)),
                                                        action("end", (1,)))}, nodes={})
 
-    with pytest.raises(ValueError, match="normalized distribution"):
+    with pytest.raises(TypeError, match="Policy Distribution"):
         LedgerOnePlySearch().search(
             EvaluationRequest(root, EvaluationModel.build()), LedgerValueEvaluator(),
             InvalidPolicyModel(), provider, SearchConfiguration())
+
+
+def test_search_rejects_p0_v0_identity_mismatch_before_candidate_pricing(monkeypatch):
+    observation = printout(me=player(active=body(DRAGAPULT, 1)))
+    board = ObservationStateBuilder(DECK).root(observation)
+    root = PreviewState(observation, board, "root", deck=DECK,
+                        deck_counts=board.deck_counts or ())
+    model = EvaluationModel.build()
+    policy = LedgerPolicyModel(
+        LedgerPolicyConfiguration(temperature=1.0, uniform_mix=0.1),
+        LedgerPolicyBaseline(
+            "frozen-v1", LedgerValueEvaluator.identity, (model.identity,),
+            LEDGER_VALUE_SCALE.identity),
+    )
+    monkeypatch.setattr(
+        "common.ledger.search.price_actions",
+        lambda *_args, **_kwargs: pytest.fail("candidate pricing must not start"),
+    )
+
+    with pytest.raises(ValueError, match="baseline identity mismatch"):
+        LedgerOnePlySearch().search(
+            EvaluationRequest(root, model, baseline_identity="other"),
+            LedgerValueEvaluator(),
+            policy,
+            ScriptedProvider(menus={"root": tuple(root.legal_actions)}, nodes={}),
+            SearchConfiguration(),
+        )
 
 
 def test_exhausted_budget_marks_every_root_action_unavailable(monkeypatch):
