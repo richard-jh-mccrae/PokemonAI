@@ -1,0 +1,299 @@
+{
+  "correction_corpus_identity": "2cda28fc2a036e28283613d8f28ac6e41f2c4cee84d63879d3a60187a3f41603",
+  "evidence": {
+    "behavior_identities": [
+      {
+        "compute": "2ed14de0907e0526",
+        "decision_policy": "ledger-spend-then-end-v1:e0ac8dda1e868f81bb03075e4c64711f",
+        "evaluation_model": "564f6403598511d1",
+        "evaluator": "ledger-linear-v2:1e68de9bb2e3bac6dd1e9f9bc4d2aeb5:e9bcd5ed6f47972566f8a58af1fa3a7f",
+        "fail_safe_policy": "ledger-fail-safe-v1:e0ac8dda1e868f81bb03075e4c64711f",
+        "policy_model": "uniform-policy-model-v1:e0ac8dda1e868f81bb03075e4c64711f",
+        "prize_plan": "a5df7d1685f96376",
+        "provider": "4b66b0950a57be89bd160d5aebb6ab1e",
+        "search": "ledger-one-ply-v3:e0ac8dda1e868f81bb03075e4c64711f"
+      },
+      {
+        "compute": "2ed14de0907e0526",
+        "decision_policy": "ledger-spend-then-end-v1:e0ac8dda1e868f81bb03075e4c64711f",
+        "evaluation_model": "e7e5d61f3ea0dabd",
+        "evaluator": "ledger-linear-v2:1e68de9bb2e3bac6dd1e9f9bc4d2aeb5:e9bcd5ed6f47972566f8a58af1fa3a7f",
+        "fail_safe_policy": "ledger-fail-safe-v1:e0ac8dda1e868f81bb03075e4c64711f",
+        "policy_model": "uniform-policy-model-v1:e0ac8dda1e868f81bb03075e4c64711f",
+        "prize_plan": "b65a783fbf736a85",
+        "provider": "4b66b0950a57be89bd160d5aebb6ab1e",
+        "search": "ledger-one-ply-v3:e0ac8dda1e868f81bb03075e4c64711f"
+      }
+    ],
+    "contestants": {
+      "dragapult_ex": {
+        "agent_tree_sha256": "1f41d9d6206d0c137f877300055074f3228bc1db14982c5d18b3911cec1b560d",
+        "deck_sha256": "1c599e909cb077fdbce4534737c40d4036320079a8d85f2aebcaf91757e08620",
+        "ledger_overlay_sha256": "44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a",
+        "strategy_sha256": "cd8e7280c7d06af15abcba3bdd8d773768a7a8375777cc060d3debee8e0a8a01"
+      },
+      "mega_lucario": {
+        "agent_tree_sha256": "5f13196db1cb587277568b0503ae973052ead541d16406c6d25d209ae46963bc",
+        "deck_sha256": "15c8034c3b534a53b0ed2f9bbfa3a1bb2a265b250eda8ab7edb290aba9b81ccb",
+        "ledger_overlay_sha256": "44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a",
+        "strategy_sha256": "5efa698a81626bd3fed7af46d3b4f3ed2f6504967f903dd9c7cdadb605b3b1cd"
+      },
+      "mega_starmie": {
+        "agent_tree_sha256": "8695d98cbdacda4758640827475bef7099ea6368828e8c45f234c2151fa1b0dc",
+        "deck_sha256": "6ba17ca37dff76358f4161999084462a1659f536f707e7326420d8627294e2cd",
+        "ledger_overlay_sha256": "a301372a818715dc79730b6192312bc2f1b04ac0178bce34a62601c5eb66cd4b",
+        "strategy_sha256": "8c32937af58ceff0d7cb208a673a830ae70cae4664f4556a15d5ca27bdb96a83"
+      }
+    },
+    "correction_runs": [
+      {
+        "manifest_sha256": "d44d15550c2306a0d615ccad5a5666f0a384fecbce9606d2d26318791f708b2a",
+        "run_id": "20260902-070948_ffe3a585_dragapult_ex"
+      },
+      {
+        "manifest_sha256": "db05e4b80fa6f3ae4cd5c55ac34b18731d0ed1fb5fa3046fe98c8e9ffe7aad50",
+        "run_id": "20260902-070949_ffe3a585_mega_lucario"
+      },
+      {
+        "manifest_sha256": "795182e6c185eedc6435ba534136ceda4478f8ec3d079cb95a3217b41786e789",
+        "run_id": "20260902-070950_ffe3a585_mega_starmie"
+      }
+    ],
+    "heldout_bundle_ids": [
+      "00d2d3098adcb62d6bae7192d908ade69eceab02e9e40d7467320c94ce8c6a2b",
+      "114a8293d311e9e497030f6832327277dc32bb213882c05a1906e0094678b6cb",
+      "266dc3e753ed66ac966851d67c689d82abf2cfc09ec84ceefa5517737c4d02de",
+      "358b7fe330b2a91def4fa8c469eee2fae3d1afcfd160d084462f2ca2c0396454",
+      "73fd7bc885fdca1e9b59fa4ae0aaee8d9b79c74b49da34e1cb281ac029fc131a",
+      "872889b80f5e46f537cdd0b56de7a04a34f0046fd2f730955a098b809f9af848",
+      "8867bc6b357a559a19ed5fe551c1c34cb4428ea5791be78ed91c779e35cd9e5a",
+      "9b9c9fd07f47d50603d1102de6d3e36999d32e90837b9967b5ca745222b5602b",
+      "b8a5c4610cb7a7d12a48f6f7e21253d5b0cfb954e6084a9b766b2bb2f7582ec8",
+      "bc61d8c3934213017aee4125fb97d276079b53dda30dc2bf0952de8a718bb98e",
+      "d87975f82dddc0c9c7ab9d474d4cd09a6d8524be86f8c7b1ffe9b7e92f98506e",
+      "dbea1eae1902de97f5e2ac3ea890f5592049c5be29ded9ccf61789ce692b70f6",
+      "dc191e64e5890e2a2de2158c3cb2a57a1c55a4939243e17b219a98b005fdcee1",
+      "f5aff7cae3518c784f3ddaa47bbde0bf49080e665141a577e827ce7960a337a0",
+      "f77f9e84813d6f4b178d6ccfe6b27618303e0f9566ea64f046b6c01cde613bbe"
+    ],
+    "heldout_ledger_decisions": 1138,
+    "ledger": {
+      "compute_identity": "2ed14de0907e0526",
+      "compute_profile": "correction",
+      "evaluator": "ledger-linear-v2:1e68de9bb2e3bac6dd1e9f9bc4d2aeb5:e9bcd5ed6f47972566f8a58af1fa3a7f",
+      "feature_schema_version": 27,
+      "global_configuration_sha256": "fdb541976f6cbbf4837605c1b66141af2805cd5fd14f6a3ce01527acbc0e1850",
+      "ledger_source_sha256": "6565a0aa486e5fee5dbba2894b92dc6c64392777fa0037a80ae53fad3b058096"
+    },
+    "source_identity": {
+      "commit": "ffe3a585524951cad79c8412ad51937029dde547",
+      "dirty": false
+    },
+    "tuning_bundle_ids": [
+      "00e39b398b5b8c276e28cea12b7589e826bb2a15b552eb8e6b8a077353c57cef",
+      "08051f1cf002c54e4bf38349dd999a1756c7ac28c9810de0529e98adc30a7c76",
+      "091a1eec6ca12e1f504e4a4028fda2c72b5778ff263922482c2b0acf3fb1922b",
+      "195635e3dc685db519e7cda95986ebc62e1c405c2a5bc7fa0c1f75dc3b04d351",
+      "1aa538b701267e726d8643900095735df0d6ab218867747e296b3d9358390e59",
+      "1efab3b4ce8d238937c6e73a8b2c9c5dfd7a685576b56de6064a7ecec6a527e7",
+      "1f2f0131db6524ec500de929393f583dab9f07a682777485a5e85ab34f429027",
+      "202239113d25e9a270cbe3268bdbe15400c0347d7621c55b7a9cfb08cc51016a",
+      "22fc8983813e790f10b8d3a98fc828f3a75038ba5374f461e0ca3fabcc8814ac",
+      "2a06dfe912ad3a00393478d58890c0fcb57281c4c217100995ea42a034dc384e",
+      "304572ec814be25a820806b99dee804bafa1e83df23043ed6198fc9d14bf6dc3",
+      "32438f9caa2dc31675a12fe0c63d4ddf32215b4896a0e7823c45d4859aa662f9",
+      "39249f222ff630d2123692d11467a72c8b41901cb2d9a183719412d549586cad",
+      "3939cfeb3a01e1a3d75d4a3ba603df361f3ea5b957181b500dd2e69b645ba89f",
+      "3cbde6a8c22867a5b0abd2f7cde32135b6bd337d8567f185c9ef39c8ed8571c2",
+      "3e903da6b1154f55b4a6c23ff14c20f3a786ab28635efec7c533a86fa4316b5f",
+      "4ec3176cdaa46a47b9ecf7cf9923c9aeda2abea874a75504d038ccb5f2d2b392",
+      "507ec94e7f4f882d294488c3dd2d277be37100ecfed3971355640deb9429972f",
+      "5f53490c726c95a10fa98abdf19edc9e71f649b6f19f5168abbe2f49baca57b4",
+      "61a102f0f6d1a7ec13bf6ca0af25ad70cd16c2d505a28929b3bf9b335c17f809",
+      "633392e5a40d6c49fddf83460aa40783533500b13e2b437689d4f8d4ae5fcb0e",
+      "64f978909bff29085ab874230fbccffe144aef8725b83885049cd459d87233ab",
+      "6a2acc001a632c3332d5aea71db7a0ee38647b193a4fcfe41b6b350c2e7ac8c4",
+      "706b88178e6f8cf0a52e3a22928ec562b0adf57573153d1e94ee4d74ed50af8c",
+      "71e18e9acfb3f388a272ad3298adf6425f59cdbdc3993637b21e04bc9af2daf6",
+      "7d4308985a9b3eed48e6f9a3bff9023ee02bb8821590ec3700217c73472844aa",
+      "83f40e273a87d80194b12429525d04c59a71b838ee89782f5d323001b1175df4",
+      "8df92c70e6b72ec00306a2d49327e469ebca3ea8b630c13336e139c35ce61b3f",
+      "98f718f0763d70855e8955ccf4bd4365fdea723c356d15a917c8a5f554f65639",
+      "99253078322d8ec898ee38d9f4f4968f2428b42b6ee1dc73c9af33d88a6e98bc",
+      "99a34915b68bccc99f0a4467c6a2c908986633b167a52166a98aaa6d864a7a03",
+      "9d559df355028084aeb4e097f22b8be4a193d24a612266e9c3aa08f7a50cf3e5",
+      "a066c5c01997b72772fca0881ae09088df9257c956750a3434f53350c713294b",
+      "a75fd79bfe8277f5b4b11463d23905f92fc3b6d6cf6501747598ae6d97743606",
+      "b4dfa01a3d9422d5533e14ce69536d480d46450b455a7a59fa8c797e9e247335",
+      "b74767585e5e43d0cea0903d77bd1d1d22747f4e6f29e3c671307057604c5220",
+      "b7577fe3fb27db8d0373feb92ba988fd1a8db91cf76bd98790fa22a51c1e2268",
+      "b7cd0af6602026b8952e8dd44a58ac9b9a33257d0dbd0c87cf35b111b138e6ec",
+      "b8e10b0e9153371261f6eb98e7278d9f8c8ad65b69eca465a2f8db3b7c878ca7",
+      "c2f03d66ee0925d80913786106b755a809484bcf292907c6b820b30cb66d4f24",
+      "d868fdee57a1115d90c9bee3a54ab6eca1bf5a8d874183de46444d4665beab25",
+      "e0491db6b80b6fea830f38b5d0a6dc74a920d8f736b29c747e6d7422bd956f82",
+      "e3ddd214f109b8b6810fd47813e821988b30d4c41b1e445153c0519a1bb415fe",
+      "ead0ec05ab31f01e5fb841af206eb6761745292b306c8c84730a0af0fda2958b",
+      "fc603703a10a8ccbdaa44f6d49299ef1d2b6fc6f8841166e37389d8355e602c4"
+    ],
+    "tuning_ledger_decisions": 4829
+  },
+  "gates": [
+    {
+      "artifact_path": "evidence/historical-corrections.json",
+      "artifact_sha256": "94e62ee0d5fb8e606896bda11d0f60e9cf941f6aabd320b64973d26ed2c0a96f",
+      "command": "python tools/train/ledger_corpus.py --output data/correction-runs/issue-601-evidence/historical-corrections.json --baseline data/correction-runs/issue-601-before.json --semantic-flips data/correction-runs/issue-601-semantic-flips.json --workers 11 --store data/corrections/20260828-111914_ad58ab7d_mega_starmie/corrections.jsonl --store data/corrections/20260828-221100_a39dfc83_mega_starmie/corrections.jsonl --store data/corrections/20260829-072514_635d215b_mega_lucario/corrections.jsonl --store data/corrections/20260829-100714_6d0b9149_mega_lucario/corrections.jsonl --store data/corrections/20260829-105540_bd9add3c_mega_starmie/corrections.jsonl --store data/corrections/20260829-181337_db2e41bd_mega_starmie/corrections.jsonl --store data/corrections/20260829-184447_db2e41bd_mega_lucario/corrections.jsonl --store data/corrections/20260830-082433_d00f93d6_mega_starmie/corrections.jsonl --store data/corrections/20260830-083418_d00f93d6_mega_lucario/corrections.jsonl --store data/corrections/20260830-083953_d00f93d6_dragapult_ex/corrections.jsonl --store data/corrections/20260830-104048_1ea82212_mega_starmie/corrections.jsonl --store data/corrections/20260830-172634_2aecef25_mega_lucario/corrections.jsonl --store data/corrections/20260830-185708_2aecef25_mega_starmie/corrections.jsonl --store data/corrections/20260831-051533_d74ec20f_mega_starmie/corrections.jsonl --store data/corrections/20260831-120851_7d11660f_mega_lucario/corrections.jsonl --store data/corrections/20260831-124008_7d11660f_mega_starmie/corrections.jsonl --store data/corrections/20260831-181615_38c3a828_mega_starmie/corrections.jsonl --store data/corrections/20260831-185152_38c3a828_dragapult_ex/corrections.jsonl --store data/corrections/20260831-191734_38c3a828_mega_lucario/corrections.jsonl --store data/corrections/20260831-192940_38c3a828_mega_lucario/corrections.jsonl --store data/corrections/20260901-062151_58f85282_mega_starmie/corrections.jsonl --store data/corrections/20260901-065330_58f85282_mega_lucario/corrections.jsonl --store data/corrections/20260901-075825_58f85282_dragapult_ex/corrections.jsonl --store data/corrections/20260901-184936_a108caf3_mega_starmie/corrections.jsonl --store data/corrections/20260901-191713_a108caf3_mega_lucario/corrections.jsonl --store data/corrections/20260901-194308_78bd10b5_dragapult_ex/corrections.jsonl --store data/corrections/20260901-200023_78bd10b5_dragapult_ex/corrections.jsonl",
+      "name": "historical_corrections",
+      "output_path": "evidence/historical_corrections.log",
+      "output_sha256": "710e4d227c8b424707ff3161ceb149e04ef9bda2191c9f857cacecbfd60c6cf9",
+      "passed": true
+    },
+    {
+      "command": "python -m pytest tests/ledger tests/cards/test_pokemon_store.py -q -n auto --tb=short --ignore=tests/ledger/test_real_engine_timing.py",
+      "name": "cross_deck_regressions",
+      "output_path": "evidence/cross_deck_regressions.log",
+      "output_sha256": "6180bfcfe2137898abcf0e95df8a761616e33f86b915f97d969bed7ea69d5a30",
+      "passed": true
+    },
+    {
+      "command": "python -m pytest tests/sim/test_battle.py -k full_game -q --tb=short",
+      "name": "native_full_games",
+      "output_path": "evidence/native_full_games.log",
+      "output_sha256": "08d73def17f33ae4eb01c8ab3f2ffe219d79e8ac6c5f013d53d7bb0ff9a87c6f",
+      "passed": true
+    },
+    {
+      "command": "python -m pytest tests/ledger/test_full_game_smoke.py -q --tb=short",
+      "name": "twin_full_games",
+      "output_path": "evidence/twin_full_games.log",
+      "output_sha256": "e05144df1c78210f139a3ad814eeae4780d8b8854a963bf58097918505bda7fa",
+      "passed": true
+    },
+    {
+      "command": "python -m pytest tests/observation tests/cards tests/common tests/ledger tests/parity tests/scouting tests/blunder tests/train tests/test_import_hygiene.py tests/test_source_reachability.py --ignore=tests/ledger/test_real_engine_timing.py -q -n auto --tb=short",
+      "name": "source_contracts",
+      "output_path": "evidence/source_contracts.log",
+      "output_sha256": "4cf5645992714bd1f514ecbf2095e3f8484370d866f24d500a33bfb613565fee",
+      "passed": true
+    },
+    {
+      "command": "python -m pytest tests/test_adr_index.py tests/test_comment_budget.py tests/test_doc_links_resolve.py tests/test_line_endings_policy.py tests/test_prose_policy.py -q --tb=short",
+      "name": "documentation",
+      "output_path": "evidence/documentation.log",
+      "output_sha256": "d0fd0e753dee6a9023386c85018414a826d9339464ed9e5312ebee3d0f414946",
+      "passed": true
+    },
+    {
+      "command": "python tools/train/ledger_correction_gate.py --workers 2",
+      "name": "correction_ci",
+      "output_path": "evidence/correction_ci.log",
+      "output_sha256": "60918e960e76a0f6846969f9825b9c0cac54311864116fda822c0e37890c0201",
+      "passed": true
+    },
+    {
+      "command": "python tools/train/ledger_readiness.py --json --warnings-as-errors --decks mega_starmie mega_lucario dragapult_ex",
+      "name": "readiness",
+      "output_path": "evidence/readiness.log",
+      "output_sha256": "0e30597452995b064b4c17bcca505464afb4e774011fbbca2b6b36f47feee749",
+      "passed": true
+    },
+    {
+      "command": "python -m pytest tests/ledger/test_real_engine_timing.py -q --tb=short",
+      "name": "performance",
+      "output_path": "evidence/performance.log",
+      "output_sha256": "204bab9fb404c2171e46bd3528968f6ae311b6b43e799a48b9ae287bbace266c",
+      "passed": true
+    }
+  ],
+  "heldout": {
+    "episode_ids": [
+      "11156627186275729",
+      "14133022947440330",
+      "17593071639461572",
+      "23002851169932158",
+      "25010828818277621",
+      "33566281154898521",
+      "35712157176533153",
+      "35831570527445708",
+      "36252956276273521",
+      "45999772914386073",
+      "47235917168356503",
+      "48249254748315641",
+      "58970153385067900",
+      "65803607406534263",
+      "66936984874042789"
+    ],
+    "passed": true,
+    "reviewed_decisions": 1138
+  },
+  "manual_review": {
+    "artifact_path": "evidence/review.json",
+    "artifact_sha256": "779fb7f4498e0a9ed809903e68ded62eab3f8d23349bf2e4cb7b22d0ee135400",
+    "completed": true,
+    "episode_ids": [
+      "15511606251600790",
+      "15716540562701675",
+      "16002055658195042",
+      "16124998434077124",
+      "16347884935411209",
+      "16497339273426808",
+      "16680308788196091",
+      "18210925528176641",
+      "21233945502560509",
+      "21904384237617566",
+      "22336211155054908",
+      "24249123399414173",
+      "26488307796849172",
+      "27746855694531869",
+      "29466340035736344",
+      "29848793271833416",
+      "31045948169011602",
+      "31437031720163559",
+      "32403585921967534",
+      "33347778943346485",
+      "37483991635786456",
+      "43372405227369644",
+      "45359510210880469",
+      "45906687725277134",
+      "46326379512568572",
+      "46854962942697841",
+      "53976835652225265",
+      "54854574238089461",
+      "56504744964282739",
+      "57071430457976037",
+      "57152307012192862",
+      "57444771272179244",
+      "60222417350764172",
+      "61839583085758678",
+      "63311733655797716",
+      "63523328604696921",
+      "64463859438550534",
+      "67589765324165758",
+      "68113369092959753",
+      "70018605564820466",
+      "70220855059419489",
+      "71601563250556401",
+      "72025962955811922",
+      "8864489306051624",
+      "8914710281522471"
+    ],
+    "reviewed_decisions": 4829
+  },
+  "passed": true,
+  "regressions": {
+    "after_path": "evidence/historical-corrections.json",
+    "after_sha256": "94e62ee0d5fb8e606896bda11d0f60e9cf941f6aabd320b64973d26ed2c0a96f",
+    "before_path": "evidence/before.json",
+    "before_sha256": "854b83194fbc31dfc1fd854ea07a4ee35dafe1a0b0f5355b0f3f84f05348fd06",
+    "passed": true,
+    "semantic_flips_path": "evidence/semantic-flips.json",
+    "semantic_flips_sha256": "c2e1c1c97bbcfb0fdab66de9e8cc21c32deffb3c46949d985a8e9a2653295241",
+    "unreported": []
+  },
+  "tuning_corrections_identity": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+  "tuning_target": {
+    "after": 0.7692,
+    "before": 0.6154,
+    "name": "generality_floor"
+  }
+}

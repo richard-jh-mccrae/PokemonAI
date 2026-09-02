@@ -13,14 +13,15 @@ import sys
 REPO = Path(__file__).resolve().parents[2]
 PYTEST = (sys.executable, "-m", "pytest")
 GATES = {
-    "cross_deck_regressions": (*PYTEST, "tests/ledger", "tests/cards/test_pokemon_store.py"),
+    "cross_deck_regressions": (*PYTEST, "tests/ledger", "tests/cards/test_pokemon_store.py",
+                               "--ignore=tests/ledger/test_real_engine_timing.py", "-n", "auto"),
     "native_full_games": (*PYTEST, "tests/sim/test_battle.py", "-k", "full_game"),
     "twin_full_games": (*PYTEST, "tests/ledger/test_full_game_smoke.py"),
     "source_contracts": (*PYTEST, "tests/observation", "tests/cards", "tests/common",
                          "tests/ledger", "tests/parity", "tests/scouting", "tests/blunder",
                          "tests/train", "tests/test_import_hygiene.py",
                          "tests/test_source_reachability.py",
-                         "--ignore=tests/ledger/test_real_engine_timing.py"),
+                         "--ignore=tests/ledger/test_real_engine_timing.py", "-n", "auto"),
     "documentation": (*PYTEST, "tests/test_adr_index.py", "tests/test_comment_budget.py",
                       "tests/test_doc_links_resolve.py", "tests/test_line_endings_policy.py",
                       "tests/test_prose_policy.py"),
@@ -75,7 +76,8 @@ def _load_review(path: Path, inventory: dict) -> tuple[dict, list[dict], list[di
 
 def build_certification(*, correction_runs, review: Path,
                         correction_corpus, reviewed_corrections: Path,
-                        tuning_corrections=(), before_report: Path, evidence_dir: Path,
+                        tuning_corrections=(), before_report: Path,
+                        semantic_flips: Path | None = None, evidence_dir: Path,
                         runner=subprocess.run) -> dict:
     from train.baseline import (certification_inventory, correction_artifacts,
                                 correction_corpus_artifacts)
@@ -102,6 +104,7 @@ def build_certification(*, correction_runs, review: Path,
         "historical_corrections": (
             sys.executable, str(REPO / "tools" / "train" / "ledger_corpus.py"),
             "--output", str(historical), "--baseline", str(before_report),
+            *(("--semantic-flips", str(semantic_flips)) if semantic_flips else ()),
             "--workers", str(max(1, (os.cpu_count() or 2) - 1)),
             *(value for source in correction_corpus for value in ("--store", str(source)))),
         **GATES,
@@ -160,6 +163,9 @@ def build_certification(*, correction_runs, review: Path,
             "before_sha256": hashlib.sha256(before_report.read_bytes()).hexdigest(),
             "after_path": _portable(historical),
             "after_sha256": hashlib.sha256(historical.read_bytes()).hexdigest(),
+            **({"semantic_flips_path": _portable(semantic_flips),
+                "semantic_flips_sha256": hashlib.sha256(
+                    Path(semantic_flips).read_bytes()).hexdigest()} if semantic_flips else {}),
         },
         "evidence": inventory["evidence"],
     }
@@ -174,6 +180,7 @@ def main(argv=None) -> int:
     parser.add_argument("--reviewed-corrections", type=Path, required=True)
     parser.add_argument("--tuning-correction", action="append", type=Path, default=[])
     parser.add_argument("--before-report", type=Path, required=True)
+    parser.add_argument("--semantic-flips", type=Path)
     parser.add_argument("--evidence-dir", type=Path, required=True)
     parser.add_argument("--out", type=Path, required=True)
     args = parser.parse_args(argv)
@@ -181,7 +188,7 @@ def main(argv=None) -> int:
         correction_runs=args.run, review=args.review,
         correction_corpus=args.corpus, reviewed_corrections=args.reviewed_corrections,
         tuning_corrections=args.tuning_correction,
-        before_report=args.before_report,
+        before_report=args.before_report, semantic_flips=args.semantic_flips,
         evidence_dir=args.evidence_dir)
     args.out.parent.mkdir(parents=True, exist_ok=True)
     args.out.write_text(json.dumps(report, indent=2, sort_keys=True) + "\n", encoding="utf-8")

@@ -181,12 +181,17 @@ def _certification(tmp_path, runs, corrections, reviewed=None):
     review_sha = hashlib.sha256(review.read_bytes()).hexdigest()
     path = tmp_path / "certification.json"
     path.parent.mkdir(parents=True, exist_ok=True)
-    gates = [{"name": name, "passed": True, "command": "pytest",
-              "output_path": f"evidence/{name}.log",
-              "output_sha256": "c" * 64} for name in (
+    evidence = tmp_path / "evidence"
+    evidence.mkdir(exist_ok=True)
+    gate_names = (
         "historical_corrections", "cross_deck_regressions",
         "native_full_games", "twin_full_games", "source_contracts",
-        "documentation", "correction_ci", "readiness", "performance")]
+        "documentation", "correction_ci", "readiness", "performance")
+    for name in gate_names:
+        (evidence / f"{name}.log").write_text("passed\n", encoding="utf-8")
+    gates = [{"name": name, "passed": True, "command": "pytest",
+              "output_path": str(evidence / f"{name}.log"),
+              "output_sha256": "c" * 64} for name in gate_names]
     path.write_text(json.dumps({
         "passed": True, "gates": gates,
         "manual_review": {"completed": True,
@@ -321,7 +326,22 @@ def test_ledger_baseline_and_certification_clis_expose_the_contract():
     assert "--review" in certify.stdout
     assert "--corpus" in certify.stdout
     assert "--before-report" in certify.stdout
+    assert "--semantic-flips" in certify.stdout
     assert "--evidence-dir" in certify.stdout
+
+
+def test_content_addressed_pack_copies_evidence_and_revalidates(tmp_path):
+    from common.ledger.baseline import load_baseline
+    from train.ledger_baseline import publish_pack
+
+    baseline = _build(tmp_path / "build")
+    output = publish_pack(baseline, out_root=tmp_path / "published")
+
+    loaded = load_baseline(output)
+    assert output.parent.name == loaded["baseline_id"]
+    assert loaded["certification"]["path"] == "evidence/certification.json"
+    assert all(not Path(gate["output_path"]).is_absolute()
+               for gate in loaded["certification"]["report"]["gates"])
 
 
 def test_certification_builder_runs_all_fixed_gates_and_binds_evidence(tmp_path):

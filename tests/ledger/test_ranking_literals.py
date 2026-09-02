@@ -10,6 +10,7 @@ RANKING_MODULES = tuple(path for path in sorted(
 
 APPROVED_DECLARATIONS = {
     "src/common/decision/coordinator.py": {"LOTTERY_DIGEST_BYTES"},
+    "src/common/ledger/baseline.py": {"SCHEMA_VERSION"},
     "src/common/ledger/activation.py": {"DAMAGE_UNIT_HP", "SYMMETRIC_STADIUM_FIT"},
     "src/common/ledger/chance.py": {
         "DIRECT_REFRESH_CARD_GAIN", "DIRECT_REFRESH_MAX_RETAINED",

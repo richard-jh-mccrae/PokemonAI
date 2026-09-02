@@ -1,0 +1,1 @@
+{"counts": {"cards": 50, "clauses": 63, "features": 285, "observation_sensitivity_witnesses": 100, "parameter_sensitivity_witnesses": 283, "sensitivity_witnesses": 217}, "feature_dispositions": {"active": 217, "retired": 68}, "findings": [], "passed": true, "schema_version": 4, "warnings": []}
