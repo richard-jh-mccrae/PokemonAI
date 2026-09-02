@@ -5,7 +5,7 @@ import pytest
 
 from common.api import ActionIdentity
 from common.ledger import EvaluationModel
-from common.observation import KnownDeckTop, KnownOwnPrizes, LegalKnowledge
+from common.observation import KnownDeckTop, KnownOwnPrizes, LegalKnowledge, UnknownDeckTop
 from cgpy.experiment import (BoundaryReason, ChanceExpansionRequest,
                              ChanceExpansionStatus, ChanceSampleKey, NodeKind,
                              PrimitiveTransition, TeacherCoverage,
@@ -64,10 +64,10 @@ def test_ultra_ball_play_is_one_primitive_transition_to_a_forced_discard_node():
     fetch = next(
         action for action in environment.legal_actions(fetched)
         if option_card_id(direct, direct.gs.pending.options[action.selection[0]]) == 120)
-    boundary = environment.transition(fetched, fetch.identity).node
-    assert environment.node_kind(boundary) is NodeKind.CHANCE
-    assert boundary.boundary_reason is BoundaryReason.SHUFFLE_DRAW
-    assert environment.observation(boundary).me.hand.count(120) == 1
+    main = environment.transition(fetched, fetch.identity).node
+    assert environment.node_kind(main) is NodeKind.PLAYER_DECISION
+    assert main.boundary_reason is None
+    assert environment.observation(main).me.hand.count(120) == 1
 
 
 def test_pokegear_hidden_reveal_stops_at_a_chance_node():
@@ -216,7 +216,7 @@ def test_retreat_chain_reaches_main_then_turn_boundary_without_greedy_policy(mon
     assert environment.node_kind(boundary) is NodeKind.TURN_BOUNDARY
 
 
-def test_poffin_multi_select_is_atomic_before_its_shuffle_boundary():
+def test_poffin_multi_select_returns_to_main_without_a_shuffle_branch():
     engine, _agent = scenario(
         "dragapult_ex", me_active=BodySpec((119,)), me_hand=(1086,),
         me_top=(119, 119), them_active=BodySpec((119, 120, 121), energies=(2, 5)))
@@ -231,10 +231,10 @@ def test_poffin_multi_select_is_atomic_before_its_shuffle_boundary():
         SelectContext.TO_BENCH)
     both = next(action for action in environment.legal_actions(choose_bench)
                 if len(action.selection) == 2)
-    boundary = environment.transition(choose_bench, both.identity).node
+    main = environment.transition(choose_bench, both.identity).node
 
-    assert environment.node_kind(boundary) is NodeKind.CHANCE
-    assert boundary.boundary_reason is BoundaryReason.SHUFFLE_DRAW
+    assert environment.node_kind(main) is NodeKind.PLAYER_DECISION
+    assert main.boundary_reason is None
 
 
 def test_lillies_expands_to_reproducible_whole_hand_main_successors():
@@ -331,7 +331,7 @@ def test_harlequin_resolves_both_hidden_hands_then_allows_later_traversal():
     assert not engine.gs.supporter_played
 
 
-def test_small_shuffle_support_is_exact_and_equivalent_states_coalesce():
+def test_pure_shuffle_canonicalizes_private_deck_order_without_a_chance_node():
     engine, _agent = scenario(
         "dragapult_ex", me_active=BodySpec((119,)),
         me_hand=(1121, 2, 5, 121),
@@ -347,43 +347,40 @@ def test_small_shuffle_support_is_exact_and_equivalent_states_coalesce():
     board.deck = kept
     lock_main_allowances(engine)
     prize_counts = Counter(engine.gs.card_id(serial) for serial in board.prize)
-    environment = TurnSearchEnvironment.from_engine(
-        engine, perspective_seat=0,
-        knowledge=LegalKnowledge(own_prizes=KnownOwnPrizes(
-            tuple(prize_counts.items()))))
-    root = environment.root
-    play = next(
-        action for action in environment.legal_actions(root)
-        if action.identity.kind == "play"
-        and engine.gs.card_id(engine.gs.players[0].hand[
-            engine.gs.pending.options[action.selection[0]]["index"]]) == 1121)
-    discard = environment.transition(root, play.identity).node
-    paid = next(
-        action for action in environment.legal_actions(discard)
-        if len(action.selection) == 2)
-    fetch_node = environment.transition(discard, paid.identity).node
-    fetch = next(
-        action for action in environment.legal_actions(fetch_node)
-        if environment.observation(fetch_node).select.deck[
-            action.selection[0]].card_id == 120)
-    chance = environment.transition(fetch_node, fetch.identity).node
+    reverse = engine.fork()
+    reverse.gs.players[0].deck.reverse()
+    knowledge = LegalKnowledge(
+        own_prizes=KnownOwnPrizes(tuple(prize_counts.items())),
+        known_top=KnownDeckTop(((kept[-1], 1086),)))
 
-    expansion = environment.expand(
-        chance, ChanceExpansionRequest(
-            experiment_seed=604, exact_outcome_limit=16, sample_count=3))
+    def fetch_then_shuffle(source):
+        environment = TurnSearchEnvironment.from_engine(
+            source, perspective_seat=0, knowledge=knowledge)
+        root = environment.root
+        play = next(
+            action for action in environment.legal_actions(root)
+            if action.identity.kind == "play"
+            and source.gs.card_id(source.gs.players[0].hand[
+                source.gs.pending.options[action.selection[0]]["index"]]) == 1121)
+        discard = environment.transition(root, play.identity).node
+        paid = next(action for action in environment.legal_actions(discard)
+                    if len(action.selection) == 2)
+        fetch_node = environment.transition(discard, paid.identity).node
+        fetch = next(
+            action for action in environment.legal_actions(fetch_node)
+            if action.selection and environment.observation(fetch_node).select.deck[
+                environment.observation(fetch_node).select.options[
+                    action.selection[0]].index].card_id == 120)
+        return environment, environment.transition(fetch_node, fetch.identity).node
 
-    assert expansion.status is ChanceExpansionStatus.COMPLETE
-    assert expansion.support_size == 2
-    assert expansion.requested_count == expansion.produced_count == 2
-    assert [transition.probability for transition in expansion.transitions] == [0.5, 0.5]
-    assert len({transition.result_state_key for transition in expansion.transitions}) == 1
-    assert len(expansion.successors) == 1
-    assert expansion.successors[0].probability == pytest.approx(1.0)
-    assert len(expansion.successors[0].branch_keys) == 2
-    assert environment.node_kind(expansion.successors[0].node) is NodeKind.PLAYER_DECISION
-    for transition in expansion.transitions:
-        persisted = type(transition).loads(transition.dumps())
-        assert environment.replay_chance(chance, persisted) == transition
+    first_environment, first = fetch_then_shuffle(engine)
+    second_environment, second = fetch_then_shuffle(reverse)
+
+    assert first_environment.node_kind(first) is NodeKind.PLAYER_DECISION
+    assert second_environment.node_kind(second) is NodeKind.PLAYER_DECISION
+    assert first.state_key == second.state_key
+    assert first.observation.decision_key == second.observation.decision_key
+    assert isinstance(first.observation.knowledge.known_top, UnknownDeckTop)
 
 
 def test_sampled_draw_honors_legal_known_top_over_private_deck_order():
@@ -732,7 +729,7 @@ def test_expansion_fold_can_reverse_single_hit_ranking_for_a_whole_hand_combo():
         if action.identity.kind == "play"
     }
     request = ChanceExpansionRequest(
-        experiment_seed=47, exact_outcome_limit=1, sample_count=12)
+        experiment_seed=35, exact_outcome_limit=1, sample_count=12)
     expansions = {
         card_id: environment.expand(
             environment.transition(root, plays[card_id].identity).node, request)

@@ -19,7 +19,7 @@ from cgpy.experiment import (
     ExperimentSnapshot,
     TurnSearchEnvironment,
 )
-from cgpy.experiment.teacher import WithinHorizonTeacher
+from cgpy.experiment.teacher import WithinHorizonTeacher, merge_root_action_results
 from cgpy.experiment.teacher_contracts import (
     TeacherCoverage,
     TeacherSearchConfiguration,
@@ -35,7 +35,7 @@ def test_teacher_public_api_is_available_from_experiment_package():
                                  TeacherSearchConfiguration,
                                  WithinHorizonTeacher)
 
-    assert WithinHorizonTeacher.identity.endswith("-v1")
+    assert WithinHorizonTeacher.identity.endswith("-v2")
     assert TeacherCoverage.COMPLETE.value == "complete"
     assert TeacherSearchConfiguration().time_cap_seconds == 600.0
     assert TeacherExecutionConfiguration().root_timeout_seconds == 660.0
@@ -148,6 +148,47 @@ def test_teacher_compares_complete_root_actions_and_round_trips_result():
     assert result.best_full_sequence == (beta,)
     assert result.benchmark_ready is False
     assert TeacherSearchResult.loads(result.dumps()) == result
+
+
+@pytest.mark.parametrize("beta_value", (4.5, 2.0))
+def test_parallel_root_action_results_merge_back_into_one_decision(beta_value):
+    root = _node("root", NodeKind.PLAYER_DECISION)
+    alpha_leaf = _node("alpha-leaf", NodeKind.TURN_BOUNDARY)
+    beta_leaf = _node("beta-leaf", NodeKind.TURN_BOUNDARY)
+    alpha = ActionIdentity("alpha")
+    beta = ActionIdentity("beta")
+    values = {
+        root.state_key.digest: 1.0,
+        alpha_leaf.state_key.digest: 2.0,
+        beta_leaf.state_key.digest: beta_value,
+    }
+    configuration = TeacherSearchConfiguration()
+    results = tuple(WithinHorizonTeacher(_Evaluator(values)).search_environment(
+        _GraphEnvironment(root, {
+            root.state_key.digest: (action,),
+            (root.state_key.digest, action): leaf,
+        }), evaluation_model=_Model(), experiment_seed=605,
+        configuration=configuration)
+                    for action, leaf in ((alpha, alpha_leaf), (beta, beta_leaf)))
+
+    merged = merge_root_action_results(
+        results, configuration, elapsed_seconds=3.0)
+    serial = WithinHorizonTeacher(_Evaluator(values)).search_environment(
+        _GraphEnvironment(root, {
+            root.state_key.digest: (alpha, beta),
+            (root.state_key.digest, alpha): alpha_leaf,
+            (root.state_key.digest, beta): beta_leaf,
+        }), evaluation_model=_Model(), experiment_seed=605,
+        configuration=configuration)
+
+    assert merged.coverage is TeacherCoverage.COMPLETE
+    assert merged.preferred_action == serial.preferred_action
+    assert tuple(item.action for item in merged.root_actions) == (alpha, beta)
+    assert merged.statistics.elapsed_seconds == 3.0
+    merged_document, serial_document = merged.document(), serial.document()
+    merged_document.pop("statistics")
+    serial_document.pop("statistics")
+    assert merged_document == serial_document
 
 
 def test_unverified_baseline_identity_cannot_certify_teacher_output():

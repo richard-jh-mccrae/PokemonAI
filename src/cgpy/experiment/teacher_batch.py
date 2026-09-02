@@ -1,6 +1,7 @@
 """Process-isolated execution of independent Within-Horizon Teacher roots."""
 from __future__ import annotations
 
+import math
 import multiprocessing
 from dataclasses import dataclass
 from time import monotonic, sleep
@@ -70,12 +71,17 @@ class TeacherBatchRunner:
         self.context_name = context_name
 
     def run(self, cases, configuration: TeacherExecutionConfiguration =
-            TeacherExecutionConfiguration()) -> TeacherBatchResult:
+            TeacherExecutionConfiguration(), *,
+            timeout_seconds: float | None = None) -> TeacherBatchResult:
         cases = tuple(cases)
         identities = tuple(case.case_id for case in cases)
         if len(set(identities)) != len(identities):
             raise ValueError("Teacher Batch Cases require unique identities")
         started = self.clock()
+        if timeout_seconds is not None and (
+                not math.isfinite(timeout_seconds) or timeout_seconds <= 0):
+            raise ValueError("Teacher batch timeout must be positive and finite")
+        deadline = None if timeout_seconds is None else started + timeout_seconds
         effective = min(configuration.workers, len(cases))
         if not cases:
             return TeacherBatchResult(
@@ -106,6 +112,17 @@ class TeacherBatchRunner:
         while active:
             progressed = False
             now = self.clock()
+            if deadline is not None and now >= deadline:
+                for worker in active.values():
+                    _stop_process(worker)
+                for index, case in enumerate(cases):
+                    if items[index] is None:
+                        items[index] = TeacherBatchItem(
+                            case.case_id, TeacherWorkerStatus.UNAVAILABLE,
+                            TeacherStopReason.WORKER_TIMEOUT,
+                            failure=f"branch batch exceeded {timeout_seconds:g}s root timeout")
+                active.clear()
+                break
             for index, worker in tuple(active.items()):
                 case = cases[index]
                 if worker.connection.poll():

@@ -3,7 +3,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, replace
 from itertools import permutations
-from math import factorial, perm
+from math import perm
 
 from common.api import ActionIdentity
 from common.observation import (KnownDeckTop, KnownOwnPrizes, LegalKnowledge,
@@ -55,7 +55,6 @@ class _RandomBoundary(Exception):
 
 
 _RANDOM_METHODS = {
-    "shuffle": (NodeKind.CHANCE, BoundaryReason.SHUFFLE_DRAW),
     "draw_bind": (NodeKind.CHANCE, BoundaryReason.SHUFFLE_DRAW),
     "prize_bind": (NodeKind.CHANCE, BoundaryReason.SHUFFLE_DRAW),
     "coin": (NodeKind.CHANCE, BoundaryReason.RANDOM_REVEAL),
@@ -67,8 +66,6 @@ _RANDOM_METHODS = {
 
 
 def _chance_event(method: str, args: tuple, kwargs: dict) -> _ChanceEvent:
-    if method == "shuffle":
-        return _ChanceEvent(method, int(kwargs["seat"]), tuple(args[0]))
     if method == "coin":
         seat = args[0] if args else kwargs.get("seat")
         return _ChanceEvent(method, None if seat is None else int(seat))
@@ -98,11 +95,29 @@ def _consume_known_top(known_top: list[tuple[int, int]], values) -> None:
 
 
 class _BoundaryProbeRng:
-    def __init__(self, delegate, turn_changed, outcomes: tuple[bool, ...]):
+    def __init__(self, delegate, turn_changed, outcomes: tuple[bool, ...], *,
+                 perspective_seat: int, knowledge: LegalKnowledge, game_state):
         self.delegate = delegate
         self._turn_changed = turn_changed
         self._outcomes = outcomes
         self._outcome_index = 0
+        self._perspective_seat = perspective_seat
+        self._knowledge = knowledge
+        self._game_state = game_state
+        self._known_top = list(
+            knowledge.known_top.cards
+            if isinstance(knowledge.known_top, KnownDeckTop) else ())
+
+    @property
+    def knowledge(self) -> LegalKnowledge:
+        known_top = (KnownDeckTop(tuple(self._known_top))
+                     if self._known_top else UnknownDeckTop())
+        return replace(self._knowledge, known_top=known_top)
+
+    def shuffle(self, seq: list, *, seat: int) -> None:
+        seq.sort(key=lambda serial: (self._game_state.card_id(serial), serial))
+        if seat == self._perspective_seat:
+            self._known_top.clear()
 
     def hand_pick_expect(self, *args, **kwargs):
         return self.delegate.hand_pick_expect(*args, **kwargs)
@@ -335,7 +350,7 @@ class _SegmentRng:
 class _PrescribedRng:
     def __init__(self, choices: tuple[_ExactChoice, ...],
                  outcomes: tuple[bool, ...] = (), *, perspective_seat: int,
-                 knowledge: LegalKnowledge):
+                 knowledge: LegalKnowledge, game_state):
         self.delegate = SeededRng(0)
         self._choices = choices
         self._choice_index = 0
@@ -343,6 +358,7 @@ class _PrescribedRng:
         self._outcome_index = 0
         self._perspective_seat = perspective_seat
         self._knowledge = knowledge
+        self._game_state = game_state
         self._known_top = list(
             knowledge.known_top.cards
             if isinstance(knowledge.known_top, KnownDeckTop) else ())
@@ -381,11 +397,7 @@ class _PrescribedRng:
         return choice.payload
 
     def shuffle(self, seq: list, *, seat: int) -> None:
-        event = _chance_event("shuffle", (seq,), {"seat": seat})
-        order = tuple(self._take(event))
-        if sorted(order) != sorted(seq):
-            raise SearchContractError("exact shuffle branch changed the deck multiset")
-        seq[:] = order
+        seq.sort(key=lambda serial: (self._game_state.card_id(serial), serial))
         if seat == self._perspective_seat:
             self._known_top.clear()
 
@@ -621,7 +633,9 @@ class TurnSearchEnvironment:
         probe = _BoundaryProbeRng(
             child_engine.gs.rng,
             lambda: child_engine.gs.turn != self._root_turn,
-            plan.outcomes)
+            plan.outcomes, perspective_seat=self.perspective_seat,
+            knowledge=parent.observation.knowledge,
+            game_state=child_engine.gs)
         child_engine.gs.rng = probe
         hook_token = before_begin_turn.set(_stop_before_turn)
         try:
@@ -632,12 +646,12 @@ class TurnSearchEnvironment:
                 child_engine, boundary.kind, boundary.reason,
                 replay_plan=replay_plan, chance_method=boundary.method,
                 chance_event=boundary.event,
-                knowledge=parent.observation.knowledge)
+                knowledge=probe.knowledge)
         except Exception as exc:
             child = self._unavailable_node(parent, child_engine, plan.action, exc)
         else:
             child = self._make_node(
-                child_engine, knowledge=parent.observation.knowledge)
+                child_engine, knowledge=probe.knowledge)
         finally:
             child_engine.gs.rng = probe.delegate
             before_begin_turn.reset(hook_token)
@@ -675,7 +689,7 @@ class TurnSearchEnvironment:
         child_engine = plan.source.fork()
         rng = _PrescribedRng(
             choices, plan.outcomes, perspective_seat=self.perspective_seat,
-            knowledge=parent.observation.knowledge)
+            knowledge=parent.observation.knowledge, game_state=child_engine.gs)
         child_engine.gs.rng = rng
         hook_token = before_begin_turn.set(_stop_before_turn)
         child = None
@@ -708,13 +722,6 @@ class TurnSearchEnvironment:
                 _ExactChoice("coin", False, 0.5),
                 _ExactChoice("coin", True, 0.5),
             ) if limit is None or limit >= 2 else None
-        if event.method == "shuffle":
-            support = factorial(len(values))
-            if limit is not None and support > limit:
-                return None
-            probability = 1.0 / support
-            return tuple(_ExactChoice("shuffle", value, probability)
-                         for value in permutations(values))
         if event.method in ("draw_bind", "hand_pick", "prize_take"):
             support = len(values)
             if support == 0 or (limit is not None and support > limit):

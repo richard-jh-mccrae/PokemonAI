@@ -10,6 +10,7 @@ from enum import Enum
 from common.api import ActionIdentity
 from common.decision import EvaluationStatus
 
+from .action_policy import ALL_LEGAL_ACTION_POLICY, SUPPORTED_ACTION_POLICIES
 from .contracts import NodeKind
 
 
@@ -55,6 +56,7 @@ class TeacherSearchConfiguration:
     time_cap_seconds: float = 600.0
     noise_tolerance: float = 1e-9
     tie_seed: int = 1178
+    action_policy: str = ALL_LEGAL_ACTION_POLICY
 
     def __post_init__(self):
         if self.schema_version != 1:
@@ -67,6 +69,8 @@ class TeacherSearchConfiguration:
             raise ValueError("time_cap_seconds must be positive and finite")
         if not math.isfinite(self.noise_tolerance) or self.noise_tolerance <= 0:
             raise ValueError("noise_tolerance must be positive and finite")
+        if self.action_policy not in SUPPORTED_ACTION_POLICIES:
+            raise ValueError(f"unsupported Teacher action policy {self.action_policy!r}")
 
     @property
     def identity(self) -> str:

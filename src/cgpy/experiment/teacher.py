@@ -11,6 +11,7 @@ from common.api import ActionIdentity
 from common.decision import EvaluationRequest, EvaluationStatus
 from common.ledger import LedgerValueEvaluator
 
+from .action_policy import admissible_teacher_actions
 from .contracts import ChanceExpansionRequest, ChanceExpansionStatus, NodeKind
 from .environment import TurnSearchEnvironment
 from .teacher_contracts import (
@@ -102,7 +103,7 @@ def _quality(values) -> EvaluationStatus:
     return EvaluationStatus.COMPLETE
 
 
-def _neutral_choice(outcomes: tuple[_ActionOutcome, ...], tied: tuple[int, ...], seed: int) -> int:
+def _neutral_choice(tied: tuple[int, ...], seed: int) -> int:
     return min(tied, key=lambda index: hashlib.blake2b(
         f"{seed}:{index}".encode(), digest_size=8).digest())
 
@@ -117,8 +118,84 @@ def _merge_policy(evaluations) -> tuple[TeacherPolicyEntry, ...]:
     return tuple(merged.values())
 
 
+def merge_root_action_results(
+        results, configuration: TeacherSearchConfiguration, *,
+        elapsed_seconds: float | None = None) -> TeacherSearchResult:
+    results = tuple(results)
+    if not results:
+        raise ValueError("root-action merge requires at least one Teacher result")
+    first = results[0]
+    metadata = (
+        first.root_state_key, first.snapshot_id, first.experiment_seed,
+        first.configuration_identity, first.evaluator_identity,
+        first.evaluation_model_identity, first.baseline_identity,
+        first.baseline_value, first.baseline_quality,
+    )
+    for result in results:
+        candidate = (
+            result.root_state_key, result.snapshot_id, result.experiment_seed,
+            result.configuration_identity, result.evaluator_identity,
+            result.evaluation_model_identity, result.baseline_identity,
+            result.baseline_value, result.baseline_quality,
+        )
+        if candidate != metadata or result.configuration_identity != configuration.identity:
+            raise ValueError("root-action Teacher results use different search contracts")
+        if len(result.root_actions) != 1:
+            raise ValueError("each root-action Teacher result must contain one action")
+    root_actions = tuple(result.root_actions[0] for result in results)
+    statistics = TeacherSearchStatistics(
+        nodes_visited=sum(result.statistics.nodes_visited for result in results),
+        leaf_evaluations=sum(result.statistics.leaf_evaluations for result in results),
+        chance_nodes=sum(result.statistics.chance_nodes for result in results),
+        chance_branches=sum(result.statistics.chance_branches for result in results),
+        cache_hits=sum(result.statistics.cache_hits for result in results),
+        transpositions=sum(result.statistics.transpositions for result in results),
+        memo_entries=sum(result.statistics.memo_entries for result in results),
+        cycles=sum(result.statistics.cycles for result in results),
+        elapsed_seconds=(
+            max(result.statistics.elapsed_seconds for result in results)
+            if elapsed_seconds is None else max(0.0, float(elapsed_seconds))),
+    )
+    incomplete = tuple(action for action in root_actions
+                       if action.coverage is not TeacherCoverage.COMPLETE)
+    if incomplete:
+        failed = incomplete[0]
+        coverage = (TeacherCoverage.UNAVAILABLE
+                    if all(action.coverage is TeacherCoverage.UNAVAILABLE
+                           for action in root_actions)
+                    else TeacherCoverage.INCOMPLETE)
+        return TeacherSearchResult(
+            *metadata[:8], first.baseline_quality, root_actions,
+            None, (), (), (), (), None, coverage,
+            _quality((first.baseline_quality,
+                      *(action.value_quality for action in root_actions))),
+            failed.stop_reason, statistics, False,
+            failed.failure or first.failure)
+    best = max(action.expected_value for action in root_actions)
+    tied = tuple(index for index, action in enumerate(root_actions)
+                 if best - action.expected_value <= configuration.noise_tolerance)
+    selected_index = _neutral_choice(tied, configuration.tie_seed)
+    selected_action = root_actions[selected_index]
+    selected_result = results[selected_index]
+    indifference = tuple(root_actions[index].action for index in tied)
+    decision_quality = _quality(action.value_quality for action in root_actions)
+    root_entry = TeacherPolicyEntry(
+        first.root_state_key, selected_action.action, selected_action.expected_value,
+        decision_quality, indifference)
+    selected_policy = (root_entry,) + tuple(
+        entry for entry in selected_result.selected_policy
+        if entry.state_key != first.root_state_key)
+    return TeacherSearchResult(
+        *metadata[:8], first.baseline_quality, root_actions,
+        selected_action.action, indifference, selected_policy,
+        selected_result.leaves, selected_result.principal_variation,
+        selected_result.best_full_sequence, TeacherCoverage.COMPLETE,
+        _quality((first.baseline_quality, decision_quality)),
+        TeacherStopReason.COMPLETE, statistics, False, selected_result.failure)
+
+
 class WithinHorizonTeacher:
-    identity = "cgpy-within-horizon-teacher-v1"
+    identity = "cgpy-within-horizon-teacher-v2"
 
     def __init__(self, evaluator=None, *, clock=monotonic):
         self.evaluator = evaluator or LedgerValueEvaluator()
@@ -315,8 +392,11 @@ class WithinHorizonTeacher:
                     frame.phase = _FramePhase.CHANCE
                     continue
                 if frame.kind in (NodeKind.PLAYER_DECISION, NodeKind.FORCED_DECISION):
-                    frame.actions = tuple(
-                        action.identity for action in environment.legal_actions(frame.node))
+                    legal = admissible_teacher_actions(
+                        frame.node.observation,
+                        environment.legal_actions(frame.node),
+                        configuration.action_policy)
+                    frame.actions = tuple(action.identity for action in legal)
                     if not frame.actions:
                         finish(_NodeEvaluation(
                             TeacherCoverage.UNAVAILABLE, EvaluationStatus.UNAVAILABLE, None,
@@ -382,7 +462,7 @@ class WithinHorizonTeacher:
         best = max(child.value for child in children)
         tied = tuple(index for index, child in enumerate(children)
                      if best - child.value <= configuration.noise_tolerance)
-        selected_index = _neutral_choice(outcomes, tied, configuration.tie_seed)
+        selected_index = _neutral_choice(tied, configuration.tie_seed)
         selected = outcomes[selected_index]
         indifference = tuple(actions[index] for index in tied)
         quality = _quality(child.quality for child in children)
@@ -455,4 +535,4 @@ class WithinHorizonTeacher:
             policy, child.leaves, principal, sequence, child.failure)
 
 
-__all__ = ("WithinHorizonTeacher",)
+__all__ = ("WithinHorizonTeacher", "merge_root_action_results")
