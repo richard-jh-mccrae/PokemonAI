@@ -28,6 +28,7 @@ from cgpy.experiment import (  # noqa: E402
     TeacherExecutionConfiguration,
     TeacherModelRecord,
     TeacherSearchConfiguration,
+    WithinHorizonTeacher,
 )
 from common.ledger import LedgerValueEvaluator  # noqa: E402
 from common.ledger.baseline import baseline_identities, load_baseline  # noqa: E402
@@ -439,9 +440,11 @@ def run_teacher(root: Path, *, output: Path, workers: int, repetitions: int,
         "schema": RUN_SCHEMA, "schema_version": RUN_SCHEMA_VERSION,
         "generated_at": generated_at, "corpus_id": corpus["corpus_id"],
         "method": "teacher_exhaustive",
+        "method_identity": WithinHorizonTeacher.identity,
         "search_configuration": asdict(search_configuration),
         "search_configuration_identity": search_configuration.identity,
         "execution": asdict(execution),
+        "source_identity": git_source_identity(REPO, allow_dirty=True),
         "host": {
             "system": platform.system(), "machine": platform.machine(),
             "processor": platform.processor(), "python": platform.python_version(),

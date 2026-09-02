@@ -90,6 +90,8 @@ def test_teacher_run_records_repeatable_targets_and_latency_summary(tmp_path):
 
     document = json.loads(output.read_text(encoding="utf-8"))
     assert document["method"] == "teacher_exhaustive"
+    assert document["method_identity"] == search_timing.WithinHorizonTeacher.identity
+    assert document["source_identity"]["commit"]
     assert document["summary"]["requested_roots"] == 2
     assert document["summary"]["median_seconds"] == 0.75
     assert document["summary"]["p95_seconds"] == 1.25
