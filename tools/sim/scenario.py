@@ -46,8 +46,9 @@ def runtime(agent: str, cards, *, compute_configuration=None,
 
 
 def scenario(agent: str, *, me_active: BodySpec, me_bench=(), me_hand=(),
-             me_discard=(), me_prizes=6, me_top=(), them_active=None,
-             them_bench=(), them_prizes=6, turn=3, compute_configuration=None):
+             me_discard=(), me_prizes=6, me_top=(), me_deck_count=None,
+             them_active=None, them_bench=(), them_prizes=6,
+             them_deck_count=None, turn=3, compute_configuration=None):
     cards = deck(agent)
     engine, _seat, _error = Engine.start(cards, cards, rng=SeededRng(71237))
     if engine is None:
@@ -77,7 +78,7 @@ def scenario(agent: str, *, me_active: BodySpec, me_bench=(), me_hand=(),
             hp=maximum if value.hp is None else value.hp,
             max_hp=maximum, entered_turn=1)
 
-    def populate(seat, active, bench, hand, discard, prizes, top=()):
+    def populate(seat, active, bench, hand, discard, prizes, top=(), deck_count=None):
         board = gs.players[seat]
         board.active = body(seat, active)
         board.active_facedown = False
@@ -87,14 +88,24 @@ def scenario(agent: str, *, me_active: BodySpec, me_bench=(), me_hand=(),
         top_serials = [take(seat, card_id) for card_id in top]
         remaining = [serial for values in pools[seat].values() for serial in values]
         board.prize = remaining[:prizes]
-        board.deck = remaining[prizes:]
+        remaining = remaining[prizes:]
+        if deck_count is not None:
+            body_count = int(deck_count) - len(top_serials)
+            if body_count < 0 or body_count > len(remaining):
+                raise ValueError("scenario deck count cannot contain the declared top")
+            board.deck = remaining[:body_count]
+            board.discard.extend(remaining[body_count:])
+        else:
+            board.deck = remaining
         for serial in reversed(top_serials):
             board.deck.append(serial)
         board.poisoned = board.burned = board.asleep = False
         board.paralyzed = board.confused = False
 
-    populate(0, me_active, me_bench, me_hand, me_discard, me_prizes, me_top)
-    populate(1, them_active or me_active, them_bench, (), (), them_prizes)
+    populate(0, me_active, me_bench, me_hand, me_discard, me_prizes,
+             me_top, me_deck_count)
+    populate(1, them_active or me_active, them_bench, (), (), them_prizes,
+             deck_count=them_deck_count)
     gs.turn = turn
     gs.first_player = 0
     gs.turn_action_count = 0

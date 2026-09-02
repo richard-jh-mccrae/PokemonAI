@@ -63,15 +63,17 @@ def root_specs() -> tuple[RootSpec, ...]:
     B = BodySpec
     return (
         RootSpec("dragapult-opening", "dragapult_ex", "opening",
-                 "Two Dreepy and an immediately playable evolution.", {
-                     "me_active": B((119,)), "me_bench": (B((119,)),),
-                     "me_hand": (120,), "them_active": B((119,)), "turn": 3,
+                 "A lone Dreepy can bench Budew or preserve the minimal board.", {
+                     "me_active": B((119,)), "me_hand": (235,),
+                     "them_active": B((119,)), "turn": 3,
                  }, 60901),
         RootSpec("dragapult-search", "dragapult_ex", "search",
-                 "Ultra Ball can expose a known Drakloak/Dragapult deck top.", {
-                     "me_active": B((119,)), "me_bench": (B((119,)),),
-                     "me_hand": (1121, 1120, 1097), "me_top": (120, 121),
-                     "them_active": B((119, 120, 121)), "turn": 5,
+                 "Recon Directive chooses between a known gust and search Item.", {
+                     "me_active": B((119, 120, 121)),
+                     "me_bench": (B((119, 120)),),
+                     "me_top": (1182, 1121),
+                     "me_deck_count": 8,
+                     "them_active": B((119, 120, 121)), "turn": 9,
                  }, 60902),
         RootSpec("dragapult-tactical", "dragapult_ex", "tactical",
                  "Powered Dragapult and Munkidori face a damaged evolved attacker.", {
@@ -90,13 +92,14 @@ def root_specs() -> tuple[RootSpec, ...]:
                  "Ultra Ball can expose known Mega Lucario and Hariyama targets.", {
                      "me_active": B((677,)), "me_bench": (B((673,)),),
                      "me_hand": (1121, 6, 6), "me_top": (678, 674),
-                     "them_active": B((677, 678)), "turn": 5,
+                     "me_deck_count": 8,
+                     "them_active": B((677, 678)), "turn": 9,
                  }, 60905),
         RootSpec("lucario-tactical", "mega_lucario", "tactical",
-                 "Powered Mega Lucario has gust, acceleration, and a second attacker.", {
+                 "Powered Mega Lucario can gust before attacking or preserve Boss.", {
                      "me_active": B((677, 678), (6, 6)),
                      "me_bench": (B((673, 674)),),
-                     "me_hand": (1182, 1142, 6), "me_prizes": 2,
+                     "me_hand": (1182,), "me_prizes": 2,
                      "them_active": B((677, 678), (6,), hp=190),
                      "them_bench": (B((673,)),), "them_prizes": 2, "turn": 9,
                  }, 60906),
