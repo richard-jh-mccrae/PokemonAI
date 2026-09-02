@@ -126,9 +126,20 @@ class WithinHorizonTeacher:
 
     def search(self, snapshot, *, evaluation_model, experiment_seed: int,
                configuration: TeacherSearchConfiguration = TeacherSearchConfiguration(),
-               baseline_identity: str | None = None) -> TeacherSearchResult:
+               baseline_identity: str | None = None,
+               parity=None) -> TeacherSearchResult:
+        if parity is None:
+            environment = TurnSearchEnvironment.from_snapshot(snapshot)
+        else:
+            engine = snapshot.fork_engine()
+            engine.gs.parity_manifest = parity
+            engine.gs.executed_chains = []
+            observation = snapshot.observation
+            environment = TurnSearchEnvironment.from_engine(
+                engine, perspective_seat=observation.seat,
+                knowledge=observation.knowledge)
         return self.search_environment(
-            TurnSearchEnvironment.from_snapshot(snapshot),
+            environment,
             evaluation_model=evaluation_model, experiment_seed=experiment_seed,
             configuration=configuration, baseline_identity=baseline_identity,
             snapshot_id=snapshot.snapshot_id)

@@ -1,0 +1,1690 @@
+{
+  "schema": "cgpy-search-timing-baseline",
+  "schema_version": 1,
+  "corpus_id": "546b82daaecc5bcef0f63c79cf1a3bd79c04060a24b60709bfd0837d53d22e43",
+  "method": "teacher_exhaustive",
+  "search_configuration": {
+    "chance_branch_cap": 100000,
+    "chance_sample_count": 12,
+    "exact_outcome_limit": 16,
+    "node_cap": 100000,
+    "noise_tolerance": 1e-9,
+    "path_node_cap": 512,
+    "schema_version": 1,
+    "tie_seed": 1178,
+    "time_cap_seconds": 120
+  },
+  "execution": {
+    "root_timeout_seconds": 140,
+    "schema_version": 1,
+    "workers": 1
+  },
+  "repetitions": 3,
+  "limits": {
+    "median_time_multiplier": 2,
+    "minimum_median_seconds": 0.25,
+    "batch_time_multiplier": 2
+  },
+  "measurement": {
+    "run_id": "c24d9de65bb3c55228b94749877e8a81b15835881ec89af8d0768ac38df45af1",
+    "generated_at": "2026-09-02T18:39:30.795592+02:00",
+    "source_identity": {
+      "commit": "5791a42dd71af0b79f50644638fa08bbae842c39",
+      "dirty": false
+    },
+    "host": {
+      "logical_cores": 12,
+      "machine": "AMD64",
+      "processor": "Intel64 Family 6 Model 186 Stepping 3, GenuineIntel",
+      "python": "3.11.9",
+      "system": "Windows"
+    },
+    "batch_elapsed_seconds": 76.6569999998901,
+    "scope": "Single-worker search medians exclude startup; batch time includes worker startup and IPC.",
+    "calibration": "Local serial bootstrap; retain CI artifacts for reviewed runner-specific calibration."
+  },
+  "roots": [
+    {
+      "root_id": "dragapult-opening",
+      "reference_target_id": "0b8f8f9c4335bd27547606620457ce8a88b64ab2105d14bb9bf9e52171775bf6",
+      "elapsed_seconds": [
+        0.01500000013038516,
+        0.015999999828636646,
+        0.030999999959021807
+      ],
+      "work": {
+        "nodes_visited": 4,
+        "leaf_evaluations": 2,
+        "chance_nodes": 0,
+        "chance_branches": 0,
+        "memo_entries": 4,
+        "cycles": 0
+      },
+      "reference_target": {
+        "best_full_sequence": [
+          {
+            "kind": "play",
+            "parts": [
+              "[0,{\"type\":7},[[2,{\"id\":235,\"playerIndex\":0}]]]"
+            ]
+          },
+          {
+            "kind": "end",
+            "parts": [
+              "[0,{\"type\":14},[]]"
+            ]
+          }
+        ],
+        "leaves": [
+          {
+            "kind": "turn_boundary",
+            "probability": 1,
+            "state_key": "da26702d2d8344e8129608ab679b9205c188ad86fe6c43204d0f42e7ca1c0b0e",
+            "value": 8.73356856142241,
+            "value_quality": "complete"
+          }
+        ],
+        "preferred_action": {
+          "kind": "play",
+          "parts": [
+            "[0,{\"type\":7},[[2,{\"id\":235,\"playerIndex\":0}]]]"
+          ]
+        },
+        "root_state_key": "9a04db450773e50a40ce51cf4491fd5ef87b2fb34778d66876cc46f1f4bd115e",
+        "selected_policy": [
+          {
+            "action": {
+              "kind": "play",
+              "parts": [
+                "[0,{\"type\":7},[[2,{\"id\":235,\"playerIndex\":0}]]]"
+              ]
+            },
+            "expected_value": 8.73356856142241,
+            "indifference_set": [
+              {
+                "kind": "play",
+                "parts": [
+                  "[0,{\"type\":7},[[2,{\"id\":235,\"playerIndex\":0}]]]"
+                ]
+              }
+            ],
+            "state_key": "9a04db450773e50a40ce51cf4491fd5ef87b2fb34778d66876cc46f1f4bd115e",
+            "value_quality": "complete"
+          },
+          {
+            "action": {
+              "kind": "end",
+              "parts": [
+                "[0,{\"type\":14},[]]"
+              ]
+            },
+            "expected_value": 8.73356856142241,
+            "indifference_set": [
+              {
+                "kind": "end",
+                "parts": [
+                  "[0,{\"type\":14},[]]"
+                ]
+              }
+            ],
+            "state_key": "ba3b9ec72891235e21e1e1c86e08da376e63dce7f7b028b6907a9e7f424fa205",
+            "value_quality": "complete"
+          }
+        ]
+      }
+    },
+    {
+      "root_id": "dragapult-search",
+      "reference_target_id": "267d92c6d37567dddfc7ecdb25999cefe8f40c808bbbe06518999272f4abc2fe",
+      "elapsed_seconds": [
+        0.4220000000204891,
+        0.4529999999795109,
+        0.5160000000614673
+      ],
+      "work": {
+        "nodes_visited": 161,
+        "leaf_evaluations": 69,
+        "chance_nodes": 1,
+        "chance_branches": 12,
+        "memo_entries": 161,
+        "cycles": 0
+      },
+      "reference_target": {
+        "best_full_sequence": null,
+        "leaves": [
+          {
+            "kind": "turn_boundary",
+            "probability": 0.08333333333333333,
+            "state_key": "cde676697a147826da02134a28b6bd5375a8d44554a26322c45df0d7c99bed1e",
+            "value": 7.05416153846154,
+            "value_quality": "complete"
+          },
+          {
+            "kind": "turn_boundary",
+            "probability": 0.16666666666666666,
+            "state_key": "bd21b84afba6f98aaa30239f2126cbbac7fc44caf49246d0323722e7c4b7d877",
+            "value": 8.379604326923076,
+            "value_quality": "complete"
+          },
+          {
+            "kind": "turn_boundary",
+            "probability": 0.08333333333333333,
+            "state_key": "f63277958956ab348f3b95d2c453c0f71f02e589ceb0287cb3f289020826ce53",
+            "value": 8.695407211538459,
+            "value_quality": "complete"
+          },
+          {
+            "kind": "turn_boundary",
+            "probability": 0.08333333333333333,
+            "state_key": "46e4f6418b4745abffb3a8e28a474318fc5fccb5de2c83283d35af01bc21aab1",
+            "value": 8.695407211538459,
+            "value_quality": "complete"
+          },
+          {
+            "kind": "turn_boundary",
+            "probability": 0.08333333333333333,
+            "state_key": "af38e16a9ecc421738bfddfd7a60cd1b7e200db04987058affa16f844ebeb809",
+            "value": 8.695407211538459,
+            "value_quality": "complete"
+          },
+          {
+            "kind": "turn_boundary",
+            "probability": 0.08333333333333333,
+            "state_key": "b38f6d29139ca6ac9e15dc1cf526c7df70f205b79deb8ff4e5e041e1b43061e6",
+            "value": 8.379604326923076,
+            "value_quality": "complete"
+          },
+          {
+            "kind": "turn_boundary",
+            "probability": 0.08333333333333333,
+            "state_key": "411a73ed2ae08ebf31083bac5b435b91bbfa06d12e13bff9e4ea9e0388119276",
+            "value": 8.695407211538459,
+            "value_quality": "complete"
+          },
+          {
+            "kind": "turn_boundary",
+            "probability": 0.08333333333333333,
+            "state_key": "a678a5161d7c6de8aac49687854edef2f30e9cad6bb93329e6c2bf305145db07",
+            "value": 8.695407211538459,
+            "value_quality": "complete"
+          },
+          {
+            "kind": "turn_boundary",
+            "probability": 0.08333333333333333,
+            "state_key": "7494ad0ca5b256eb4119758eb16b1239d4808a2fa00309c21a1e9eb2ad344e17",
+            "value": 8.695407211538459,
+            "value_quality": "complete"
+          },
+          {
+            "kind": "turn_boundary",
+            "probability": 0.08333333333333333,
+            "state_key": "c3586f192e341d623924ad976ef391f94b4300aca4b5d378d17e6032e940fe90",
+            "value": 8.695407211538459,
+            "value_quality": "complete"
+          },
+          {
+            "kind": "turn_boundary",
+            "probability": 0.08333333333333333,
+            "state_key": "97e784a125ab517cdbc5d672bb00e73e3df66121e76836d4ad6ea83290888ce5",
+            "value": 8.695407211538459,
+            "value_quality": "complete"
+          }
+        ],
+        "preferred_action": {
+          "kind": "ability",
+          "parts": [
+            "[0,{\"type\":10},[[5,{\"appearThisTurn\":false,\"energies\":[],\"energyCards\":[],\"hp\":90,\"id\":120,\"maxHp\":90,\"playerIndex\":0,\"preEvolution\":[{\"id\":119,\"playerIndex\":0}],\"tools\":[]}]]]"
+          ]
+        },
+        "root_state_key": "2b80881d4bf2679ad0f1f1cfa38b0c9720d74dd8106f1f4bc3f878a1abe7a9fa",
+        "selected_policy": [
+          {
+            "action": {
+              "kind": "ability",
+              "parts": [
+                "[0,{\"type\":10},[[5,{\"appearThisTurn\":false,\"energies\":[],\"energyCards\":[],\"hp\":90,\"id\":120,\"maxHp\":90,\"playerIndex\":0,\"preEvolution\":[{\"id\":119,\"playerIndex\":0}],\"tools\":[]}]]]"
+              ]
+            },
+            "expected_value": 8.479686017628202,
+            "indifference_set": [
+              {
+                "kind": "ability",
+                "parts": [
+                  "[0,{\"type\":10},[[5,{\"appearThisTurn\":false,\"energies\":[],\"energyCards\":[],\"hp\":90,\"id\":120,\"maxHp\":90,\"playerIndex\":0,\"preEvolution\":[{\"id\":119,\"playerIndex\":0}],\"tools\":[]}]]]"
+                ]
+              }
+            ],
+            "state_key": "2b80881d4bf2679ad0f1f1cfa38b0c9720d74dd8106f1f4bc3f878a1abe7a9fa",
+            "value_quality": "estimated"
+          },
+          {
+            "action": {
+              "kind": "card",
+              "parts": [
+                "[0,{\"playerIndex\":0,\"type\":3},[[12,{\"id\":119,\"playerIndex\":0}]]]"
+              ]
+            },
+            "expected_value": 7.05416153846154,
+            "indifference_set": [
+              {
+                "kind": "card",
+                "parts": [
+                  "[0,{\"playerIndex\":0,\"type\":3},[[12,{\"id\":119,\"playerIndex\":0}]]]"
+                ]
+              }
+            ],
+            "state_key": "a5ee02278e8c17f91ccd2afd1b28f991358246f479f4c7fa75e771d2fbaaa163",
+            "value_quality": "complete"
+          },
+          {
+            "action": {
+              "kind": "play",
+              "parts": [
+                "[0,{\"type\":7},[[2,{\"id\":119,\"playerIndex\":0}]]]"
+              ]
+            },
+            "expected_value": 7.05416153846154,
+            "indifference_set": [
+              {
+                "kind": "play",
+                "parts": [
+                  "[0,{\"type\":7},[[2,{\"id\":119,\"playerIndex\":0}]]]"
+                ]
+              }
+            ],
+            "state_key": "0e696d7064365442dbfdeae3433563392a08994a84e58395a65c5053bfa2a16c",
+            "value_quality": "complete"
+          },
+          {
+            "action": {
+              "kind": "end",
+              "parts": [
+                "[0,{\"type\":14},[]]"
+              ]
+            },
+            "expected_value": 7.05416153846154,
+            "indifference_set": [
+              {
+                "kind": "end",
+                "parts": [
+                  "[0,{\"type\":14},[]]"
+                ]
+              }
+            ],
+            "state_key": "600aba6dcad82ad742bf3ca5222c14bf84944a11fc63de9657beee152e1852f6",
+            "value_quality": "complete"
+          },
+          {
+            "action": {
+              "kind": "card",
+              "parts": [
+                "[0,{\"playerIndex\":0,\"type\":3},[[12,{\"id\":7,\"playerIndex\":0}]]]"
+              ]
+            },
+            "expected_value": 8.379604326923076,
+            "indifference_set": [
+              {
+                "kind": "card",
+                "parts": [
+                  "[0,{\"playerIndex\":0,\"type\":3},[[12,{\"id\":7,\"playerIndex\":0}]]]"
+                ]
+              }
+            ],
+            "state_key": "15bd5cac02d4e02a5977a9fe3c971186ffdd3d9f0860b4bb031bdfa25337b116",
+            "value_quality": "complete"
+          },
+          {
+            "action": {
+              "kind": "attach",
+              "parts": [
+                "[0,{\"type\":8},[[2,{\"id\":7,\"playerIndex\":0}],[4,{\"appearThisTurn\":false,\"energies\":[],\"energyCards\":[],\"hp\":320,\"id\":121,\"maxHp\":320,\"playerIndex\":0,\"preEvolution\":[{\"id\":119,\"playerIndex\":0},{\"id\":120,\"playerIndex\":0}],\"tools\":[]}]]]"
+              ]
+            },
+            "expected_value": 8.379604326923076,
+            "indifference_set": [
+              {
+                "kind": "attach",
+                "parts": [
+                  "[0,{\"type\":8},[[2,{\"id\":7,\"playerIndex\":0}],[4,{\"appearThisTurn\":false,\"energies\":[],\"energyCards\":[],\"hp\":320,\"id\":121,\"maxHp\":320,\"playerIndex\":0,\"preEvolution\":[{\"id\":119,\"playerIndex\":0},{\"id\":120,\"playerIndex\":0}],\"tools\":[]}]]]"
+                ]
+              }
+            ],
+            "state_key": "484a95a526e1d26aa7a345107614aa443019ea956dea439e3a045d7719df00f1",
+            "value_quality": "complete"
+          },
+          {
+            "action": {
+              "kind": "attack",
+              "parts": [
+                "[0,{\"attackId\":153,\"type\":13},[]]"
+              ]
+            },
+            "expected_value": 8.379604326923076,
+            "indifference_set": [
+              {
+                "kind": "attack",
+                "parts": [
+                  "[0,{\"attackId\":153,\"type\":13},[]]"
+                ]
+              }
+            ],
+            "state_key": "e2fddefe91bf9348ff924bc68ab35d1c7a754da218f27760d9d551f1f41b50d5",
+            "value_quality": "complete"
+          },
+          {
+            "action": {
+              "kind": "card",
+              "parts": [
+                "[0,{\"playerIndex\":0,\"type\":3},[[12,{\"id\":5,\"playerIndex\":0}]]]"
+              ]
+            },
+            "expected_value": 8.695407211538459,
+            "indifference_set": [
+              {
+                "kind": "card",
+                "parts": [
+                  "[0,{\"playerIndex\":0,\"type\":3},[[12,{\"id\":5,\"playerIndex\":0}]]]"
+                ]
+              }
+            ],
+            "state_key": "5be412cfb8b5bea238f74d6ed03649a1b3d4689d9899bca96c042d0a1261adf3",
+            "value_quality": "complete"
+          },
+          {
+            "action": {
+              "kind": "attach",
+              "parts": [
+                "[0,{\"type\":8},[[2,{\"id\":5,\"playerIndex\":0}],[4,{\"appearThisTurn\":false,\"energies\":[],\"energyCards\":[],\"hp\":320,\"id\":121,\"maxHp\":320,\"playerIndex\":0,\"preEvolution\":[{\"id\":119,\"playerIndex\":0},{\"id\":120,\"playerIndex\":0}],\"tools\":[]}]]]"
+              ]
+            },
+            "expected_value": 8.695407211538459,
+            "indifference_set": [
+              {
+                "kind": "attach",
+                "parts": [
+                  "[0,{\"type\":8},[[2,{\"id\":5,\"playerIndex\":0}],[4,{\"appearThisTurn\":false,\"energies\":[],\"energyCards\":[],\"hp\":320,\"id\":121,\"maxHp\":320,\"playerIndex\":0,\"preEvolution\":[{\"id\":119,\"playerIndex\":0},{\"id\":120,\"playerIndex\":0}],\"tools\":[]}]]]"
+                ]
+              }
+            ],
+            "state_key": "bec129072dfe6c2c19252acd7adf2974bdc52064504e335b8a76767fa7bbe36d",
+            "value_quality": "complete"
+          },
+          {
+            "action": {
+              "kind": "attack",
+              "parts": [
+                "[0,{\"attackId\":153,\"type\":13},[]]"
+              ]
+            },
+            "expected_value": 8.695407211538459,
+            "indifference_set": [
+              {
+                "kind": "attack",
+                "parts": [
+                  "[0,{\"attackId\":153,\"type\":13},[]]"
+                ]
+              }
+            ],
+            "state_key": "1a89202653b7a59ec9a99bd3212912c374e30759d03e6b9b0c9e4030ae3cc2aa",
+            "value_quality": "complete"
+          },
+          {
+            "action": {
+              "kind": "card",
+              "parts": [
+                "[0,{\"playerIndex\":0,\"type\":3},[[12,{\"id\":2,\"playerIndex\":0}]]]"
+              ]
+            },
+            "expected_value": 8.695407211538459,
+            "indifference_set": [
+              {
+                "kind": "card",
+                "parts": [
+                  "[0,{\"playerIndex\":0,\"type\":3},[[12,{\"id\":2,\"playerIndex\":0}]]]"
+                ]
+              }
+            ],
+            "state_key": "e82221f5eaea89930b02589a1dba587a5ec5d7d957ce38284f1880d4025c40f2",
+            "value_quality": "complete"
+          },
+          {
+            "action": {
+              "kind": "attach",
+              "parts": [
+                "[0,{\"type\":8},[[2,{\"id\":2,\"playerIndex\":0}],[4,{\"appearThisTurn\":false,\"energies\":[],\"energyCards\":[],\"hp\":320,\"id\":121,\"maxHp\":320,\"playerIndex\":0,\"preEvolution\":[{\"id\":119,\"playerIndex\":0},{\"id\":120,\"playerIndex\":0}],\"tools\":[]}]]]"
+              ]
+            },
+            "expected_value": 8.695407211538459,
+            "indifference_set": [
+              {
+                "kind": "attach",
+                "parts": [
+                  "[0,{\"type\":8},[[2,{\"id\":2,\"playerIndex\":0}],[4,{\"appearThisTurn\":false,\"energies\":[],\"energyCards\":[],\"hp\":320,\"id\":121,\"maxHp\":320,\"playerIndex\":0,\"preEvolution\":[{\"id\":119,\"playerIndex\":0},{\"id\":120,\"playerIndex\":0}],\"tools\":[]}]]]"
+                ]
+              }
+            ],
+            "state_key": "908b49100bdefcd838edb5d7e6f1c54a88a727bed584ee04d70e01ccb2eaead2",
+            "value_quality": "complete"
+          },
+          {
+            "action": {
+              "kind": "attack",
+              "parts": [
+                "[0,{\"attackId\":153,\"type\":13},[]]"
+              ]
+            },
+            "expected_value": 8.695407211538459,
+            "indifference_set": [
+              {
+                "kind": "attack",
+                "parts": [
+                  "[0,{\"attackId\":153,\"type\":13},[]]"
+                ]
+              }
+            ],
+            "state_key": "50326f0b884e6760bb5dfa3c7f70223361457c888aafc45cab92fff1f40ed11c",
+            "value_quality": "complete"
+          },
+          {
+            "action": {
+              "kind": "card",
+              "parts": [
+                "[0,{\"playerIndex\":0,\"type\":3},[[12,{\"id\":2,\"playerIndex\":0}]]]"
+              ]
+            },
+            "expected_value": 8.695407211538459,
+            "indifference_set": [
+              {
+                "kind": "card",
+                "parts": [
+                  "[0,{\"playerIndex\":0,\"type\":3},[[12,{\"id\":2,\"playerIndex\":0}]]]"
+                ]
+              }
+            ],
+            "state_key": "7f76fd04e8d1409091315164179eb302f652549aacfc5dcd5a399f942cb817f4",
+            "value_quality": "complete"
+          },
+          {
+            "action": {
+              "kind": "attach",
+              "parts": [
+                "[0,{\"type\":8},[[2,{\"id\":2,\"playerIndex\":0}],[4,{\"appearThisTurn\":false,\"energies\":[],\"energyCards\":[],\"hp\":320,\"id\":121,\"maxHp\":320,\"playerIndex\":0,\"preEvolution\":[{\"id\":119,\"playerIndex\":0},{\"id\":120,\"playerIndex\":0}],\"tools\":[]}]]]"
+              ]
+            },
+            "expected_value": 8.695407211538459,
+            "indifference_set": [
+              {
+                "kind": "attach",
+                "parts": [
+                  "[0,{\"type\":8},[[2,{\"id\":2,\"playerIndex\":0}],[4,{\"appearThisTurn\":false,\"energies\":[],\"energyCards\":[],\"hp\":320,\"id\":121,\"maxHp\":320,\"playerIndex\":0,\"preEvolution\":[{\"id\":119,\"playerIndex\":0},{\"id\":120,\"playerIndex\":0}],\"tools\":[]}]]]"
+                ]
+              }
+            ],
+            "state_key": "64dcb5a839240e8805e6aa1647e75c8e849d098afc7b08a8a30752265aabf7cd",
+            "value_quality": "complete"
+          },
+          {
+            "action": {
+              "kind": "attack",
+              "parts": [
+                "[0,{\"attackId\":153,\"type\":13},[]]"
+              ]
+            },
+            "expected_value": 8.695407211538459,
+            "indifference_set": [
+              {
+                "kind": "attack",
+                "parts": [
+                  "[0,{\"attackId\":153,\"type\":13},[]]"
+                ]
+              }
+            ],
+            "state_key": "28cab5338a2f641615cdd33c8bcbf9d631237b60df41abd28bf35867b9a860be",
+            "value_quality": "complete"
+          },
+          {
+            "action": {
+              "kind": "card",
+              "parts": [
+                "[0,{\"playerIndex\":0,\"type\":3},[[12,{\"id\":7,\"playerIndex\":0}]]]"
+              ]
+            },
+            "expected_value": 8.379604326923076,
+            "indifference_set": [
+              {
+                "kind": "card",
+                "parts": [
+                  "[0,{\"playerIndex\":0,\"type\":3},[[12,{\"id\":7,\"playerIndex\":0}]]]"
+                ]
+              }
+            ],
+            "state_key": "644aab3f98804d1e25a30d4b764cba3f1f8363c3196b654fc23c9a82eff18f52",
+            "value_quality": "complete"
+          },
+          {
+            "action": {
+              "kind": "attach",
+              "parts": [
+                "[0,{\"type\":8},[[2,{\"id\":7,\"playerIndex\":0}],[4,{\"appearThisTurn\":false,\"energies\":[],\"energyCards\":[],\"hp\":320,\"id\":121,\"maxHp\":320,\"playerIndex\":0,\"preEvolution\":[{\"id\":119,\"playerIndex\":0},{\"id\":120,\"playerIndex\":0}],\"tools\":[]}]]]"
+              ]
+            },
+            "expected_value": 8.379604326923076,
+            "indifference_set": [
+              {
+                "kind": "attach",
+                "parts": [
+                  "[0,{\"type\":8},[[2,{\"id\":7,\"playerIndex\":0}],[4,{\"appearThisTurn\":false,\"energies\":[],\"energyCards\":[],\"hp\":320,\"id\":121,\"maxHp\":320,\"playerIndex\":0,\"preEvolution\":[{\"id\":119,\"playerIndex\":0},{\"id\":120,\"playerIndex\":0}],\"tools\":[]}]]]"
+                ]
+              }
+            ],
+            "state_key": "a9946961d51d703535c864409df9db70eac1d5c3f6451736363eb2e213994494",
+            "value_quality": "complete"
+          },
+          {
+            "action": {
+              "kind": "attack",
+              "parts": [
+                "[0,{\"attackId\":153,\"type\":13},[]]"
+              ]
+            },
+            "expected_value": 8.379604326923076,
+            "indifference_set": [
+              {
+                "kind": "attack",
+                "parts": [
+                  "[0,{\"attackId\":153,\"type\":13},[]]"
+                ]
+              }
+            ],
+            "state_key": "521b514289d97151727249fac7f7e2f7b9bc97c53541a089ee3b48591f7bf267",
+            "value_quality": "complete"
+          },
+          {
+            "action": {
+              "kind": "card",
+              "parts": [
+                "[0,{\"playerIndex\":0,\"type\":3},[[12,{\"id\":5,\"playerIndex\":0}]]]"
+              ]
+            },
+            "expected_value": 8.695407211538459,
+            "indifference_set": [
+              {
+                "kind": "card",
+                "parts": [
+                  "[0,{\"playerIndex\":0,\"type\":3},[[12,{\"id\":5,\"playerIndex\":0}]]]"
+                ]
+              }
+            ],
+            "state_key": "93e6346ef5658dc99894b013ef3e87a553ae2017102a243e4ca33f692911880f",
+            "value_quality": "complete"
+          },
+          {
+            "action": {
+              "kind": "attach",
+              "parts": [
+                "[0,{\"type\":8},[[2,{\"id\":5,\"playerIndex\":0}],[4,{\"appearThisTurn\":false,\"energies\":[],\"energyCards\":[],\"hp\":320,\"id\":121,\"maxHp\":320,\"playerIndex\":0,\"preEvolution\":[{\"id\":119,\"playerIndex\":0},{\"id\":120,\"playerIndex\":0}],\"tools\":[]}]]]"
+              ]
+            },
+            "expected_value": 8.695407211538459,
+            "indifference_set": [
+              {
+                "kind": "attach",
+                "parts": [
+                  "[0,{\"type\":8},[[2,{\"id\":5,\"playerIndex\":0}],[4,{\"appearThisTurn\":false,\"energies\":[],\"energyCards\":[],\"hp\":320,\"id\":121,\"maxHp\":320,\"playerIndex\":0,\"preEvolution\":[{\"id\":119,\"playerIndex\":0},{\"id\":120,\"playerIndex\":0}],\"tools\":[]}]]]"
+                ]
+              }
+            ],
+            "state_key": "26d193fb3ee8131f9d6b1232cdf34bc503ef1b2b2f5fdd001fcae652b8a056d0",
+            "value_quality": "complete"
+          },
+          {
+            "action": {
+              "kind": "attack",
+              "parts": [
+                "[0,{\"attackId\":153,\"type\":13},[]]"
+              ]
+            },
+            "expected_value": 8.695407211538459,
+            "indifference_set": [
+              {
+                "kind": "attack",
+                "parts": [
+                  "[0,{\"attackId\":153,\"type\":13},[]]"
+                ]
+              }
+            ],
+            "state_key": "cb8153c9778912554faff42474f708d3a5c963f9f71d50a5ff52946d44fd006f",
+            "value_quality": "complete"
+          },
+          {
+            "action": {
+              "kind": "card",
+              "parts": [
+                "[0,{\"playerIndex\":0,\"type\":3},[[12,{\"id\":5,\"playerIndex\":0}]]]"
+              ]
+            },
+            "expected_value": 8.695407211538459,
+            "indifference_set": [
+              {
+                "kind": "card",
+                "parts": [
+                  "[0,{\"playerIndex\":0,\"type\":3},[[12,{\"id\":5,\"playerIndex\":0}]]]"
+                ]
+              }
+            ],
+            "state_key": "46c1bec92753819a36d050304564cbb0c1bd0be154a8830c1686df82dfce4ff7",
+            "value_quality": "complete"
+          },
+          {
+            "action": {
+              "kind": "attach",
+              "parts": [
+                "[0,{\"type\":8},[[2,{\"id\":5,\"playerIndex\":0}],[4,{\"appearThisTurn\":false,\"energies\":[],\"energyCards\":[],\"hp\":320,\"id\":121,\"maxHp\":320,\"playerIndex\":0,\"preEvolution\":[{\"id\":119,\"playerIndex\":0},{\"id\":120,\"playerIndex\":0}],\"tools\":[]}]]]"
+              ]
+            },
+            "expected_value": 8.695407211538459,
+            "indifference_set": [
+              {
+                "kind": "attach",
+                "parts": [
+                  "[0,{\"type\":8},[[2,{\"id\":5,\"playerIndex\":0}],[4,{\"appearThisTurn\":false,\"energies\":[],\"energyCards\":[],\"hp\":320,\"id\":121,\"maxHp\":320,\"playerIndex\":0,\"preEvolution\":[{\"id\":119,\"playerIndex\":0},{\"id\":120,\"playerIndex\":0}],\"tools\":[]}]]]"
+                ]
+              }
+            ],
+            "state_key": "701ef1f84706675d3e316eba0022cf3904a2aa31233cb16b2f7f2576805ea224",
+            "value_quality": "complete"
+          },
+          {
+            "action": {
+              "kind": "attack",
+              "parts": [
+                "[0,{\"attackId\":153,\"type\":13},[]]"
+              ]
+            },
+            "expected_value": 8.695407211538459,
+            "indifference_set": [
+              {
+                "kind": "attack",
+                "parts": [
+                  "[0,{\"attackId\":153,\"type\":13},[]]"
+                ]
+              }
+            ],
+            "state_key": "7a40455d5c246265f09e57d6ca1e189658c3e0ce1775fc252d3edb4fe2006373",
+            "value_quality": "complete"
+          },
+          {
+            "action": {
+              "kind": "card",
+              "parts": [
+                "[0,{\"playerIndex\":0,\"type\":3},[[12,{\"id\":5,\"playerIndex\":0}]]]"
+              ]
+            },
+            "expected_value": 8.695407211538459,
+            "indifference_set": [
+              {
+                "kind": "card",
+                "parts": [
+                  "[0,{\"playerIndex\":0,\"type\":3},[[12,{\"id\":5,\"playerIndex\":0}]]]"
+                ]
+              }
+            ],
+            "state_key": "0d200becf0462513863fc7c267246018760081866a624967083499712aa6b0c6",
+            "value_quality": "complete"
+          },
+          {
+            "action": {
+              "kind": "attach",
+              "parts": [
+                "[0,{\"type\":8},[[2,{\"id\":5,\"playerIndex\":0}],[4,{\"appearThisTurn\":false,\"energies\":[],\"energyCards\":[],\"hp\":320,\"id\":121,\"maxHp\":320,\"playerIndex\":0,\"preEvolution\":[{\"id\":119,\"playerIndex\":0},{\"id\":120,\"playerIndex\":0}],\"tools\":[]}]]]"
+              ]
+            },
+            "expected_value": 8.695407211538459,
+            "indifference_set": [
+              {
+                "kind": "attach",
+                "parts": [
+                  "[0,{\"type\":8},[[2,{\"id\":5,\"playerIndex\":0}],[4,{\"appearThisTurn\":false,\"energies\":[],\"energyCards\":[],\"hp\":320,\"id\":121,\"maxHp\":320,\"playerIndex\":0,\"preEvolution\":[{\"id\":119,\"playerIndex\":0},{\"id\":120,\"playerIndex\":0}],\"tools\":[]}]]]"
+                ]
+              }
+            ],
+            "state_key": "d5dbcf71636be2980c947c7a692685b5a6826451fdc70868a2fc1701b875eb02",
+            "value_quality": "complete"
+          },
+          {
+            "action": {
+              "kind": "attack",
+              "parts": [
+                "[0,{\"attackId\":153,\"type\":13},[]]"
+              ]
+            },
+            "expected_value": 8.695407211538459,
+            "indifference_set": [
+              {
+                "kind": "attack",
+                "parts": [
+                  "[0,{\"attackId\":153,\"type\":13},[]]"
+                ]
+              }
+            ],
+            "state_key": "b94878e76c100498d8313980efd9de0e4e5fd5f545aefab633ae38e9118bfff4",
+            "value_quality": "complete"
+          },
+          {
+            "action": {
+              "kind": "card",
+              "parts": [
+                "[0,{\"playerIndex\":0,\"type\":3},[[12,{\"id\":2,\"playerIndex\":0}]]]"
+              ]
+            },
+            "expected_value": 8.695407211538459,
+            "indifference_set": [
+              {
+                "kind": "card",
+                "parts": [
+                  "[0,{\"playerIndex\":0,\"type\":3},[[12,{\"id\":2,\"playerIndex\":0}]]]"
+                ]
+              }
+            ],
+            "state_key": "6bea61cb481300712ff9d5ac58b3257dbd9d85adb41eb0bb45c913b82da64197",
+            "value_quality": "complete"
+          },
+          {
+            "action": {
+              "kind": "attach",
+              "parts": [
+                "[0,{\"type\":8},[[2,{\"id\":2,\"playerIndex\":0}],[4,{\"appearThisTurn\":false,\"energies\":[],\"energyCards\":[],\"hp\":320,\"id\":121,\"maxHp\":320,\"playerIndex\":0,\"preEvolution\":[{\"id\":119,\"playerIndex\":0},{\"id\":120,\"playerIndex\":0}],\"tools\":[]}]]]"
+              ]
+            },
+            "expected_value": 8.695407211538459,
+            "indifference_set": [
+              {
+                "kind": "attach",
+                "parts": [
+                  "[0,{\"type\":8},[[2,{\"id\":2,\"playerIndex\":0}],[4,{\"appearThisTurn\":false,\"energies\":[],\"energyCards\":[],\"hp\":320,\"id\":121,\"maxHp\":320,\"playerIndex\":0,\"preEvolution\":[{\"id\":119,\"playerIndex\":0},{\"id\":120,\"playerIndex\":0}],\"tools\":[]}]]]"
+                ]
+              }
+            ],
+            "state_key": "28482d9b0c2dea19e70d7106d37b8de04297259ce0d5b26443b8f971b88a9776",
+            "value_quality": "complete"
+          },
+          {
+            "action": {
+              "kind": "attack",
+              "parts": [
+                "[0,{\"attackId\":153,\"type\":13},[]]"
+              ]
+            },
+            "expected_value": 8.695407211538459,
+            "indifference_set": [
+              {
+                "kind": "attack",
+                "parts": [
+                  "[0,{\"attackId\":153,\"type\":13},[]]"
+                ]
+              }
+            ],
+            "state_key": "1880eb5eb5bb2792f4227dbea43a3aa0e0adc667051e2f5078713f4afa727bd0",
+            "value_quality": "complete"
+          },
+          {
+            "action": {
+              "kind": "card",
+              "parts": [
+                "[0,{\"playerIndex\":0,\"type\":3},[[12,{\"id\":5,\"playerIndex\":0}]]]"
+              ]
+            },
+            "expected_value": 8.695407211538459,
+            "indifference_set": [
+              {
+                "kind": "card",
+                "parts": [
+                  "[0,{\"playerIndex\":0,\"type\":3},[[12,{\"id\":2,\"playerIndex\":0}]]]"
+                ]
+              },
+              {
+                "kind": "card",
+                "parts": [
+                  "[0,{\"playerIndex\":0,\"type\":3},[[12,{\"id\":5,\"playerIndex\":0}]]]"
+                ]
+              }
+            ],
+            "state_key": "a90889747c23cb2d50cda454b82c0317613096959b9c1d2225ce03bf335000ef",
+            "value_quality": "complete"
+          },
+          {
+            "action": {
+              "kind": "attach",
+              "parts": [
+                "[0,{\"type\":8},[[2,{\"id\":5,\"playerIndex\":0}],[4,{\"appearThisTurn\":false,\"energies\":[],\"energyCards\":[],\"hp\":320,\"id\":121,\"maxHp\":320,\"playerIndex\":0,\"preEvolution\":[{\"id\":119,\"playerIndex\":0},{\"id\":120,\"playerIndex\":0}],\"tools\":[]}]]]"
+              ]
+            },
+            "expected_value": 8.695407211538459,
+            "indifference_set": [
+              {
+                "kind": "attach",
+                "parts": [
+                  "[0,{\"type\":8},[[2,{\"id\":5,\"playerIndex\":0}],[4,{\"appearThisTurn\":false,\"energies\":[],\"energyCards\":[],\"hp\":320,\"id\":121,\"maxHp\":320,\"playerIndex\":0,\"preEvolution\":[{\"id\":119,\"playerIndex\":0},{\"id\":120,\"playerIndex\":0}],\"tools\":[]}]]]"
+                ]
+              }
+            ],
+            "state_key": "f69cbe3a4d9185bd3b5c2e2681503ed73103520a6a758191fc63272b6d7b8b3f",
+            "value_quality": "complete"
+          },
+          {
+            "action": {
+              "kind": "attack",
+              "parts": [
+                "[0,{\"attackId\":153,\"type\":13},[]]"
+              ]
+            },
+            "expected_value": 8.695407211538459,
+            "indifference_set": [
+              {
+                "kind": "attack",
+                "parts": [
+                  "[0,{\"attackId\":153,\"type\":13},[]]"
+                ]
+              }
+            ],
+            "state_key": "0581a45f7ef299faaea882a789621a97a9cebdbd90b0c909ec1aa5f88f65522b",
+            "value_quality": "complete"
+          }
+        ]
+      }
+    },
+    {
+      "root_id": "dragapult-tactical",
+      "reference_target_id": "b801674e64d9ecc959b1de4eadc35506ebe1582228758a432d4b100cff4b855c",
+      "elapsed_seconds": [
+        7.780999999959022,
+        7.843000000109896,
+        8.171000000089407
+      ],
+      "work": {
+        "nodes_visited": 1985,
+        "leaf_evaluations": 1190,
+        "chance_nodes": 123,
+        "chance_branches": 1206,
+        "memo_entries": 1985,
+        "cycles": 0
+      },
+      "reference_target": {
+        "best_full_sequence": [
+          {
+            "kind": "attack",
+            "parts": [
+              "[0,{\"attackId\":153,\"type\":13},[]]"
+            ]
+          }
+        ],
+        "leaves": [
+          {
+            "kind": "turn_boundary",
+            "probability": 1,
+            "state_key": "5a83cdd20e0f7f871f98133e4e0fc7bb08dcc4fc0714be57c7f9a7e9bf63d566",
+            "value": 116.77031918750002,
+            "value_quality": "complete"
+          }
+        ],
+        "preferred_action": {
+          "kind": "attack",
+          "parts": [
+            "[0,{\"attackId\":153,\"type\":13},[]]"
+          ]
+        },
+        "root_state_key": "357d733294a9c98ec3e9cfb9c98e80ac2cac1fb5aa2a4c05a802cf86fbc60657",
+        "selected_policy": [
+          {
+            "action": {
+              "kind": "attack",
+              "parts": [
+                "[0,{\"attackId\":153,\"type\":13},[]]"
+              ]
+            },
+            "expected_value": 116.77031918750002,
+            "indifference_set": [
+              {
+                "kind": "attack",
+                "parts": [
+                  "[0,{\"attackId\":153,\"type\":13},[]]"
+                ]
+              }
+            ],
+            "state_key": "357d733294a9c98ec3e9cfb9c98e80ac2cac1fb5aa2a4c05a802cf86fbc60657",
+            "value_quality": "estimated"
+          }
+        ]
+      }
+    },
+    {
+      "root_id": "lucario-opening",
+      "reference_target_id": "c4597da2b1a9b3568349f583bc9390c66099fb6add8ad3a0e0051cc7e7497257",
+      "elapsed_seconds": [
+        0.23500000010244548,
+        0.2190000000409782,
+        0.21899999980814755
+      ],
+      "work": {
+        "nodes_visited": 53,
+        "leaf_evaluations": 40,
+        "chance_nodes": 6,
+        "chance_branches": 72,
+        "memo_entries": 53,
+        "cycles": 0
+      },
+      "reference_target": {
+        "best_full_sequence": null,
+        "leaves": [
+          {
+            "kind": "terminal",
+            "probability": 0.08333333333333333,
+            "state_key": "1365c9f7026dec0b0da23d34ec422b2f5cdf402024cad4a27dbf64a93be5c9ec",
+            "value": 112.43564090909092,
+            "value_quality": "complete"
+          },
+          {
+            "kind": "terminal",
+            "probability": 0.16666666666666666,
+            "state_key": "2a26f9a09ea8d49a03856d953052e8fc1df35099566f00005572861ca84e8a9d",
+            "value": 112.7719590909091,
+            "value_quality": "complete"
+          },
+          {
+            "kind": "terminal",
+            "probability": 0.08333333333333333,
+            "state_key": "2918f826611d74e370b891cb8971c218200b29ec274f5b1bd98efb9bb30605de",
+            "value": 112.80761363636366,
+            "value_quality": "complete"
+          },
+          {
+            "kind": "terminal",
+            "probability": 0.08333333333333333,
+            "state_key": "73221f441652c9900f59b25a2dc7953817b9bc097638e16c89f0f211a3451ec0",
+            "value": 112.4518681818182,
+            "value_quality": "complete"
+          },
+          {
+            "kind": "terminal",
+            "probability": 0.08333333333333333,
+            "state_key": "1eb8e1134608d6e2ea3875317be96af5f5dce3aca3332f97d3f5405b78720b50",
+            "value": 112.27000454545455,
+            "value_quality": "complete"
+          },
+          {
+            "kind": "terminal",
+            "probability": 0.08333333333333333,
+            "state_key": "6fb76cdcad69700c878a039f8a5c7857d038f60531d43518a9810d9f3503b1fb",
+            "value": 112.4518681818182,
+            "value_quality": "complete"
+          },
+          {
+            "kind": "terminal",
+            "probability": 0.08333333333333333,
+            "state_key": "064cb5f5a80339c65d7fc81d73a2d38b1b71cf84a972ec68f9066ef50751b5f8",
+            "value": 112.3594653409091,
+            "value_quality": "complete"
+          },
+          {
+            "kind": "terminal",
+            "probability": 0.08333333333333333,
+            "state_key": "1fcb482998d35588d0882704a716ebc12171228f790492213859abb67073eb2c",
+            "value": 112.29518636363638,
+            "value_quality": "complete"
+          },
+          {
+            "kind": "terminal",
+            "probability": 0.08333333333333333,
+            "state_key": "a6efb6d72354fd4094cc072a2fd7626c079eceaf769cd84c065525d7b9adae6a",
+            "value": 112.30214090909092,
+            "value_quality": "complete"
+          },
+          {
+            "kind": "terminal",
+            "probability": 0.08333333333333333,
+            "state_key": "5d786ed204adda96c3327eb85568d1ed119fd757f8d855415b60807317f760c0",
+            "value": 112.3594653409091,
+            "value_quality": "complete"
+          },
+          {
+            "kind": "terminal",
+            "probability": 0.08333333333333333,
+            "state_key": "42b113555c2348a5b137a35e37a101b34af82b5a7da4b4c3ab758d8254b942aa",
+            "value": 112.7719590909091,
+            "value_quality": "complete"
+          }
+        ],
+        "preferred_action": {
+          "kind": "evolve",
+          "parts": [
+            "[0,{\"type\":9},[[2,{\"id\":678,\"playerIndex\":0}],[4,{\"appearThisTurn\":false,\"energies\":[],\"energyCards\":[],\"hp\":80,\"id\":677,\"maxHp\":80,\"playerIndex\":0,\"preEvolution\":[],\"tools\":[]}]]]"
+          ]
+        },
+        "root_state_key": "97b47fe10b6dc8a22cfcdd27556137b540fe7b6ca0f84ff2ffb6ad5a1968efe4",
+        "selected_policy": [
+          {
+            "action": {
+              "kind": "evolve",
+              "parts": [
+                "[0,{\"type\":9},[[2,{\"id\":678,\"playerIndex\":0}],[4,{\"appearThisTurn\":false,\"energies\":[],\"energyCards\":[],\"hp\":80,\"id\":677,\"maxHp\":80,\"playerIndex\":0,\"preEvolution\":[],\"tools\":[]}]]]"
+              ]
+            },
+            "expected_value": 112.50409422348486,
+            "indifference_set": [
+              {
+                "kind": "attach",
+                "parts": [
+                  "[0,{\"type\":8},[[2,{\"id\":6,\"playerIndex\":0}],[4,{\"appearThisTurn\":false,\"energies\":[],\"energyCards\":[],\"hp\":80,\"id\":677,\"maxHp\":80,\"playerIndex\":0,\"preEvolution\":[],\"tools\":[]}]]]"
+                ]
+              },
+              {
+                "kind": "evolve",
+                "parts": [
+                  "[0,{\"type\":9},[[2,{\"id\":678,\"playerIndex\":0}],[4,{\"appearThisTurn\":false,\"energies\":[],\"energyCards\":[],\"hp\":80,\"id\":677,\"maxHp\":80,\"playerIndex\":0,\"preEvolution\":[],\"tools\":[]}]]]"
+                ]
+              }
+            ],
+            "state_key": "97b47fe10b6dc8a22cfcdd27556137b540fe7b6ca0f84ff2ffb6ad5a1968efe4",
+            "value_quality": "estimated"
+          },
+          {
+            "action": {
+              "kind": "attach",
+              "parts": [
+                "[0,{\"type\":8},[[2,{\"id\":6,\"playerIndex\":0}],[4,{\"appearThisTurn\":true,\"energies\":[],\"energyCards\":[],\"hp\":340,\"id\":678,\"maxHp\":340,\"playerIndex\":0,\"preEvolution\":[{\"id\":677,\"playerIndex\":0}],\"tools\":[]}]]]"
+              ]
+            },
+            "expected_value": 112.50409422348486,
+            "indifference_set": [
+              {
+                "kind": "attach",
+                "parts": [
+                  "[0,{\"type\":8},[[2,{\"id\":6,\"playerIndex\":0}],[4,{\"appearThisTurn\":true,\"energies\":[],\"energyCards\":[],\"hp\":340,\"id\":678,\"maxHp\":340,\"playerIndex\":0,\"preEvolution\":[{\"id\":677,\"playerIndex\":0}],\"tools\":[]}]]]"
+                ]
+              }
+            ],
+            "state_key": "46bcbb14a06f991ee25871e7835a87034b308717784a67cb7b03fb5caedb76de",
+            "value_quality": "estimated"
+          },
+          {
+            "action": {
+              "kind": "attack",
+              "parts": [
+                "[0,{\"attackId\":982,\"type\":13},[]]"
+              ]
+            },
+            "expected_value": 112.50409422348486,
+            "indifference_set": [
+              {
+                "kind": "attack",
+                "parts": [
+                  "[0,{\"attackId\":982,\"type\":13},[]]"
+                ]
+              }
+            ],
+            "state_key": "a7325c3dd0ced068f9bda19408648932587153b31a5af5f55bf1b55c0abeddc8",
+            "value_quality": "estimated"
+          },
+          {
+            "action": {
+              "kind": "card",
+              "parts": [
+                "[{\"area\":6,\"index\":2,\"playerIndex\":0,\"type\":3},[]]"
+              ]
+            },
+            "expected_value": 112.50409422348486,
+            "indifference_set": [
+              {
+                "kind": "card",
+                "parts": [
+                  "[{\"area\":6,\"index\":2,\"playerIndex\":0,\"type\":3},[]]"
+                ]
+              }
+            ],
+            "state_key": "bca6b9d08b161ae007861b9fe45bad9da0de3148d7029df939db50b765643ffb",
+            "value_quality": "estimated"
+          }
+        ]
+      }
+    },
+    {
+      "root_id": "lucario-search",
+      "reference_target_id": "c52a91b8a569566a737e21c4c80fa8be915b21fa22f88c83a3bd7a485be379e4",
+      "elapsed_seconds": [
+        0.5940000000409782,
+        0.5940000000409782,
+        0.6410000000614673
+      ],
+      "work": {
+        "nodes_visited": 222,
+        "leaf_evaluations": 108,
+        "chance_nodes": 5,
+        "chance_branches": 60,
+        "memo_entries": 222,
+        "cycles": 0
+      },
+      "reference_target": {
+        "best_full_sequence": [
+          {
+            "kind": "attach",
+            "parts": [
+              "[0,{\"type\":8},[[2,{\"id\":6,\"playerIndex\":0}],[4,{\"appearThisTurn\":false,\"energies\":[],\"energyCards\":[],\"hp\":80,\"id\":677,\"maxHp\":80,\"playerIndex\":0,\"preEvolution\":[],\"tools\":[]}]]]"
+            ]
+          },
+          {
+            "kind": "attack",
+            "parts": [
+              "[0,{\"attackId\":981,\"type\":13},[]]"
+            ]
+          }
+        ],
+        "leaves": [
+          {
+            "kind": "turn_boundary",
+            "probability": 1,
+            "state_key": "87d09c94ffa678c909364247ef8d60105c2a596b9e7af3ab9ffff57ef1de83ab",
+            "value": 7.802123792016808,
+            "value_quality": "complete"
+          }
+        ],
+        "preferred_action": {
+          "kind": "attach",
+          "parts": [
+            "[0,{\"type\":8},[[2,{\"id\":6,\"playerIndex\":0}],[4,{\"appearThisTurn\":false,\"energies\":[],\"energyCards\":[],\"hp\":80,\"id\":677,\"maxHp\":80,\"playerIndex\":0,\"preEvolution\":[],\"tools\":[]}]]]"
+          ]
+        },
+        "root_state_key": "d8c90864cb6b998c861c060d9dae3242338afbc046c1b1fb1920057684daec3f",
+        "selected_policy": [
+          {
+            "action": {
+              "kind": "attach",
+              "parts": [
+                "[0,{\"type\":8},[[2,{\"id\":6,\"playerIndex\":0}],[4,{\"appearThisTurn\":false,\"energies\":[],\"energyCards\":[],\"hp\":80,\"id\":677,\"maxHp\":80,\"playerIndex\":0,\"preEvolution\":[],\"tools\":[]}]]]"
+              ]
+            },
+            "expected_value": 7.802123792016808,
+            "indifference_set": [
+              {
+                "kind": "attach",
+                "parts": [
+                  "[0,{\"type\":8},[[2,{\"id\":6,\"playerIndex\":0}],[4,{\"appearThisTurn\":false,\"energies\":[],\"energyCards\":[],\"hp\":80,\"id\":677,\"maxHp\":80,\"playerIndex\":0,\"preEvolution\":[],\"tools\":[]}]]]"
+                ]
+              }
+            ],
+            "state_key": "d8c90864cb6b998c861c060d9dae3242338afbc046c1b1fb1920057684daec3f",
+            "value_quality": "estimated"
+          },
+          {
+            "action": {
+              "kind": "attack",
+              "parts": [
+                "[0,{\"attackId\":981,\"type\":13},[]]"
+              ]
+            },
+            "expected_value": 7.802123792016808,
+            "indifference_set": [
+              {
+                "kind": "attack",
+                "parts": [
+                  "[0,{\"attackId\":981,\"type\":13},[]]"
+                ]
+              }
+            ],
+            "state_key": "b46654bf1a13239c3ed396479630530d509022ce028503813cbfe7a25b4d2bc4",
+            "value_quality": "complete"
+          }
+        ]
+      }
+    },
+    {
+      "root_id": "lucario-tactical",
+      "reference_target_id": "5dc3baa2d2deb44157a82e0fa2244ac0a176a9a30395ac81b25cd991d6f0a7fe",
+      "elapsed_seconds": [
+        0.2970000000204891,
+        0.2970000000204891,
+        0.2970000000204891
+      ],
+      "work": {
+        "nodes_visited": 76,
+        "leaf_evaluations": 55,
+        "chance_nodes": 5,
+        "chance_branches": 60,
+        "memo_entries": 76,
+        "cycles": 0
+      },
+      "reference_target": {
+        "best_full_sequence": [
+          {
+            "kind": "attack",
+            "parts": [
+              "[0,{\"attackId\":982,\"type\":13},[]]"
+            ]
+          }
+        ],
+        "leaves": [
+          {
+            "kind": "turn_boundary",
+            "probability": 1,
+            "state_key": "4ebfecd1da8a6f346e23215e34b28e1e9ba079d1416ace8819e84c8d047e25e1",
+            "value": 119.58595165556792,
+            "value_quality": "complete"
+          }
+        ],
+        "preferred_action": {
+          "kind": "attack",
+          "parts": [
+            "[0,{\"attackId\":982,\"type\":13},[]]"
+          ]
+        },
+        "root_state_key": "1de1357caed858e35093fd20c9cb60f5975eea5f5133d05aaf6c474161e59744",
+        "selected_policy": [
+          {
+            "action": {
+              "kind": "attack",
+              "parts": [
+                "[0,{\"attackId\":982,\"type\":13},[]]"
+              ]
+            },
+            "expected_value": 119.58595165556792,
+            "indifference_set": [
+              {
+                "kind": "attack",
+                "parts": [
+                  "[0,{\"attackId\":982,\"type\":13},[]]"
+                ]
+              }
+            ],
+            "state_key": "1de1357caed858e35093fd20c9cb60f5975eea5f5133d05aaf6c474161e59744",
+            "value_quality": "estimated"
+          }
+        ]
+      }
+    },
+    {
+      "root_id": "starmie-opening",
+      "reference_target_id": "5c48dea944b5fa256cf7baa87e63e181be0b084c855ebb9bf49ab94f7f1b2436",
+      "elapsed_seconds": [
+        0.2660000000614673,
+        0.2660000000614673,
+        0.28199999989010394
+      ],
+      "work": {
+        "nodes_visited": 74,
+        "leaf_evaluations": 51,
+        "chance_nodes": 6,
+        "chance_branches": 72,
+        "memo_entries": 74,
+        "cycles": 0
+      },
+      "reference_target": {
+        "best_full_sequence": null,
+        "leaves": [
+          {
+            "kind": "terminal",
+            "probability": 0.16666666666666666,
+            "state_key": "f860065ddf36b52e1153c8bf8286a24f2dd0c3c596036efe2ebfee05a24dcc52",
+            "value": 112.55388863636365,
+            "value_quality": "complete"
+          },
+          {
+            "kind": "terminal",
+            "probability": 0.08333333333333333,
+            "state_key": "edbe708204055c8fef86f0540ff917492cd90a2003f4be059f44a7ae9205bd5a",
+            "value": 112.77634318181819,
+            "value_quality": "complete"
+          },
+          {
+            "kind": "terminal",
+            "probability": 0.08333333333333333,
+            "state_key": "a9f903f34e64882918e3325765518a3d6f0d6ff373f7ef5c48bb7d49d921c6b7",
+            "value": 112.40317840909093,
+            "value_quality": "complete"
+          },
+          {
+            "kind": "terminal",
+            "probability": 0.08333333333333333,
+            "state_key": "ee0becac5df12595bb617543082a076dde9ca6d97900c7da832db613d45b4c44",
+            "value": 112.88288863636365,
+            "value_quality": "complete"
+          },
+          {
+            "kind": "terminal",
+            "probability": 0.16666666666666666,
+            "state_key": "621353d9bb1379c7ddde50f63e32445def7212571270d645b142a8b7287089a7",
+            "value": 112.88288863636365,
+            "value_quality": "complete"
+          },
+          {
+            "kind": "terminal",
+            "probability": 0.08333333333333333,
+            "state_key": "047d6e79de1f5bd40aceb6d986b90fb1745b38bab01958c0dd10c5a9c520aaff",
+            "value": 112.77634318181819,
+            "value_quality": "complete"
+          },
+          {
+            "kind": "terminal",
+            "probability": 0.08333333333333333,
+            "state_key": "736f0d0f69f840236f1073bd713c5e9b82387015215ee6941e9365cc4f672bc8",
+            "value": 112.38093409090911,
+            "value_quality": "complete"
+          },
+          {
+            "kind": "terminal",
+            "probability": 0.08333333333333333,
+            "state_key": "f083a3e7dd818f9200e157af2df5838b16f0ce38fa152fe78520dba42cfcad4b",
+            "value": 112.6754340909091,
+            "value_quality": "complete"
+          },
+          {
+            "kind": "terminal",
+            "probability": 0.08333333333333333,
+            "state_key": "95b7ee5e9f19cd1a3f42a3f5cf746ea8a4d19ed2a7706076241d345ceeaa17f7",
+            "value": 112.95616136363638,
+            "value_quality": "complete"
+          },
+          {
+            "kind": "terminal",
+            "probability": 0.08333333333333333,
+            "state_key": "bdf4364227116c82a8fc8df6d21d5f74fadc031d433c6b00ac9ef855417ba24b",
+            "value": 112.26511590909092,
+            "value_quality": "complete"
+          }
+        ],
+        "preferred_action": {
+          "kind": "evolve",
+          "parts": [
+            "[0,{\"type\":9},[[2,{\"id\":1031,\"playerIndex\":0}],[4,{\"appearThisTurn\":false,\"energies\":[],\"energyCards\":[],\"hp\":70,\"id\":1030,\"maxHp\":70,\"playerIndex\":0,\"preEvolution\":[],\"tools\":[]}]]]"
+          ]
+        },
+        "root_state_key": "50554914d6c88a537726fe1ecc8eacf390be2d6ba4b0028b66effbc117597d75",
+        "selected_policy": [
+          {
+            "action": {
+              "kind": "evolve",
+              "parts": [
+                "[0,{\"type\":9},[[2,{\"id\":1031,\"playerIndex\":0}],[4,{\"appearThisTurn\":false,\"energies\":[],\"energyCards\":[],\"hp\":70,\"id\":1030,\"maxHp\":70,\"playerIndex\":0,\"preEvolution\":[],\"tools\":[]}]]]"
+              ]
+            },
+            "expected_value": 112.66582945075758,
+            "indifference_set": [
+              {
+                "kind": "attach",
+                "parts": [
+                  "[0,{\"type\":8},[[2,{\"id\":3,\"playerIndex\":0}],[4,{\"appearThisTurn\":false,\"energies\":[],\"energyCards\":[],\"hp\":70,\"id\":1030,\"maxHp\":70,\"playerIndex\":0,\"preEvolution\":[],\"tools\":[]}]]]"
+                ]
+              },
+              {
+                "kind": "evolve",
+                "parts": [
+                  "[0,{\"type\":9},[[2,{\"id\":1031,\"playerIndex\":0}],[4,{\"appearThisTurn\":false,\"energies\":[],\"energyCards\":[],\"hp\":70,\"id\":1030,\"maxHp\":70,\"playerIndex\":0,\"preEvolution\":[],\"tools\":[]}]]]"
+                ]
+              }
+            ],
+            "state_key": "50554914d6c88a537726fe1ecc8eacf390be2d6ba4b0028b66effbc117597d75",
+            "value_quality": "estimated"
+          },
+          {
+            "action": {
+              "kind": "attach",
+              "parts": [
+                "[0,{\"type\":8},[[2,{\"id\":3,\"playerIndex\":0}],[4,{\"appearThisTurn\":true,\"energies\":[],\"energyCards\":[],\"hp\":330,\"id\":1031,\"maxHp\":330,\"playerIndex\":0,\"preEvolution\":[{\"id\":1030,\"playerIndex\":0}],\"tools\":[]}]]]"
+              ]
+            },
+            "expected_value": 112.66582945075758,
+            "indifference_set": [
+              {
+                "kind": "attach",
+                "parts": [
+                  "[0,{\"type\":8},[[2,{\"id\":3,\"playerIndex\":0}],[4,{\"appearThisTurn\":true,\"energies\":[],\"energyCards\":[],\"hp\":330,\"id\":1031,\"maxHp\":330,\"playerIndex\":0,\"preEvolution\":[{\"id\":1030,\"playerIndex\":0}],\"tools\":[]}]]]"
+                ]
+              }
+            ],
+            "state_key": "3ae87cf4cca0a6a77ca450881f9a518a393842babf841caf73f3c2d9c05d6a25",
+            "value_quality": "estimated"
+          },
+          {
+            "action": {
+              "kind": "attack",
+              "parts": [
+                "[0,{\"attackId\":1487,\"type\":13},[]]"
+              ]
+            },
+            "expected_value": 112.66582945075758,
+            "indifference_set": [
+              {
+                "kind": "attack",
+                "parts": [
+                  "[0,{\"attackId\":1487,\"type\":13},[]]"
+                ]
+              }
+            ],
+            "state_key": "74229b46223079bc6cd584df7418efc0d6915b794d44d21ddd287ea2446616c4",
+            "value_quality": "estimated"
+          },
+          {
+            "action": {
+              "kind": "card",
+              "parts": [
+                "[{\"area\":6,\"index\":2,\"playerIndex\":0,\"type\":3},[]]"
+              ]
+            },
+            "expected_value": 112.66582945075758,
+            "indifference_set": [
+              {
+                "kind": "card",
+                "parts": [
+                  "[{\"area\":6,\"index\":2,\"playerIndex\":0,\"type\":3},[]]"
+                ]
+              }
+            ],
+            "state_key": "b1baaf393e012893f250d88b555307438ca31d8966d2170b1e46ec3070aade46",
+            "value_quality": "estimated"
+          }
+        ]
+      }
+    },
+    {
+      "root_id": "starmie-search",
+      "reference_target_id": "6f43339160952988355f98cac3e4980dadad6453f4411e93c1a20f4143ba4afb",
+      "elapsed_seconds": [
+        0.5150000001303852,
+        0.5,
+        0.5630000000819564
+      ],
+      "work": {
+        "nodes_visited": 192,
+        "leaf_evaluations": 91,
+        "chance_nodes": 4,
+        "chance_branches": 48,
+        "memo_entries": 192,
+        "cycles": 0
+      },
+      "reference_target": {
+        "best_full_sequence": [
+          {
+            "kind": "attach",
+            "parts": [
+              "[0,{\"type\":8},[[2,{\"id\":3,\"playerIndex\":0}],[4,{\"appearThisTurn\":false,\"energies\":[],\"energyCards\":[],\"hp\":70,\"id\":1030,\"maxHp\":70,\"playerIndex\":0,\"preEvolution\":[],\"tools\":[]}]]]"
+            ]
+          },
+          {
+            "kind": "attack",
+            "parts": [
+              "[0,{\"attackId\":1486,\"type\":13},[]]"
+            ]
+          }
+        ],
+        "leaves": [
+          {
+            "kind": "turn_boundary",
+            "probability": 1,
+            "state_key": "6a6bdb20aa3ffc8436440872478d811dd0786b53792af2de39037a96dc2bb6ee",
+            "value": 8.099354640151512,
+            "value_quality": "complete"
+          }
+        ],
+        "preferred_action": {
+          "kind": "attach",
+          "parts": [
+            "[0,{\"type\":8},[[2,{\"id\":3,\"playerIndex\":0}],[4,{\"appearThisTurn\":false,\"energies\":[],\"energyCards\":[],\"hp\":70,\"id\":1030,\"maxHp\":70,\"playerIndex\":0,\"preEvolution\":[],\"tools\":[]}]]]"
+          ]
+        },
+        "root_state_key": "55ef88ca75e85aaaf66624f96b1a51a60cdf8ff96207dc6101b0a50aff70c91a",
+        "selected_policy": [
+          {
+            "action": {
+              "kind": "attach",
+              "parts": [
+                "[0,{\"type\":8},[[2,{\"id\":3,\"playerIndex\":0}],[4,{\"appearThisTurn\":false,\"energies\":[],\"energyCards\":[],\"hp\":70,\"id\":1030,\"maxHp\":70,\"playerIndex\":0,\"preEvolution\":[],\"tools\":[]}]]]"
+              ]
+            },
+            "expected_value": 8.099354640151512,
+            "indifference_set": [
+              {
+                "kind": "attach",
+                "parts": [
+                  "[0,{\"type\":8},[[2,{\"id\":3,\"playerIndex\":0}],[4,{\"appearThisTurn\":false,\"energies\":[],\"energyCards\":[],\"hp\":70,\"id\":1030,\"maxHp\":70,\"playerIndex\":0,\"preEvolution\":[],\"tools\":[]}]]]"
+                ]
+              }
+            ],
+            "state_key": "55ef88ca75e85aaaf66624f96b1a51a60cdf8ff96207dc6101b0a50aff70c91a",
+            "value_quality": "estimated"
+          },
+          {
+            "action": {
+              "kind": "attack",
+              "parts": [
+                "[0,{\"attackId\":1486,\"type\":13},[]]"
+              ]
+            },
+            "expected_value": 8.099354640151512,
+            "indifference_set": [
+              {
+                "kind": "attack",
+                "parts": [
+                  "[0,{\"attackId\":1486,\"type\":13},[]]"
+                ]
+              }
+            ],
+            "state_key": "44ad211bd838bc7460f15328bad66497b5afe6e30dc7c224170059b66e536da0",
+            "value_quality": "complete"
+          }
+        ]
+      }
+    },
+    {
+      "root_id": "starmie-tactical",
+      "reference_target_id": "afe0a6e2970e36c6a61aa4193437939b5cdee124f11e6f33e4c6eb3a8af58eb1",
+      "elapsed_seconds": [
+        8,
+        8.343999999808148,
+        10.905999999959022
+      ],
+      "work": {
+        "nodes_visited": 1994,
+        "leaf_evaluations": 1218,
+        "chance_nodes": 129,
+        "chance_branches": 1218,
+        "memo_entries": 1994,
+        "cycles": 0
+      },
+      "reference_target": {
+        "best_full_sequence": [
+          {
+            "kind": "attach",
+            "parts": [
+              "[0,{\"type\":8},[[2,{\"id\":3,\"playerIndex\":0}],[4,{\"appearThisTurn\":false,\"energies\":[3,0,0,0],\"energyCards\":[{\"id\":3,\"playerIndex\":0},{\"id\":17,\"playerIndex\":0}],\"hp\":330,\"id\":1031,\"maxHp\":330,\"playerIndex\":0,\"preEvolution\":[{\"id\":1030,\"playerIndex\":0}],\"tools\":[]}]]]"
+            ]
+          },
+          {
+            "kind": "attack",
+            "parts": [
+              "[0,{\"attackId\":1487,\"type\":13},[]]"
+            ]
+          },
+          {
+            "kind": "card",
+            "parts": [
+              "[1,{\"playerIndex\":1,\"type\":3},[[5,{\"appearThisTurn\":false,\"energies\":[],\"energyCards\":[],\"hp\":70,\"id\":1030,\"maxHp\":70,\"playerIndex\":1,\"preEvolution\":[],\"tools\":[]}]]]"
+            ]
+          }
+        ],
+        "leaves": [
+          {
+            "kind": "turn_boundary",
+            "probability": 1,
+            "state_key": "369e5fa72bdbe45e53985a51d2cf91a3e6f4f05f73ab9d95a30080d4814c492a",
+            "value": 118.64386301823178,
+            "value_quality": "complete"
+          }
+        ],
+        "preferred_action": {
+          "kind": "attach",
+          "parts": [
+            "[0,{\"type\":8},[[2,{\"id\":3,\"playerIndex\":0}],[4,{\"appearThisTurn\":false,\"energies\":[3,0,0,0],\"energyCards\":[{\"id\":3,\"playerIndex\":0},{\"id\":17,\"playerIndex\":0}],\"hp\":330,\"id\":1031,\"maxHp\":330,\"playerIndex\":0,\"preEvolution\":[{\"id\":1030,\"playerIndex\":0}],\"tools\":[]}]]]"
+          ]
+        },
+        "root_state_key": "e90344e2020b263a76f7117bcebdff59e672adbbf7660c82f9092970e8ca92d1",
+        "selected_policy": [
+          {
+            "action": {
+              "kind": "attach",
+              "parts": [
+                "[0,{\"type\":8},[[2,{\"id\":3,\"playerIndex\":0}],[4,{\"appearThisTurn\":false,\"energies\":[3,0,0,0],\"energyCards\":[{\"id\":3,\"playerIndex\":0},{\"id\":17,\"playerIndex\":0}],\"hp\":330,\"id\":1031,\"maxHp\":330,\"playerIndex\":0,\"preEvolution\":[{\"id\":1030,\"playerIndex\":0}],\"tools\":[]}]]]"
+              ]
+            },
+            "expected_value": 118.64386301823178,
+            "indifference_set": [
+              {
+                "kind": "attach",
+                "parts": [
+                  "[0,{\"type\":8},[[2,{\"id\":3,\"playerIndex\":0}],[4,{\"appearThisTurn\":false,\"energies\":[3,0,0,0],\"energyCards\":[{\"id\":3,\"playerIndex\":0},{\"id\":17,\"playerIndex\":0}],\"hp\":330,\"id\":1031,\"maxHp\":330,\"playerIndex\":0,\"preEvolution\":[{\"id\":1030,\"playerIndex\":0}],\"tools\":[]}]]]"
+                ]
+              }
+            ],
+            "state_key": "e90344e2020b263a76f7117bcebdff59e672adbbf7660c82f9092970e8ca92d1",
+            "value_quality": "estimated"
+          },
+          {
+            "action": {
+              "kind": "attack",
+              "parts": [
+                "[0,{\"attackId\":1487,\"type\":13},[]]"
+              ]
+            },
+            "expected_value": 118.64386301823178,
+            "indifference_set": [
+              {
+                "kind": "attack",
+                "parts": [
+                  "[0,{\"attackId\":1487,\"type\":13},[]]"
+                ]
+              }
+            ],
+            "state_key": "74b22d74c3ab86e4cc5410333a3be2a61a4c49d6608b7fb3a35e179e24194d38",
+            "value_quality": "estimated"
+          },
+          {
+            "action": {
+              "kind": "card",
+              "parts": [
+                "[1,{\"playerIndex\":1,\"type\":3},[[5,{\"appearThisTurn\":false,\"energies\":[],\"energyCards\":[],\"hp\":70,\"id\":1030,\"maxHp\":70,\"playerIndex\":1,\"preEvolution\":[],\"tools\":[]}]]]"
+              ]
+            },
+            "expected_value": 118.64386301823178,
+            "indifference_set": [
+              {
+                "kind": "card",
+                "parts": [
+                  "[1,{\"playerIndex\":1,\"type\":3},[[5,{\"appearThisTurn\":false,\"energies\":[],\"energyCards\":[],\"hp\":70,\"id\":1030,\"maxHp\":70,\"playerIndex\":1,\"preEvolution\":[],\"tools\":[]}]]]"
+                ]
+              }
+            ],
+            "state_key": "e13acd24a1ec2db59b042ce7e425712d99cb4df7d7690c5d2ea2f0ab567ad8d0",
+            "value_quality": "complete"
+          }
+        ]
+      }
+    }
+  ]
+}

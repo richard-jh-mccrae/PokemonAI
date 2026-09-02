@@ -74,6 +74,18 @@ def test_experiment_snapshot_artifact_is_filename_independent(tmp_path):
     assert first.read_bytes() == second.read_bytes()
 
 
+def test_snapshot_compatibility_ignores_search_methods_and_python_minor(monkeypatch):
+    from cgpy.experiment import snapshot as snapshot_module
+
+    snapshot = ExperimentSnapshot.capture(_start_of_turn(), seat=0)
+    assert all("experiment" not in name for name in snapshot_module._ENGINE_MODULES)
+    assert "python" not in snapshot.document["identities"]
+    monkeypatch.setattr(snapshot_module.platform, "python_version", lambda: "future")
+
+    assert ExperimentSnapshot(snapshot.document).fork_engine().god_frame() == \
+        snapshot.fork_engine().god_frame()
+
+
 def test_snapshot_load_rejects_deck_identity_that_disagrees_with_engine(tmp_path):
     document = copy.deepcopy(ExperimentSnapshot.capture(
         _start_of_turn(), seat=0).document)

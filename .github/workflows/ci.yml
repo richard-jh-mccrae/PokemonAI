@@ -190,6 +190,8 @@ jobs:
     needs: plan
     runs-on: ubuntu-latest
     timeout-minutes: 10
+    env:
+      PYTHONHASHSEED: '0'
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -201,6 +203,25 @@ jobs:
         run: >-
           python -m pytest tests/ledger/test_real_engine_timing.py
           -q -s --tb=short --durations=20
+      - name: Gate Teacher compute and timing on the frozen corpus
+        run: >-
+          python tools/train/search_timing.py run
+          --jobs 1 --repetitions 3 --time-cap 120 --root-timeout 140
+          --assert-baseline data/benchmarks/search_timing/teacher_ci_baseline.json
+          --out data/search-timing-runs/ci/teacher.json
+      - name: Publish search timing summary
+        if: always()
+        shell: bash
+        run: |
+          report=data/search-timing-runs/ci/teacher.gate.md
+          if [ -f "$report" ]; then cat "$report" >> "$GITHUB_STEP_SUMMARY"; fi
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: search-timing-${{ github.sha }}
+          path: data/search-timing-runs/ci/
+          if-no-files-found: warn
+          retention-days: 30
 
   test-src:
     name: tests / src

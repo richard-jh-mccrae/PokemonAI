@@ -21,8 +21,12 @@ from ..state import (CardInstance, EffectFrame, GameState, PendingSelect, Player
 
 
 SCHEMA = "cgpy-experiment-snapshot"
-SCHEMA_VERSION = 1
+SCHEMA_VERSION = 2
 RNG_SCHEMA = "python-random/v1"
+_ENGINE_MODULES = (
+    "cards.py", "chain.py", "damage.py", "engine.py", "execution.py", "options.py",
+    "render.py", "rng.py", "schema.py", "search.py", "state.py", "turn.py",
+)
 _STATE_TYPES = {item.__name__: item for item in (
     CardInstance, EffectFrame, PendingSelect, PlayerBoard, PokemonInPlay,
 )}
@@ -99,7 +103,8 @@ def _identities() -> dict:
     repo = root.parents[1]
     definitions = root / "defs"
     return {
-        "engine": _file_identity(root.rglob("*.py"), base=repo),
+        "engine": _file_identity((root / name for name in _ENGINE_MODULES), base=repo),
+        "snapshot": _file_identity((Path(__file__),), base=repo),
         "legal_view": _file_identity((repo / "src" / "common" / "api.py",
                                       *(repo / "src" / "common" / "observation").rglob("*.py")),
                                      base=repo),
@@ -107,7 +112,6 @@ def _identities() -> dict:
             "card_data.json", "attack_data.json", "tables_meta.json")), base=repo),
         "chain_definitions": _file_identity((definitions / name for name in (
             "chain_overrides.json", "generated_chains.json")), base=repo),
-        "python": platform.python_version(),
         "rng": RNG_SCHEMA,
     }
 
@@ -198,6 +202,7 @@ class ExperimentSnapshot:
         body = {
             "schema": SCHEMA, "schema_version": SCHEMA_VERSION,
             "identities": {**_identities(), "decks": _deck_identities(decks)},
+            "producer": {"python": platform.python_version()},
             "provenance": _encode(provenance or {}),
             "seat": seat, "turn": engine.gs.turn,
             "position_key": observed.position_key,
