@@ -1,4 +1,4 @@
-# ADR-TEMP-606 — Policy models consume priced candidate evidence
+# ADR-0199 — Policy models consume priced candidate evidence
 
 Status: Accepted for Issue #606 (2026-08-31).
 

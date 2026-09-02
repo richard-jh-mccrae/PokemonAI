@@ -141,7 +141,7 @@ fires, the first-merged-keeps-it convention established above still applies: ref
 recompute, rename again. See `.claude/skills/grill-with-docs/SKILL.md` and
 `.claude/skills/open-pr/SKILL.md` for the full mechanics.
 
-**Next free number: 0199.**
+**Next free number: 0200.**
 
 ## Index
 
@@ -346,3 +346,4 @@ recompute, rename again. See `.claude/skills/grill-with-docs/SKILL.md` and
 | [0196](0196-search-state-separates-engine-truth-from-policy-view.md) | Search state separates engine truth from policy view | Accepted; built for Issue #603. |
 | [0197](0197-chance-resolution-simulates-future-randomness.md) | Chance resolution simulates future randomness | Accepted; built for Issue #604. |
 | [0198](0198-teacher-targets-are-complete-contingent-policies.md) | Teacher targets are complete contingent policies | Accepted; built for Issue #605. |
+| [0199](0199-policy-models-consume-priced-candidate-evidence.md) | Policy models consume priced candidate evidence | Accepted; built for Issue #606. |
