@@ -14,7 +14,7 @@ from common.decision import (
     PolicyRequest,
 )
 
-from .baseline import require_baseline, validate_baseline
+from .baseline import AUTHORITATIVE_DECKS, baseline_identities, require_baseline
 from .decision import LEDGER_VALUE_SCALE
 
 
@@ -25,7 +25,7 @@ POLICY_CONFIG_ID_DIGEST_BYTES = 8
 class LedgerPolicyConfiguration:
     temperature: float
     uniform_mix: float
-    accepted_statuses: tuple[str, ...] = ("complete", "estimated")
+    accepted_statuses: tuple[EvaluationStatus, ...] = (EvaluationStatus.COMPLETE,)
     schema_version: int = 1
 
     def __post_init__(self):
@@ -35,18 +35,50 @@ class LedgerPolicyConfiguration:
             raise ValueError("Ledger policy temperature must be positive and finite")
         if not math.isfinite(self.uniform_mix) or not 0.0 < self.uniform_mix < 1.0:
             raise ValueError("Ledger policy uniform mix must be strictly between zero and one")
-        allowed = {EvaluationStatus.COMPLETE.value, EvaluationStatus.ESTIMATED.value}
-        statuses = tuple(str(status) for status in self.accepted_statuses)
+        allowed = {EvaluationStatus.COMPLETE, EvaluationStatus.ESTIMATED}
+        statuses = tuple(self.accepted_statuses)
         if (not statuses or set(statuses) - allowed
-                or len(set(statuses)) != len(statuses)):
+                or len(set(statuses)) != len(statuses)
+                or any(not isinstance(status, EvaluationStatus) for status in statuses)):
             raise ValueError("Ledger policy accepted statuses are invalid")
-        object.__setattr__(self, "accepted_statuses", tuple(sorted(statuses)))
+        object.__setattr__(self, "accepted_statuses", tuple(
+            sorted(statuses, key=lambda status: status.value)))
 
     @property
     def identity(self) -> str:
         blob = json.dumps(asdict(self), sort_keys=True).encode("utf-8")
         return hashlib.blake2b(
             blob, digest_size=POLICY_CONFIG_ID_DIGEST_BYTES).hexdigest()
+
+    @classmethod
+    def load_calibrated(cls, expected_baseline_identity: str,
+                        path: Path | str) -> "LedgerPolicyConfiguration":
+        artifact = json.loads(Path(path).read_text(encoding="utf-8"))
+        required = {
+            "schema", "schema_version", "baseline_identity", "source", "heldout",
+            "objective", "grid", "configuration", "mean_acceptable_log_loss",
+            "rows", "deck_smoke",
+        }
+        if not isinstance(artifact, dict) or set(artifact) != required \
+                or artifact["schema"] != "ledger.policy-calibration" \
+                or artifact["schema_version"] != 1:
+            raise ValueError("invalid Ledger policy calibration artifact")
+        if artifact["baseline_identity"] != expected_baseline_identity:
+            raise ValueError("Ledger policy calibration baseline identity mismatch")
+        if artifact["heldout"] != {"consumed": False, "paths": []}:
+            raise ValueError("Ledger policy calibration consumed held-out evidence")
+        if set(artifact["deck_smoke"]) != set(AUTHORITATIVE_DECKS):
+            raise ValueError("Ledger policy calibration lacks a deck-root smoke check")
+        payload = artifact["configuration"]
+        configuration = cls(
+            float(payload["temperature"]),
+            float(payload["uniform_mix"]),
+            tuple(EvaluationStatus(status) for status in payload["accepted_statuses"]),
+            int(payload["schema_version"]),
+        )
+        if configuration.identity != payload["identity"]:
+            raise ValueError("Ledger policy calibration configuration identity mismatch")
+        return configuration
 
 
 @dataclass(frozen=True, slots=True)
@@ -65,12 +97,11 @@ class LedgerPolicyBaseline:
 
     @classmethod
     def from_manifest(cls, manifest: dict) -> "LedgerPolicyBaseline":
-        manifest = validate_baseline(manifest)
-        behaviors = tuple(manifest["behavior_identities"])
+        identities = baseline_identities(manifest)
         return cls(
-            manifest["baseline_id"],
-            manifest["ledger"]["evaluator"],
-            tuple(sorted({str(item["evaluation_model"]) for item in behaviors})),
+            identities.baseline,
+            identities.evaluator,
+            identities.evaluation_models,
         )
 
     @classmethod
@@ -132,7 +163,7 @@ class LedgerPolicyModel:
         for candidate in candidates:
             if candidate.status is EvaluationStatus.UNAVAILABLE or candidate.delta is None:
                 return PolicyFallbackReason.UNAVAILABLE_CANDIDATE
-            if candidate.status.value not in self.configuration.accepted_statuses:
+            if candidate.status not in self.configuration.accepted_statuses:
                 return PolicyFallbackReason.UNACCEPTED_STATUS
         return None
 

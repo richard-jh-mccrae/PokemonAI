@@ -111,7 +111,7 @@ def test_one_ply_search_retains_every_candidate_and_explicit_successor():
     assert tuple(candidate.delta.total for candidate in
                  policy_requests[0].roster.candidates) == pytest.approx(
                      tuple(candidate.delta.total for candidate in result.roster.candidates))
-    assert result.policy_distribution.priors_for(result.roster) == (0.5, 0.5)
+    assert tuple(candidate.prior for candidate in result.roster.candidates) == (0.5, 0.5)
 
     legacy_prices = price_actions(
         root, board, evaluate(board, model).total, provider, model, configuration)
@@ -151,7 +151,8 @@ def test_search_builds_ledger_priors_from_the_already_priced_roster():
     priors = tuple(candidate.prior for candidate in result.roster.candidates)
     assert priors.index(max(priors)) == deltas.index(max(deltas))
     assert all(prior > 0.0 for prior in priors)
-    assert result.policy_distribution.source.baseline_identity == "frozen-v1"
+    assert result.baseline.baseline_identity == "frozen-v1"
+    assert result.baseline.evaluation_model_identity == evaluation_model.identity
     assert set(evaluator.calls.values()) == {1}
 
 
@@ -188,6 +189,12 @@ def test_every_candidate_delta_is_expected_successor_ledger_minus_root_ledger():
         assert {successor.valuation.evaluator_identity
                 for successor in candidate.successors} == {
                     LedgerValueEvaluator.identity}
+        assert {successor.valuation.evaluation_model_identity
+                for successor in candidate.successors} == {
+                    result.baseline.evaluation_model_identity}
+        assert {successor.valuation.baseline_identity
+                for successor in candidate.successors} == {
+                    result.baseline.baseline_identity}
 
 
 def test_search_rejects_non_distribution_policy_priors():
@@ -210,31 +217,34 @@ def test_search_rejects_non_distribution_policy_priors():
             InvalidPolicyModel(), provider, SearchConfiguration())
 
 
-def test_search_rejects_p0_v0_identity_mismatch_before_candidate_pricing(monkeypatch):
+@pytest.mark.parametrize("mismatch", ("baseline", "evaluator", "model", "scale"))
+def test_search_rejects_p0_v0_identity_mismatch_before_evaluation(mismatch):
     observation = printout(me=player(active=body(DRAGAPULT, 1)))
     board = ObservationStateBuilder(DECK).root(observation)
     root = PreviewState(observation, board, "root", deck=DECK,
                         deck_counts=board.deck_counts or ())
     model = EvaluationModel.build()
+    baseline = LedgerPolicyBaseline(
+        "other" if mismatch == "baseline" else "frozen-v1",
+        "other" if mismatch == "evaluator" else CountingLedgerEvaluator.identity,
+        ("other",) if mismatch == "model" else (model.identity,),
+        "other" if mismatch == "scale" else LEDGER_VALUE_SCALE.identity,
+    )
     policy = LedgerPolicyModel(
         LedgerPolicyConfiguration(temperature=1.0, uniform_mix=0.1),
-        LedgerPolicyBaseline(
-            "frozen-v1", LedgerValueEvaluator.identity, (model.identity,),
-            LEDGER_VALUE_SCALE.identity),
+        baseline,
     )
-    monkeypatch.setattr(
-        "common.ledger.search.price_actions",
-        lambda *_args, **_kwargs: pytest.fail("candidate pricing must not start"),
-    )
+    evaluator = CountingLedgerEvaluator()
 
-    with pytest.raises(ValueError, match="baseline identity mismatch"):
+    with pytest.raises(ValueError, match="identity mismatch"):
         LedgerOnePlySearch().search(
-            EvaluationRequest(root, model, baseline_identity="other"),
-            LedgerValueEvaluator(),
+            EvaluationRequest(root, model, baseline_identity="frozen-v1"),
+            evaluator,
             policy,
             ScriptedProvider(menus={"root": tuple(root.legal_actions)}, nodes={}),
             SearchConfiguration(),
         )
+    assert evaluator.calls == {}
 
 
 def test_exhausted_budget_marks_every_root_action_unavailable(monkeypatch):

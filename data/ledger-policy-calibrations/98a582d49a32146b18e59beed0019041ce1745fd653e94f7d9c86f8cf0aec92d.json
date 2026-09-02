@@ -1,0 +1,88 @@
+{
+  "baseline_identity": "98a582d49a32146b18e59beed0019041ce1745fd653e94f7d9c86f8cf0aec92d",
+  "configuration": {
+    "accepted_statuses": [
+      "complete"
+    ],
+    "identity": "6f822dc74c2655c5",
+    "schema_version": 1,
+    "temperature": 8.0,
+    "uniform_mix": 0.01
+  },
+  "deck_smoke": {
+    "dragapult_ex": {
+      "all_priors_finite_normalized_nonzero": true,
+      "disagreement_samples": [
+        "14109113266227352-50",
+        "14789614378652353-11",
+        "15479115077245684-38",
+        "16110717069958674-28",
+        "16115750339586613-29"
+      ],
+      "live_greedy_disagreements": 34,
+      "mean_acceptable_log_loss": 1.5327638598626339,
+      "rows": 52
+    },
+    "mega_lucario": {
+      "all_priors_finite_normalized_nonzero": true,
+      "disagreement_samples": [
+        "14109113266227352-78",
+        "14109113266227352-90",
+        "14789614378652353-3",
+        "14789614378652353-52",
+        "16650902666221556-28"
+      ],
+      "live_greedy_disagreements": 19,
+      "mean_acceptable_log_loss": 1.6523803452835921,
+      "rows": 38
+    },
+    "mega_starmie": {
+      "all_priors_finite_normalized_nonzero": true,
+      "disagreement_samples": [
+        "16110717069958674-122",
+        "16110717069958674-9",
+        "16115750339586613-22",
+        "16115750339586613-38",
+        "16115750339586613-60"
+      ],
+      "live_greedy_disagreements": 21,
+      "mean_acceptable_log_loss": 1.49069154590329,
+      "rows": 37
+    }
+  },
+  "grid": {
+    "configurations": 49,
+    "temperatures": [
+      0.25,
+      0.5,
+      1.0,
+      2.0,
+      4.0,
+      8.0,
+      16.0
+    ],
+    "uniform_mixes": [
+      0.01,
+      0.025,
+      0.05,
+      0.1,
+      0.2,
+      0.35,
+      0.5
+    ]
+  },
+  "heldout": {
+    "consumed": false,
+    "paths": []
+  },
+  "mean_acceptable_log_loss": 1.5562973309610644,
+  "objective": "mean_acceptable_action_negative_log_likelihood",
+  "rows": 127,
+  "schema": "ledger.policy-calibration",
+  "schema_version": 1,
+  "source": {
+    "partition": "frozen_historical_corrections_tuning",
+    "path": "evidence/historical-corrections.json",
+    "sha256": "94e62ee0d5fb8e606896bda11d0f60e9cf941f6aabd320b64973d26ed2c0a96f"
+  }
+}

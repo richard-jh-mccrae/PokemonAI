@@ -186,6 +186,18 @@ class LedgerOnePlySearch:
         board = getattr(root, "observation", root)
         state_values = {}
         evaluation_states = {}
+        validate_source = getattr(policy_model, "validate_source", None)
+
+        if validate_source is not None:
+            value_scale = getattr(evaluator, "value_scale", None)
+            if value_scale is None:
+                raise ValueError("Ledger policy evaluator lacks a Value Scale")
+            validate_source(PolicySourceIdentity(
+                request.baseline_identity,
+                evaluator.identity,
+                request.evaluation_model.identity,
+                value_scale.identity,
+            ))
 
         def check_guard():
             if request.execution_guard is not None:
@@ -217,7 +229,8 @@ class LedgerOnePlySearch:
                 reusable_parent = evaluation_states.get(evaluation_key(parent_board))
             child_request = EvaluationRequest(
                 state, request.evaluation_model, parent, delta,
-                self._portfolio_memo, request.execution_guard)
+                self._portfolio_memo, request.execution_guard,
+                request.baseline_identity)
             key = evaluation_key(observed)
             if key not in state_values:
                 check_guard()
@@ -227,6 +240,13 @@ class LedgerOnePlySearch:
                     evaluation_states[key] = evaluation_state
                 else:
                     value = evaluator.evaluate(child_request)
+                if validate_source is not None:
+                    validate_source(PolicySourceIdentity(
+                        value.baseline_identity,
+                        value.evaluator_identity,
+                        value.evaluation_model_identity,
+                        value.scale.identity,
+                    ))
                 state_values[key] = value
                 check_guard()
             return state_values[key]
@@ -249,9 +269,6 @@ class LedgerOnePlySearch:
             request.evaluation_model.identity,
             baseline.scale.identity,
         )
-        validate_source = getattr(policy_model, "validate_source", None)
-        if validate_source is not None:
-            validate_source(policy_source)
         actions = tuple(root.legal_actions)
         cached_identity = self._cached_continuation(actions)
         if cached_identity is None:
@@ -268,7 +285,7 @@ class LedgerOnePlySearch:
                 gaps=("forced action not priced",))
             roster = CandidateRoster.from_legal_actions(
                 actions, (candidate,), forced=True)
-            roster, distribution = _apply_policy(
+            roster = _apply_policy(
                 board, roster, policy_source, policy_model)
             return SearchResult(
                 baseline,
@@ -276,7 +293,6 @@ class LedgerOnePlySearch:
                 nodes_visited=budget.nodes,
                 stop_reason=budget.stop_reason,
                 frontier=tuple(budget.frontier),
-                policy_distribution=distribution,
             )
         try:
             check_guard()
@@ -360,7 +376,7 @@ class LedgerOnePlySearch:
                              if cached_identity is not None else budget.stop_reason),
                 frontier=tuple(budget.frontier),
             )
-        priced_roster, distribution = _apply_policy(
+        priced_roster = _apply_policy(
             board, priced_roster, policy_source, policy_model)
         return SearchResult(
             baseline,
@@ -369,7 +385,6 @@ class LedgerOnePlySearch:
             stop_reason=("cached_continuation"
                          if cached_identity is not None else budget.stop_reason),
             frontier=tuple(budget.frontier),
-            policy_distribution=distribution,
         )
 
 
@@ -378,11 +393,7 @@ def _apply_policy(board, roster, source, policy_model):
     if not isinstance(distribution, PolicyDistribution):
         raise TypeError("policy model must return a Policy Distribution")
     priors = distribution.priors_for(roster)
-    candidates = tuple(replace(candidate, prior=prior)
-                       for candidate, prior in zip(roster.candidates, priors))
-    return CandidateRoster(
-        candidates, roster.forced, roster.legal_action_identities,
-        roster.legal_actions_proven), distribution
+    return roster.with_priors(priors)
 
 
 def _opportunity_sources_match(left, right, kind):

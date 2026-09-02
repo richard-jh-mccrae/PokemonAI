@@ -1,3 +1,4 @@
+from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass, replace
 import json
 from pathlib import Path
@@ -10,11 +11,10 @@ from common.decision import (
     CandidateRoster,
     DecisionDelta,
     EvaluationStatus,
+    PolicyFallbackReason,
     PolicyRequest,
     PolicyDistribution,
     PolicySourceIdentity,
-    SearchResult,
-    StateValuation,
     ValueScale,
     ValuedCandidate,
 )
@@ -113,6 +113,18 @@ def test_policy_distribution_round_trips_hidden_safe_evidence():
         tuple(item.final_prior for item in distribution.actions))
 
 
+def test_ledger_policy_is_repeatable_across_thread_workers():
+    candidates = roster(2.0, -1.0)
+    request = PolicyRequest(OBSERVATION, candidates, SOURCE)
+    model = LedgerPolicyModel(
+        LedgerPolicyConfiguration(temperature=2.0, uniform_mix=0.1), BASELINE)
+
+    with ThreadPoolExecutor(max_workers=2) as workers:
+        results = tuple(workers.map(model.priors, (request, request)))
+
+    assert results[0] == results[1] == model.priors(request)
+
+
 @pytest.mark.parametrize(("deltas", "expected"), (
     ((-7.0, -7.0), (0.5, 0.5)),
     ((10_000.0, -10_000.0), (0.95, 0.05)),
@@ -140,9 +152,9 @@ def test_forced_unpriced_action_receives_probability_one():
 
 @pytest.mark.parametrize(("items", "accepted", "reason"), (
     (((1.0, EvaluationStatus.COMPLETE), (None, EvaluationStatus.UNAVAILABLE)),
-     ("complete", "estimated"), "unavailable_candidate"),
+     (EvaluationStatus.COMPLETE, EvaluationStatus.ESTIMATED), "unavailable_candidate"),
     (((1.0, EvaluationStatus.COMPLETE), (0.5, EvaluationStatus.ESTIMATED)),
-     ("complete",), "unaccepted_status"),
+     (EvaluationStatus.COMPLETE,), "unaccepted_status"),
 ))
 def test_non_comparable_candidate_falls_back_the_entire_roster(
         items, accepted, reason):
@@ -176,13 +188,36 @@ def test_ledger_policy_configuration_rejects_invalid_normalization(
 def test_ledger_policy_configuration_identity_ignores_status_order():
     first = LedgerPolicyConfiguration(
         temperature=1.0, uniform_mix=0.1,
-        accepted_statuses=("complete", "estimated"))
+        accepted_statuses=(EvaluationStatus.COMPLETE, EvaluationStatus.ESTIMATED))
     second = LedgerPolicyConfiguration(
         temperature=1.0, uniform_mix=0.1,
-        accepted_statuses=("estimated", "complete"))
+        accepted_statuses=(EvaluationStatus.ESTIMATED, EvaluationStatus.COMPLETE))
 
     assert first == second
     assert first.identity == second.identity
+
+
+def test_estimated_candidate_requires_explicit_opt_in():
+    candidates = mixed_roster(
+        (1.0, EvaluationStatus.COMPLETE),
+        (0.5, EvaluationStatus.ESTIMATED),
+    )
+
+    default = LedgerPolicyModel(
+        LedgerPolicyConfiguration(temperature=1.0, uniform_mix=0.1), BASELINE,
+    ).priors(PolicyRequest(OBSERVATION, candidates, SOURCE))
+    opted_in = LedgerPolicyModel(
+        LedgerPolicyConfiguration(
+            temperature=1.0,
+            uniform_mix=0.1,
+            accepted_statuses=(EvaluationStatus.COMPLETE, EvaluationStatus.ESTIMATED),
+        ),
+        BASELINE,
+    ).priors(PolicyRequest(OBSERVATION, candidates, SOURCE))
+
+    assert default.fallback_reason is PolicyFallbackReason.UNACCEPTED_STATUS
+    assert opted_in.fallback_reason is None
+    assert opted_in.actions[0].final_prior > opted_in.actions[1].final_prior
 
 
 @pytest.mark.parametrize(("field", "value", "message"), (
@@ -220,6 +255,27 @@ def test_ledger_policy_loads_the_committed_frozen_baseline():
     assert baseline.evaluation_model_identities
 
 
+def test_committed_calibration_matches_the_frozen_baseline_without_heldout_data():
+    repository = Path(__file__).resolve().parents[2]
+    baseline_identity = next(
+        (repository / "data" / "ledger-baselines").iterdir()).name
+    path = (repository / "data" / "ledger-policy-calibrations"
+            / f"{baseline_identity}.json")
+
+    configuration = LedgerPolicyConfiguration.load_calibrated(baseline_identity, path)
+    artifact = json.loads(path.read_text(encoding="utf-8"))
+
+    assert configuration.identity == "6f822dc74c2655c5"
+    assert configuration.accepted_statuses == (EvaluationStatus.COMPLETE,)
+    assert artifact["heldout"] == {"consumed": False, "paths": []}
+    assert set(artifact["deck_smoke"]) == {
+        "dragapult_ex", "mega_lucario", "mega_starmie"}
+    assert all(result["all_priors_finite_normalized_nonzero"]
+               for result in artifact["deck_smoke"].values())
+    assert sum(result["live_greedy_disagreements"]
+               for result in artifact["deck_smoke"].values()) > 0
+
+
 def test_policy_distribution_decoder_rejects_unknown_fields():
     candidates = roster(1.0, 0.0)
     distribution = UniformPolicyModel().priors(
@@ -249,14 +305,3 @@ def test_ledger_policy_rejects_candidate_value_scale_mismatch():
 
     with pytest.raises(ValueError, match="candidate Value Scale"):
         model.priors(PolicyRequest(OBSERVATION, candidates, SOURCE))
-
-
-def test_search_result_rejects_policy_evidence_for_another_roster():
-    first = roster(1.0, 0.0)
-    second = roster(1.0)
-    distribution = UniformPolicyModel().priors(
-        PolicyRequest(OBSERVATION, first, SOURCE))
-    baseline = StateValuation("root", 0.0, SCALE, 0, "evaluator-v1")
-
-    with pytest.raises(ValueError, match="Candidate Roster"):
-        SearchResult(baseline, second, policy_distribution=distribution)

@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import math
 import traceback
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from enum import Enum
 from typing import Protocol
 
@@ -163,6 +163,8 @@ class StateValuation:
     gaps: tuple[str, ...] = ()
     evidence: object | None = None
     cache_key: str | None = None
+    baseline_identity: str | None = None
+    evaluation_model_identity: str | None = None
 
     def __post_init__(self):
         if not math.isfinite(self.total):
@@ -299,6 +301,14 @@ class CandidateRoster:
     def policy_action_identities(self) -> tuple["PolicyActionIdentity", ...]:
         return tuple(PolicyActionIdentity.from_action(candidate.action)
                      for candidate in self.candidates)
+
+    def with_priors(self, priors) -> "CandidateRoster":
+        priors = tuple(priors)
+        if len(priors) != len(self.candidates):
+            raise ValueError("candidate prior count does not match roster")
+        return replace(self, candidates=tuple(
+            replace(candidate, prior=prior)
+            for candidate, prior in zip(self.candidates, priors)))
 
 
 def _roster_action_id(action):
@@ -555,16 +565,6 @@ class SearchResult:
     stop_reason: str = "complete"
     frontier: tuple[object, ...] = ()
     failure: DecisionFailure | None = None
-    policy_distribution: PolicyDistribution | None = None
-
-    def __post_init__(self):
-        if self.policy_distribution is None:
-            return
-        priors = self.policy_distribution.priors_for(self.roster)
-        if any(candidate.prior is None
-               or not math.isclose(candidate.prior, prior, rel_tol=1e-12, abs_tol=1e-12)
-               for candidate, prior in zip(self.roster.candidates, priors)):
-            raise ValueError("Search Result priors differ from its Policy Distribution")
 
 
 @dataclass(frozen=True, slots=True)

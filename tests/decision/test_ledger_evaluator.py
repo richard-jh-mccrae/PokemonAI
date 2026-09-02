@@ -10,11 +10,14 @@ def test_ledger_evaluator_exposes_total_and_every_linear_component():
         me=player(active=body(DRAGAPULT, 1), hand=[DARK_E])))
     model = EvaluationModel.build()
 
-    valuation = LedgerValueEvaluator().evaluate(EvaluationRequest(board, model))
+    valuation = LedgerValueEvaluator().evaluate(
+        EvaluationRequest(board, model, baseline_identity="frozen-v1"))
 
     assert valuation.state_key == board.position_key
     assert valuation.cache_key == board.valuation_key
     assert valuation.scale == LEDGER_VALUE_SCALE
+    assert valuation.baseline_identity == "frozen-v1"
+    assert valuation.evaluation_model_identity == model.identity
     assert valuation.status is EvaluationStatus.COMPLETE
     assert not valuation.gaps
     assert valuation.total == sum(component.value for component in valuation.components)

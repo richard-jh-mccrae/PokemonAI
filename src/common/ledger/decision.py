@@ -50,6 +50,7 @@ def evaluator_semantics_identity(paths=None) -> str:
 
 class LedgerValueEvaluator:
     identity = f"ledger-linear-v2:{FEATURE_CATALOG.identity}:{evaluator_semantics_identity()}"
+    value_scale = LEDGER_VALUE_SCALE
 
     def evaluate_with_state(
             self, request, parent_state=None) -> tuple[StateValuation, EvaluationSnapshot]:
@@ -65,7 +66,8 @@ class LedgerValueEvaluator:
             if snapshot.valuation != full:
                 raise AssertionError("incremental Ledger valuation differs from full valuation")
         return state_valuation_from_ledger(
-            board, snapshot.valuation, self.identity), snapshot
+            board, snapshot.valuation, self.identity,
+            request.baseline_identity, model.identity), snapshot
 
     def evaluate(self, request) -> StateValuation:
         return self.evaluate_with_state(request)[0]
@@ -78,13 +80,16 @@ def value_components(contributions) -> tuple[ValueComponent, ...]:
 
 
 def state_valuation_from_ledger(board, valuation: Valuation,
-                                evaluator_identity=LedgerValueEvaluator.identity) -> StateValuation:
+                                evaluator_identity=LedgerValueEvaluator.identity,
+                                baseline_identity=None,
+                                evaluation_model_identity=None) -> StateValuation:
     status = (EvaluationStatus.ESTIMATED if valuation.gaps
               else EvaluationStatus.COMPLETE)
     return StateValuation(
         board.position_key, valuation.total, LEDGER_VALUE_SCALE,
         board.seat, evaluator_identity, value_components(valuation.contributions),
-        status, valuation.gaps, valuation.prize_map, board.valuation_key)
+        status, valuation.gaps, valuation.prize_map, board.valuation_key,
+        baseline_identity, evaluation_model_identity)
 
 
 def ledger_valuation_from_state(valuation: StateValuation) -> Valuation:
