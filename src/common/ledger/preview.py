@@ -916,7 +916,10 @@ def _local_action_events(board, action, ctx=None, landings=()):
     if ctx is not None and (exposure := _survival_tool_target(
             board, action, ctx)):
         return (("survival_tool_target", exposure),)
-    if ctx is not None and _body_ability_ready(board, action, ctx):
+    if ctx is not None and (fit := _manual_attachment_target_fit(
+            board, action, ctx)):
+        return (("attachment_target_fit", fit),)
+    if ctx is not None and _body_ability_bonus_applies(board, action, ctx):
         commitment = _evolution_target_commitment(board, action)
         if commitment:
             return (("body_ability_ready", 1.0),
@@ -965,7 +968,7 @@ def _local_action_events(board, action, ctx=None, landings=()):
                 include_hand_attach=False)
             threat = max(capability.attack_now, capability.line_potential)
             progress = (min(DAMAGE_COUNTER_HP, target.hp)
-                        / max(DAMAGE_COUNTER_HP, target.hp)
+                        / DAMAGE_COUNTER_HP
                         * math.sqrt(prize_value) * (1.0 + threat))
             return (("damage_counter_progress", progress),)
     return ()
@@ -1093,7 +1096,8 @@ def _dead_play(board, action, ctx):
         state, _capacity = _liveness(
             card_id, facts, demand, ctx, board.deck_counts)
         dead += state is DemandState.DEAD or (
-            isinstance(facts, TrainerCard) and state is not DemandState.LIVE)
+            isinstance(facts, TrainerCard) and facts.kind == SUPPORTER
+            and state is not DemandState.LIVE)
     return float(dead)
 
 
@@ -1188,19 +1192,24 @@ def _body_ability_ready(board, action, ctx):
                    in selected_names for body in board.me.bodies)
 
 
-def _acceleration_phase_events(board, action, ctx):
-    from .capabilities import energy_marginal
-    from .worth import Reach, legal_line_reach, line_reach
+def _body_ability_bonus_applies(board, action, ctx):
+    if not _body_ability_ready(board, action, ctx):
+        return False
+    active = board.me.active
+    if active is None or action.identity.kind != "card":
+        return True
+    prize_value = int(getattr(ctx.facts(active.card.card_id), "prize_value", 1) or 1)
+    return not (
+        board.them.prize_count - prize_value <= 1
+        and _active_doomed(board.them, board.me, ctx, board))
 
+
+def _acceleration_phase_events(board, action, ctx):
     context_card = board.select.context_card
     energy = None if context_card is None else ctx.facts(context_card.card_id)
     if not isinstance(energy, EnergyCard):
         return ()
-    hand_names = Counter(
-        facts.name for card in tuple(board.me.hand)
-        if (facts := ctx.facts(card.card_id)) is not None)
-    reach = line_reach(
-        hand_names, board.deck_counts, ctx, hand=board.me.hand, turn=board.turn)
+    reach = _attachment_line_reach(board, ctx)
     values = []
     for selection in action.selection:
         if not 0 <= selection < len(board.select.options):
@@ -1211,25 +1220,63 @@ def _acceleration_phase_events(board, action, ctx):
             continue
         side = board.me if option.playerIndex in {None, board.seat} else board.them
         opponent = board.them if side is board.me else board.me
-        facts = ctx.facts(body.card.card_id)
-        body_reach = legal_line_reach(
-            body, reach, ctx, board.me.hand, board.turn)
-        line = (facts, *(ctx.facts(card_id) for card_id, status in body_reach.items()
-                         if status is not Reach.ABSENT))
-        route_prizes = max((int(getattr(card, "prize_value", 1) or 1)
-                            for card in line if card is not None), default=1)
-        damage_per_energy = max((
-            float(attack.damage or attack.damage_fix or attack.damage_max or 0)
-            / DAMAGE_UNIT_HP / max(1, len(attack.cost))
-            for card in line if card is not None for attack in card.attacks), default=0.0)
-        typed_route = any(
-            energy.provides in attack.cost
-            for card in line if card is not None for attack in card.attacks)
-        route_fit = damage_per_energy if typed_route else 0.0
-        marginal = energy_marginal(
-            body, energy, side, opponent, board, ctx, reach=body_reach)
-        values.append(route_prizes * marginal + route_fit)
+        values.append(_attachment_target_fit(
+            board, body, energy, side, opponent, ctx, reach))
     return (("acceleration_phase_fit", sum(values)),) if values else ()
+
+
+def _manual_attachment_target_fit(board, action, ctx):
+    if action.identity.kind != "attach":
+        return 0.0
+    target = _selected_body(board, action)
+    energy = next((
+        facts for _serial, card_id in _selected_cards(board, action)
+        if card_id is not None
+        and isinstance((facts := ctx.facts(card_id)), EnergyCard)), None)
+    if target is None or energy is None:
+        return 0.0
+    reach = _attachment_line_reach(board, ctx)
+    selected = _attachment_target_fit(
+        board, target, energy, board.me, board.them, ctx, reach)
+    best = max(
+        _attachment_target_fit(
+            board, body, energy, board.me, board.them, ctx, reach)
+        for body in board.me.bodies)
+    return selected - best
+
+
+def _attachment_line_reach(board, ctx):
+    from .worth import line_reach
+
+    hand_names = Counter(
+        facts.name for card in tuple(board.me.hand)
+        if (facts := ctx.facts(card.card_id)) is not None)
+    return line_reach(
+        hand_names, board.deck_counts, ctx, hand=board.me.hand, turn=board.turn)
+
+
+def _attachment_target_fit(board, body, energy, side, opponent, ctx, reach):
+    from .capabilities import energy_marginal
+    from .worth import Reach, legal_line_reach
+
+    facts = ctx.facts(body.card.card_id)
+    body_reach = legal_line_reach(
+        body, reach, ctx, board.me.hand, board.turn)
+    line = (facts, *(ctx.facts(card_id) for card_id, status in body_reach.items()
+                     if status is not Reach.ABSENT))
+    route_prizes = max((int(getattr(card, "prize_value", 1) or 1)
+                        for card in line if card is not None), default=1)
+    damage_per_energy = max((
+        float(attack.damage or attack.damage_fix or attack.damage_max or 0)
+        / DAMAGE_UNIT_HP / max(1, len(attack.cost))
+        for card in line if card is not None for attack in card.attacks), default=0.0)
+    typed_route = any(
+        energy.provides in attack.cost
+        for card in line if card is not None for attack in card.attacks)
+    route_fit = damage_per_energy if typed_route else 0.0
+    marginal = energy_marginal(
+        body, energy, side, opponent, board, ctx, reach=body_reach)
+    return route_prizes * marginal + route_fit
 
 
 def _play_before_refresh(board, action, ctx):

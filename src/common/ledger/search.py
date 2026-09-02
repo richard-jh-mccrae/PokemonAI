@@ -346,13 +346,28 @@ def _opportunity_sources_match(left, right, kind):
     return bool(left_sources.intersection(right_sources))
 
 
+def _attachment_target_value(continuation):
+    components = getattr(
+        continuation, "policy_components",
+        getattr(continuation, "policy_contributions", ()))
+    return sum(
+        component.value for component in components
+        if getattr(component, "key", getattr(component, "feature", None))
+        == "action.attachment_target_fit")
+
+
 def preservation_frontier(candidates, noise_tolerance=0.0):
+    compare_attachment_targets = all(
+        candidate.action.identity.kind == "attach" for candidate in candidates)
+
     def value(candidate):
         continuation = (getattr(candidate, "continuation", None)
                         or getattr(candidate, "footprint", None))
         return candidate.delta.total + (
             0.0 if continuation is None else
-            getattr(continuation, "action_opportunity", 0.0))
+            getattr(continuation, "action_opportunity", 0.0)
+            - (0.0 if compare_attachment_targets else
+               _attachment_target_value(continuation)))
 
     def policy_features(candidate):
         continuation = (getattr(candidate, "continuation", None)
@@ -603,12 +618,19 @@ class GreedyDecisionPolicy:
             def policy_value(candidate):
                 continuation = candidate.continuation
                 return candidate.delta.total + (
-                    0.0 if continuation is None else continuation.action_opportunity)
+                    0.0 if continuation is None else
+                    continuation.action_opportunity
+                    - _attachment_target_value(continuation))
 
             enders = tuple(
                 candidate for candidate in candidates
                 if candidate.disposition is CandidateDisposition.ENDS_TURN)
             explicit_end = any(
+                candidate.continuation is not None
+                and RealizedOutcome.EXPLICIT_TURN_END in
+                candidate.continuation.realized_outcomes
+                for candidate in enders)
+            only_explicit_end = bool(enders) and all(
                 candidate.continuation is not None
                 and RealizedOutcome.EXPLICIT_TURN_END in
                 candidate.continuation.realized_outcomes
@@ -752,8 +774,9 @@ class GreedyDecisionPolicy:
                 if candidate.disposition is CandidateDisposition.CONTINUES_TURN
                 and candidate.continuation is not None
                 and candidate.action.identity.kind == "attach"
-                and {"end", "play"}.issubset(
+                and ({"end", "play"}.issubset(
                     candidate.continuation.opportunities_preserved)
+                     or only_explicit_end)
                 and any(
                     component.value > configuration.noise_tolerance
                     and component.key == "option.energy"
@@ -834,6 +857,11 @@ class GreedyDecisionPolicy:
             continuing_ids = {id(candidate) for candidate in continuing}
             continuing = (*continuing, *(candidate for candidate in retreat_attachments
                                           if id(candidate) not in continuing_ids))
+            if accelerating_attachments:
+                continuing = tuple(
+                    candidate for candidate in continuing
+                    if candidate.action.identity.kind != "attach"
+                    or candidate in accelerating_attachments)
             winning_preparation = tuple(
                 candidate for candidate in candidates
                 if candidate.disposition is CandidateDisposition.CONTINUES_TURN
@@ -921,6 +949,8 @@ class GreedyDecisionPolicy:
     @staticmethod
     def _ranked(candidates, configuration, *, include_action_opportunity=False,
                 include_dependency_opportunity=False):
+        compare_attachment_targets = all(
+            candidate.action.identity.kind == "attach" for candidate in candidates)
         dependency_roster = (
             include_dependency_opportunity
             and any(candidate.continuation is not None
@@ -932,8 +962,11 @@ class GreedyDecisionPolicy:
             if candidate.delta is None:
                 return float("-inf")
             include = include_action_opportunity or dependency_roster
-            opportunity = (candidate.continuation.action_opportunity
-                           if include and candidate.continuation is not None else 0.0)
+            opportunity = (
+                candidate.continuation.action_opportunity
+                - (0.0 if compare_attachment_targets else
+                   _attachment_target_value(candidate.continuation))
+                if include and candidate.continuation is not None else 0.0)
             return candidate.delta.total + opportunity
 
         indexed = sorted(enumerate(candidates), key=lambda item: value(item[1]), reverse=True)

@@ -45,6 +45,21 @@ def test_multi_provision_energy_is_live_for_a_reachable_evolution_line():
     assert activation(state, "interaction.kind.special_energy.in_hand_setup", context) == 1
 
 
+def test_multi_provision_energy_outvalues_one_basic_for_open_evolved_bodies():
+    context = EvaluationModel.build()
+    ignition = board(me=player(
+        active=body(MEGA_STARMIE, 1), hand=[IGNITION]))
+    water = board(me=player(
+        active=body(MEGA_STARMIE, 1), hand=[WATER_E]))
+
+    multi_provision = sum(
+        item.value for item in evaluate(ignition, context).contributions
+        if item.feature == "continuation.multi_provision_in_hand")
+
+    assert multi_provision == 0.2
+    assert value(ignition, context) > value(water, context)
+
+
 def test_basic_option_only_includes_forward_evolutions_in_visible_reach():
     context = EvaluationModel.build()
     absent = replace(

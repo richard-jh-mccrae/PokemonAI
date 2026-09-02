@@ -181,6 +181,8 @@ def _rule(source, claims, operation, argument=None, parameters=()):
 
 
 _DECLARED_RULES = {
+    "action.attachment_target_fit": _rule(
+        "action", ("attachment_target_fit",), "constant"),
     "action.damage_counter_progress": _rule(
         "action", ("damage_counter_progress",), "constant"),
     "action.overkill_counter": _rule("action", ("overkill_counter",), "constant"),
@@ -433,7 +435,8 @@ _KIND_PLACEMENTS = {
 
 _SCALAR_DEFAULTS = {
     "action.acceleration_phase_fit": 1.0,
-    "action.damage_counter_progress": 1.0,
+    "action.attachment_target_fit": 0.15,
+    "action.damage_counter_progress": 0.10,
     "action.overkill_counter": -100.0,
     "action.draw_before_refresh": -0.75,
     "action.gust_spend": -1.25,
@@ -507,7 +510,7 @@ _SCALAR_DEFAULTS = {
     "context.opponent_unknown_deck": 0.002,
     "context.damaged_attached": -1.0,
     "context.damaged_active_threat": -1.0,
-    "continuation.multi_provision_in_hand": 0.05,
+    "continuation.multi_provision_in_hand": 0.10,
     "continuation.zone_created": 0.01,
     "continuation.zone_replaced": 0.005,
     "continuation.allowance_consumed": -0.01,
@@ -651,7 +654,7 @@ FEATURE_CATALOG = FeatureCatalog(
         f"clause.parameter.{parameter}", 0.0,
         disposition=FeatureDisposition.RETIRED)
             for parameter in CLAUSE_PARAMETER_QUALIFIERS),
-    schema_version=26,
+    schema_version=27,
 )
 
 

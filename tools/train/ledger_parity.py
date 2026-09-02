@@ -23,15 +23,25 @@ def _opportunity_sources_match(left, right, kind):
     return bool(left_sources.intersection(right_sources))
 
 
+def _attachment_target_value(footprint):
+    return sum(
+        component.value for component in footprint.policy_contributions
+        if component.feature == "action.attachment_target_fit")
+
+
 def legacy_choose(prices, *, forced, configuration):
     if forced:
         return _legacy_ranked(
             prices, configuration, include_action_opportunity=True)[0]
     def policy_value(price):
-        return price.swing + price.footprint.action_opportunity
+        return (price.swing + price.footprint.action_opportunity
+                - _attachment_target_value(price.footprint))
 
     enders = tuple(price for price in prices if price.ends_turn)
     explicit_end = any(
+        RealizedOutcome.EXPLICIT_TURN_END in price.footprint.realized_outcomes
+        for price in enders)
+    only_explicit_end = bool(enders) and all(
         RealizedOutcome.EXPLICIT_TURN_END in price.footprint.realized_outcomes
         for price in enders)
     best_ender_value = max((price.swing for price in enders),
@@ -144,7 +154,8 @@ def legacy_choose(prices, *, forced, configuration):
         price for price in prices
         if not price.ends_turn
         and price.action.identity.kind == "attach"
-        and {"end", "play"}.issubset(price.footprint.opportunities_preserved)
+        and ({"end", "play"}.issubset(price.footprint.opportunities_preserved)
+             or only_explicit_end)
         and any(
             component.value > configuration.noise_tolerance
             and component.feature == "option.energy"
@@ -214,6 +225,11 @@ def legacy_choose(prices, *, forced, configuration):
     continuing_ids = {id(price) for price in continuing}
     continuing = (*continuing, *(price for price in retreat_attachments
                                   if id(price) not in continuing_ids))
+    if accelerating_attachments:
+        continuing = tuple(
+            price for price in continuing
+            if price.action.identity.kind != "attach"
+            or price in accelerating_attachments)
     winning_preparation = tuple(
         price for price in prices
         if not price.ends_turn
@@ -285,8 +301,13 @@ def legacy_choose(prices, *, forced, configuration):
 
 
 def _legacy_preservation_frontier(candidates, noise_tolerance=0.0):
+    compare_attachment_targets = all(
+        candidate.action.identity.kind == "attach" for candidate in candidates)
+
     def value(candidate):
-        return candidate.swing + candidate.footprint.action_opportunity
+        return (candidate.swing + candidate.footprint.action_opportunity
+                - (0.0 if compare_attachment_targets else
+                   _attachment_target_value(candidate.footprint)))
 
     def realized_source_value(candidate):
         return sum(
@@ -540,6 +561,8 @@ def assert_runtime_parity(*, state, board, provider, evaluation_model, result,
 
 def _legacy_ranked(prices, configuration, *, include_action_opportunity=False,
                    include_dependency_opportunity=False):
+    compare_attachment_targets = all(
+        price.action.identity.kind == "attach" for price in prices)
     dependency_roster = (
         include_dependency_opportunity
         and any(ContinuationOpportunity.DEPENDENCY_REACH in
@@ -549,7 +572,10 @@ def _legacy_ranked(prices, configuration, *, include_action_opportunity=False,
     def value(price):
         include = include_action_opportunity or dependency_roster
         return price.swing + (
-            price.footprint.action_opportunity if include else 0.0)
+            price.footprint.action_opportunity
+            - (0.0 if compare_attachment_targets else
+               _attachment_target_value(price.footprint))
+            if include else 0.0)
 
     remaining = list(enumerate(prices))
     ranked = []

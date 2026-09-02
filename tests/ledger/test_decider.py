@@ -15,7 +15,7 @@ import pytest
 from common.algebra import Deterministic, Refresh, Terminal, Unknown
 from common.decision import (CandidateDisposition, CandidateRoster, DecisionDelta,
                              ComputeConfiguration, EvaluationStatus, SearchConfiguration,
-                             ValuedCandidate)
+                             RealizedOutcome, ValuedCandidate)
 from common.ledger import EvaluationModel, LedgerDecider, PrizeMap
 from common.ledger.decider import LedgerUnavailable
 from common.ledger.decision import LEDGER_VALUE_SCALE
@@ -615,6 +615,48 @@ def test_action_opportunity_cost_changes_policy_without_changing_canonical_delta
     assert lifted.action.kind == "end"
     assert default.action.kind == "attach"
     assert lifted_price["swing"] == pytest.approx(default_price["swing"])
+
+
+def test_realized_attachment_before_end_does_not_require_a_play_option():
+    from types import SimpleNamespace
+
+    attachment = ContinuationFootprint(
+        -0.13, 0.11, True,
+        opportunities_preserved=("end",),
+        policy_contributions=(SimpleNamespace(
+            key="option.energy", value=0.13,
+            provenance=("action.realized_portfolio",)),))
+    prices = (
+        _price("attach", 0, -0.13, footprint=attachment),
+        _price("end", 1, 4.0, ends=True, footprint=ContinuationFootprint(
+            4.0, 0.0, False,
+            realized_outcomes=(RealizedOutcome.EXPLICIT_TURN_END,))),
+    )
+
+    assert choose_prices(make_decider(provider=None), prices).action.selection == [0]
+
+
+def test_attachment_target_fit_only_ranks_attachment_targets():
+    from types import SimpleNamespace
+
+    attachment = ContinuationFootprint(
+        0.1, 0.6, True,
+        opportunities_preserved=("end", "play"),
+        policy_contributions=(SimpleNamespace(
+            key="action.attachment_target_fit", value=0.5,
+            provenance=("action",)),))
+    play = ContinuationFootprint(
+        0.4, 0.05, True,
+        opportunities_preserved=("end", "play"))
+    prices = (
+        _price("attach", 0, 0.1, footprint=attachment),
+        _price("play", 1, 0.4, footprint=play),
+        _price("end", 2, 0.0, ends=True, footprint=ContinuationFootprint(
+            0.0, 0.0, False,
+            realized_outcomes=(RealizedOutcome.EXPLICIT_TURN_END,))),
+    )
+
+    assert choose_prices(make_decider(provider=None), prices).action.selection == [1]
 
 
 def test_continuation_footprint_is_policy_telemetry_not_ledger_delta():

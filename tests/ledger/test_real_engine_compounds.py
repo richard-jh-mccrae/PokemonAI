@@ -67,6 +67,51 @@ def test_ultra_ball_prices_play_two_discards_and_fetch_as_one_real_engine_chain(
     assert 120 in tuple(engine.gs.card_id(serial) for serial in engine.gs.players[0].hand)
 
 
+def test_rosa_requires_a_prize_deficit_basic_energy_and_stage_two_target():
+    cases = (
+        (BodySpec((119, 120, 121)), (2,), 6, 3, True),
+        (BodySpec((119, 120, 121)), (2,), 3, 3, False),
+        (BodySpec((119, 120)), (2,), 6, 3, False),
+        (BodySpec((119, 120, 121)), (), 6, 3, False),
+    )
+
+    for active, discard, my_prizes, their_prizes, expected in cases:
+        engine, _agent = _scenario(
+            "dragapult_ex", me_active=active, me_hand=(1240,),
+            me_discard=discard, me_prizes=my_prizes,
+            them_prizes=their_prizes,
+            them_active=BodySpec((119, 120, 121), energies=(2, 5)))
+        offered = any(
+            option["type"] == int(OptionType.PLAY)
+            and engine.gs.card_id(engine.gs.players[0].hand[option["index"]]) == 1240
+            for option in engine.gs.pending.options)
+
+        assert offered is expected
+
+
+def test_pilot_plays_rosa_and_attaches_two_basic_energies_to_one_stage_two():
+    engine, agent = _scenario(
+        "dragapult_ex", me_active=BodySpec((119, 120, 121)),
+        me_hand=(1240,), me_discard=(2, 5), me_prizes=6, them_prizes=3,
+        them_active=BodySpec((119, 120, 121), energies=(2, 5)))
+
+    decision, option = decide_option(engine, agent)
+    assert option["type"] == int(OptionType.PLAY)
+    assert engine.gs.card_id(engine.gs.pending.effect_card) == 1240
+    assert engine.gs.pending.context == int(SelectContext.ATTACH_TO)
+
+    decision = agent.decide(observation(engine))
+    assert set(_chosen_card_ids(engine, decision)) == {2, 5}
+    engine.step(list(decision.chosen))
+    assert engine.gs.pending.context == int(SelectContext.ATTACH_FROM)
+
+    decision = agent.decide(observation(engine))
+    assert _chosen_card_ids(engine, decision) == (121,)
+    engine.step(list(decision.chosen))
+    assert Counter(engine.gs.card_id(serial)
+                   for serial in engine.gs.players[0].active.energy) == Counter((2, 5))
+
+
 def test_retreat_prices_payment_and_best_promotion_as_one_real_engine_chain():
     engine, agent = _scenario(
         "dragapult_ex", me_active=BodySpec((119,), energies=(2,), hp=20),
