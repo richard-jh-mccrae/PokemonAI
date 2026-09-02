@@ -9,7 +9,7 @@ import sys
 
 
 REPO = Path(__file__).resolve().parents[2]
-DEFAULT_OUT = REPO / "data" / "ledger-baselines" / "one-ply.json"
+DEFAULT_ROOT = REPO / "data" / "ledger-baselines"
 
 
 def main(argv=None) -> int:
@@ -22,34 +22,40 @@ def main(argv=None) -> int:
     parser = argparse.ArgumentParser(description="Freeze a certified one-ply Ledger Baseline")
     parser.add_argument("--run", action="append", type=Path, required=True,
                         help="completed Correction Run directory; repeatable")
-    parser.add_argument("--corrections", action="append", type=Path, default=[],
-                        help="Correction JSONL or directory; repeatable")
+    parser.add_argument("--corpus", action="append", type=Path, required=True,
+                        help="historical Correction JSONL or directory; repeatable")
+    parser.add_argument("--reviewed-corrections", type=Path, required=True)
+    parser.add_argument("--tuning-correction", action="append", type=Path, default=[])
     parser.add_argument("--certification", type=Path, required=True,
                         help="passed review JSON bound to run, bundle, source, and behavior IDs")
     parser.add_argument("--known-weakness", action="append", default=[])
     parser.add_argument("--created-at")
-    parser.add_argument("--out", type=Path, default=DEFAULT_OUT)
+    parser.add_argument("--out-root", type=Path, default=DEFAULT_ROOT)
     args = parser.parse_args(argv)
 
-    correction_files = [path for source in args.corrections for path in jsonl_files(source)]
+    correction_files = [path for source in args.corpus for path in jsonl_files(source)]
     if not correction_files:
         raise ValueError("no Correction JSONL files found")
     baseline = build_baseline(
-        correction_runs=args.run, corrections=args.corrections,
+        correction_runs=args.run, correction_corpus=args.corpus,
+        reviewed_corrections=args.reviewed_corrections,
+        tuning_corrections=args.tuning_correction,
         certification=args.certification, known_weaknesses=args.known_weakness,
         current_source_identity=_git_source_identity(
             REPO, allow_dirty=False,
-            exclude_paths=(*args.run, *correction_files, args.certification, args.out)),
+            exclude_paths=(*args.run, *correction_files, args.reviewed_corrections,
+                           args.certification, args.out_root)),
         created_at=args.created_at or datetime.now(timezone.utc).isoformat())
-    if args.out.exists():
-        existing = load_baseline(args.out)
+    output = args.out_root / baseline["baseline_id"] / "manifest.json"
+    if output.exists():
+        existing = load_baseline(output)
         if existing != baseline:
-            raise ValueError(f"immutable Ledger Baseline already exists: {args.out}")
-        print(f"already frozen {existing['baseline_id']} -> {args.out}")
+            raise ValueError(f"immutable Ledger Baseline already exists: {output}")
+        print(f"already frozen {existing['baseline_id']} -> {output}")
         return 0
-    args.out.parent.mkdir(parents=True, exist_ok=True)
-    args.out.write_text(json.dumps(baseline, indent=2, sort_keys=True) + "\n", encoding="utf-8")
-    print(f"froze {baseline['baseline_id']} -> {args.out}")
+    output.parent.mkdir(parents=True, exist_ok=False)
+    output.write_text(json.dumps(baseline, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+    print(f"froze {baseline['baseline_id']} -> {output}")
     return 0
 
 

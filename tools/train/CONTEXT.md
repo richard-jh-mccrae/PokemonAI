@@ -102,6 +102,26 @@ randomized opponent plan, produced for human Ledger review. It stages Episode Bu
 neither a Benchmark nor a Corpus Snapshot.
 _Avoid_: Self-play Corpus, Strategy Benchmark, Corpus Run
 
+**Correction Corpus Manifest**:
+The immutable identity of the Human Corrections and their review dispositions used to compare
+Ledger behavior across revisions.
+_Avoid_: Correction Run, Corpus Snapshot, mutable corrections directory
+
+**Baseline Candidate**:
+One fixed Ledger behavior and evidence set awaiting review, held-out evaluation, and certification.
+Any behavior change creates a new candidate.
+_Avoid_: Ledger Baseline, working tree, latest Ledger
+
+**Baseline Review**:
+The complete reviewer verdict set covering every tuning Decision Record in a Baseline Candidate.
+It references decision evidence without copying or replacing it.
+_Avoid_: Correction count, corpus dashboard, Held-Out Evaluation
+
+**Held-Out Partition**:
+Episodes selected before a Correction Run starts and unavailable to tuning until its Baseline
+Candidate locks. Reusing their findings for tuning requires a new candidate and fresh partition.
+_Avoid_: deferred Correction, tuning split, hidden engine state
+
 **Ledger Baseline**:
 One immutable identity joining one-ply Ledger behavior, source and Deck definitions, Corrections
 evidence, a held-out manifest, and the tests that certified them. Later experiments name this
