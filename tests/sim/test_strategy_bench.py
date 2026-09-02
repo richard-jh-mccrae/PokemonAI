@@ -149,7 +149,7 @@ def test_benchmark_pins_and_emits_the_frozen_ledger_baseline(monkeypatch, tmp_pa
         "contestants": {"mega_starmie": frozen_agent},
     })
     monkeypatch.setattr("sim.correction_run._ledger_identity", lambda: {"id": "ledger"})
-    monkeypatch.setattr("sim.correction_run._agent_identity",
+    monkeypatch.setattr("sim.run_identity.agent_identity",
                         lambda root, name: frozen_agent)
 
     config = pin_ledger_baseline({
@@ -191,7 +191,7 @@ def test_benchmark_rejects_deck_overlay_drift(monkeypatch, tmp_path):
         }},
     })
     monkeypatch.setattr("sim.correction_run._ledger_identity", lambda: {"id": "ledger"})
-    monkeypatch.setattr("sim.correction_run._agent_identity", lambda root, name: {
+    monkeypatch.setattr("sim.run_identity.agent_identity", lambda root, name: {
         "deck_sha256": "deck", "ledger_overlay_sha256": "changed",
     })
     with pytest.raises(ValueError, match="ledger_overlay_sha256 differs"):

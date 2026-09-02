@@ -79,7 +79,7 @@ def publish_pack(baseline: dict, *, out_root: Path) -> Path:
 
 def main(argv=None) -> int:
     sys.path[:0] = [str(REPO / "tools"), str(REPO / "src")]
-    from sim.correction_run import _git_source_identity
+    from sim.run_identity import git_source_identity
     from train.baseline import build_baseline
     from train.blunder.store import jsonl_files
 
@@ -105,7 +105,7 @@ def main(argv=None) -> int:
         reviewed_corrections=args.reviewed_corrections,
         tuning_corrections=args.tuning_correction,
         certification=args.certification, known_weaknesses=args.known_weakness,
-        current_source_identity=_git_source_identity(
+        current_source_identity=git_source_identity(
             REPO, allow_dirty=False,
             exclude_paths=(*args.run, *correction_files, args.reviewed_corrections,
                            args.certification, args.out_root)),

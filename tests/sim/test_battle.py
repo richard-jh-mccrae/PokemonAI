@@ -236,6 +236,36 @@ def test_play_match_attributes_an_expired_shorter_wait_to_the_match_deadline(mon
     assert result.match_deadline_hit
 
 
+def test_play_match_applies_seat_specific_decision_timeouts(monkeypatch):
+    observations = iter((
+        {"current": {"result": -1, "yourIndex": 0}, "select": {"context": 0}},
+        {"current": {"result": -1, "yourIndex": 1}, "select": {"context": 0}},
+        {"current": {"result": 0, "yourIndex": 0}, "select": None},
+    ))
+    monkeypatch.setattr("cg.game.battle_start", lambda _a, _b: (
+        next(observations), SimpleNamespace(errorPlayer=-1)))
+    monkeypatch.setattr("cg.game.battle_select", lambda _choice: next(observations))
+    monkeypatch.setattr("cg.game.battle_finish", lambda: None)
+    seen = [[], []]
+
+    class Server:
+        last_timeout = False
+        last_telemetry = []
+        last_seconds = 0.0
+
+        def __init__(self, seat):
+            self.seat = seat
+
+        def act(self, _obs, timeout=None):
+            seen[self.seat].append(timeout)
+            return [0]
+
+    result = play_match(Server(0), Server(1), [], [], decision_timeout=(660.0, 120.0))
+
+    assert result.winner == 0
+    assert seen == [[660.0], [120.0]]
+
+
 @pytest.mark.req("REQ-SIM-0007")
 def test_play_match_times_every_decision_even_with_the_contestants_telemetry_off(monkeypatch):
     live = {"current": {"result": -1, "yourIndex": 0}, "select": {"context": 0}}

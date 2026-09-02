@@ -248,6 +248,30 @@ class AgentRuntime:
                 knowledge=self.knowledge, state=getattr(self, "last_state", None))
 
     def _decide(self, observation: dict) -> RootDecision:
+        state, parent_valuation, delta = self._advance_observation(observation)
+        if state.turn.number <= 0:
+            self._in_pregame = True
+            return self._pregame(state)
+        self._in_pregame = False
+        # Decision trees allocate heavily but rarely create cycles. Pause unproductive collector
+        # scans until the decision ends; the next allocation resumes collection.
+        collector_was_enabled = gc.isenabled()
+        if collector_was_enabled:
+            gc.disable()
+        try:
+            self._parent_valuation = parent_valuation
+            self._observation_delta = delta
+            execution_guard = (
+                None if self.decision_containment_seconds is None
+                else DecisionExecutionGuard(self.decision_containment_seconds))
+            if execution_guard is None:
+                return self._decide_core(state, observation)
+            return self._decide_core(state, observation, execution_guard)
+        finally:
+            if collector_was_enabled:
+                gc.enable()
+
+    def _advance_observation(self, observation: dict):
         turn_number = int(observation["current"]["turn"])
         if turn_number <= 0 and not self._in_pregame:
             self._reset_for_pregame()
@@ -271,33 +295,24 @@ class AgentRuntime:
                 delta = ObservationDelta(tuple(sorted(parts)))
         self.last_state = state
         self.knowledge = state.knowledge
+        return state, parent_valuation, delta
+
+    def observe(self, observation: dict) -> ObservationState:
+        """Advance legal match knowledge without asking the Ledger to choose an action."""
+        state, parent_valuation, delta = self._advance_observation(observation)
+        self._parent_valuation = parent_valuation
+        self._observation_delta = delta
         if state.turn.number <= 0:
             self._in_pregame = True
-            return self._pregame(state)
+            return state
         self._in_pregame = False
-        # Decision trees allocate heavily but rarely create cycles. Pause unproductive collector
-        # scans until the decision ends; the next allocation resumes collection.
-        collector_was_enabled = gc.isenabled()
-        if collector_was_enabled:
-            gc.disable()
-        try:
-            self._parent_valuation = parent_valuation
-            self._observation_delta = delta
-            execution_guard = (
-                None if self.decision_containment_seconds is None
-                else DecisionExecutionGuard(self.decision_containment_seconds))
-            if execution_guard is None:
-                return self._decide_core(state, observation)
-            return self._decide_core(state, observation, execution_guard)
-        finally:
-            if collector_was_enabled:
-                gc.enable()
+        snapshot = AgentRuntime._observe_matchup(self, state)
+        state, _snapshot, delta = self._bind_ledger_observation(
+            state, parent_valuation, delta, snapshot)
+        self._observation_delta = delta
+        return state
 
-    def _decide_core(self, state: ObservationState, observation: dict,
-                     execution_guard=None) -> RootDecision:
-        parent_valuation = self._parent_valuation
-        delta = self._observation_delta
-        snapshot = self._observe_matchup(state)
+    def _bind_ledger_observation(self, state, parent_valuation, delta, snapshot):
         self.knowledge = reduce_knowledge(
             self.knowledge, opponent=_belief_from_snapshot(snapshot))
         builder = ObservationStateBuilder(self.deck)
@@ -308,6 +323,14 @@ class AgentRuntime:
             delta = ObservationDelta(tuple(sorted(parts)))
         self.knowledge = state.knowledge
         self.last_state = state
+        return state, snapshot, delta
+
+    def _decide_core(self, state: ObservationState, observation: dict,
+                     execution_guard=None) -> RootDecision:
+        parent_valuation = self._parent_valuation
+        snapshot = self._observe_matchup(state)
+        state, snapshot, delta = self._bind_ledger_observation(
+            state, parent_valuation, self._observation_delta, snapshot)
         return self.ledger.decide(
             observation, opponent=snapshot,
             knowledge=self.knowledge, state=state,
@@ -362,6 +385,21 @@ def _decision_containment_seconds_from_environment() -> float | None:
     return max(0.1, seconds - _decision_reserve_seconds(seconds))
 
 
+def track_own_cards(runtime: AgentRuntime) -> AgentRuntime:
+    """Attach the legal own-prize and known-top tracker used by deployed agents."""
+    own_cards = OwnCardModel(runtime.deck)
+
+    def enrich_knowledge(state, knowledge):
+        own_cards.observe(state)
+        return reduce_knowledge(
+            knowledge,
+            own_prizes=tuple(sorted((own_cards.prize_export() or {}).items())),
+            known_top=own_cards.known_top_export() or ())
+
+    runtime.knowledge_enricher = enrich_knowledge
+    return runtime
+
+
 def _compute_configuration_from_environment() -> ComputeConfiguration:
     from common.decision import correction_compute_profile
 
@@ -383,17 +421,8 @@ def make_agent(strategy):
         strategy, _read_deck(),
         compute_configuration=_compute_configuration_from_environment(),
         decision_containment_seconds=_decision_containment_seconds_from_environment())
-    own_cards = OwnCardModel(runtime.deck)
+    track_own_cards(runtime)
     telemetry_on = os.environ.get("AGENT_NO_TELEMETRY") != "1"
-
-    def enrich_knowledge(state, knowledge):
-        own_cards.observe(state)
-        return reduce_knowledge(
-            knowledge,
-            own_prizes=tuple(sorted((own_cards.prize_export() or {}).items())),
-            known_top=own_cards.known_top_export() or ())
-
-    runtime.knowledge_enricher = enrich_knowledge
 
     def agent(observation: dict) -> list[int]:
         protocol_operation = ("deck_submission"
@@ -433,4 +462,4 @@ def make_agent(strategy):
     return agent
 
 
-__all__ = ["AgentRuntime", "build_runtime", "make_agent"]
+__all__ = ["AgentRuntime", "build_runtime", "make_agent", "track_own_cards"]

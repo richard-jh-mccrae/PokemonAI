@@ -1,4 +1,5 @@
-from .chance import ChanceBranchKey, ChanceBranchKind, ChanceSampleKey
+from .chance import (ChanceBranchKey, ChanceBranchKind, ChanceInformationKey,
+                     ChanceSampleKey)
 from .contracts import (BoundaryReason, ChanceExpansion, ChanceExpansionRequest,
                         ChanceExpansionStatus, ChanceSuccessor, ChanceTransition,
                         NodeKind, PrimitiveTransition, SearchContractError,
@@ -23,7 +24,8 @@ from .teacher_contracts import (
 
 __all__ = (
     "BoundaryReason", "ChanceBranchKey", "ChanceBranchKind", "ChanceExpansion",
-    "ChanceExpansionRequest", "ChanceExpansionStatus", "ChanceSampleKey",
+    "ChanceExpansionRequest", "ChanceExpansionStatus", "ChanceInformationKey",
+    "ChanceSampleKey",
     "ChanceSuccessor", "ChanceTransition", "ExperimentParityManifest", "ExperimentSnapshot",
     "NodeKind", "PairedSeedCase", "PairedSeedMatch", "PolicyRoot", "PrimitiveTransition",
     "SearchContractError", "SearchNode", "SearchStateKey",

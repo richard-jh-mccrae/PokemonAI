@@ -29,7 +29,8 @@ def default_jobs() -> int:
 
 
 def pin_ledger_baseline(config: dict) -> dict:
-    from sim.correction_run import _agent_identity, _ledger_identity
+    from sim.correction_run import _ledger_identity
+    from sim.run_identity import agent_identity
 
     path = config.get("ledger_baseline_path")
     expected = config.get("ledger_baseline_id")
@@ -43,7 +44,7 @@ def pin_ledger_baseline(config: dict) -> dict:
         frozen = baseline["contestants"].get(name)
         if frozen is None:
             raise ValueError(f"benchmark agent {name!r} is absent from the frozen baseline")
-        current = _agent_identity(agents_root, name)
+        current = agent_identity(agents_root, name)
         for field in ("deck_sha256", "ledger_overlay_sha256"):
             if current.get(field) != frozen.get(field):
                 raise ValueError(

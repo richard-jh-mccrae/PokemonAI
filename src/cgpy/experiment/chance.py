@@ -12,6 +12,7 @@ from common.api import ActionIdentity
 CHANCE_SCHEMA_VERSION = 1
 _DOMAIN = b"cgpy-chance-sample"
 _BRANCH_DOMAIN = b"cgpy-chance-branch"
+_INFORMATION_DOMAIN = b"cgpy-chance-information"
 
 
 class ChanceBranchKind(str, Enum):
@@ -21,6 +22,40 @@ class ChanceBranchKind(str, Enum):
 
 def _frame(value: bytes) -> bytes:
     return len(value).to_bytes(8, "big") + value
+
+
+@dataclass(frozen=True, slots=True)
+class ChanceInformationKey:
+    observation_key: str
+    node_kind: str
+    boundary_reason: str | None = None
+    action: ActionIdentity | None = None
+    prior_outcomes: int = 0
+    method: str | None = None
+    schema_version: int = CHANCE_SCHEMA_VERSION
+
+    def __post_init__(self):
+        if not self.observation_key or not self.node_kind:
+            raise ValueError("Chance Information identity fields must be non-empty")
+        if self.prior_outcomes < 0 or self.schema_version < 1:
+            raise ValueError("invalid Chance Information identity")
+        if self.action is not None and not isinstance(self.action, ActionIdentity):
+            raise TypeError("Chance Information action must be an ActionIdentity")
+
+    @property
+    def digest(self) -> str:
+        action = None if self.action is None else [self.action.kind, self.action.parts]
+        payload = json.dumps(
+            [self.boundary_reason, action, self.prior_outcomes, self.method],
+            sort_keys=True, separators=(",", ":"), ensure_ascii=False).encode("utf-8")
+        parts = (
+            _INFORMATION_DOMAIN,
+            str(self.schema_version).encode("ascii"),
+            self.observation_key.encode("utf-8"),
+            self.node_kind.encode("utf-8"),
+            payload,
+        )
+        return hashlib.sha256(b"".join(_frame(part) for part in parts)).hexdigest()
 
 
 @dataclass(frozen=True, slots=True)
@@ -126,5 +161,6 @@ class ChanceBranchKey:
 
 
 __all__ = (
-    "CHANCE_SCHEMA_VERSION", "ChanceBranchKey", "ChanceBranchKind", "ChanceSampleKey",
+    "CHANCE_SCHEMA_VERSION", "ChanceBranchKey", "ChanceBranchKind",
+    "ChanceInformationKey", "ChanceSampleKey",
 )

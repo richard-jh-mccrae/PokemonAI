@@ -6,15 +6,17 @@ from itertools import permutations
 from math import factorial, perm
 
 from common.api import ActionIdentity
-from common.observation import (KnownDeckTop, LegalKnowledge, ObservationState,
-                                ObservationStateBuilder, UnknownDeckTop)
+from common.observation import (KnownDeckTop, KnownOwnPrizes, LegalKnowledge,
+                                ObservationState, ObservationStateBuilder,
+                                UnknownDeckTop)
 
 from .. import render
 from ..engine import Engine
 from ..execution import before_begin_turn
 from ..rng import SeededRng
 from ..schema import SelectContext
-from .chance import ChanceBranchKey, ChanceBranchKind, ChanceSampleKey
+from .chance import (ChanceBranchKey, ChanceBranchKind, ChanceInformationKey,
+                     ChanceSampleKey)
 from .contracts import (BoundaryReason, ChanceExpansion, ChanceExpansionRequest,
                         ChanceExpansionStatus, ChanceSuccessor, ChanceTransition,
                         NodeKind, PrimitiveTransition, SearchContractError,
@@ -132,13 +134,15 @@ class _BoundaryProbeRng:
 
 class _SegmentRng:
     def __init__(self, seed: int, outcomes: tuple[bool, ...] = (), *,
-                 perspective_seat: int, knowledge: LegalKnowledge):
+                 perspective_seat: int, knowledge: LegalKnowledge,
+                 game_state):
         self.delegate = SeededRng(seed)
         self._outcomes = outcomes
         self._outcome_index = 0
         self._shuffled: set[int] = set()
         self._perspective_seat = perspective_seat
         self._knowledge = knowledge
+        self._game_state = game_state
         self._known_top = list(
             knowledge.known_top.cards
             if isinstance(knowledge.known_top, KnownDeckTop) else ())
@@ -150,13 +154,75 @@ class _SegmentRng:
         return replace(self._knowledge, known_top=known_top)
 
     def _sample(self, values, count: int, *, seat: int) -> list[int]:
-        candidates = list(values)
+        candidates = sorted(
+            values, key=lambda serial: (self._game_state.card_id(serial), serial))
         self.delegate.shuffle(candidates, seat=seat)
         return candidates[:min(max(0, count), len(candidates))]
 
+    def _stop_hidden(self, method: str, args: tuple, kwargs: dict) -> None:
+        raise _RandomBoundary(
+            NodeKind.INFORMATION_BOUNDARY,
+            BoundaryReason.UNSUPPORTED_HIDDEN_TRANSITION,
+            _chance_event(method, args, kwargs))
+
+    def _sample_deck_pool(
+            self, seat: int, deck: list[int], count: int, *, exclude=()) -> list[int]:
+        excluded = set(exclude)
+        if seat == self._perspective_seat:
+            excluded.update(serial for serial, _card_id in self._known_top)
+        if (seat == self._perspective_seat
+                and isinstance(self._knowledge.own_prizes, KnownOwnPrizes)):
+            return self._sample(
+                [serial for serial in deck if serial not in excluded], count,
+                seat=seat)
+        board = self._game_state.players[seat]
+        hidden_zones = (board.prize,) if seat == self._perspective_seat else (
+            board.hand, board.prize)
+        pool = (deck, *hidden_zones)
+        selected = self._sample(
+            [serial for zone in pool for serial in zone
+             if serial not in excluded],
+            count, seat=seat)
+        selected_set = set(selected)
+        fillers = iter(serial for serial in sorted(
+            deck, key=lambda serial: (self._game_state.card_id(serial), serial))
+                       if serial not in selected_set and serial not in excluded)
+        for serial in selected:
+            if serial in deck:
+                continue
+            filler = next(fillers)
+            deck[deck.index(filler)] = serial
+            source = next(zone for zone in hidden_zones if serial in zone)
+            source[source.index(serial)] = filler
+        return selected
+
+    def _pin_known_top(self, deck: list[int]) -> list[int]:
+        serials = [serial for serial, _card_id in self._known_top]
+        if not serials:
+            return []
+        prize = self._game_state.players[self._perspective_seat].prize
+        reserved = set(serials)
+        fillers = iter(serial for serial in sorted(
+            deck, key=lambda value: (self._game_state.card_id(value), value))
+                       if serial not in reserved)
+        for serial in serials:
+            if serial in deck:
+                continue
+            if (isinstance(self._knowledge.own_prizes, KnownOwnPrizes)
+                    or serial not in prize):
+                raise SearchContractError(
+                    "Known Deck Top disagrees with the exact search fork")
+            filler = next(fillers)
+            deck[deck.index(filler)] = serial
+            prize[prize.index(serial)] = filler
+        return serials
+
     def shuffle(self, seq: list, *, seat: int) -> None:
+        seq.sort(key=lambda serial: (self._game_state.card_id(serial), serial))
         self.delegate.shuffle(seq, seat=seat)
-        self._shuffled.add(id(seq))
+        if (seat == self._perspective_seat
+                and isinstance(self._knowledge.own_prizes, KnownOwnPrizes)):
+            self._shuffled.add(id(seq))
         if seat == self._perspective_seat:
             self._known_top.clear()
 
@@ -172,16 +238,23 @@ class _SegmentRng:
         if id(deck) in self._shuffled:
             return deck[-1]
         if seat == self._perspective_seat and self._known_top:
-            serial = self._known_top.pop(0)[0]
-            if serial in deck:
-                return serial
-            self._known_top.clear()
-        return self._sample(deck, 1, seat=seat)[0]
+            serial = self._pin_known_top(deck)[0]
+            self._known_top.pop(0)
+            return serial
+        return self._sample_deck_pool(seat, deck, 1)[0]
 
     def prize_bind(self, seat: int, deck: list[int], count: int) -> list[int]:
-        return self._sample(deck, count, seat=seat)
+        if seat == self._perspective_seat and self._known_top:
+            known = self._pin_known_top(deck)[:count]
+            result = known + self._sample_deck_pool(
+                seat, deck, count - len(known), exclude=known)
+            _consume_known_top(self._known_top, result)
+            return result
+        return self._sample_deck_pool(seat, deck, count)
 
     def hand_pick(self, seat: int, hand: list[int]) -> int:
+        if seat != self._perspective_seat:
+            self._stop_hidden("hand_pick", (seat, hand), {})
         return self._sample(hand, 1, seat=seat)[0]
 
     def hand_pick_expect(self, *_args, **_kwargs) -> None:
@@ -189,39 +262,74 @@ class _SegmentRng:
 
     def look_bind(self, seat: int, deck: list[int], n: int,
                   *, from_bottom: bool = False) -> list[int]:
+        if seat != self._perspective_seat:
+            self._stop_hidden(
+                "look_bind", (seat, deck, n), {"from_bottom": from_bottom})
         if id(deck) in self._shuffled:
             result = (list(deck[:n]) if from_bottom
                       else [deck[-1 - index] for index in range(min(n, len(deck)))])
-        elif (seat == self._perspective_seat and not from_bottom
-              and self._known_top):
-            known = [serial for serial, _card_id in self._known_top
-                     if serial in deck][:n]
-            remainder = [serial for serial in deck if serial not in known]
-            result = known + self._sample(remainder, n - len(known), seat=seat)
+        elif seat == self._perspective_seat and self._known_top:
+            known = self._pin_known_top(deck)
+            if from_bottom:
+                unknown_count = max(0, len(deck) - len(known))
+                sampled_count = min(n, unknown_count)
+                result = self._sample_deck_pool(seat, deck, sampled_count)
+                result += list(reversed(known))[:n - sampled_count]
+            else:
+                prefix = known[:n]
+                result = prefix + self._sample_deck_pool(
+                    seat, deck, n - len(prefix), exclude=prefix)
         else:
-            result = self._sample(deck, n, seat=seat)
-        if seat == self._perspective_seat and not from_bottom:
-            _consume_known_top(self._known_top, result)
+            result = self._sample_deck_pool(seat, deck, n)
+        if seat == self._perspective_seat:
+            if from_bottom:
+                removed = set(result)
+                self._known_top[:] = [
+                    entry for entry in self._known_top if entry[0] not in removed]
+            else:
+                _consume_known_top(self._known_top, result)
         return result
 
     def mill_bind(self, seat: int, deck: list[int], prize: list[int],
                   n: int) -> list[int]:
+        if seat != self._perspective_seat:
+            self._stop_hidden("mill_bind", (seat, deck, prize, n), {})
         if id(deck) in self._shuffled:
             return [deck[-1 - index] for index in range(min(n, len(deck)))]
         if seat == self._perspective_seat and self._known_top:
-            known = [serial for serial, _card_id in self._known_top[:n]]
-            known = [serial for serial in known if serial in deck]
-            remainder = [serial for serial in deck if serial not in known]
-            result = known + self._sample(remainder, n - len(known), seat=seat)
+            known = self._pin_known_top(deck)[:n]
+            result = known + self._sample_deck_pool(
+                seat, deck, n - len(known), exclude=known)
         else:
-            result = self._sample(deck, n, seat=seat)
+            result = self._sample_deck_pool(seat, deck, n)
         if seat == self._perspective_seat:
             _consume_known_top(self._known_top, result)
         return result
 
     def prize_take(self, seat: int, _serial: int, *, deck: list[int],
                    prize: list[int]) -> int:
-        return self._sample(prize, 1, seat=seat)[0]
+        if (seat == self._perspective_seat
+                and isinstance(self._knowledge.own_prizes, KnownOwnPrizes)):
+            return self._sample(prize, 1, seat=seat)[0]
+        slot_index = prize.index(_serial)
+        if seat == self._perspective_seat:
+            self._pin_known_top(deck)
+        slot_serial = prize[slot_index]
+        board = self._game_state.players[seat]
+        hidden_zones = (deck, prize) if seat == self._perspective_seat else (
+            deck, board.hand, prize)
+        reserved = ({entry[0] for entry in self._known_top}
+                    if seat == self._perspective_seat else set())
+        selected = self._sample(
+            [serial for zone in hidden_zones for serial in zone
+             if serial not in reserved],
+            1, seat=seat)[0]
+        if selected == slot_serial:
+            return selected
+        source = next(zone for zone in hidden_zones if selected in zone)
+        source[source.index(selected)] = slot_serial
+        prize[slot_index] = selected
+        return selected
 
 
 class _PrescribedRng:
@@ -409,6 +517,7 @@ class TurnSearchEnvironment:
             raise ValueError("Turn Search Environment requires SeededRng")
         self.perspective_seat = int(perspective_seat)
         self._states: dict[object, _NodeState] = {}
+        self._information_keys: dict[str, str] = {}
         root_engine = engine.fork()
         self._root_turn = root_engine.gs.turn
         self._root = self._make_node(root_engine, knowledge=knowledge)
@@ -442,6 +551,11 @@ class TurnSearchEnvironment:
                   replay_plan: _ReplayPlan | None = None,
                   chance_method: str | None = None,
                   chance_event: _ChanceEvent | None = None) -> SearchNode:
+        information_key = observation.decision_key
+        previous = self._information_keys.setdefault(key.digest, information_key)
+        if previous != information_key:
+            raise SearchContractError(
+                "one Search State Key produced conflicting legal information states")
         handle = object()
         self._states[handle] = _NodeState(
             engine, replay_plan, chance_method, chance_event)
@@ -534,7 +648,8 @@ class TurnSearchEnvironment:
         child_engine = plan.source.fork()
         rng = _SegmentRng(
             seed, plan.outcomes, perspective_seat=self.perspective_seat,
-            knowledge=parent.observation.knowledge)
+            knowledge=parent.observation.knowledge,
+            game_state=child_engine.gs)
         child_engine.gs.rng = rng
         hook_token = before_begin_turn.set(_stop_before_turn)
         try:
@@ -641,6 +756,9 @@ class TurnSearchEnvironment:
                 if limit is not None and len(leaves) > limit:
                     aborted = True
                 return
+            if self._event_has_hidden_support(event, node.observation.knowledge):
+                aborted = True
+                return
             options = self._exact_choices(event, limit)
             if options is None:
                 aborted = True
@@ -696,9 +814,12 @@ class TurnSearchEnvironment:
             raise SearchContractError(f"cannot sample a {node.kind.value} Search Node")
         if not isinstance(sample, ChanceSampleKey):
             raise TypeError("sample requires a Chance Sample Key")
-        if sample.root_state_key != self.root.state_key.digest:
+        root_keys = {self.root.state_key.digest,
+                     self._chance_information_key(self.root)}
+        if sample.root_state_key not in root_keys:
             raise SearchContractError("Chance Sample root key does not match")
-        if sample.node_state_key != node.state_key.digest:
+        node_keys = {node.state_key.digest, self._chance_information_key(node)}
+        if sample.node_state_key not in node_keys:
             raise SearchContractError("Chance Sample node key does not match")
         if (state.replay_plan is not None
                 and sample.action != state.replay_plan.action):
@@ -770,10 +891,13 @@ class TurnSearchEnvironment:
                 len(exact), produced,
                 None if produced else "no exact branch resolved")
         if state.replay_plan is not None or request.exact_outcome_limit < 2:
+            root_information_key = self._chance_information_key(self.root)
+            node_information_key = self._chance_information_key(node)
+
             def resolve_sample(index: int) -> ChanceTransition:
                 branch = ChanceBranchKey.sampled(ChanceSampleKey(
-                    request.experiment_seed, self.root.state_key.digest,
-                    node.state_key.digest, action, index), method=method)
+                    request.experiment_seed, root_information_key,
+                    node_information_key, action, index), method=method)
                 if state.replay_plan is None:
                     return self._resolve_coin(
                         node, SeededRng(branch.sample.seed).coin(), branch,
@@ -905,6 +1029,39 @@ class TurnSearchEnvironment:
     def state_key(self, node: SearchNode) -> SearchStateKey:
         self._node_state(node)
         return node.state_key
+
+    def information_key(self, state_key: SearchStateKey | str) -> str:
+        digest = state_key.digest if isinstance(state_key, SearchStateKey) else str(state_key)
+        try:
+            return self._information_keys[digest]
+        except KeyError as exc:
+            raise SearchContractError("Search State Key is absent from this environment") from exc
+
+    def _chance_information_key(self, node: SearchNode) -> str:
+        state = self._node_state(node)
+        plan = state.replay_plan
+        return ChanceInformationKey(
+            node.observation.decision_key,
+            node.kind.value,
+            None if node.boundary_reason is None else node.boundary_reason.value,
+            None if plan is None else plan.action,
+            0 if plan is None else len(plan.outcomes),
+            state.chance_method,
+        ).digest
+
+    def _event_has_hidden_support(
+            self, event: _ChanceEvent, knowledge: LegalKnowledge) -> bool:
+        if event.method == "coin":
+            return False
+        if event.seat != self.perspective_seat:
+            return True
+        return (
+            not isinstance(knowledge.own_prizes, KnownOwnPrizes)
+            and event.method in {
+                "shuffle", "draw_bind", "prize_bind", "look_bind",
+                "mill_bind", "prize_take",
+            }
+        )
 
 
 __all__ = ("TurnSearchEnvironment",)
