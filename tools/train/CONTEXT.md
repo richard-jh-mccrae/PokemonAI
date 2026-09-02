@@ -196,6 +196,11 @@ A cached detailed timing analysis of one hotspot Corpus Decision under matching 
 It must preserve the decision's Replay Certificate and is not canonical evidence.
 _Avoid_: Decision Timing, Telemetry Span, Benchmark Result
 
+**Search Timing Corpus**:
+A small immutable suite of exact synthetic Experiment Roots used to compare search cost while holding
+state, randomness, parity, and the frozen Ledger Baseline fixed. It is not held-out quality evidence.
+_Avoid_: Performance Profile, Canonical Corpus, Benchmark Result
+
 **Terminal Target**:
 The complete public Episode result projected to a Corpus Decision's acting seat. Training Views may
 derive scalar labels from it without changing the recorded outcome.

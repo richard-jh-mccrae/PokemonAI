@@ -24,7 +24,7 @@ def _worker_entry(case: TeacherBatchCase, connection) -> None:
             snapshot, evaluation_model=case.model.to_model(),
             experiment_seed=case.experiment_seed,
             configuration=case.search_configuration,
-            baseline_identity=case.baseline_identity)
+            baseline_identity=case.baseline_identity, parity=case.parity)
         connection.send({"status": "completed", "result": result.dumps()})
     except Exception as exc:
         connection.send({

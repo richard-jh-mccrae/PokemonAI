@@ -6,6 +6,7 @@ import math
 from dataclasses import dataclass
 from enum import Enum
 
+from .parity import ExperimentParityManifest
 from .teacher_contracts import (
     TeacherSearchConfiguration,
     TeacherSearchResult,
@@ -105,6 +106,7 @@ class TeacherBatchCase:
     model: TeacherModelRecord
     search_configuration: TeacherSearchConfiguration = TeacherSearchConfiguration()
     baseline_identity: str | None = None
+    parity: ExperimentParityManifest | None = None
 
     def __post_init__(self):
         if not self.case_id or not self.snapshot_path:
