@@ -36,6 +36,8 @@ def _same_reference(actual, expected, tolerance: float, *, field: str = "") -> b
 def _validate_baseline(baseline: dict) -> None:
     if baseline.get("schema") != "cgpy-search-timing-baseline" or baseline.get("schema_version") != 1:
         raise ValueError("unsupported Search Timing Baseline schema")
+    if baseline["measurement"].get("run_schema_version", 1) not in (1, 2):
+        raise ValueError("unsupported Search Timing Run schema in baseline")
     repetitions = baseline["repetitions"]
     if type(repetitions) is not int or repetitions < 3 or repetitions % 2 == 0:
         raise ValueError("timing baseline requires an odd number of at least three repetitions")
@@ -72,6 +74,9 @@ def _root_report(rows: list[dict], baseline: dict, limits: dict, tolerance: floa
     root_id = baseline["root_id"]
     for row in rows:
         label = f"{root_id} repetition {row.get('repetition')}"
+        for key in ("search_configuration", "search_configuration_identity"):
+            if key in baseline and row.get(key) != baseline[key]:
+                failures.append(f"{label}: {key} changed")
         if any(row.get(key) != value for key, value in (
                 ("worker_status", "completed"), ("coverage", "complete"),
                 ("stop_reason", "complete"), ("failure", None))) or row.get("reference_ready") is not True:
@@ -114,11 +119,14 @@ def _root_report(rows: list[dict], baseline: dict, limits: dict, tolerance: floa
 def check_run(run: dict, baseline: dict) -> dict:
     _validate_baseline(baseline)
     failures = []
-    if run.get("schema") != "cgpy-search-timing-run" or run.get("schema_version") != 1:
+    expected_version = baseline["measurement"].get("run_schema_version", 1)
+    if run.get("schema") != "cgpy-search-timing-run" or run.get("schema_version") != expected_version:
         failures.append("unsupported Search Timing Run schema")
     for key in ("corpus_id", "method", "search_configuration", "execution"):
         if run.get(key) != baseline[key]:
             failures.append(f"{key} differs from the performance baseline")
+    if "method_identity" in baseline and run.get("method_identity") != baseline["method_identity"]:
+        failures.append("method_identity differs from the performance baseline")
     rows = run.get("results") or []
     expected = Counter((root["root_id"], repetition)
                        for root in baseline["roots"]
@@ -144,9 +152,54 @@ def check_run(run: dict, baseline: dict) -> dict:
         "run_id": run.get("run_id"), "corpus_id": baseline["corpus_id"],
         "baseline_measurement": baseline["measurement"], "limits": baseline["limits"],
         "value_absolute_tolerance": tolerance,
+        "execution": run.get("execution"),
         "passed": not failures, "failures": failures, "roots": roots,
         "batch_elapsed_seconds": batch, "maximum_batch_seconds": maximum_batch,
     }
+
+
+def baseline_from_run(run: dict) -> dict:
+    if run.get("schema_version") != 2 or run.get("source_identity", {}).get("dirty") is not False:
+        raise ValueError("baseline requires a decision-wall run from a clean checkout")
+    rows = run.get("results") or []
+    roots = []
+    for root_id in sorted({row["root_id"] for row in rows}):
+        samples = [row for row in rows if row["root_id"] == root_id]
+        first = samples[0]
+        target = first.get("reference_target")
+        if not target or not first.get("statistics"):
+            raise ValueError(f"missing reference or compute evidence for {root_id}")
+        work = {key: first["statistics"][key] for key in WORK_COUNTERS}
+        if any({key: sample["statistics"][key] for key in WORK_COUNTERS} != work
+               for sample in samples if sample.get("statistics")):
+            raise ValueError(f"unstable compute evidence for {root_id}")
+        roots.append({
+            "root_id": root_id, "reference_target_id": target["target_id"],
+            "reference_target": {key: value for key, value in target.items() if key != "target_id"},
+            "elapsed_seconds": [sample["elapsed_seconds"] for sample in samples], "work": work,
+            "search_configuration": first["search_configuration"],
+            "search_configuration_identity": first["search_configuration_identity"],
+        })
+    baseline = {
+        "schema": "cgpy-search-timing-baseline", "schema_version": 1,
+        **{key: run[key] for key in (
+            "corpus_id", "method", "method_identity", "search_configuration", "execution")},
+        "repetitions": len(roots[0]["elapsed_seconds"]) if roots else 0,
+        "limits": {"median_time_multiplier": 2.0, "minimum_median_seconds": 0.25,
+                   "batch_time_multiplier": 2.0},
+        "measurement": {
+            **{key: run[key] for key in ("run_id", "generated_at", "source_identity", "host")},
+            "run_schema_version": run["schema_version"],
+            "batch_elapsed_seconds": run["summary"]["batch_elapsed_seconds"],
+            "scope": "Decision wall latency includes fork, worker startup, IPC, policy loading, and merge.",
+            "calibration": "Local bootstrap; retain CI artifacts for reviewed runner-specific calibration.",
+        },
+        "roots": roots,
+    }
+    report = check_run(run, baseline)
+    if not report["passed"]:
+        raise ValueError("run cannot certify a baseline: " + "; ".join(report["failures"]))
+    return baseline
 
 
 def render_report(report: dict) -> str:
@@ -160,6 +213,12 @@ def render_report(report: dict) -> str:
         "| Root | Median / limit | Nodes | Leaf evaluations | Chance branches |",
         "| --- | ---: | ---: | ---: | ---: |",
     ]
+    execution = report.get("execution") or {}
+    if execution.get("latency_scope") == "decision_wall":
+        lines[2:2] = [
+            f"Decision wall latency; {execution['workers']} branch workers, one root at a time. "
+            "Includes worker startup, IPC, policy loading, and merge.", "",
+        ]
     for root in report["roots"]:
         work = [f"{root['work'][name]} / {root['maximum_work'][name]}"
                 for name in ("nodes_visited", "leaf_evaluations", "chance_branches")]

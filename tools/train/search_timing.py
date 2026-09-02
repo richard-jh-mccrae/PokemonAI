@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 import argparse
-from dataclasses import asdict, dataclass
+from dataclasses import asdict, dataclass, replace
 from datetime import datetime, timezone
 import hashlib
 import json
@@ -14,6 +14,7 @@ import shutil
 import statistics
 import sys
 import tempfile
+from time import perf_counter
 
 
 REPO = Path(__file__).resolve().parents[2]
@@ -23,31 +24,33 @@ from cgpy.experiment import (  # noqa: E402
     ExperimentParityManifest,
     ExperimentSnapshot,
     PairedSeedCase,
-    TeacherBatchCase,
-    TeacherBatchRunner,
     TeacherExecutionConfiguration,
     TeacherModelRecord,
     TeacherSearchConfiguration,
+    TeacherStopReason,
     WithinHorizonTeacher,
+    teacher_action_policy_for_agent,
 )
 from common.ledger import LedgerValueEvaluator  # noqa: E402
 from common.ledger.baseline import baseline_identities, load_baseline  # noqa: E402
 from sim.run_identity import git_source_identity  # noqa: E402
 from sim.scenario import BodySpec, deck, runtime, scenario  # noqa: E402
-from train.search_timing_gate import check_run, render_report  # noqa: E402
+from sim.teacher_agent import IsolatedTeacherSearcher, TeacherSearchUnavailable  # noqa: E402
+from sim.teacher_review_run import MAX_JOBS, default_jobs  # noqa: E402
+from train.search_timing_gate import baseline_from_run, check_run, render_report  # noqa: E402
 
 
 CORPUS_SCHEMA = "cgpy-search-timing-corpus"
-CORPUS_SCHEMA_VERSION = 1
+CORPUS_SCHEMA_VERSION = 2
 RUN_SCHEMA = "cgpy-search-timing-run"
-RUN_SCHEMA_VERSION = 1
+RUN_SCHEMA_VERSION = 2
 METHODS = ("ledger_one_ply", "teacher_exhaustive", "puct_uniform", "puct_ledger")
 STRATA = ("opening", "search", "tactical")
 AGENTS = ("dragapult_ex", "mega_lucario", "mega_starmie")
-DEFAULT_CORPUS = REPO / "data" / "benchmarks" / "search_timing" / "v1"
+DEFAULT_CORPUS = REPO / "data" / "benchmarks" / "search_timing" / "v2"
 DEFAULT_RUNS = REPO / "data" / "search-timing-runs"
 DEFAULT_BASELINES = REPO / "data" / "ledger-baselines"
-MAX_WORKERS = 8
+MAX_WORKERS = MAX_JOBS
 
 
 @dataclass(frozen=True, slots=True)
@@ -60,9 +63,9 @@ class RootSpec:
     experiment_seed: int
 
 
-def root_specs() -> tuple[RootSpec, ...]:
+def root_specs(version: int = CORPUS_SCHEMA_VERSION) -> tuple[RootSpec, ...]:
     B = BodySpec
-    return (
+    original = (
         RootSpec("dragapult-opening", "dragapult_ex", "opening",
                  "A lone Dreepy can bench Budew or preserve the minimal board.", {
                      "me_active": B((119,)), "me_hand": (235,),
@@ -124,6 +127,18 @@ def root_specs() -> tuple[RootSpec, ...]:
                      "them_bench": (B((1030,)),), "them_prizes": 2, "turn": 9,
                  }, 60909),
     )
+    if version == 1:
+        return original
+    if version != CORPUS_SCHEMA_VERSION:
+        raise ValueError("unsupported Search Timing Corpus schema")
+    return original + (
+        RootSpec("starmie-tutor-chain", "mega_starmie", "search",
+                 "Tutor-heavy hand reproduces the redundant-shuffle and forced-fetch workload.", {
+                     "me_active": B((1030,)),
+                     "me_hand": (1189, 1097, 1086, 17, 1120, 1225, 1145),
+                     "them_active": B((1030,)), "turn": 2, "first_player": 1,
+                 }, 60910),
+    )
 
 
 def _canonical(value) -> bytes:
@@ -147,7 +162,7 @@ def _default_baseline() -> Path:
 
 
 def default_workers() -> int:
-    return min(max(1, (os.cpu_count() or 1) - 2), MAX_WORKERS)
+    return default_jobs()
 
 
 def _parity_document(parity: ExperimentParityManifest) -> dict:
@@ -232,7 +247,7 @@ def capture_corpus(out: Path, *, baseline_path: Path | None = None,
             "methods": list(METHODS), "agents": list(AGENTS), "strata": list(STRATA),
             "selection": {
                 "kind": "fixed-synthetic-first-main-roots",
-                "rule": "three declared nontrivial strata per developed deck",
+                "rule": "declared deck/stratum coverage plus diagnosed tutor-chain regression",
                 "held_out_quality_evidence": False,
             },
             "baseline": {
@@ -266,7 +281,7 @@ def load_corpus(root: Path) -> tuple[dict, ExperimentParityManifest]:
         "selection", "baseline", "parity", "source_identity", "cases",
     }
     if set(document) != required or document.get("schema") != CORPUS_SCHEMA \
-            or document.get("schema_version") != CORPUS_SCHEMA_VERSION:
+            or document.get("schema_version") not in (1, CORPUS_SCHEMA_VERSION):
         raise ValueError("unsupported Search Timing Corpus schema")
     body = {key: value for key, value in document.items() if key != "corpus_id"}
     if document["corpus_id"] != _identity(body):
@@ -276,10 +291,9 @@ def load_corpus(root: Path) -> tuple[dict, ExperimentParityManifest]:
         raise ValueError("Search Timing Corpus method or coverage inventory mismatch")
     cases = document["cases"]
     pairs = {(case.get("agent"), case.get("stratum")) for case in cases}
-    if len(cases) != len(AGENTS) * len(STRATA) \
-            or pairs != {(agent, stratum) for agent in AGENTS for stratum in STRATA} \
+    if pairs != {(agent, stratum) for agent in AGENTS for stratum in STRATA} \
             or len({case.get("root_id") for case in cases}) != len(cases):
-        raise ValueError("Search Timing Corpus must contain one root per deck and stratum")
+        raise ValueError("Search Timing Corpus requires unique roots covering every deck and stratum")
     parity = _load_parity(document["parity"])
     baseline = document["baseline"]
     baseline_path = _relative_artifact(REPO, baseline["manifest_path"])
@@ -291,7 +305,8 @@ def load_corpus(root: Path) -> tuple[dict, ExperimentParityManifest]:
             or identities.evaluator != baseline["evaluator_identity"] \
             or list(identities.evaluation_models) != baseline["evaluation_model_identities"]:
         raise ValueError("Search Timing Corpus Ledger Baseline identity mismatch")
-    expected = {(spec.root_id, spec.agent, spec.stratum) for spec in root_specs()}
+    expected = {(spec.root_id, spec.agent, spec.stratum)
+                for spec in root_specs(document["schema_version"])}
     if {(case.get("root_id"), case.get("agent"), case.get("stratum"))
             for case in cases} != expected:
         raise ValueError("Search Timing Corpus declared root inventory mismatch")
@@ -369,12 +384,12 @@ def _summaries(rows: list[dict], elapsed_seconds: float) -> dict:
 def run_teacher(root: Path, *, output: Path, workers: int, repetitions: int,
                 roots=(), search_configuration: TeacherSearchConfiguration,
                 root_timeout_seconds: float,
-                runner: TeacherBatchRunner | None = None) -> Path:
+                searcher_factory=None) -> Path:
     if not 1 <= workers <= MAX_WORKERS:
         raise ValueError(f"workers must be between 1 and {MAX_WORKERS}")
     if repetitions <= 0:
         raise ValueError("repetitions must be positive")
-    corpus, parity = load_corpus(root)
+    corpus, _parity = load_corpus(root)
     selected = set(roots)
     cases = [case for case in corpus["cases"]
              if not selected or case["root_id"] in selected]
@@ -385,76 +400,96 @@ def run_teacher(root: Path, *, output: Path, workers: int, repetitions: int,
     baseline = corpus["baseline"]
     if LedgerValueEvaluator.identity != baseline["evaluator_identity"]:
         raise ValueError("Teacher evaluator differs from the frozen Ledger Baseline")
-    models = {}
-    paired_cases = {}
+    execution = TeacherExecutionConfiguration(
+        workers=workers, root_timeout_seconds=root_timeout_seconds)
+    searcher_factory = searcher_factory or IsolatedTeacherSearcher
+    prepared = []
+    configurations = {}
     for case in cases:
         model = runtime(case["agent"], case["deck"]).ledger.ctx
         if model.identity not in baseline["evaluation_model_identities"]:
             raise ValueError(
                 f"{case['agent']} Evaluation Model is absent from the frozen Ledger Baseline")
-        models[case["root_id"]] = TeacherModelRecord.from_model(model)
-        paired_cases[case["root_id"]] = PairedSeedCase.loads(
-            _relative_artifact(corpus_root, case["paired_case_path"]).read_text(
-                encoding="utf-8"))
-    batch_cases = []
-    metadata = {}
-    for repetition in range(repetitions):
-        for case in cases:
-            paired = paired_cases[case["root_id"]]
-            batch_id = f"{case['root_id']}:{repetition + 1}"
-            batch_cases.append(TeacherBatchCase(
-                batch_id,
-                str(_relative_artifact(corpus_root, case["snapshot_path"])),
-                paired.experiment_seed, models[case["root_id"]],
-                search_configuration, baseline["baseline_id"], parity))
-            metadata[batch_id] = (case, repetition + 1)
-    execution = TeacherExecutionConfiguration(
-        workers=workers, root_timeout_seconds=root_timeout_seconds)
-    batch = (runner or TeacherBatchRunner()).run(batch_cases, execution)
+        configuration = replace(
+            search_configuration, action_policy=teacher_action_policy_for_agent(case["agent"]))
+        configurations[case["agent"]] = asdict(configuration)
+        searcher = searcher_factory(
+            model=TeacherModelRecord.from_model(model), search_configuration=configuration,
+            baseline_identity=baseline["baseline_id"],
+            root_timeout_seconds=root_timeout_seconds, workers=workers)
+        snapshot = ExperimentSnapshot.load(_relative_artifact(corpus_root, case["snapshot_path"]))
+        prepared.append((case, snapshot, snapshot.observation, snapshot.fork_engine(), searcher, configuration))
     rows = []
-    for item in batch.items:
-        case, repetition = metadata[item.case_id]
-        result = item.result
-        target = None if result is None else _reference_target(result)
-        certified = bool(
-            target is not None
-            and result.evaluator_identity == baseline["evaluator_identity"]
-            and result.evaluation_model_identity in baseline["evaluation_model_identities"]
-            and result.baseline_identity == baseline["baseline_id"])
-        result_document = None if result is None else result.document()
-        rows.append({
-            "root_id": case["root_id"], "agent": case["agent"],
-            "stratum": case["stratum"], "repetition": repetition,
-            "worker_status": item.status.value,
-            "coverage": None if result is None else result.coverage.value,
-            "stop_reason": item.stop_reason.value,
-            "failure": item.failure if result is None else result.failure,
-            "elapsed_seconds": None if result is None else result.statistics.elapsed_seconds,
-            "statistics": None if result is None else asdict(result.statistics),
-            "preferred_action": None if result is None else result_document["preferred_action"],
-            "best_full_sequence": (
-                None if result is None else result_document["best_full_sequence"]),
-            "teacher_semantic_identity": (
-                None if result is None else result.semantic_identity),
-            "reference_target": target,
-            "reference_ready": certified,
-        })
+    batch_started = perf_counter()
+    for repetition in range(1, repetitions + 1):
+        for case, snapshot, observation, engine, searcher, configuration in prepared:
+            started = perf_counter()
+            result = None
+            failure = None
+            stop_reason = TeacherStopReason.WORKER_ERROR
+            try:
+                result = searcher.search(
+                    engine=engine.fork(), perspective_seat=observation.seat,
+                    knowledge=observation.knowledge, experiment_seed=case["experiment_seed"],
+                    timeout_seconds=root_timeout_seconds).result
+                stop_reason = result.stop_reason
+                failure = result.failure
+            except TeacherSearchUnavailable as exc:
+                stop_reason, failure = exc.stop_reason, str(exc)
+            except Exception as exc:
+                failure = f"{type(exc).__name__}: {exc}"
+            elapsed = perf_counter() - started
+            target = None if result is None else _reference_target(result)
+            certified = bool(
+                target is not None
+                and result.evaluator_identity == baseline["evaluator_identity"]
+                and result.evaluation_model_identity in baseline["evaluation_model_identities"]
+                and result.baseline_identity == baseline["baseline_id"]
+                and result.configuration_identity == configuration.identity)
+            result_document = None if result is None else result.document()
+            rows.append({
+                "root_id": case["root_id"], "agent": case["agent"],
+                "stratum": case["stratum"], "repetition": repetition,
+                "snapshot_id": snapshot.snapshot_id,
+                "search_configuration": asdict(configuration),
+                "search_configuration_identity": configuration.identity,
+                "worker_status": "unavailable" if result is None else "completed",
+                "coverage": None if result is None else result.coverage.value,
+                "stop_reason": stop_reason.value, "failure": failure,
+                "elapsed_seconds": elapsed,
+                "statistics": None if result is None else asdict(result.statistics),
+                "preferred_action": None if result is None else result_document["preferred_action"],
+                "best_full_sequence": (
+                    None if result is None else result_document["best_full_sequence"]),
+                "teacher_semantic_identity": None if result is None else result.semantic_identity,
+                "reference_target": target, "reference_ready": certified,
+            })
+    batch_elapsed = perf_counter() - batch_started
+    configuration_document = asdict(search_configuration)
+    del configuration_document["action_policy"]
+    configuration_document["action_policy_by_agent"] = {
+        agent: configuration["action_policy"] for agent, configuration in configurations.items()}
     generated_at = datetime.now(timezone.utc).isoformat()
     body = {
         "schema": RUN_SCHEMA, "schema_version": RUN_SCHEMA_VERSION,
         "generated_at": generated_at, "corpus_id": corpus["corpus_id"],
         "method": "teacher_exhaustive",
         "method_identity": WithinHorizonTeacher.identity,
-        "search_configuration": asdict(search_configuration),
-        "search_configuration_identity": search_configuration.identity,
-        "execution": asdict(execution),
+        "search_configuration": configuration_document,
+        "search_configuration_identity": _identity(configuration_document),
+        "execution": {
+            **asdict(execution), "parallelism_scope": "root_actions", "roots_in_flight": 1,
+            "latency_scope": "decision_wall", "backend": "cgpy",
+            "budget_scope": "search_worker",
+            "entry_point": "sim.teacher_agent.IsolatedTeacherSearcher",
+        },
         "source_identity": git_source_identity(REPO, allow_dirty=True),
         "host": {
             "system": platform.system(), "machine": platform.machine(),
             "processor": platform.processor(), "python": platform.python_version(),
             "logical_cores": os.cpu_count(),
         },
-        "results": rows, "summary": _summaries(rows, batch.elapsed_seconds),
+        "results": rows, "summary": _summaries(rows, batch_elapsed),
     }
     document = {**body, "run_id": _identity(body)}
     output = Path(output)
@@ -471,28 +506,34 @@ def run_teacher(root: Path, *, output: Path, workers: int, repetitions: int,
 def _parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="Capture, verify, and run search timing roots")
     subparsers = parser.add_subparsers(dest="command", required=True)
-    capture = subparsers.add_parser("capture", help="publish the immutable nine-root corpus")
+    capture = subparsers.add_parser("capture", help="publish the current immutable root corpus")
     capture.add_argument("--out", type=Path, default=DEFAULT_CORPUS)
     capture.add_argument("--ledger-baseline", type=Path)
     capture.add_argument("--allow-dirty", action="store_true")
     verify = subparsers.add_parser("verify", help="verify corpus identities and artifacts")
     verify.add_argument("--corpus", type=Path, default=DEFAULT_CORPUS)
+    baseline = subparsers.add_parser("baseline", help="freeze a reviewed clean-checkout timing run")
+    baseline.add_argument("--run", type=Path, required=True)
+    baseline.add_argument("--out", type=Path, required=True)
     run = subparsers.add_parser("run", help="time one implemented search method")
     run.add_argument("--corpus", type=Path, default=DEFAULT_CORPUS)
     run.add_argument("--method", choices=("teacher_exhaustive",),
                      default="teacher_exhaustive")
     run.add_argument("--root", action="append", default=[])
-    run.add_argument("--jobs", type=int, default=default_workers())
+    run.add_argument("--jobs", type=int, default=default_workers(),
+                     help="workers for branches within one decision; roots run sequentially")
     run.add_argument("--repetitions", type=int, default=1)
-    run.add_argument("--time-cap", type=float, default=600.0)
-    run.add_argument("--root-timeout", type=float, default=660.0)
-    run.add_argument("--node-cap", type=int, default=100_000)
-    run.add_argument("--path-node-cap", type=int, default=512)
-    run.add_argument("--chance-branch-cap", type=int, default=100_000)
-    run.add_argument("--exact-outcome-limit", type=int, default=16)
-    run.add_argument("--chance-samples", type=int, default=12)
-    run.add_argument("--noise-tolerance", type=float, default=1e-9)
-    run.add_argument("--tie-seed", type=int, default=1178)
+    defaults = TeacherSearchConfiguration()
+    run.add_argument("--time-cap", type=float, default=defaults.time_cap_seconds)
+    run.add_argument("--root-timeout", type=float,
+                     default=TeacherExecutionConfiguration().root_timeout_seconds)
+    run.add_argument("--node-cap", type=int, default=defaults.node_cap)
+    run.add_argument("--path-node-cap", type=int, default=defaults.path_node_cap)
+    run.add_argument("--chance-branch-cap", type=int, default=defaults.chance_branch_cap)
+    run.add_argument("--exact-outcome-limit", type=int, default=defaults.exact_outcome_limit)
+    run.add_argument("--chance-samples", type=int, default=defaults.chance_sample_count)
+    run.add_argument("--noise-tolerance", type=float, default=defaults.noise_tolerance)
+    run.add_argument("--tie-seed", type=int, default=defaults.tie_seed)
     run.add_argument("--out", type=Path, default=DEFAULT_RUNS)
     run.add_argument("--assert-baseline", type=Path,
                      help="fail on changed results, increased compute, or excessive median/batch time")
@@ -511,6 +552,14 @@ def main(argv=None) -> int:
     if args.command == "verify":
         document, _parity = load_corpus(args.corpus)
         print(f"verified {document['corpus_id']} ({len(document['cases'])} roots)")
+        return 0
+    if args.command == "baseline":
+        if args.out.exists():
+            raise ValueError(f"Search Timing Baseline already exists: {args.out}")
+        baseline = baseline_from_run(json.loads(args.run.read_text(encoding="utf-8")))
+        args.out.parent.mkdir(parents=True, exist_ok=True)
+        args.out.write_text(json.dumps(baseline, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+        print(args.out)
         return 0
     configuration = TeacherSearchConfiguration(
         node_cap=args.node_cap, path_node_cap=args.path_node_cap,

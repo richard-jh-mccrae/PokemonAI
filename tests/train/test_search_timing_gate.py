@@ -8,7 +8,7 @@ from cgpy.experiment import TeacherSearchConfiguration, TeacherExecutionConfigur
 from train import search_timing, search_timing_gate
 
 
-BASELINE = search_timing.REPO / "data/benchmarks/search_timing/teacher_ci_baseline.json"
+BASELINE = search_timing.REPO / "data/benchmarks/search_timing/teacher_live_ci_baseline.json"
 
 
 def _baseline():
@@ -20,7 +20,7 @@ def _baseline():
         "repetitions": 3,
         "limits": {"median_time_multiplier": 2.0, "minimum_median_seconds": 0.25,
                    "batch_time_multiplier": 2.0},
-        "measurement": {"batch_elapsed_seconds": 10.0},
+        "measurement": {"batch_elapsed_seconds": 10.0, "run_schema_version": 2},
         "roots": [{
             "root_id": "test-root", "reference_target_id": "fixed-target",
             "reference_target": {
@@ -40,6 +40,9 @@ def _passing_run(baseline):
     return {
         "schema": search_timing.RUN_SCHEMA, "schema_version": search_timing.RUN_SCHEMA_VERSION,
         "run_id": "test-run",
+        "generated_at": "2026-09-02T00:00:00Z", "host": {"python": "test"},
+        "source_identity": {"commit": "test-commit", "dirty": False},
+        "method_identity": baseline.get("method_identity", "test-teacher"),
         **{key: deepcopy(baseline[key]) for key in (
             "corpus_id", "method", "search_configuration", "execution")},
         "summary": {"batch_elapsed_seconds": 10.0},
@@ -50,6 +53,8 @@ def _passing_run(baseline):
             "reference_target": {**deepcopy(root["reference_target"]),
                                  "target_id": root["reference_target_id"]},
             "elapsed_seconds": elapsed, "statistics": dict(root["work"]),
+            "search_configuration": root.get("search_configuration", baseline["search_configuration"]),
+            "search_configuration_identity": root.get("search_configuration_identity", "test-config"),
         } for root in baseline["roots"]
             for repetition, elapsed in enumerate(root["elapsed_seconds"], 1)],
     }
@@ -62,12 +67,22 @@ def test_committed_limits_cover_the_immutable_corpus_and_preserve_measurement_pr
     assert baseline["corpus_id"] == corpus["corpus_id"]
     assert {root["root_id"] for root in baseline["roots"]} == {
         case["root_id"] for case in corpus["cases"]}
-    assert baseline["execution"]["workers"] == 1
+    assert baseline["execution"]["workers"] == 2
+    assert baseline["execution"]["parallelism_scope"] == "root_actions"
+    assert baseline["execution"]["latency_scope"] == "decision_wall"
     assert baseline["repetitions"] == 3
     assert baseline["measurement"]["source_identity"]["dirty"] is False
     assert baseline["measurement"]["run_id"]
     assert baseline["measurement"]["host"]["python"]
     assert search_timing_gate.check_run(_passing_run(baseline), baseline)["passed"]
+
+
+def test_historical_worker_only_baseline_remains_readable_but_rejects_live_latency():
+    baseline = json.loads(BASELINE.with_name("teacher_ci_baseline.json").read_text(encoding="utf-8"))
+    run = _passing_run(baseline)
+    assert not search_timing_gate.check_run(run, baseline)["passed"]
+    run["schema_version"] = 1
+    assert search_timing_gate.check_run(run, baseline)["passed"]
 
 
 def test_gate_allows_less_compute_and_one_timing_outlier_with_identical_results():
@@ -264,15 +279,59 @@ def test_cli_writes_gate_evidence_and_returns_nonzero_on_regression(tmp_path, mo
     assert "test-root" in output.with_suffix(".gate.md").read_text(encoding="utf-8")
 
 
-def test_ci_runs_real_corpus_serially_and_retains_gate_artifacts():
+def test_ci_runs_real_corpus_with_branch_workers_and_retains_gate_artifacts():
     import yaml
 
     workflow = yaml.safe_load((search_timing.REPO / ".github/workflows/ci.yml").read_text(encoding="utf-8"))
     job = workflow["jobs"]["test-performance"]
     assert job["env"]["PYTHONHASHSEED"] == "0"
     step = next(step for step in job["steps"] if "--assert-baseline" in step.get("run", ""))
-    for option in ("--jobs 1", "--repetitions 3", "--time-cap 120", "--root-timeout 140"):
+    for option in ("--jobs 2", "--repetitions 3", "--time-cap 120", "--root-timeout 140"):
         assert option in step["run"]
     assert "--root " not in step["run"]
     upload = next(step for step in job["steps"] if step.get("uses", "").startswith("actions/upload-artifact@"))
     assert upload["if"] == "always()"
+
+
+def test_freeze_baseline_pins_live_contract_and_rejects_incomplete_or_dirty_runs():
+    baseline = _baseline()
+    baseline["measurement"]["run_schema_version"] = 2
+    run = _passing_run(baseline)
+    frozen = search_timing_gate.baseline_from_run(run)
+    assert frozen["measurement"]["run_id"] == run["run_id"]
+    assert frozen["measurement"]["run_schema_version"] == 2
+    assert frozen["roots"][0]["search_configuration"] == run["results"][0]["search_configuration"]
+    assert search_timing_gate.check_run(run, frozen)["passed"]
+    run["results"][0]["stop_reason"] = "time_cap"
+    with pytest.raises(ValueError, match="cannot certify"):
+        search_timing_gate.baseline_from_run(run)
+    run["source_identity"]["dirty"] = True
+    with pytest.raises(ValueError, match="clean checkout"):
+        search_timing_gate.baseline_from_run(run)
+
+
+def test_live_baseline_pins_method_and_each_resolved_deck_configuration():
+    baseline = _baseline()
+    baseline["measurement"]["run_schema_version"] = 2
+    run = _passing_run(baseline)
+    frozen = search_timing_gate.baseline_from_run(run)
+    run["results"][0]["search_configuration_identity"] = "all-legal-instead-of-deck-policy"
+    assert not search_timing_gate.check_run(run, frozen)["passed"]
+    run = _passing_run(frozen)
+    run["method_identity"] = "other-teacher"
+    assert not search_timing_gate.check_run(run, frozen)["passed"]
+
+
+def test_baseline_cli_preserves_existing_artifacts(tmp_path):
+    run = _passing_run(_baseline())
+    source = tmp_path / "run.json"
+    source.write_text(json.dumps(run), encoding="utf-8")
+    output = tmp_path / "baseline.json"
+    args = ["baseline", "--run", str(source), "--out", str(output)]
+
+    assert search_timing.main(args) == 0
+    original = output.read_bytes()
+    assert search_timing_gate.check_run(run, json.loads(original))["passed"]
+    with pytest.raises(ValueError, match="already exists"):
+        search_timing.main(args)
+    assert output.read_bytes() == original
