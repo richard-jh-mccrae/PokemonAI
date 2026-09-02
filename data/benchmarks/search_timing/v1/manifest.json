@@ -79,15 +79,15 @@
         1260,
         1260
       ],
-      "description": "Two Dreepy and an immediately playable evolution.",
+      "description": "A lone Dreepy can bench Budew or preserve the minimal board.",
       "experiment_seed": 60901,
-      "paired_case_id": "3eb61401b8524f90d5c5e9cda2670dd0d4dc36b3fdb758cba10154f1640a89f0",
+      "paired_case_id": "3ad3f7f1207e3ef1fa85fa047948a7124e3c58831f236daed37e79cd1ddf953b",
       "paired_case_path": "cases/dragapult-opening.paired-case.json",
-      "paired_case_sha256": "85f130ae71f680ef8d89eb9315f3b806c04a4187d90665e423107f659e1737d4",
+      "paired_case_sha256": "13e68456047c5dddcc19cbc4bd58c24d2b98e297bb77fbd3c06bdd0d130e5b54",
       "root_id": "dragapult-opening",
-      "snapshot_id": "acb6b97e65ef48f7eb152fc85cc66088b5451f05a0d846064cfe0d6805558f55",
+      "snapshot_id": "c95730bb56821f269702f99a228a4801fc0c44f4619d68093679fed6168ab6ee",
       "snapshot_path": "snapshots/dragapult-opening.snapshot.json.gz",
-      "snapshot_sha256": "0d1f7abebc96705090b8fe04ad5de959ab20dd0d9ab3752f3042e29663f0d588",
+      "snapshot_sha256": "99228e5e52e326bb483e80f033a72c2050eda83a4a8ac62985b1ea9f83831355",
       "stratum": "opening"
     },
     {
@@ -154,15 +154,15 @@
         1260,
         1260
       ],
-      "description": "Ultra Ball can expose a known Drakloak/Dragapult deck top.",
+      "description": "Recon Directive chooses between a known gust and search Item.",
       "experiment_seed": 60902,
-      "paired_case_id": "73b3848b9506f050abb366f2ddf93fc309ba8e7903b274451cbac3a878e0f8e3",
+      "paired_case_id": "d542faa8969ee4599014bb1ea22c6be64b19b6d4bd1605f559820223f39b092d",
       "paired_case_path": "cases/dragapult-search.paired-case.json",
-      "paired_case_sha256": "f45892c69c2682c687d6b81e881c6bcbb7d2e27f249715fe803e5c9a411c51d3",
+      "paired_case_sha256": "f33a3af0e6c7f9473b9413b37eed06e95e0a81e218725a86b20d17a2c0ac1ab4",
       "root_id": "dragapult-search",
-      "snapshot_id": "de8a35226b7f2b46154e6052accd4a741dd340c5bfe73914e50b756e4a054ef6",
+      "snapshot_id": "429d8190a451e6590015cf6a3de9a23017a6b1b54c6f026ee214ce64f9cfb949",
       "snapshot_path": "snapshots/dragapult-search.snapshot.json.gz",
-      "snapshot_sha256": "704e8acb9be22d9cae0e4bdd8435a6f6e859af750832a125246386ce8f1b823d",
+      "snapshot_sha256": "b03016ce2e0d1d536a597da434cfbe07888bbc49f3a0771a9debb037f3a5c1c8",
       "stratum": "search"
     },
     {
@@ -381,13 +381,13 @@
       ],
       "description": "Ultra Ball can expose known Mega Lucario and Hariyama targets.",
       "experiment_seed": 60905,
-      "paired_case_id": "0a252d1098e4ac5a0602d898987ef7121fdfb6095d2f9d88abde3ea36f97b7c5",
+      "paired_case_id": "d54eb9f4cef40c716f3bd7aebcfba396a4027caa09429f4782df2e30fd0a0ded",
       "paired_case_path": "cases/lucario-search.paired-case.json",
-      "paired_case_sha256": "eb6745f6f98276c2903ff1cb5f1511813e46a3e6fc58f6243bd22e4573905fbb",
+      "paired_case_sha256": "58d4ae9296b77cea3726fffab63ed13278fd0f327505d370a0051f321fe73b93",
       "root_id": "lucario-search",
-      "snapshot_id": "ad3e4a07d4b3bfd8bbb21e44e17f1e7964f4a9304bf1ec908d10477ebfed76c8",
+      "snapshot_id": "42f7f98d9be264a9f9d42d3db8dffb22e099d47ffbfc94a045b7144608d09e47",
       "snapshot_path": "snapshots/lucario-search.snapshot.json.gz",
-      "snapshot_sha256": "346e793754c003d6545bd6eda1f7afbb5a5e5feba222d168a3a567c9314243c0",
+      "snapshot_sha256": "37005e18980fce7f7a516a3f494b2c9b4998ba7cd690e18b0bfa7d202ce686a5",
       "stratum": "search"
     },
     {
@@ -454,15 +454,15 @@
         1252,
         1252
       ],
-      "description": "Powered Mega Lucario has gust, acceleration, and a second attacker.",
+      "description": "Powered Mega Lucario can gust before attacking or preserve Boss.",
       "experiment_seed": 60906,
-      "paired_case_id": "fae5973dfb28218b699771b1b14cd69bc1a720a15cfe4e44099fc4e974e51bb5",
+      "paired_case_id": "3b46c0ab46a47fd7b2b3221aeea3289ab11a81ca7eb73e8d7154648028803162",
       "paired_case_path": "cases/lucario-tactical.paired-case.json",
-      "paired_case_sha256": "dba9d7652c1b0b47123efdf2f0c408a8b566611cb5379df4caae980177e734f8",
+      "paired_case_sha256": "8e2361eb9dfc085e8aef93eb645cf76bdca97c0d5108f25b1876a0a17afce3d2",
       "root_id": "lucario-tactical",
-      "snapshot_id": "f55968a03fb504c6b1560817d532082d3d00b3c4a7d562fe291d7b459d3dfb1c",
+      "snapshot_id": "20573344c8cb917575b86cd2b1fc4924e8c7fcfe1ac36fb80191a274712bbc60",
       "snapshot_path": "snapshots/lucario-tactical.snapshot.json.gz",
-      "snapshot_sha256": "2d6d928915883de1ea66f6b662cf2f8ba715380ef98572de21284cd597632f44",
+      "snapshot_sha256": "0269457efe7937dc3a10ab6ebd3f436e703eb0c657308bc18b560764444c2fe1",
       "stratum": "tactical"
     },
     {
@@ -691,7 +691,7 @@
       "stratum": "tactical"
     }
   ],
-  "corpus_id": "1283e66f10a11ac01bd2cef646322ec22f74c0860a2eb3089eaab5ec70cee838",
+  "corpus_id": "7a1d5c333152fbd0ca382adc2e3e9926f2760fee43c46affc458a6057dd5f598",
   "methods": [
     "ledger_one_ply",
     "teacher_exhaustive",
@@ -1060,7 +1060,7 @@
     "rule": "three declared nontrivial strata per developed deck"
   },
   "source_identity": {
-    "commit": "fc0025038128fae12b9a8b36d67bb88984f9fa0d",
+    "commit": "464cb33c77e13a1880fc052ec78ea94f1133c243",
     "dirty": false
   },
   "strata": [
