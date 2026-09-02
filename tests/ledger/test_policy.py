@@ -249,10 +249,12 @@ def test_ledger_policy_loads_the_committed_frozen_baseline():
     manifests = tuple((repository / "data" / "ledger-baselines").glob("*/manifest.json"))
 
     assert len(manifests) == 1
-    baseline = LedgerPolicyBaseline.load(manifests[0].parent.name, manifests[0])
+    baseline = LedgerPolicyBaseline.load(
+        manifests[0].parent.name, manifests[0], SCALE.identity)
     assert baseline.baseline_identity == manifests[0].parent.name
     assert baseline.evaluator_identity
     assert baseline.evaluation_model_identities
+    assert baseline.value_scale_identity == SCALE.identity
 
 
 def test_committed_calibration_matches_the_frozen_baseline_without_heldout_data():
@@ -274,6 +276,19 @@ def test_committed_calibration_matches_the_frozen_baseline_without_heldout_data(
                for result in artifact["deck_smoke"].values())
     assert sum(result["live_greedy_disagreements"]
                for result in artifact["deck_smoke"].values()) > 0
+
+
+def test_calibrated_model_binds_frozen_baseline_to_recorded_value_scale():
+    repository = Path(__file__).resolve().parents[2]
+    manifest = next((repository / "data" / "ledger-baselines").glob("*/manifest.json"))
+    calibration = (repository / "data" / "ledger-policy-calibrations"
+                   / f"{manifest.parent.name}.json")
+
+    model = LedgerPolicyModel.load_calibrated(
+        manifest.parent.name, manifest, calibration)
+
+    assert model.baseline.value_scale_identity == SCALE.identity
+    assert model.configuration.identity == "6f822dc74c2655c5"
 
 
 def test_policy_distribution_decoder_rejects_unknown_fields():

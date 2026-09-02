@@ -2,6 +2,9 @@ import json
 
 import pytest
 
+from common.decision import EvaluationStatus
+from common.ledger import LedgerPolicyConfiguration
+from common.ledger.policy import normalize_ledger_priors
 from train.policy_calibrate import _loss, _priors
 
 
@@ -29,6 +32,18 @@ def test_policy_calibration_smoke_falls_back_for_estimated_evidence():
     sample["candidates"][1]["status"] = "estimated"
 
     assert _priors(sample, 1.0, 0.1) == (0.5, 0.5)
+
+
+def test_policy_calibration_uses_runtime_normalization_semantics():
+    configuration = LedgerPolicyConfiguration(1.0, 0.1)
+
+    runtime = normalize_ledger_priors(
+        (2.0, 0.0),
+        (EvaluationStatus.COMPLETE, EvaluationStatus.COMPLETE),
+        configuration,
+    )
+
+    assert _priors(row(), 1.0, 0.1) == runtime.priors
 
 
 @pytest.mark.parametrize(("temperature", "mix"), ((0.25, 0.01), (16.0, 0.5)))

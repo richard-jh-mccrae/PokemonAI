@@ -17,7 +17,9 @@ from .features import (
     ActivationRule, FEATURE_CATALOG, FeatureCatalog, FeatureDisposition, FeatureSpec,
 )
 from .preview import ContinuationFootprint
-from .policy import LedgerPolicyBaseline, LedgerPolicyConfiguration, LedgerPolicyModel
+from .policy import (LedgerPolicyBaseline, LedgerPolicyCalibration,
+                     LedgerPolicyConfiguration, LedgerPolicyDeckSmoke,
+                     LedgerPolicyModel)
 from .prizes import PrizeMap, derive_prize_map
 from .seam import (LedgerNativeProvider, PreviewState, preview_provider_factory,
                    register_preview_variant)
@@ -51,7 +53,8 @@ __all__ = ("AUTHORITATIVE_DECKS", "ActivationCompiler", "ActivationEnvironment",
            "EvaluationModel", "EvaluationSnapshot", "LEDGER_VALUE_SCALE", "LedgerDecider",
            "LedgerNativeProvider",
            "LedgerReadinessReport", "LedgerUnavailable", "LedgerValueEvaluator",
-           "LedgerPolicyBaseline", "LedgerPolicyConfiguration", "LedgerPolicyModel",
+           "LedgerPolicyBaseline", "LedgerPolicyCalibration", "LedgerPolicyConfiguration",
+           "LedgerPolicyDeckSmoke", "LedgerPolicyModel",
            "GreedyDecisionPolicy", "LedgerOnePlySearch", "UniformPolicyModel",
            "PreviewState", "PrizeMap", "ReadinessFinding", "Valuation",
            "OpponentProfile", "ValuationConfiguration", "WholeBoardCertification",

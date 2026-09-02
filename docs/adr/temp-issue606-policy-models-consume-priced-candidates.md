@@ -19,7 +19,8 @@ Model, and Value Scale. Uniform and Ledger models share one request/result contr
 the frozen certified Correction evidence, which is the tuning source rather than the held-out game
 partition. Baseline `98a582d49a32146b18e59beed0019041ce1745fd653e94f7d9c86f8cf0aec92d`
 selects temperature `8.0` and uniform mixing `0.01`; the identified artifact records the grid,
-three-deck smoke results, and zero held-out inputs. Estimated values require explicit opt-in. The
+three-deck smoke results, frozen `ledger-worth:v1` Value Scale, and zero held-out inputs. Estimated
+values require explicit opt-in. The
 existing status model represents incomplete chance evaluation as estimated; it has no rejected
 status, so unavailable and disallowed-estimated evidence are the independently typed fallbacks.
 

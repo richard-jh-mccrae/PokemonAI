@@ -84,5 +84,6 @@
     "partition": "frozen_historical_corrections_tuning",
     "path": "evidence/historical-corrections.json",
     "sha256": "94e62ee0d5fb8e606896bda11d0f60e9cf941f6aabd320b64973d26ed2c0a96f"
-  }
+  },
+  "value_scale_identity": "ledger-worth:v1"
 }
