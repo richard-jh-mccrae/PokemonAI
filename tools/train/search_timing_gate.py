@@ -16,6 +16,23 @@ def _positive_finite(value) -> bool:
     return type(value) in (int, float) and math.isfinite(value) and value > 0
 
 
+def _same_reference(actual, expected, tolerance: float, *, field: str = "") -> bool:
+    if field in ("value", "expected_value"):
+        return (type(actual) in (int, float) and type(expected) in (int, float)
+                and math.isfinite(actual) and math.isfinite(expected)
+                and math.isclose(actual, expected, rel_tol=0.0, abs_tol=tolerance))
+    if isinstance(expected, dict):
+        return (isinstance(actual, dict) and actual.keys() == expected.keys()
+                and all(_same_reference(actual[key], value, tolerance, field=key)
+                        for key, value in expected.items()))
+    if isinstance(expected, list):
+        return (isinstance(actual, list) and len(actual) == len(expected)
+                and all(_same_reference(a, b, tolerance) for a, b in zip(actual, expected)))
+    if type(expected) in (int, float):
+        return type(actual) in (int, float) and math.isfinite(actual) and actual == expected
+    return type(actual) is type(expected) and actual == expected
+
+
 def _validate_baseline(baseline: dict) -> None:
     if baseline.get("schema") != "cgpy-search-timing-baseline" or baseline.get("schema_version") != 1:
         raise ValueError("unsupported Search Timing Baseline schema")
@@ -33,17 +50,22 @@ def _validate_baseline(baseline: dict) -> None:
         raise ValueError("timing multipliers cannot reject the baseline itself")
     if not _positive_finite(baseline["measurement"]["batch_elapsed_seconds"]):
         raise ValueError("invalid baseline batch timing")
+    if not _positive_finite(baseline["search_configuration"]["noise_tolerance"]):
+        raise ValueError("invalid baseline value tolerance")
     for root in roots:
         if len(root["elapsed_seconds"]) != repetitions or not all(
                 _positive_finite(value) for value in root["elapsed_seconds"]):
             raise ValueError(f"invalid timing samples for {root['root_id']}")
         if not root["reference_target_id"] or set(root["work"]) != set(WORK_COUNTERS):
             raise ValueError(f"missing result or compute evidence for {root['root_id']}")
+        if set(root["reference_target"]) != {
+                "root_state_key", "preferred_action", "selected_policy", "leaves", "best_full_sequence"}:
+            raise ValueError(f"missing full reference target for {root['root_id']}")
         if any(type(value) is not int or value < 0 for value in root["work"].values()):
             raise ValueError(f"invalid compute baseline for {root['root_id']}")
 
 
-def _root_report(rows: list[dict], baseline: dict, limits: dict) -> dict:
+def _root_report(rows: list[dict], baseline: dict, limits: dict, tolerance: float) -> dict:
     failures = []
     timings = []
     observed = {name: [] for name in WORK_COUNTERS}
@@ -55,7 +77,8 @@ def _root_report(rows: list[dict], baseline: dict, limits: dict) -> dict:
                 ("stop_reason", "complete"), ("failure", None))) or row.get("reference_ready") is not True:
             failures.append(f"{label}: incomplete/uncertified search ({row.get('stop_reason')}; {row.get('failure')})")
         target = row.get("reference_target") or {}
-        if target.get("target_id") != baseline["reference_target_id"]:
+        target = {key: value for key, value in target.items() if key != "target_id"}
+        if not _same_reference(target, baseline["reference_target"], tolerance):
             failures.append(f"{label}: reference result changed")
         elapsed = row.get("elapsed_seconds")
         if not _positive_finite(elapsed):
@@ -103,8 +126,9 @@ def check_run(run: dict, baseline: dict) -> dict:
     actual = Counter((row.get("root_id"), row.get("repetition")) for row in rows)
     if actual != expected:
         failures.append("root/repetition inventory differs: missing, duplicate, or unexpected samples")
+    tolerance = baseline["search_configuration"]["noise_tolerance"]
     roots = [_root_report([row for row in rows if row.get("root_id") == root["root_id"]],
-                          root, baseline["limits"]) for root in baseline["roots"]]
+                          root, baseline["limits"], tolerance) for root in baseline["roots"]]
     for root in roots:
         failures.extend(root["failures"])
     batch = (run.get("summary") or {}).get("batch_elapsed_seconds")
@@ -119,6 +143,7 @@ def check_run(run: dict, baseline: dict) -> dict:
         "schema": "cgpy-search-timing-gate", "schema_version": 1,
         "run_id": run.get("run_id"), "corpus_id": baseline["corpus_id"],
         "baseline_measurement": baseline["measurement"], "limits": baseline["limits"],
+        "value_absolute_tolerance": tolerance,
         "passed": not failures, "failures": failures, "roots": roots,
         "batch_elapsed_seconds": batch, "maximum_batch_seconds": maximum_batch,
     }
@@ -130,6 +155,7 @@ def render_report(report: dict) -> str:
 
     lines = [
         f"## Search timing: {'PASS' if report['passed'] else 'FAIL'}", "",
+        f"Result structure exact; absolute valuation tolerance {report['value_absolute_tolerance']:g}.", "",
         "Work is observed / ceiling. Time is median / ceiling in seconds.", "",
         "| Root | Median / limit | Nodes | Leaf evaluations | Chance branches |",
         "| --- | ---: | ---: | ---: | ---: |",

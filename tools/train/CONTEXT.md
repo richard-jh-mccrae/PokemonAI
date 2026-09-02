@@ -202,6 +202,8 @@ state, randomness, parity, and the frozen Ledger Baseline fixed. It is not held-
 CI requires unchanged results and complete coverage before comparing cost. Deterministic work has no
 growth allowance; wall-clock medians need runner headroom. Ceiling changes require reviewed measurements,
 never automatic relearning from a failing run.
+Result structure compares exactly; valuations use the pinned search noise tolerance to accommodate
+cross-Python floating-point summation differences. Raw fingerprints remain in run artifacts.
 _Avoid_: Performance Profile, Canonical Corpus, Benchmark Result
 
 **Terminal Target**:

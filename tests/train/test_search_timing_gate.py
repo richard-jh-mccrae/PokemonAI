@@ -23,6 +23,12 @@ def _baseline():
         "measurement": {"batch_elapsed_seconds": 10.0},
         "roots": [{
             "root_id": "test-root", "reference_target_id": "fixed-target",
+            "reference_target": {
+                "root_state_key": "root", "preferred_action": {"kind": "end", "parts": []},
+                "selected_policy": [{"state_key": "root", "expected_value": 8.73356856142241}],
+                "leaves": [{"state_key": "leaf", "value": 8.73356856142241, "probability": 1.0}],
+                "best_full_sequence": [{"kind": "end", "parts": []}],
+            },
             "elapsed_seconds": [1.0, 1.1, 0.9],
             "work": {name: (0 if name == "cycles" else 10)
                      for name in search_timing_gate.WORK_COUNTERS},
@@ -41,7 +47,8 @@ def _passing_run(baseline):
             "root_id": root["root_id"], "repetition": repetition,
             "worker_status": "completed", "coverage": "complete", "stop_reason": "complete",
             "failure": None, "reference_ready": True,
-            "reference_target": {"target_id": root["reference_target_id"]},
+            "reference_target": {**deepcopy(root["reference_target"]),
+                                 "target_id": root["reference_target_id"]},
             "elapsed_seconds": elapsed, "statistics": dict(root["work"]),
         } for root in baseline["roots"]
             for repetition, elapsed in enumerate(root["elapsed_seconds"], 1)],
@@ -77,6 +84,49 @@ def test_gate_allows_less_compute_and_one_timing_outlier_with_identical_results(
     assert report["roots"][0]["maximum_seconds"] == 5.0
     assert report["roots"][0]["maximum_median_seconds"] == 2.0
     assert "test-root" in search_timing_gate.render_report(report)
+
+
+def test_reference_values_allow_only_the_existing_search_noise_tolerance():
+    baseline = _baseline()
+    run = _passing_run(baseline)
+    target = run["results"][0]["reference_target"]
+    target["target_id"] = "different-raw-float-fingerprint"
+    target["selected_policy"][0]["expected_value"] = 8.733568561422414
+    target["leaves"][0]["value"] = 8.733568561422414
+
+    assert search_timing_gate.check_run(run, baseline)["passed"]
+    target["leaves"][0]["value"] += 1e-8
+    assert not search_timing_gate.check_run(run, baseline)["passed"]
+
+
+def test_equivalent_integer_and_float_json_probabilities_compare_exactly():
+    baseline = _baseline()
+    baseline["roots"][0]["reference_target"]["leaves"][0]["probability"] = 1
+    run = _passing_run(baseline)
+    run["results"][0]["reference_target"]["leaves"][0]["probability"] = 1.0
+
+    assert search_timing_gate.check_run(run, baseline)["passed"]
+
+
+@pytest.mark.parametrize("field,value", [
+    ("probability", 1.0 - 1e-14), ("state_key", "other-leaf"),
+    ("value", float("nan")), ("value", float("inf")),
+])
+def test_reference_tolerance_never_hides_structural_probability_or_invalid_value_changes(field, value):
+    baseline = _baseline()
+    run = _passing_run(baseline)
+    run["results"][0]["reference_target"]["leaves"][0][field] = value
+
+    assert not search_timing_gate.check_run(run, baseline)["passed"]
+
+
+@pytest.mark.parametrize("field", ["preferred_action", "best_full_sequence", "selected_policy"])
+def test_reference_policy_and_sequence_remain_exact(field):
+    baseline = _baseline()
+    run = _passing_run(baseline)
+    run["results"][0]["reference_target"][field] = None
+
+    assert not search_timing_gate.check_run(run, baseline)["passed"]
 
 
 @pytest.mark.parametrize("counter", search_timing_gate.WORK_COUNTERS)
