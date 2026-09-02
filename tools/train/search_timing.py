@@ -214,7 +214,7 @@ def capture_corpus(out: Path, *, baseline_path: Path | None = None,
                 baseline_identity=identities.baseline, parity=parity)
             case_relative = f"cases/{spec.root_id}.paired-case.json"
             case_path = stage / case_relative
-            case_path.write_text(paired.dumps() + "\n", encoding="utf-8")
+            case_path.write_bytes((paired.dumps() + "\n").encode("utf-8"))
             cases.append({
                 "root_id": spec.root_id, "agent": spec.agent,
                 "stratum": spec.stratum, "description": spec.description,
@@ -246,8 +246,8 @@ def capture_corpus(out: Path, *, baseline_path: Path | None = None,
             "cases": cases,
         }
         manifest = {**body, "corpus_id": _identity(body)}
-        (stage / "manifest.json").write_text(
-            json.dumps(manifest, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+        (stage / "manifest.json").write_bytes(
+            (json.dumps(manifest, indent=2, sort_keys=True) + "\n").encode("utf-8"))
         stage.rename(out)
     except Exception:
         shutil.rmtree(stage, ignore_errors=True)
