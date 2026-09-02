@@ -13,6 +13,9 @@ from train.corpus import load_episode_bundle
 from train.corpus.evidence import audit_correction_records
 
 
+REPO = Path(__file__).resolve().parents[2]
+
+
 def _canonical(value) -> bytes:
     return json.dumps(value, sort_keys=True, separators=(",", ":"),
                       ensure_ascii=False).encode("utf-8")
@@ -22,7 +25,15 @@ def _sha(path: Path) -> str:
     return hashlib.sha256(Path(path).read_bytes()).hexdigest()
 
 
-def _heldout_decisions(decisions: list[dict]) -> list[dict]:
+def _portable(path: Path) -> str:
+    path = Path(path).resolve()
+    try:
+        return path.relative_to(REPO).as_posix()
+    except ValueError:
+        return str(path)
+
+
+def _ledger_decisions(decisions: list[dict]) -> list[dict]:
     return [{
         "record_id": record["record_id"], "seat": record["decision"].get("seat"),
         "turn": record["decision"].get("turn"),
@@ -35,6 +46,13 @@ def _heldout_decisions(decisions: list[dict]) -> list[dict]:
 
 def _report(slots: list[dict]) -> dict:
     tuning = [slot for slot in slots if slot["partition"] == "tuning"]
+    heldout = [slot for slot in slots if slot["partition"] == "heldout"]
+    durations = [float(slot["duration_seconds"]) for slot in slots
+                 if slot.get("duration_seconds") is not None]
+    reasons = {}
+    for slot in slots:
+        reason = str(slot.get("terminal_reason") or "unknown")
+        reasons[reason] = reasons.get(reason, 0) + 1
     return {
         "episodes": len(slots),
         "tuning_episodes": len(tuning),
@@ -45,6 +63,8 @@ def _report(slots: list[dict]) -> dict:
         "ledger_decisions": sum(slot["audit"]["ledger_decisions"] for slot in slots),
         "tuning_ledger_decisions": sum(
             slot["audit"]["ledger_decisions"] for slot in tuning),
+        "heldout_ledger_decisions": sum(
+            slot["audit"]["ledger_decisions"] for slot in heldout),
         "pregame_decisions": sum(slot["audit"]["pregame_decisions"] for slot in slots),
         "forced_unpriced_decisions": sum(
             len(slot["audit"].get("forced_unpriced_decisions", ())) for slot in slots),
@@ -52,12 +72,17 @@ def _report(slots: list[dict]) -> dict:
                                   for slot in slots),
         "estimated_decisions": sum(slot["audit"]["completeness"]["estimated"]
                                    for slot in slots),
+        "terminal_reasons": reasons,
+        "duration_seconds": {
+            "total": sum(durations), "maximum": max(durations, default=0.0)},
+        "failed_episodes": 0,
     }
 
 
 def _collect_runs(correction_runs) -> dict:
     runs, source, ledger, contestants, identities = [], None, None, {}, {}
     tuning_owners, heldout_episode_ids = {}, set()
+    review_decisions = {"tuning": [], "heldout": []}
     reports, heldout_manifest = {}, {}
     for run_dir in sorted(map(Path, correction_runs), key=lambda value: str(value)):
         path = run_dir / "manifest.json"
@@ -89,7 +114,7 @@ def _collect_runs(correction_runs) -> dict:
             bundle = (run_dir / relative).resolve()
             if run_dir.resolve() not in bundle.parents or not bundle.is_dir():
                 raise ValueError("Ledger Baseline Correction Run bundle is missing")
-            bundle_manifest, decisions, _receipt, _outcome, replay = load_episode_bundle(bundle)
+            bundle_manifest, decisions, _receipt, outcome, replay = load_episode_bundle(bundle)
             if bundle_manifest["bundle_id"] != slot.get("bundle_id") \
                     or str(bundle_manifest["episode_key"]) != str(slot.get("episode_id")) \
                     or str((replay.get("info") or {}).get("EpisodeId")) != str(slot.get("episode_id")):
@@ -101,7 +126,11 @@ def _collect_runs(correction_runs) -> dict:
                 "index", "episode_id", "opponent", "focal_seat", "partition", "engine_seed",
                 "bundle_id", "focal_result")}
             (heldout if slot.get("partition") == "heldout" else tuning).append(evidence)
-            audited.append({**slot, "audit": audit})
+            audited.append({
+                **slot, "audit": audit,
+                "terminal_reason": outcome.get("terminal_reason"),
+                "duration_seconds": outcome.get("duration_seconds"),
+            })
             episode_id = str(slot.get("episode_id"))
             if episode_id in tuning_owners or episode_id in heldout_episode_ids:
                 raise ValueError("Ledger Baseline Episode identity is duplicated")
@@ -111,7 +140,12 @@ def _collect_runs(correction_runs) -> dict:
                 heldout_episode_ids.add(episode_id)
                 heldout_manifest[focal].append({
                     "episode_id": slot.get("episode_id"), "bundle_id": slot.get("bundle_id"),
-                    "decisions": _heldout_decisions(decisions),
+                    "decisions": _ledger_decisions(decisions),
+                })
+            for decision in _ledger_decisions(decisions):
+                review_decisions[slot.get("partition")].append({
+                    "record_id": decision["record_id"],
+                    "episode_id": slot.get("episode_id"), "focal": focal,
                 })
             for identity in audit["behavior_identities"]:
                 identities[_canonical(identity)] = identity
@@ -133,6 +167,7 @@ def _collect_runs(correction_runs) -> dict:
         "behavior_identities": [identities[key] for key in sorted(identities)],
         "runs": runs, "reports": reports, "heldout_manifest": heldout_manifest,
         "tuning_owners": tuning_owners, "heldout_episode_ids": heldout_episode_ids,
+        "review_decisions": review_decisions,
     }
 
 
@@ -158,6 +193,7 @@ def certification_inventory(correction_runs) -> dict:
         "evidence": evidence,
         "tuning_episode_ids": sorted(data["tuning_owners"]),
         "heldout_episode_ids": sorted(data["heldout_episode_ids"]),
+        "review_decisions": data["review_decisions"],
     }
 
 
@@ -169,27 +205,43 @@ def correction_artifacts(sources) -> tuple[list[dict], list]:
         loaded = load_corrections(path, dedup=False)
         if not loaded or any(record.provenance != "human" for record in loaded):
             raise ValueError(f"invalid manual Correction artifact: {path}")
-        artifacts.append({"path": str(path), "sha256": _sha(path), "records": len(loaded)})
+        artifacts.append({"path": _portable(path), "sha256": _sha(path), "records": len(loaded)})
         records.extend(loaded)
     return artifacts, records
 
 
-def build_baseline(*, correction_runs, corrections, certification: Path | str,
+def correction_corpus_artifacts(sources, reviewed: Path | str) -> tuple[list[dict], list]:
+    artifacts, records = correction_artifacts(sources)
+    reviewed = Path(reviewed)
+    document = json.loads(reviewed.read_text(encoding="utf-8"))
+    if not isinstance(document, dict):
+        raise ValueError("reviewed Correction dispositions must be a JSON object")
+    artifacts.append({
+        "path": _portable(reviewed), "sha256": _sha(reviewed),
+        "records": len(document), "kind": "reviewed_dispositions",
+    })
+    return sorted(artifacts, key=lambda item: item["path"]), records
+
+
+def build_baseline(*, correction_runs, correction_corpus, reviewed_corrections,
+                   tuning_corrections, certification: Path | str,
                    current_source_identity: dict, known_weaknesses, created_at: str) -> dict:
     data = _collect_runs(correction_runs)
     if data["source"] != current_source_identity or current_source_identity.get("dirty"):
         raise ValueError("Ledger Baseline source identity is not the current clean source")
-    artifacts, records = correction_artifacts(corrections)
-    if not artifacts:
-        raise ValueError("Ledger Baseline requires a manual Correction")
+    corpus_artifacts, _corpus_records = correction_corpus_artifacts(
+        correction_corpus, reviewed_corrections)
+    tuning_artifacts, records = correction_artifacts(tuning_corrections)
     if any(data["tuning_owners"].get(str(record.episode_id)) != record.agent
            for record in records):
         raise ValueError("manual Correction is not owned by its focal tuning partition")
     certification_path = Path(certification)
     report = validate_certification(json.loads(
         certification_path.read_text(encoding="utf-8")))
-    corrections_identity = hashlib.sha256(_canonical(artifacts)).hexdigest()
-    if report.get("corrections_identity") != corrections_identity:
+    corpus_identity = hashlib.sha256(_canonical(corpus_artifacts)).hexdigest()
+    tuning_identity = hashlib.sha256(_canonical(tuning_artifacts)).hexdigest()
+    if report.get("correction_corpus_identity") != corpus_identity \
+            or report.get("tuning_corrections_identity") != tuning_identity:
         raise ValueError("Ledger Baseline certification used different Corrections")
     reviewed = {str(value) for value in report["manual_review"]["episode_ids"]}
     certified_heldout = {str(value) for value in report["heldout"]["episode_ids"]}
@@ -203,9 +255,14 @@ def build_baseline(*, correction_runs, corrections, certification: Path | str,
         "source_identity": data["source"], "ledger": data["ledger"],
         "contestants": data["contestants"], "behavior_identities": data["behavior_identities"],
         "correction_runs": data["runs"], "reports": data["reports"],
-        "heldout_manifest": data["heldout_manifest"], "corrections": artifacts,
-        "corrections_identity": corrections_identity,
-        "certification": {"path": str(certification_path),
+        "heldout_manifest": data["heldout_manifest"],
+        "correction_corpus": {
+            "artifacts": corpus_artifacts, "identity": corpus_identity,
+            "records": len(_corpus_records)},
+        "tuning_corrections": {
+            "artifacts": tuning_artifacts, "identity": tuning_identity,
+            "records": len(records)},
+        "certification": {"path": _portable(certification_path),
                           "sha256": _sha(certification_path), "report": report},
         "blunder_policy": BLUNDER_POLICY, "known_weaknesses": list(known_weaknesses),
     }
@@ -216,4 +273,5 @@ def build_baseline(*, correction_runs, corrections, certification: Path | str,
 
 
 __all__ = ("build_baseline", "certification_inventory", "correction_artifacts",
+           "correction_corpus_artifacts",
            "correction_run_evidence")

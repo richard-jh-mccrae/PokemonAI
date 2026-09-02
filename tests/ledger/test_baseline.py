@@ -141,30 +141,69 @@ def _corrections(tmp_path):
     return path
 
 
-def _certification(tmp_path, runs, corrections):
+def _reviewed(tmp_path):
+    path = tmp_path / "reviewed.json"
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text("{}\n", encoding="utf-8")
+    return path
+
+
+def _review(tmp_path, runs):
+    from train.baseline import certification_inventory
+
+    inventory = certification_inventory(runs)
+    path = tmp_path / "baseline-review.json"
+    rows = [{**row, "partition": partition, "verdict": "pass"}
+            for partition, decisions in inventory["review_decisions"].items()
+            for row in decisions]
+    path.write_text(json.dumps({
+        "schema": "ledger.baseline-review", "schema_version": 1,
+        "source_identity": inventory["evidence"]["source_identity"],
+        "correction_runs": inventory["evidence"]["correction_runs"],
+        "rows": rows,
+    }), encoding="utf-8")
+    return path
+
+
+def _certification(tmp_path, runs, corrections, reviewed=None):
     import hashlib
     from train.baseline import certification_inventory, correction_artifacts
 
     inventory = certification_inventory(runs)
-    artifacts, _records = correction_artifacts([corrections])
-    corrections_identity = hashlib.sha256(json.dumps(
+    from train.baseline import correction_corpus_artifacts
+    reviewed = reviewed or _reviewed(corrections.parent)
+    artifacts, _records = correction_corpus_artifacts([corrections], reviewed)
+    corpus_identity = hashlib.sha256(json.dumps(
         artifacts, sort_keys=True, separators=(",", ":"),
         ensure_ascii=False).encode("utf-8")).hexdigest()
+    tuning_identity = hashlib.sha256(b"[]").hexdigest()
+    review = _review(tmp_path, runs)
+    review_sha = hashlib.sha256(review.read_bytes()).hexdigest()
     path = tmp_path / "certification.json"
     path.parent.mkdir(parents=True, exist_ok=True)
-    gates = [{"name": name, "passed": True, "command": "pytest",
-              "output_sha256": "c" * 64} for name in (
+    evidence = tmp_path / "evidence"
+    evidence.mkdir(exist_ok=True)
+    gate_names = (
         "historical_corrections", "cross_deck_regressions",
-        "native_full_games", "twin_full_games")]
+        "native_full_games", "twin_full_games", "source_contracts",
+        "documentation", "correction_ci", "readiness", "performance")
+    for name in gate_names:
+        (evidence / f"{name}.log").write_text("passed\n", encoding="utf-8")
+    gates = [{"name": name, "passed": True, "command": "pytest",
+              "output_path": str(evidence / f"{name}.log"),
+              "output_sha256": "c" * 64} for name in gate_names]
     path.write_text(json.dumps({
         "passed": True, "gates": gates,
         "manual_review": {"completed": True,
                           "reviewed_decisions": inventory["evidence"]["tuning_ledger_decisions"],
-                          "episode_ids": inventory["tuning_episode_ids"]},
-        "heldout": {"passed": True, "episode_ids": inventory["heldout_episode_ids"]},
+                          "episode_ids": inventory["tuning_episode_ids"],
+                          "artifact_path": str(review), "artifact_sha256": review_sha},
+        "heldout": {"passed": True, "episode_ids": inventory["heldout_episode_ids"],
+                    "reviewed_decisions": inventory["evidence"]["heldout_ledger_decisions"]},
         "tuning_target": {"name": "agreement", "before": 0.5, "after": 0.6},
         "regressions": {"passed": True, "unreported": []},
-        "corrections_identity": corrections_identity,
+        "correction_corpus_identity": corpus_identity,
+        "tuning_corrections_identity": tuning_identity,
         "evidence": inventory["evidence"],
     }), encoding="utf-8")
     return path
@@ -180,8 +219,10 @@ def _build(tmp_path, **overrides):
     certification = overrides.pop("certification", None)
     certification = (_certification(tmp_path, runs, corrections)
                      if certification is None else certification)
+    reviewed = overrides.pop("reviewed_corrections", None) or _reviewed(corrections.parent)
     return build_baseline(
-        correction_runs=runs, corrections=[corrections], certification=certification,
+        correction_runs=runs, correction_corpus=[corrections],
+        reviewed_corrections=reviewed, tuning_corrections=[], certification=certification,
         current_source_identity=overrides.pop("current_source_identity", SOURCE),
         known_weaknesses=overrides.pop("known_weaknesses", ["one-ply only"]),
         created_at="2026-08-25T00:00:00+00:00", **overrides)
@@ -195,7 +236,8 @@ def test_three_deck_baseline_freeze_is_complete(tmp_path):
     assert set(baseline["reports"]) == set(FOCALS)
     assert all(baseline["heldout_manifest"][focal][0]["decisions"] for focal in FOCALS)
     assert baseline["ledger"] == LEDGER
-    assert baseline["corrections_identity"]
+    assert baseline["correction_corpus"]["identity"]
+    assert baseline["tuning_corrections"]["records"] == 0
     assert validate_baseline(baseline) == baseline
 
 
@@ -281,10 +323,25 @@ def test_ledger_baseline_and_certification_clis_expose_the_contract():
         cwd=REPO, capture_output=True, text=True, check=False)
     assert baseline.returncode == certify.returncode == 0
     assert "--run" in baseline.stdout and "--certification" in baseline.stdout
-    assert "--reviewed-decisions" in certify.stdout
-    assert "--corrections" in certify.stdout
+    assert "--review" in certify.stdout
+    assert "--corpus" in certify.stdout
     assert "--before-report" in certify.stdout
+    assert "--semantic-flips" in certify.stdout
     assert "--evidence-dir" in certify.stdout
+
+
+def test_content_addressed_pack_copies_evidence_and_revalidates(tmp_path):
+    from common.ledger.baseline import load_baseline
+    from train.ledger_baseline import publish_pack
+
+    baseline = _build(tmp_path / "build")
+    output = publish_pack(baseline, out_root=tmp_path / "published")
+
+    loaded = load_baseline(output)
+    assert output.parent.name == loaded["baseline_id"]
+    assert loaded["certification"]["path"] == "evidence/certification.json"
+    assert all(not Path(gate["output_path"]).is_absolute()
+               for gate in loaded["certification"]["report"]["gates"])
 
 
 def test_certification_builder_runs_all_fixed_gates_and_binds_evidence(tmp_path):
@@ -314,14 +371,14 @@ def test_certification_builder_runs_all_fixed_gates_and_binds_evidence(tmp_path)
             }), encoding="utf-8")
         return SimpleNamespace(returncode=0, stdout="passed", stderr="")
 
+    reviewed = _reviewed(tmp_path)
     report = build_certification(
-        correction_runs=runs,
-        reviewed_decisions=inventory["evidence"]["tuning_ledger_decisions"],
-        corrections=[corrections],
+        correction_runs=runs, review=_review(tmp_path, runs),
+        correction_corpus=[corrections], reviewed_corrections=reviewed,
         before_report=before, evidence_dir=tmp_path / "evidence", runner=runner)
 
     assert report["passed"] is True
-    assert len(commands) == 4
+    assert len(commands) == 9
     assert report["evidence"] == inventory["evidence"]
     assert report["tuning_target"] == {
         "name": "generality_floor", "before": 0.5, "after": 0.6,

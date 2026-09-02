@@ -7,7 +7,7 @@ from pathlib import Path
 
 
 SCHEMA = "ledger.baseline"
-SCHEMA_VERSION = 1
+SCHEMA_VERSION = 2
 AUTHORITATIVE_DECKS = ("dragapult_ex", "mega_lucario", "mega_starmie")
 BLUNDER_POLICY = {
     "during_experiments": "record_only",
@@ -15,7 +15,8 @@ BLUNDER_POLICY = {
 }
 REQUIRED_GATES = {
     "historical_corrections", "cross_deck_regressions",
-    "native_full_games", "twin_full_games",
+    "native_full_games", "twin_full_games", "source_contracts",
+    "documentation", "correction_ci", "readiness", "performance",
 }
 _SHA256_HEX_LENGTH = hashlib.sha256().digest_size * len("00")
 
@@ -46,6 +47,8 @@ def certified_evidence(manifest: dict) -> dict:
             str(slot["bundle_id"]) for run in runs for slot in run["heldout"]),
         "tuning_ledger_decisions": sum(
             int(run["report"]["tuning_ledger_decisions"]) for run in runs),
+        "heldout_ledger_decisions": sum(
+            int(run["report"]["heldout_ledger_decisions"]) for run in runs),
     }
 
 
@@ -56,16 +59,19 @@ def validate_certification(report: dict) -> dict:
             or len(gates) != len(REQUIRED_GATES) \
             or names != REQUIRED_GATES or any(
                 gate.get("passed") is not True or not gate.get("command")
+                or not gate.get("output_path")
                 or len(str(gate.get("output_sha256"))) != _SHA256_HEX_LENGTH for gate in gates):
         raise ValueError("Ledger Baseline certification gates did not pass")
     review = report.get("manual_review") or {}
-    if review.get("completed") is not True or int(review.get("reviewed_decisions") or 0) <= 0:
+    if review.get("completed") is not True or int(review.get("reviewed_decisions") or 0) <= 0 \
+            or len(str(review.get("artifact_sha256") or "")) != _SHA256_HEX_LENGTH:
         raise ValueError("Ledger Baseline manual review is incomplete")
     if not isinstance(review.get("episode_ids"), list) or not review["episode_ids"]:
         raise ValueError("Ledger Baseline manual review lacks Episode identities")
     heldout = report.get("heldout") or {}
     if heldout.get("passed") is not True \
-            or not isinstance(heldout.get("episode_ids"), list) or not heldout["episode_ids"]:
+            or not isinstance(heldout.get("episode_ids"), list) or not heldout["episode_ids"] \
+            or int(heldout.get("reviewed_decisions") or 0) <= 0:
         raise ValueError("Ledger Baseline held-out evaluation did not pass")
     target = report.get("tuning_target") or {}
     before, after = target.get("before"), target.get("after")
@@ -75,8 +81,9 @@ def validate_certification(report: dict) -> dict:
     regressions = report.get("regressions") or {}
     if regressions.get("passed") is not True or regressions.get("unreported") != []:
         raise ValueError("Ledger Baseline has unreported regressions")
-    if len(str(report.get("corrections_identity") or "")) != _SHA256_HEX_LENGTH:
-        raise ValueError("Ledger Baseline certification lacks Corrections identity")
+    for name in ("correction_corpus_identity", "tuning_corrections_identity"):
+        if len(str(report.get(name) or "")) != _SHA256_HEX_LENGTH:
+            raise ValueError(f"Ledger Baseline certification lacks {name}")
     return report
 
 
@@ -84,8 +91,8 @@ def validate_baseline(manifest: dict) -> dict:
     required = {
         "schema", "schema_version", "baseline_id", "created_at", "focals",
         "source_identity", "ledger", "contestants", "behavior_identities",
-        "correction_runs", "reports", "heldout_manifest", "corrections",
-        "corrections_identity", "certification", "blunder_policy", "known_weaknesses",
+        "correction_runs", "reports", "heldout_manifest", "correction_corpus",
+        "tuning_corrections", "certification", "blunder_policy", "known_weaknesses",
     }
     if not isinstance(manifest, dict) or set(manifest) != required:
         raise ValueError("invalid Ledger Baseline fields")
@@ -98,12 +105,14 @@ def validate_baseline(manifest: dict) -> dict:
         raise ValueError("Ledger Baseline lacks per-deck held-out state manifests")
     if not manifest["correction_runs"] or not manifest["behavior_identities"]:
         raise ValueError("Ledger Baseline lacks Correction Run behavior evidence")
-    if not manifest["corrections"] or not all(
-            int(item.get("records", 0)) > 0 for item in manifest["corrections"]):
-        raise ValueError("Ledger Baseline requires a manual Correction")
-    expected_corrections = hashlib.sha256(_canonical(manifest["corrections"])).hexdigest()
-    if manifest["corrections_identity"] != expected_corrections:
-        raise ValueError("Ledger Baseline corrections identity mismatch")
+    corpus = manifest["correction_corpus"]
+    if not corpus.get("artifacts") or int(corpus.get("records") or 0) <= 0:
+        raise ValueError("Ledger Baseline requires the historical Correction corpus")
+    for name in ("correction_corpus", "tuning_corrections"):
+        group = manifest[name]
+        expected = hashlib.sha256(_canonical(group["artifacts"])).hexdigest()
+        if group.get("identity") != expected:
+            raise ValueError(f"Ledger Baseline {name} identity mismatch")
     if manifest["blunder_policy"] != BLUNDER_POLICY:
         raise ValueError("Ledger Baseline blunder policy is invalid")
     certification = manifest["certification"]
@@ -115,6 +124,11 @@ def validate_baseline(manifest: dict) -> dict:
         raise ValueError("Ledger Baseline certification evidence does not match")
     if report["manual_review"]["reviewed_decisions"] != evidence["tuning_ledger_decisions"]:
         raise ValueError("Ledger Baseline manual review decision count is incomplete")
+    if report["heldout"]["reviewed_decisions"] != evidence["heldout_ledger_decisions"]:
+        raise ValueError("Ledger Baseline held-out review decision count is incomplete")
+    if report["correction_corpus_identity"] != corpus["identity"] \
+            or report["tuning_corrections_identity"] != manifest["tuning_corrections"]["identity"]:
+        raise ValueError("Ledger Baseline Correction identities do not match")
     if len(str(certification["sha256"])) != _SHA256_HEX_LENGTH:
         raise ValueError("Ledger Baseline certification artifact hash is invalid")
     if manifest["baseline_id"] != _identity(manifest):
