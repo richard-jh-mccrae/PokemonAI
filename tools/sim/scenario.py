@@ -48,7 +48,7 @@ def runtime(agent: str, cards, *, compute_configuration=None,
 def scenario(agent: str, *, me_active: BodySpec, me_bench=(), me_hand=(),
              me_discard=(), me_prizes=6, me_top=(), me_deck_count=None,
              them_active=None, them_bench=(), them_prizes=6,
-             them_deck_count=None, turn=3, compute_configuration=None):
+             them_deck_count=None, turn=3, first_player=0, compute_configuration=None):
     cards = deck(agent)
     engine, _seat, _error = Engine.start(cards, cards, rng=SeededRng(71237))
     if engine is None:
@@ -107,7 +107,7 @@ def scenario(agent: str, *, me_active: BodySpec, me_bench=(), me_hand=(),
     populate(1, them_active or me_active, them_bench, (), (), them_prizes,
              deck_count=them_deck_count)
     gs.turn = turn
-    gs.first_player = 0
+    gs.first_player = first_player
     gs.turn_action_count = 0
     gs.supporter_played = False
     gs.stadium_played = False

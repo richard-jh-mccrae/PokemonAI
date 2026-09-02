@@ -206,8 +206,8 @@ jobs:
       - name: Gate Teacher compute and timing on the frozen corpus
         run: >-
           python tools/train/search_timing.py run
-          --jobs 1 --repetitions 3 --time-cap 120 --root-timeout 140
-          --assert-baseline data/benchmarks/search_timing/teacher_ci_baseline.json
+          --jobs 2 --repetitions 3 --time-cap 120 --root-timeout 140
+          --assert-baseline data/benchmarks/search_timing/teacher_live_ci_baseline.json
           --out data/search-timing-runs/ci/teacher.json
       - name: Publish search timing summary
         if: always()
