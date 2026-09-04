@@ -169,6 +169,22 @@ def test_correction_run_audit_accepts_a_forced_unpriced_singleton():
     assert summary["incomplete_decisions"] == []
 
 
+@pytest.mark.parametrize("policy_reason", ("best_delta", "forced"))
+def test_correction_run_audit_rejects_a_private_alternative_even_when_the_chosen_action_is_priced(policy_reason):
+    from sim.correction_run import audit_correction_records
+
+    record = {"record_type": "decision", "record_id": "private-alternative", "decision": {
+        "variant": "ledger", "turn": 1, "policy_reason": policy_reason, "chosen_action_id": "end"},
+        "completeness": "unavailable", "search": {"failure": None},
+        "candidates": [{"action_id": "end", "status": "complete", "gaps": []},
+                       {"action_id": "attack", "status": "unavailable", "successors": [], "gaps": [
+                           "unpriceable: private opponent selection unavailable (focal information boundary)"]}],
+        "behavior_identity": {"evaluator": "ledger-linear-v1"}}
+
+    with pytest.raises(ValueError, match="^unavailable Ledger decision entered Correction Run: unavailable$"):
+        audit_correction_records([record])
+
+
 def test_correction_run_audit_requires_one_decision_record_per_replay_choice():
     from sim.correction_run import audit_correction_records
     from sim.record import MatchRecorder
@@ -611,12 +627,12 @@ def test_correction_worker_passes_its_decision_limit_to_the_agent(monkeypatch, t
     assert calls[0]["decision_seconds"] == 20.0
 
 
-def test_correction_run_process_worker_builds_a_strict_episode_bundle(tmp_path):
+def test_correction_run_process_worker_quarantines_unrecoverable_focal_views(tmp_path):
     from sim.correction_run import (
         ExecutionConfig, _agent_identity, _git_source_identity, create_correction_run,
         execute_correction_run,
     )
-    from train.corpus import load_episode_bundle
+    from train.corpus.bundle import _strict_records
 
     agent = "mega_starmie"
     agents = REPO / "src" / "agents"
@@ -635,12 +651,14 @@ def test_correction_run_process_worker_builds_a_strict_episode_bundle(tmp_path):
         run_dir=run_dir, agents_root=agents, extra_syspath=(REPO / "src",),
         decision_timeout=20.0, episode_timeout=600.0, max_bytes=1024 ** 3)
 
-    assert manifest["status"] == "complete"
+    assert manifest["status"] == "failed"
     slot = manifest["slots"][0]
-    assert slot["status"] == "complete"
-    assert slot["audit"]["ledger_decisions"] > 0
-    assert slot["audit"]["completeness"]["estimated"] == 0
-    bundle = run_dir / slot["bundle_path"]
-    _bundle_manifest, decisions, _receipt, _outcome, _replay = load_episode_bundle(bundle)
-    assert len(decisions) == (slot["audit"]["ledger_decisions"]
-                              + slot["audit"]["pregame_decisions"])
+    assert slot["status"] == "failed" and "bundle_path" not in slot
+    assert slot["error"]["message"] == "unavailable Ledger decision entered Correction Run: unavailable"
+    quarantine = run_dir / slot["quarantine_path"]
+    records = _strict_records((quarantine / "telemetry.jsonl").read_text().splitlines())
+    unavailable = [candidate for record in records for candidate in record.get("candidates", ())
+                   if candidate["status"] == "unavailable"]
+    assert unavailable and all(not candidate["successors"] for candidate in unavailable)
+    assert any("focal hand update is hidden from the source viewer" in gap
+               for candidate in unavailable for gap in candidate["gaps"])

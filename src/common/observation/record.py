@@ -7,6 +7,7 @@ from common.api import ActionIdentity
 from common.options import LegalAction
 
 from . import nodes
+from .event_visibility import validate_events
 from .state import (AttackEvent, DrawEvent, KnownObservationEvent, MoveCardEvent,
                     ObservationDelta, ObservationEvent, ObservationState, SCHEMA_VERSION,
                     ShuffleEvent, UnknownObservationEvent)
@@ -70,10 +71,7 @@ class ObservationRecord:
 
     @classmethod
     def from_state(cls, state: ObservationState) -> "ObservationRecord":
-        if not isinstance(state.me.hand, nodes.VisibleHand):
-            raise ValueError("record root hand must be visible")
-        if not isinstance(state.them.hand, nodes.HiddenHand):
-            raise ValueError("record opponent hand must be hidden")
+        _validate_state(state)
         return cls(SCHEMA_VERSION, _encode(state))
 
     def to_state(self) -> ObservationState:
@@ -100,6 +98,7 @@ def _validate_state(state: ObservationState) -> None:
         raise ValueError("record root hand must be visible")
     if not isinstance(state.them.hand, nodes.HiddenHand):
         raise ValueError("record opponent hand must be hidden")
+    validate_events(state.events, state.seat)
     _validate_frozen(state)
 
 

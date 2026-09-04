@@ -1,6 +1,9 @@
 # PokémonAI: Search, Policy, and Value Learning
 ## Implementation Handoff
 
+> Historical handoff. Bounded PUCT replaced the proposed exhaustive Teacher; Teacher-specific
+> architecture below is retired as of 2026-09-04.
+
 **Design target:** scalable, high-strength play across many decks under strict runtime budgets.
 
 ---

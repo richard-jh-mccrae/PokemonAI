@@ -1,7 +1,7 @@
 """Batch mode for the blunder inspector: tag Corrections across Replay collections.
 
-``blunder_correction`` accepts a Replay, Episode Bundle, Correction Run, Teacher Review Run, or a
-directory of collected Replays. The shell steps across them in episode-id order; provenance,
+``blunder_correction`` accepts a Replay, Episode Bundle, Correction Run, or a directory of collected
+Replays. The shell steps across them in episode-id order; provenance,
 own-seat, and optional live telemetry come from the collection's native metadata.
 """
 from __future__ import annotations
@@ -51,15 +51,6 @@ def discover_replays(path: Path | str) -> list[Path]:
                 if (bundle / "manifest.json").is_file():
                     games.append((int(slot.get("index", len(games))), bundle))
             return [bundle for _index, bundle in sorted(games)]
-        if manifest.get("schema") == "teacher.review-run":
-            games = []
-            for slot in manifest.get("slots") or ():
-                if slot.get("status") != "complete" or not slot.get("replay_path"):
-                    continue
-                replay = path / slot["replay_path"]
-                if replay.is_file():
-                    games.append((int(slot.get("index", len(games))), replay))
-            return [replay for _index, replay in sorted(games)]
     found = [(eid, p) for p in path.iterdir() if (eid := _episode_id(p)) is not None]
     return [p for _, p in sorted(found, key=lambda t: t[0])]
 
@@ -78,33 +69,6 @@ def _correction_run(path: Path, bundle_id: str) -> tuple[dict | None, dict | Non
                      and item.get("partition") == partition), None)
         return manifest, slot
     return None, None
-
-
-def _teacher_review_run(path: Path) -> tuple[dict | None, dict | None]:
-    resolved = path.resolve()
-    for parent in (path.parent, *path.parents):
-        manifest_path = parent / "manifest.json"
-        if not manifest_path.is_file():
-            continue
-        manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
-        if manifest.get("schema") != "teacher.review-run":
-            continue
-        slot = next((item for item in manifest.get("slots") or ()
-                     if item.get("replay_path")
-                     and (parent / item["replay_path"]).resolve() == resolved), None)
-        return manifest, slot
-    return None, None
-
-
-def _teacher_provenance(run: dict, slot: dict) -> dict:
-    source = run.get("source_identity") or {}
-    return {
-        "live_seat": int(slot["focal_seat"]),
-        "agent": run.get("focal"),
-        "agent_build": run.get("run_id"),
-        "agent_version": source.get("commit"),
-        "built_at": run.get("created_at"),
-    }
 
 
 def _reject_heldout_bundle(path: Path, bundle_id: str) -> None:
@@ -129,12 +93,6 @@ def load_game_summary(path: Path | str) -> dict:
     """Replay and provenance needed by the shell before Decision Telemetry is requested."""
     path = Path(path)
     replay = load_replay_for_viewer(path)
-    teacher_run, teacher_slot = _teacher_review_run(path)
-    if teacher_slot is not None:
-        return {
-            "replay": replay, "has_telemetry": False,
-            **_teacher_provenance(teacher_run, teacher_slot),
-        }
     if path.is_dir() and (path / "manifest.json").is_file():
         manifest = json.loads((path / "manifest.json").read_text(encoding="utf-8"))
         if manifest.get("schema") == "ledger.episode-bundle":
@@ -165,13 +123,6 @@ def load_game_summary(path: Path | str) -> dict:
 def load_game(path: Path | str) -> dict:
     """Load one Replay with its provenance, own-seat, and available Decision Telemetry."""
     path = Path(path)
-    teacher_run, teacher_slot = _teacher_review_run(path)
-    if teacher_slot is not None:
-        return {
-            "replay": load_replay(path), "live_records": None,
-            "live_records_by_seat": {},
-            **_teacher_provenance(teacher_run, teacher_slot),
-        }
     if path.is_dir() and (path / "manifest.json").is_file():
         manifest, decisions, _receipt, _outcome, replay = load_episode_bundle(path)
         _reject_heldout_bundle(path, manifest["bundle_id"])

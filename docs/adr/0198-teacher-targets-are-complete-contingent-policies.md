@@ -1,6 +1,6 @@
 # ADR-0198 — Teacher targets are complete contingent policies
 
-Status: Accepted for Issue #605 (2026-08-31).
+Status: Superseded by bounded PUCT (2026-09-04). The implementation and timing gate are retired.
 
 ## Context
 
@@ -32,3 +32,10 @@ The first build owns one single-root search seam plus a process-based batch seam
 versioned inputs rather than policy hidden in the traversal. Any cap, cycle, worker failure, or
 incomplete successor stays typed and benchmark-visible rather than being silently promoted into
 teacher evidence. Certification requires a validated frozen one-ply Ledger Baseline.
+
+## Retirement
+
+Bounded PUCT became the maintained turn-search algorithm under ADR-0200 through ADR-0204. The
+Within-Horizon Teacher, its batch and review runners, and its frozen timing corpus duplicated that
+search surface without serving the live runtime. They were removed. The shared Turn Search
+Environment, chance contracts, snapshots, and action policy remain inputs to PUCT and parity work.

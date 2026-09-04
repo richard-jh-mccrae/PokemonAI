@@ -4,13 +4,10 @@ from collections import Counter
 import pytest
 
 from common.api import ActionIdentity
-from common.ledger import EvaluationModel
 from common.observation import KnownDeckTop, KnownOwnPrizes, LegalKnowledge, UnknownDeckTop
 from cgpy.experiment import (BoundaryReason, ChanceExpansionRequest,
                              ChanceExpansionStatus, ChanceSampleKey, NodeKind,
-                             PrimitiveTransition, TeacherCoverage,
-                             TeacherSearchConfiguration, TurnSearchEnvironment,
-                             WithinHorizonTeacher)
+                             PrimitiveTransition, TurnSearchEnvironment)
 from cgpy.rng import SeededRng
 from cgpy.schema import SelectContext
 
@@ -649,41 +646,6 @@ def test_refresh_is_invariant_to_opponent_deck_hand_allocation():
     assert tuple(item.branch_key for item in first.transitions) == \
         tuple(item.branch_key for item in second.transitions)
     assert first_visible == second_visible
-
-
-def test_teacher_choice_is_invariant_to_unseen_deck_order():
-    engine, _agent = scenario(
-        "mega_starmie", me_active=BodySpec((1030,)), me_hand=(3,),
-        them_active=BodySpec((1030, 1031), energies=(3, 17)))
-    enriching_energy = engine.gs.players[0].hand[0]
-    engine.gs.cards[enriching_energy].card_id = 13
-    for index, serial in enumerate(engine.gs.players[0].deck):
-        engine.gs.cards[serial].card_id = 3 if index % 2 else 17
-    permuted = engine.fork()
-    permuted.gs.players[0].deck.reverse()
-    lock_main_allowances(engine, energy=False)
-    lock_main_allowances(permuted, energy=False)
-    configuration = TeacherSearchConfiguration(
-        node_cap=1_000, path_node_cap=64, chance_branch_cap=1_000,
-        exact_outcome_limit=1, chance_sample_count=6, time_cap_seconds=10)
-
-    def search(source):
-        environment = TurnSearchEnvironment.from_engine(source, perspective_seat=0)
-        result = WithinHorizonTeacher().search_environment(
-            environment, evaluation_model=EvaluationModel.build(),
-            experiment_seed=654, configuration=configuration,
-            baseline_identity="hidden-order-test")
-        return environment, result
-
-    baseline, first = search(engine)
-    hidden, second = search(permuted)
-
-    assert baseline.root.observation.decision_key == hidden.root.observation.decision_key
-    assert baseline.root.state_key != hidden.root.state_key
-    assert first.coverage is second.coverage is TeacherCoverage.COMPLETE
-    assert first.preferred_action == second.preferred_action
-    assert tuple((item.action, item.expected_value) for item in first.root_actions) == \
-        tuple((item.action, item.expected_value) for item in second.root_actions)
 
 
 def test_known_top_is_consumed_when_drakloak_moves_it_into_looking():

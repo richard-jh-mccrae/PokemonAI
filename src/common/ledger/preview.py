@@ -20,6 +20,7 @@ from common.cards.card_facts import SUPPORTER, EnergyCard, PokemonCard, TrainerC
 from common.decision import (ContinuationOpportunity, EvaluationStatus, OpportunityRef,
                              RealizedOutcome, SearchConfiguration, SuccessorResult)
 from common.observation import ObservationState, ObservationStateBuilder, TransitionTrace
+from common.observation.projection import SelectionVisibility
 from common.strategy.context import (_ACTIVE, _BENCH, _DAMAGE, _DAMAGE_COUNTER_ANY, _DECK,
                                      _DISCARD, _EVOLVE, _HAND, _LOOKING, _MAIN, _PLAY,
                                      _ATTACH_FROM, _ATTACH_TO, _TO_BENCH, _TO_HAND)
@@ -117,6 +118,8 @@ def price_actions(state, board: ObservationState, baseline: float, provider,
                        if action.identity.kind == "end"), None)
     end_valuation = baseline_valuation
     end_board = board
+    end_path = ()
+    end_resolved = False
     end_gaps: list[str] = []
     end_unavailable = False
     if end_action is not None:
@@ -127,7 +130,7 @@ def price_actions(state, board: ObservationState, baseline: float, provider,
                 state, board, end_node, compute.depth_budget)
             end_landings = _coalesce_landings(end_landings)
             if len(end_landings) == 1:
-                _probability, _state, end_board, _ended, _path = end_landings[0]
+                _probability, _state, end_board, end_resolved, end_path = end_landings[0]
             else:
                 end_gaps.append("end counterfactual has multiple successors")
                 end_unavailable = True
@@ -155,8 +158,8 @@ def price_actions(state, board: ObservationState, baseline: float, provider,
                 activations=activations, contributions=state_contributions,
                 realized_outcomes=(RealizedOutcome.EXPLICIT_TURN_END,))
             successors = (() if end_unavailable else (_successor_result(
-                1.0, end_board, True, valuation_fn, state_valuation_fn,
-                board.position_key, (action.identity,),
+                1.0, end_board, end_resolved, valuation_fn, state_valuation_fn,
+                board.position_key, (action.identity, *end_path),
                 precomputed_valuation=end_valuation),))
             prices.append(OptionPrice(
                 action, state_delta, True, tuple(end_gaps), footprint,
@@ -315,9 +318,17 @@ class _Walk:
         self.continuation_policy = {}
 
     def node(self, state, board: ObservationState, node, depth: int):
-        if self.budget is not None and not self.budget.visit(getattr(state, "semantic_key", None)):
+        budget_stopped = (self.budget is not None
+                          and not self.budget.visit(getattr(state, "semantic_key", None)))
+        if budget_stopped:
             self.gaps.append(f"search stopped: {self.budget.stop_reason}")
             self.path_stopped = True
+        if isinstance(node, Unknown):
+            self.nodes += 1
+            self.gaps.append(f"unpriceable: {node.reason} ({node.missing_fact})")
+            self.unavailable = True
+            return self.valuation(board), 0.0, ((1.0, state, board, False, ()),)
+        if budget_stopped:
             return self.valuation(board), 0.0, ((1.0, state, board, False, ()),)
         self.nodes += 1
         if isinstance(node, Terminal):
@@ -416,15 +427,17 @@ class _Walk:
                 return self.valuation(board), 0.0, ((1.0, state, board, False, ()),)
             label, result = self._choose(entries, node.actor, salt=f"choice:{depth}")
             return _with_path(result, label)
-        if isinstance(node, Unknown):
-            self.gaps.append(f"unpriceable: {node.reason} ({node.missing_fact})")
-            self.unavailable = True
-            return self.valuation(board), 0.0, ((1.0, state, board, False, ()),)
         self.gaps.append(f"unpriceable: undeclared node {type(node).__name__}")
         self.unavailable = True
         return self.valuation(board), 0.0, ((1.0, state, board, False, ()),)
 
     def deterministic(self, state, board: ObservationState, depth: int):
+        control = self.provider.control(state) if hasattr(self.provider, "control") else None
+        if control is not None and control.visibility is SelectionVisibility.PUBLIC:
+            return self.public_opponent_choice(state, board, depth)
+        if control is not None and control.visibility is SelectionVisibility.PRIVATE:
+            return self.node(state, board, Unknown(
+                "private opponent selection unavailable", "focal information boundary"), depth)
         context_value = None if board.select is None else board.select.context
         context = _MAIN if context_value is None else int(context_value)
         if context == _DAMAGE_COUNTER_ANY:
@@ -485,6 +498,21 @@ class _Walk:
         result = next(result for candidate, result, _scored, _footprint in entries
                       if candidate == identity)
         self.continuation_policy[tuple(action.identity for action in actions)] = identity
+        return _with_path(result, identity)
+
+    def public_opponent_choice(self, state, board, depth):
+        entries = []
+        for action in self.provider.actions(state):
+            if self._budget_stopped():
+                break
+            result = self.node(state, board, self.provider.transition(state, action), depth - 1)
+            entries.append((action.identity, result))
+        if not entries:
+            if not self._budget_stopped():
+                self.unavailable = True
+                self.gaps.append("public opponent selection offered no actions")
+            return self.valuation(board), 0.0, ((1.0, state, board, False, ()),)
+        identity, result = self._choose(entries, Actor.OPPONENT, salt=f"public-menu:{depth}")
         return _with_path(result, identity)
 
     def damage_counter_rollout(self, state, board, depth):

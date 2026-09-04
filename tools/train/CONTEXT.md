@@ -102,12 +102,6 @@ randomized opponent plan, produced for human Ledger review. It stages Episode Bu
 neither a Benchmark nor a Corpus Snapshot.
 _Avoid_: Self-play Corpus, Strategy Benchmark, Corpus Run
 
-**Teacher Review Run**:
-A bounded, manifested batch of Episodes where the Teacher controls one focal Deck against one-ply
-Ledger opponents, produced for human search-blunder review. It is not a Correction Run or training
-corpus.
-_Avoid_: Correction Run, Teacher Corpus, Self-play Run
-
 **Correction Corpus Manifest**:
 The immutable identity of the Human Corrections and their review dispositions used to compare
 Ledger behavior across revisions.
@@ -195,16 +189,6 @@ _Avoid_: Correction, Mismatch Row, Automated Ruling
 A cached detailed timing analysis of one hotspot Corpus Decision under matching recorded identities.
 It must preserve the decision's Replay Certificate and is not canonical evidence.
 _Avoid_: Decision Timing, Telemetry Span, Benchmark Result
-
-**Search Timing Corpus**:
-A small immutable suite of exact synthetic Experiment Roots used to compare search cost while holding
-state, randomness, parity, and the frozen Ledger Baseline fixed. It is not held-out quality evidence.
-CI requires unchanged results and complete coverage before comparing cost. Deterministic work has no
-growth allowance; wall-clock medians need runner headroom. Ceiling changes require reviewed measurements,
-never automatic relearning from a failing run.
-Result structure compares exactly; valuations use the pinned search noise tolerance to accommodate
-cross-Python floating-point summation differences. Raw fingerprints remain in run artifacts.
-_Avoid_: Performance Profile, Canonical Corpus, Benchmark Result
 
 **Terminal Target**:
 The complete public Episode result projected to a Corpus Decision's acting seat. Training Views may

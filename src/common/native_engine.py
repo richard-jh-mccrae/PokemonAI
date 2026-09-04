@@ -9,7 +9,8 @@ from .algebra import Actor, Chance, Deterministic, Terminal, Unknown, WeightedEd
 from .cards import card_store
 from .options import LegalAction, recycled_card_ids
 from .refresh import refresh_transition
-from .observation.provider import provider_payload as _payload
+from .observation.provider import ProviderBinding, provider_payload as _payload
+from .observation.projection import ProjectionError, SelectionVisibility, project_successor
 from common.strategy.context import _MAIN, _NO, _YES
 
 
@@ -68,16 +69,6 @@ def _hidden_card_identity(card):
     if isinstance(card, dict):
         return card.get("id", card.get("cardId"))
     return card
-
-
-def _known_prize_cards(parent, remaining_prizes, count: int) -> list[dict]:
-    known = Counter({int(card_id): int(copies)
-                     for card_id, copies in getattr(parent, "prize_counts", ())})
-    remaining = Counter(
-        int(card_id) for card in remaining_prizes
-        if (card_id := _hidden_card_identity(card)) is not None)
-    taken = known - remaining
-    return [{"id": card_id} for card_id in sorted(taken.elements())[:count]]
 
 
 def _hidden_signature(observation: dict, root_seat: int) -> str:
@@ -150,19 +141,7 @@ def _own_hidden_zones(root, player: dict, *, world_index: int,
     return deck, prizes
 
 
-def _actor_seat(observation: dict, root_seat: int) -> int:
-    select = observation.get("select") or {}
-    if int(select.get("context", -1)) == _MAIN:
-        return root_seat
-    seats = {int(option["playerIndex"]) for option in (select.get("option") or ())
-             if option.get("playerIndex") is not None}
-    if len(seats) == 1:
-        return next(iter(seats))
-    current = observation.get("current") or {}
-    return int(current.get("yourIndex", root_seat))
-
-
-class NativeCgTransitionProvider:
+class NativeCgTransitionProvider(ProviderBinding):
     """Fork the authoritative engine; enumerate and apply actions without ranking them."""
 
     backend = "native-cg-bellman"
@@ -206,11 +185,6 @@ class NativeCgTransitionProvider:
             self._api.search_end()
             self._search_open = False
 
-    def _bind(self, state, observation):
-        """Successor state construction — the Ledger preview seam overrides this to skip the
-        DecisionState build per node (ADR-0146)."""
-        return state.with_observation(observation)
-
     def _key(self, state) -> str:
         """The world-map key for a state; the preview seam substitutes identity tokens."""
         return state.semantic_key
@@ -218,10 +192,14 @@ class NativeCgTransitionProvider:
     def actions(self, state) -> tuple[LegalAction, ...]:
         if self._key(state) not in self._worlds:
             return ()
+        control = self.control(state)
+        if control is not None and control.visibility is not SelectionVisibility.FOCAL:
+            return control.actions
         return state.legal_actions
 
     def actor(self, state) -> Actor:
-        seat = int(getattr(state, "actor_seat", state.root_seat))
+        control = self.control(state)
+        seat = control.actor_seat if control is not None else getattr(state, "actor_seat", state.root_seat)
         return Actor.OURS if seat == state.root_seat else Actor.OPPONENT
 
     def transition(self, state, action: LegalAction):
@@ -232,28 +210,28 @@ class NativeCgTransitionProvider:
         if refresh is not None:
             return refresh
         children = []
-        forced_next_actor = 1 - state.root_seat if action.identity.kind == "end" else None
         try:
             for world in worlds:
                 stepped = self._api.search_step(world.search_id, list(action.selection))
                 committed = world.attack_committed or action.identity.kind == "attack"
-                observation = self._observation(
-                    stepped.observation, state, actor_seat=forced_next_actor)
+                raw = _plain_native(stepped.observation)
+                if int((raw.get("select") or {}).get("context", -1)) == MANUAL_COIN_CONTEXT:
+                    outcomes = self._coin_children(
+                        stepped.searchId, world.probability, committed, state, raw)
+                else:
+                    outcomes = [(world.probability, stepped.searchId, committed, self._observation(raw, state))]
                 recycled = recycled_card_ids(
                     _payload(state), action, self.registry, state.root_seat,
                     carried=getattr(state, "recycled_card_ids", ()),
                     actor_seat=getattr(state, "actor_seat", state.root_seat))
-                self._provider_metadata.setdefault(id(observation), {})[
-                    "recycled_card_ids"] = recycled
-                if int(((observation.get("select") or {}).get("context", -1))) == MANUAL_COIN_CONTEXT:
-                    children.extend(self._coin_children(
-                        stepped.searchId, world.probability, committed, state, observation,
-                        actor_seat=forced_next_actor))
-                else:
-                    children.append((world.probability, stepped.searchId, committed, observation))
+                for _probability, _search_id, _committed, observation in outcomes:
+                    self._provider_metadata.setdefault(id(observation), {})["recycled_card_ids"] = recycled
+                children.extend(outcomes)
             return self._group_children(state, action, children)
+        except ProjectionError as exc:
+            return Unknown("native observation unavailable", str(exc))
         except Exception as exc:  # noqa: BLE001 - engine gap remains explicit
-            return Unknown("native cg transition failed", f"{type(exc).__name__}: {exc}")
+            return Unknown("native cg transition failed", type(exc).__name__)
 
     def _begin_worlds(self, root) -> tuple[_NativeWorld, ...]:
         observation = _payload(root)
@@ -285,46 +263,23 @@ class NativeCgTransitionProvider:
             worlds.append(_NativeWorld(probability, int(state.searchId)))
         return tuple(worlds)
 
-    def _observation(self, native_observation, parent, *, actor_seat=None) -> dict:
-        observation = _plain_native(native_observation)
-        actor = (_actor_seat(observation, parent.root_seat)
-                 if actor_seat is None else int(actor_seat))
+    def _observation(self, native_observation, parent) -> dict:
+        raw = _plain_native(native_observation)
+        source_seat = (raw.get("current") or {}).get("yourIndex")
+        observation, control = project_successor(
+            raw, _payload(parent), parent.root_seat, source_seat=source_seat, actor_seat=source_seat,
+            known_prizes=getattr(parent, "prize_counts", ()))
         if not hasattr(self, "_provider_metadata"):
             self._provider_metadata = {}
         self._provider_metadata[id(observation)] = {
-            "belief_token": _hidden_signature(observation, parent.root_seat),
-            "actor_seat": actor,
+            "belief_token": _hidden_signature(raw, parent.root_seat),
+            "actor_seat": control.actor_seat,
+            "control": control,
         }
-        current = observation.get("current") or {}
-        current["yourIndex"] = parent.root_seat
-        players = current.get("players") or ()
-        parent_players = (_payload(parent).get("current") or {}).get("players") or ()
-        if 0 <= parent.root_seat < len(players) and 0 <= parent.root_seat < len(parent_players):
-            root_player = players[parent.root_seat] or {}
-            parent_player = parent_players[parent.root_seat] or {}
-            known_hand = parent_player.get("hand")
-            hand_count = int(root_player.get("handCount", -1))
-            native_hand = root_player.get("hand")
-            hidden_hand = native_hand is None or (
-                isinstance(native_hand, list) and not native_hand and hand_count > 0)
-            if hidden_hand and isinstance(known_hand, list) and len(known_hand) <= hand_count:
-                restored = _plain_native(known_hand)
-                missing = hand_count - len(restored)
-                if missing:
-                    restored.extend(_known_prize_cards(
-                        parent, root_player.get("prize") or (), missing))
-                if len(restored) == hand_count:
-                    root_player["hand"] = restored
-        for seat, player in enumerate(players):
-            if not player:
-                continue
-            player["prize"] = [None] * len(player.get("prize") or ())
-            if seat != parent.root_seat:
-                player["hand"] = None
         return observation
 
     def _coin_children(self, search_id: int, probability: float, committed: bool,
-                       parent, observation: dict, *, actor_seat=None):
+                       parent, observation: dict):
         options = tuple((observation.get("select") or {}).get("option") or ())
         by_type = {int(option.get("type", -1)): index for index, option in enumerate(options)}
         if _YES not in by_type or _NO not in by_type:
@@ -332,8 +287,7 @@ class NativeCgTransitionProvider:
         children = []
         for option_type in (_YES, _NO):
             stepped = self._api.search_step(search_id, [by_type[option_type]])
-            observation = self._observation(
-                stepped.observation, parent, actor_seat=actor_seat)
+            observation = self._observation(stepped.observation, parent)
             children.append((probability * COIN_BRANCH_PROBABILITY,
                              int(stepped.searchId), committed, observation))
         return children
@@ -386,11 +340,13 @@ class NativeCgTransitionProvider:
         result = int(current.get("result", -1))
         if result != -1:
             return Terminal(successor, "win" if result == parent.root_seat else "loss")
-        select = _payload(successor).get("select") or {}
+        control = self.control(successor)
+        if control is not None and control.visibility is SelectionVisibility.PRIVATE:
+            return Unknown("private opponent selection unavailable", "focal information boundary")
         committed = any(row[2] for row in rows)
         passed_turn = (committed
                        and int(current.get("turn", self._root_turn)) != self._root_turn
-                       and int(select.get("context", -1)) == _MAIN)
+                       and control is not None and control.visibility is SelectionVisibility.BOUNDARY)
         if passed_turn:
             return Terminal(successor, "attack resolved")
         return Deterministic(successor)

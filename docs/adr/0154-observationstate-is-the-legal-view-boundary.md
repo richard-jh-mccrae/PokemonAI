@@ -14,6 +14,10 @@ Provider-control data travels in a private typed ProviderState beside the snapsh
 engine payloads behind opaque tokens; Ledger evaluation and telemetry receive only the legal-view
 snapshot, making the information boundary structural rather than conventional.
 
+Search providers project successor logs, hands, and prompts before building the focal snapshot.
+Opponent prompts stay outside it. Provider-only selection control may certify a public promotion;
+unsupported private choices or unprovable focal-hand updates produce unavailable evaluations.
+
 ObservationState is a deeply frozen value; a separate ObservationStateBuilder owns raw comparisons,
 fingerprints, and piece reuse. Both root and incremental construction return the same value, with
 equivalence pinned at the builder seam.
@@ -54,10 +58,15 @@ The migration is behavior-neutral on the valid observations pinned by the pre-ex
 Ledger corpus. Malformed inputs may instead take the explicit construction-error fallback;
 valuation corrections become separate work.
 
-Engine logs become a frozen union of validated Observation Event variants. An unknown future event
-keeps only safe common metadata and invalidates affected Legal Knowledge; no raw log payload enters
+Engine logs become a frozen union of validated Observation Event variants. Construction and record
+ingress/egress enforce per-kind fields and audience: opponent draws retain no identity. An unknown
+future event keeps only its kind and invalidates affected Legal Knowledge; no raw log payload enters
 state. The viewer remains fixed to the root player through simulated successors, while the acting
 side stays in ProviderState.
+
+The successor visibility contracts in `tests/observation/test_projection.py`,
+`tests/ledger/test_successor_visibility.py`, and `tests/parity/test_native_search_visibility.py`
+pin this boundary, public forced control, and actual native hidden-world substitution.
 
 Observation Events do not enter Position or Decision Keys after their consequences are reduced.
 Observation Records retain them for audit, while versioned Transition Traces retain complete action

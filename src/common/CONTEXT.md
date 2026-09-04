@@ -436,7 +436,8 @@ The live decision path:
   previews, and compute-profiled sampled-hand chance
   (ADR-0145), plus the preview seam over the providers (ADR-0146);
 - `observation/`: ObservationState, its builder, knowledge, provider capsule, keys, record codec,
-  events, and parent-relative delta;
+  events, successor visibility projection, and parent-relative delta; pending opponent control
+  stays in the provider capsule, with only certified public choices available to preview;
 - `cards/`: the unified card store — one record module per card, carrying typed clauses,
   coverage verdicts, and engine stat corrections (ADR-0143/0153) — and the per-function
   mechanics (`fetch.py`, `draw.py`, `energy.py`, `attack_lock.py`) and live bench reach in
