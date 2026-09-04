@@ -1,11 +1,10 @@
 # Shared agent runtime
 
-Every shipped deck uses one system: `common.runtime.AgentRuntime`. Live decisions come from the
-Ledger (`common/ledger/`, a 1-ply worth-differencing decider over
-`common/observation/` ObservationState, ADR-0145); the shell around it does declarative pregame,
-typed knowledge reduction, and one coordinated post-pregame decision path. Forced and degraded
-choices remain typed Decision Results. The pre-Ledger Bellman planner is quarantined under
-`deprecated/bellman/` (ADR-0149) and extends this shell as the offline teacher.
+Every shipped deck uses one system: `common.runtime.AgentRuntime`. Its typed Decision Search
+Configuration independently selects the engine backend and either the one-ply Ledger or bounded
+uniform-prior PUCT. The shell handles declarative pregame, typed knowledge reduction, and one
+coordinated post-pregame path. Forced and degraded choices remain typed Decision Results. The
+pre-Ledger Bellman planner is quarantined under `deprecated/bellman/` (ADR-0149).
 
 ## Language
 
@@ -246,10 +245,21 @@ finite limits. Choices require completed simulation evidence, which may be verif
 single-legal-action decisions are exempt. This minimum does not certify decision quality.
 _Avoid_: Separate planner, exhaustive search, quality certificate
 
-**Bounded Native Replay Adapter**:
-The production PUCT provider that reconstructs deterministic legal paths inside bounded workers and keeps
-sampled shuffle continuations on their owning worker. Only legal observations and evidence cross processes.
-_Avoid_: Native handle transport, synthetic engine state, offline provider
+**Decision Search Configuration**:
+The immutable runtime choice of decision route, Engine Backend Descriptor, and complete PUCT limits
+when PUCT is selected. Decision route and backend are independent; an unavailable backend fails during startup.
+_Avoid_: environment alias, implicit fallback, Policy Model
+
+**Engine Backend Descriptor**:
+A serializable API module path and implementation identity resolved inside every spawned transition
+worker. It identifies execution without importing an offline engine into shipped common code.
+_Avoid_: loaded module, engine handle, surrounding match engine
+
+**Bounded Observation Replay Adapter**:
+The live PUCT provider that reconstructs deterministic legal paths through its selected backend in
+bounded workers and keeps sampled shuffle continuations on their owning worker. Only legal
+observations and evidence cross processes.
+_Avoid_: Engine handle transport, direct exact-state provider, implicit backend
 
 **Search Configuration**:
 The versioned depth, node, time, chance-sampling, and randomness controls bounding Search Algorithm
@@ -435,6 +445,8 @@ The live decision path:
 - `ledger/`: the Feature Catalog, linear activation/contribution evaluation, decider, option
   previews, and compute-profiled sampled-hand chance
   (ADR-0145), plus the preview seam over the providers (ADR-0146);
+- `puct/`: bounded current-turn search, uniform priors, persistent verified tree reuse, worker
+  containment, backend-selected observation replay, and PUCT decision evidence;
 - `observation/`: ObservationState, its builder, knowledge, provider capsule, keys, record codec,
   events, successor visibility projection, and parent-relative delta; pending opponent control
   stays in the provider capsule, with only certified public choices available to preview;

@@ -2,7 +2,7 @@
 from contextvars import ContextVar
 
 
-before_begin_turn = ContextVar("cgpy_before_begin_turn", default=None)
+after_begin_turn = ContextVar("cgpy_after_begin_turn", default=None)
 
 
-__all__ = ("before_begin_turn",)
+__all__ = ("after_begin_turn",)

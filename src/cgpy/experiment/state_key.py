@@ -221,4 +221,19 @@ def unavailable_state_key(parent: SearchStateKey, action: ActionIdentity,
     return SearchStateKey(hashlib.sha256(_canonical(payload)).hexdigest())
 
 
-__all__ = ("search_state_key", "unavailable_state_key")
+def turn_boundary_state_key(*, perspective_seat: int, root_turn: int,
+                            observation_key: str) -> SearchStateKey:
+    payload = {
+        "schema_version": SEARCH_STATE_KEY_SCHEMA_VERSION,
+        "node": {
+            "kind": NodeKind.TURN_BOUNDARY.value,
+            "perspective_seat": perspective_seat,
+            "root_turn": root_turn,
+            "boundary_reason": BoundaryReason.TURN_TRANSITION.value,
+            "observation_key": observation_key,
+        },
+    }
+    return SearchStateKey(hashlib.sha256(_canonical(payload)).hexdigest())
+
+
+__all__ = ("search_state_key", "turn_boundary_state_key", "unavailable_state_key")

@@ -4,7 +4,8 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from enum import Enum
 import math
-from typing import Callable, Protocol
+from importlib import import_module
+from typing import Callable, Protocol, runtime_checkable
 from common.api import ActionIdentity
 
 from common.observation import ObservationState
@@ -38,6 +39,47 @@ class BoundaryReason(str, Enum):
 
 class SearchContractError(ValueError):
     pass
+
+
+@dataclass(frozen=True, slots=True)
+class EngineBackendDescriptor:
+    name: str
+    api_module: str
+    implementation_identity: str
+    import_root: str
+
+    def __post_init__(self):
+        if not all((self.name, self.api_module, self.implementation_identity, self.import_root)):
+            raise ValueError("engine backend descriptor fields cannot be empty")
+
+    def resolve(self):
+        try:
+            module = import_module(self.api_module)
+        except Exception as exc:
+            raise SearchContractError(
+                f"engine backend {self.name!r} is unavailable: {type(exc).__name__}") from exc
+        actual = getattr(module, "ENGINE_IMPLEMENTATION_IDENTITY", None)
+        if actual != self.implementation_identity:
+            raise SearchContractError(
+                f"engine backend {self.name!r} resolved implementation {actual!r}, "
+                f"expected {self.implementation_identity!r}")
+        return module
+
+
+_BACKENDS: dict[str, EngineBackendDescriptor] = {}
+
+
+def register_engine_backend(descriptor: EngineBackendDescriptor) -> None:
+    previous = _BACKENDS.setdefault(descriptor.name, descriptor)
+    if previous != descriptor:
+        raise ValueError(f"engine backend {descriptor.name!r} is already registered differently")
+
+
+def engine_backend(name: str) -> EngineBackendDescriptor:
+    try:
+        return _BACKENDS[str(name)]
+    except KeyError:
+        raise ValueError(f"engine backend {name!r} is unavailable") from None
 
 
 @dataclass(frozen=True, slots=True)
@@ -103,3 +145,49 @@ class ProviderCompletion:
             raise ValueError("provider completion usage cannot be negative")
         if self.retained_states is not None and self.retained_states < 0:
             raise ValueError("provider retained state count cannot be negative")
+
+
+@runtime_checkable
+class TurnSearchProvider(Protocol):
+    identity: str
+    root: SearchNode
+    retained_states: int
+
+    def legal_actions(self, node: SearchNode) -> tuple: ...
+    def ledger_state(self, node: SearchNode): ...
+    def chance_plan(self, node: SearchNode, sample_count: int) -> ChancePlan: ...
+    def reuse_from(self, previous, node: SearchNode) -> bool: ...
+    def reproduction_input(self) -> str: ...
+    def close(self) -> None: ...
+
+
+@runtime_checkable
+class WorkerTurnSearchProvider(TurnSearchProvider, Protocol):
+    peak_retained_states: int
+
+    def work_item(self, node: SearchNode, operation: str, arguments: tuple) -> ProviderJob: ...
+    def accept_work(self, result): ...
+    def observe_completion(self, completion: ProviderCompletion,
+                           affinity: str | None = None) -> None: ...
+    def release_worker_states(self) -> int: ...
+
+
+@runtime_checkable
+class DirectTurnSearchProvider(TurnSearchProvider, Protocol):
+    def transition(self, node: SearchNode, action: TurnAction): ...
+    def sample_for_search(self, node: SearchNode, experiment_seed: int,
+                          sample_index: int): ...
+
+
+NATIVE_ENGINE_BACKEND = EngineBackendDescriptor(
+    "native-cg", "cg.api", "native-cg-api-v1", "cg")
+register_engine_backend(NATIVE_ENGINE_BACKEND)
+
+
+__all__ = (
+    "BoundaryReason", "ChancePlan", "DirectTurnSearchProvider", "EngineBackendDescriptor",
+    "NATIVE_ENGINE_BACKEND", "NodeKind", "ProviderCompletion", "ProviderJob",
+    "SearchContractError", "SearchNode", "SearchStateKey", "TurnAction",
+    "TurnSearchProvider", "WorkerTurnSearchProvider", "engine_backend",
+    "register_engine_backend",
+)

@@ -13,6 +13,8 @@ from ..schema import (AreaType, CardType, EnergyType, LogType, OptionType,  # no
                       SelectContext, SelectType, SpecialConditionType)
 from .utils import to_dataclass
 
+ENGINE_IMPLEMENTATION_IDENTITY = "cgpy-compat-api-v1"
+
 _DEFS = Path(__file__).resolve().parents[1] / "defs"
 
 

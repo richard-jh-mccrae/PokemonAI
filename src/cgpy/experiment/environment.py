@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, replace
+import json
 from itertools import permutations
 from math import perm
 
@@ -15,7 +16,7 @@ from common.observation import (KnownDeckTop, KnownOwnPrizes, LegalKnowledge,
 
 from .. import render
 from ..engine import Engine
-from ..execution import before_begin_turn
+from ..execution import after_begin_turn
 from ..rng import SeededRng
 from ..schema import SelectContext
 from .chance import (ChanceBranchKey, ChanceBranchKind, ChanceInformationKey,
@@ -25,7 +26,8 @@ from .contracts import (BoundaryReason, ChanceExpansion, ChanceExpansionRequest,
                         NodeKind, PrimitiveTransition, SearchContractError,
                         SearchNode, SearchStateKey)
 from .snapshot import ExperimentSnapshot
-from .state_key import search_state_key, unavailable_state_key
+from .state_key import (search_state_key, turn_boundary_state_key,
+                        unavailable_state_key)
 
 
 @dataclass(frozen=True, slots=True)
@@ -143,8 +145,7 @@ class _BoundaryProbeRng:
         def stop(*_args, **_kwargs):
             event = _chance_event(name, _args, _kwargs)
             if self._turn_changed():
-                raise _RandomBoundary(
-                    NodeKind.TURN_BOUNDARY, BoundaryReason.TURN_TRANSITION, event)
+                return getattr(self.delegate, name)(*_args, **_kwargs)
             raise _RandomBoundary(kind, reason, event)
 
         return stop
@@ -353,7 +354,7 @@ class _SegmentRng:
 class _PrescribedRng:
     def __init__(self, choices: tuple[_ExactChoice, ...],
                  outcomes: tuple[bool, ...] = (), *, perspective_seat: int,
-                 knowledge: LegalKnowledge, game_state):
+                  knowledge: LegalKnowledge, game_state, turn_changed=lambda: False):
         self.delegate = SeededRng(0)
         self._choices = choices
         self._choice_index = 0
@@ -362,6 +363,7 @@ class _PrescribedRng:
         self._perspective_seat = perspective_seat
         self._knowledge = knowledge
         self._game_state = game_state
+        self._turn_changed = turn_changed
         self._known_top = list(
             knowledge.known_top.cards
             if isinstance(knowledge.known_top, KnownDeckTop) else ())
@@ -413,6 +415,8 @@ class _PrescribedRng:
 
     def draw_bind(self, seat: int, deck: list[int],
                   *, prize: list[int] | None = None) -> int:
+        if self._turn_changed():
+            return self.delegate.draw_bind(seat, deck, prize=prize)
         serial = int(self._take(_chance_event("draw_bind", (seat, deck), {})))
         if serial not in deck:
             raise SearchContractError("exact draw branch selected a missing card")
@@ -474,7 +478,7 @@ class _NodeState:
     chance_event: _ChanceEvent | None = None
 
 
-def _stop_before_turn(_gs, _seat) -> None:
+def _stop_after_turn(_gs, _seat) -> None:
     raise _RandomBoundary(
         NodeKind.TURN_BOUNDARY, BoundaryReason.TURN_TRANSITION,
         _ChanceEvent("turn", None))
@@ -524,6 +528,8 @@ def _classification(engine: Engine, perspective_seat: int,
 
 
 class TurnSearchEnvironment:
+    identity = "cgpy-exact-turn-search-v1"
+
     def __init__(self, engine: Engine, *, perspective_seat: int,
                  knowledge: LegalKnowledge | None = None):
         if perspective_seat not in (0, 1):
@@ -607,9 +613,12 @@ class TurnSearchEnvironment:
             continuation = (
                 replay_plan.action.kind, replay_plan.action.parts,
                 len(replay_plan.outcomes), chance_method)
-        key = search_state_key(
-            engine, kind, None, self.perspective_seat, self._root_turn, reason,
-            continuation=continuation, observation_key=observation.position_key)
+        key = (turn_boundary_state_key(
+            perspective_seat=self.perspective_seat, root_turn=self._root_turn,
+            observation_key=observation.position_key)
+            if kind is NodeKind.TURN_BOUNDARY else search_state_key(
+                engine, kind, None, self.perspective_seat, self._root_turn, reason,
+                continuation=continuation, observation_key=observation.position_key))
         return self._register(
             engine, kind, None, reason, observation, key, replay_plan=replay_plan,
             chance_method=chance_method, chance_event=chance_event)
@@ -641,7 +650,7 @@ class TurnSearchEnvironment:
             knowledge=parent.observation.knowledge,
             game_state=child_engine.gs)
         child_engine.gs.rng = probe
-        hook_token = before_begin_turn.set(_stop_before_turn)
+        hook_token = after_begin_turn.set(_stop_after_turn)
         try:
             child_engine.step(list(plan.selection))
         except _RandomBoundary as boundary:
@@ -658,7 +667,7 @@ class TurnSearchEnvironment:
                 child_engine, knowledge=probe.knowledge)
         finally:
             child_engine.gs.rng = probe.delegate
-            before_begin_turn.reset(hook_token)
+            after_begin_turn.reset(hook_token)
         return child
 
     def _run_sampled_plan(self, parent: SearchNode, plan: _ReplayPlan,
@@ -669,7 +678,7 @@ class TurnSearchEnvironment:
             knowledge=parent.observation.knowledge,
             game_state=child_engine.gs)
         child_engine.gs.rng = rng
-        hook_token = before_begin_turn.set(_stop_before_turn)
+        hook_token = after_begin_turn.set(_stop_after_turn)
         try:
             child_engine.step(list(plan.selection))
         except _RandomBoundary as boundary:
@@ -683,7 +692,7 @@ class TurnSearchEnvironment:
             child = self._make_node(child_engine, knowledge=rng.knowledge)
         finally:
             child_engine.gs.rng = rng.delegate
-            before_begin_turn.reset(hook_token)
+            after_begin_turn.reset(hook_token)
         return child
 
     def _probe_exact_plan(
@@ -693,9 +702,10 @@ class TurnSearchEnvironment:
         child_engine = plan.source.fork()
         rng = _PrescribedRng(
             choices, plan.outcomes, perspective_seat=self.perspective_seat,
-            knowledge=parent.observation.knowledge, game_state=child_engine.gs)
+            knowledge=parent.observation.knowledge, game_state=child_engine.gs,
+            turn_changed=lambda: child_engine.gs.turn != self._root_turn)
         child_engine.gs.rng = rng
-        hook_token = before_begin_turn.set(_stop_before_turn)
+        hook_token = after_begin_turn.set(_stop_after_turn)
         child = None
         event = None
         try:
@@ -714,7 +724,7 @@ class TurnSearchEnvironment:
                 child_engine, knowledge=rng.knowledge)
         finally:
             child_engine.gs.rng = rng.delegate
-            before_begin_turn.reset(hook_token)
+            after_begin_turn.reset(hook_token)
         return child, event
 
     @staticmethod
@@ -826,6 +836,10 @@ class TurnSearchEnvironment:
     def retained_states(self) -> int:
         return len(self._states)
 
+    @property
+    def peak_retained_states(self) -> int:
+        return len(self._states)
+
     def ledger_state(self, node: SearchNode) -> ProviderState:
         state = self._node_state(node)
         payload = state.engine.observation(viewer=self.perspective_seat, sbi_token=None)
@@ -863,6 +877,19 @@ class TurnSearchEnvironment:
     def close(self) -> None:
         self._states.clear()
         self._information_keys.clear()
+
+    def reproduction_input(self) -> str:
+        return json.dumps({
+            "schema": "cgpy-exact-search-root", "schema_version": 1,
+            "state_key": str(self.root.state_key),
+            "decision_key": self.root.observation.decision_key,
+        }, sort_keys=True, separators=(",", ":"))
+
+    def release_worker_states(self) -> int:
+        return 0
+
+    def observe_completion(self, _completion, affinity=None) -> None:
+        return None
 
     def chance_plan(self, node: SearchNode, sample_count: int) -> ChancePlan:
         state = self._node_state(node)

@@ -401,11 +401,13 @@ def _initialize_worker(config: dict) -> None:
     engine = config["engine"]
     if engine == "cgpy":
         os.environ["CG_ENGINE"] = "py"
+        os.environ["AGENT_ENGINE_BACKEND"] = "cgpy"
         from cgpy.alias import install
         install()
     else:
         os.environ.pop("CG_ENGINE", None)
         os.environ.pop("CGPY_SEED", None)
+        os.environ["AGENT_ENGINE_BACKEND"] = "native-cg"
     _WORKER_STATE = {"config": config, "servers": {}, "decks": {}}
     atexit.register(_close_worker)
 

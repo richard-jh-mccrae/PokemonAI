@@ -269,10 +269,12 @@ def test_production_provider_branches_a_live_native_search_without_hidden_zone_l
         battle_finish()
 
 
-def test_native_puct_adapter_replays_inside_a_spawned_worker():
+def test_configured_puct_backends_replay_inside_a_spawned_worker():
     from common.puct import NativeTurnSearchProvider
     from common.puct.workers import BoundedWorkers, WorkItem
-    from common.decision.turn import NodeKind, ProviderCompletion
+    from common.decision.turn import (NATIVE_ENGINE_BACKEND, NodeKind, ProviderCompletion,
+                                      WorkerTurnSearchProvider)
+    from cgpy.puct import ENGINE_BACKEND as CGPY_ENGINE_BACKEND
 
     deck = _deck()
     observation, start = battle_start(list(deck), list(deck))
@@ -281,20 +283,32 @@ def test_native_puct_adapter_replays_inside_a_spawned_worker():
         assert start.errorPlayer == -1
         observation = _first_main(observation)
         board = build_observation(observation, decklist=deck)
-        provider = NativeTurnSearchProvider.from_observation(observation, board)
-        end = next(action for action in provider.legal_actions(provider.root)
-                   if action.identity.kind == "end")
-        job = provider.work_item(provider.root, "transition", (end.identity,))
+        boundaries = []
+        for task_id, backend in enumerate((NATIVE_ENGINE_BACKEND, CGPY_ENGINE_BACKEND)):
+            provider = NativeTurnSearchProvider.from_observation(
+                observation, board, backend=backend)
+            assert isinstance(provider, WorkerTurnSearchProvider)
+            end = next(action for action in provider.legal_actions(provider.root)
+                       if action.identity.kind == "end")
+            job = provider.work_item(provider.root, "transition", (end.identity,))
 
-        result = workers.run_batch(
-            (WorkItem(0, job.function, job.arguments),), deadline=time.monotonic() + 20)
+            result = workers.run_batch(
+                (WorkItem(task_id, job.function, job.arguments),),
+                deadline=time.monotonic() + 20)
 
-        assert len(result) == 1 and result[0].error_type is None
-        completion = result[0].value
-        assert isinstance(completion, ProviderCompletion)
-        assert completion.operation_units >= 1
-        assert completion.state_capacity >= 2
-        assert completion.value.kind in (NodeKind.TURN_BOUNDARY, NodeKind.INFORMATION_BOUNDARY)
+            assert job.arguments[0] == backend
+            assert len(result) == 1 and result[0].error_type is None, result
+            completion = result[0].value
+            assert isinstance(completion, ProviderCompletion)
+            assert completion.operation_units >= 1
+            assert completion.state_capacity >= 2
+            assert completion.value.kind in (
+                NodeKind.TURN_BOUNDARY, NodeKind.INFORMATION_BOUNDARY)
+            boundary = completion.value.observation
+            boundaries.append((
+                boundary.turn.number, boundary.them.deck_count,
+                boundary.them.hand.count, boundary.position_key))
+        assert boundaries[0] == boundaries[1]
     finally:
         workers.close()
         battle_finish()
@@ -430,6 +444,97 @@ def test_native_puct_completes_a_bounded_root_search():
     finally:
         if search is not None:
             search.close()
+        battle_finish()
+
+
+def test_agent_runtime_can_select_puct_independently_for_each_backend():
+    from common.decision.turn import NATIVE_ENGINE_BACKEND
+    from common.puct import PuctConfiguration
+    from common.runtime import DecisionPilot, DecisionSearchConfiguration
+    from common.telemetry import build_decision_record
+    from cgpy.puct import ENGINE_BACKEND as CGPY_ENGINE_BACKEND
+
+    deck = _deck()
+    observation, start = battle_start(list(deck), list(deck))
+    runtimes = []
+    public_results = []
+    try:
+        assert start.errorPlayer == -1
+        observation = _first_main(observation)
+        for backend in (NATIVE_ENGINE_BACKEND, CGPY_ENGINE_BACKEND):
+            runtime = build_runtime(
+                _strategy(), deck,
+                decision_configuration=DecisionSearchConfiguration(
+                    DecisionPilot.PUCT, backend,
+                    PuctConfiguration(
+                        profile="play", simulation_limit=4, batch_size=2,
+                        worker_count=2, chance_samples=4, transition_limit=100,
+                        evaluation_limit=100, chance_limit=20, state_limit=200,
+                        time_limit_seconds=30, cleanup_reserve_seconds=2)))
+            runtimes.append(runtime)
+
+            decision = runtime.decide(observation)
+
+            assert decision.diagnostics["pilot"] == "puct"
+            assert decision.diagnostics["backend"] == backend.name
+            assert decision.diagnostics["engine_backend"] == backend.name
+            assert decision.decision_result.search.puct.simulations == 4
+            assert decision.chosen in tuple(
+                action.selection for action in runtime.last_state.legal_actions)
+            record = build_decision_record(
+                decision.decision_result, runtime.last_state,
+                episode_key=f"puct-{backend.name}", decision_index=0,
+                parent_decision_id=None, selection=decision.chosen,
+                evaluation_model=runtime.puct.ctx,
+                compute_configuration=runtime.puct.compute,
+                provider_configuration=runtime.puct.provider_configuration,
+                provenance={"agent": "test", "artifact": "fixture", "code": "abc",
+                            "data": {}}, decision_seconds=0.1)
+            assert record["decision"]["variant"] == "puct"
+            assert record["configuration"]["provider"]["backend"] == backend.name
+            assert record["search"]["puct"]["simulations"] == 4
+            assert "reproduction_input" not in record["search"]["puct"]
+            assert "search_begin_input" not in json.dumps(record)
+            evidence = decision.decision_result.search.puct
+            public_results.append((
+                decision.chosen,
+                tuple((candidate.prior, candidate.puct.visits,
+                       candidate.puct.value_sum, candidate.puct.exclusion)
+                      for candidate in decision.decision_result.roster.candidates),
+                evidence.simulations, evidence.work,
+                tuple((step.action, step.decision_key, step.chance_slot, step.probability)
+                      for step in evidence.principal_variation),
+                evidence.principal_variation_stop_reason,
+            ))
+        assert public_results[0] == public_results[1]
+    finally:
+        for runtime in runtimes:
+            runtime.puct.close()
+        battle_finish()
+
+
+def test_agent_runtime_can_select_the_compat_backend_for_one_ply_ledger():
+    from common.runtime import DecisionPilot, DecisionSearchConfiguration
+    from cgpy.puct import ENGINE_BACKEND as CGPY_ENGINE_BACKEND
+
+    deck = _deck()
+    observation, start = battle_start(list(deck), list(deck))
+    try:
+        assert start.errorPlayer == -1
+        observation = _first_main(observation)
+        runtime = build_runtime(
+            _strategy(), deck,
+            decision_configuration=DecisionSearchConfiguration(
+                DecisionPilot.LEDGER, CGPY_ENGINE_BACKEND))
+
+        decision = runtime.decide(observation)
+
+        assert runtime.ledger.provider_configuration["backend"] == "cgpy"
+        assert decision.diagnostics["pilot"] == "ledger"
+        assert decision.diagnostics["engine_backend"] == "cgpy"
+        assert decision.chosen in tuple(
+            action.selection for action in runtime.last_state.legal_actions)
+    finally:
         battle_finish()
 
 

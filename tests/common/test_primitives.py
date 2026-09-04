@@ -78,6 +78,28 @@ def test_two_attachments_on_one_body_are_two_decisions():
     assert option_fingerprint(fire, frame) != option_fingerprint(water, frame)
 
 
+def test_referenced_card_identity_infers_only_missing_owner_stamps():
+    option = engine_opt(type=8, area=2, index=0, inPlayArea=4, inPlayIndex=0,
+                        playerIndex=0)
+    sparse = {"current": {"yourIndex": 0, "players": [
+        {"hand": [{"id": 3}], "active": [{"id": 700, "energyCards": [{"id": 3}]}]},
+        {},
+    ]}}
+    stamped = {"current": {"yourIndex": 0, "players": [
+        {"hand": [{"id": 3, "playerIndex": 0}],
+         "active": [{"id": 700, "playerIndex": 0,
+                     "energyCards": [{"id": 3, "playerIndex": 0}]}]},
+        {},
+    ]}}
+    foreign = {"current": {"yourIndex": 0, "players": [
+        {"hand": [{"id": 3, "playerIndex": 1}], "active": stamped["current"]["players"][0]["active"]},
+        {},
+    ]}}
+
+    assert semantic_option_fingerprint(option, sparse) == semantic_option_fingerprint(option, stamped)
+    assert semantic_option_fingerprint(option, sparse) != semantic_option_fingerprint(option, foreign)
+
+
 def test_fingerprint_source_card_id_reads_the_embedded_reference():
     ability_part = semantic_option_fingerprint(engine_opt(type=10, area=4, index=0), IN_PLAY_FRAME)
     skill_part = semantic_option_fingerprint(engine_opt(type=15, cardId=678), IN_PLAY_FRAME)

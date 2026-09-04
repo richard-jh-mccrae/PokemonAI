@@ -8,7 +8,8 @@ from common.decision import DecisionCoordinator, PolicyConfiguration, StateValua
 from common.ledger.search import UniformPolicyModel
 from common.puct import (PuctConfiguration, PuctDecisionPolicy, PuctSearch,
                          evaluation_profile, inspection_profile, play_profile)
-from common.decision.turn import NodeKind, SearchNode, SearchStateKey
+from common.decision.turn import (DirectTurnSearchProvider, NodeKind, SearchNode,
+                                  SearchStateKey)
 from common.decision.turn import ChancePlan
 from common.decision.puct import PuctOutcome
 from common.observation import ObservationStateBuilder
@@ -53,6 +54,19 @@ class GraphEnvironment:
     def legal_actions(self, node):
         return node.observation.legal_actions
 
+    @property
+    def retained_states(self):
+        return len(self.nodes)
+
+    def ledger_state(self, node):
+        return node.observation
+
+    def chance_plan(self, node, sample_count):
+        raise SearchContractError("controlled node has no chance plan")
+
+    def sample_for_search(self, node, experiment_seed, sample_index):
+        raise SearchContractError("controlled node has no chance transition")
+
     def transition(self, node, action):
         successor = next(target for label, target in self.edges[self.names[node.observation.position_key]]
                          if label == action.kind)
@@ -91,6 +105,21 @@ def decide(environment, configuration=None, *, search=None, policy=None, guard=N
         policy_model=policy or UniformPolicyModel(),
         decision_policy=PuctDecisionPolicy(), policy_configuration=PolicyConfiguration())
     return coordinator.decide(environment.root, provider=environment, strict=True, execution_guard=guard)
+
+
+def test_direct_provider_contract_is_explicit_and_incomplete_providers_are_rejected():
+    environment = GraphEnvironment({"root": 0.0}, {})
+    assert isinstance(environment, DirectTurnSearchProvider)
+
+    incomplete = SimpleNamespace(root=environment.root, identity="incomplete")
+    coordinator = DecisionCoordinator(
+        evaluator=GraphEvaluator(environment.valuation_values),
+        evaluation_model=SimpleNamespace(identity="controlled-model-v1"),
+        search=PuctSearch(), search_configuration=PuctConfiguration(simulation_limit=1),
+        policy_model=UniformPolicyModel(), decision_policy=PuctDecisionPolicy(),
+        policy_configuration=PolicyConfiguration())
+    with pytest.raises(TypeError, match="supported provider contract"):
+        coordinator.decide(incomplete.root, provider=incomplete, strict=True)
 
 
 class DelayGraphEvaluator(GraphEvaluator):
@@ -236,6 +265,30 @@ def test_hard_failure_stops_even_when_an_earlier_simulation_completed():
     assert result.search.failure.message == "broken engine"
     assert '"schema":"controlled-graph-input"' in result.search.puct.reproduction_input
     assert environment.closed
+
+
+class PartlyUnavailableEnvironment(GraphEnvironment):
+    def transition(self, node, action):
+        result = super().transition(node, action)
+        if action.kind == "unsupported":
+            return SimpleNamespace(node=replace(
+                result.node, kind=NodeKind.UNAVAILABLE,
+                failure="focal hand update is unavailable"))
+        return result
+
+
+def test_explicitly_unavailable_action_is_excluded_without_hiding_the_gap():
+    environment = PartlyUnavailableEnvironment(
+        {"root": 0.0, "unsupported": 10.0, "supported": 1.0},
+        {"root": (("unsupported", "unsupported"), ("supported", "supported"))})
+
+    result = decide(environment, PuctConfiguration(simulation_limit=8))
+
+    assert result.search.puct.outcome is PuctOutcome.SEARCHED
+    assert result.chosen.identity == ActionIdentity("supported")
+    rejected = result.roster.candidates[0]
+    assert rejected.puct.exclusion == "focal hand update is unavailable"
+    assert rejected.puct.visits == 0
 
 
 def test_actual_single_action_bypasses_evaluation_and_simulation():

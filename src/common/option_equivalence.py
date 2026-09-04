@@ -55,6 +55,18 @@ def without_engine_serial(obj):
 _without_serial = without_engine_serial
 
 
+def _referenced_card_identity(obj, seat):
+    if isinstance(obj, dict):
+        normalized = {k: _referenced_card_identity(v, seat)
+                      for k, v in sorted(obj.items()) if k != "serial"}
+        if "id" in obj and "playerIndex" not in obj:
+            normalized["playerIndex"] = seat
+        return normalized
+    if isinstance(obj, list):
+        return [_referenced_card_identity(value, seat) for value in obj]
+    return obj
+
+
 def _card_at(frame, seat, area, index):
     """None — face-down zone, unknown area, bad index, absent seat — must yield NO CLASS, not a
     guess."""
@@ -94,7 +106,7 @@ def option_fingerprint(option: dict, frame: dict | None) -> str | None:
         card = _card_at(frame, seat, AREA_HAND, option.get("index"))
         if card is None:
             return None
-        cards.append([AREA_HAND, without_engine_serial(card)])
+        cards.append([AREA_HAND, _referenced_card_identity(card, seat)])
     for area_key, index_key in _ZONE_REFS:
         area = option.get(area_key)
         if area is None:
@@ -102,7 +114,7 @@ def option_fingerprint(option: dict, frame: dict | None) -> str | None:
         card = _card_at(frame, seat, area, option.get(index_key))
         if card is None:
             return None                             # unresolvable ANYWHERE -> no class, whole option
-        cards.append([area, without_engine_serial(card)])
+        cards.append([area, _referenced_card_identity(card, seat)])
     if not cards:
         return None
     discriminators = [[field, option[field]] for field in _DISCRIMINATOR_FIELDS
@@ -124,7 +136,7 @@ def semantic_option_fingerprint(option: dict, frame: dict | None) -> str | None:
         if card is None:
             return None
         referenced.add("index")
-        cards.append([AREA_HAND, without_engine_serial(card)])
+        cards.append([AREA_HAND, _referenced_card_identity(card, seat)])
     for area_key, index_key in _ZONE_REFS:
         area = option.get(area_key)
         if area is None:
@@ -133,7 +145,7 @@ def semantic_option_fingerprint(option: dict, frame: dict | None) -> str | None:
         if card is None:
             return None
         referenced.update((area_key, index_key))
-        cards.append([area, without_engine_serial(card)])
+        cards.append([area, _referenced_card_identity(card, seat)])
     fields = {k: without_engine_serial(v) for k, v in sorted(option.items())
               if k not in referenced and k != "_composer_origin" and not str(k).startswith("_")}
     try:
