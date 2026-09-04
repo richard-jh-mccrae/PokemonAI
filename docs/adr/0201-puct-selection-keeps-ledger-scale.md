@@ -1,4 +1,4 @@
-# ADR-TEMP-607: PUCT selection keeps the Ledger scale
+# ADR-0201: PUCT selection keeps the Ledger scale
 
 Accepted and implemented for Issue #607.
 

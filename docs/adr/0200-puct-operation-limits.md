@@ -1,4 +1,4 @@
-# ADR-TEMP-607: PUCT uses separate operation limits
+# ADR-0200: PUCT uses separate operation limits
 
 Accepted and implemented for Issue #607.
 
@@ -31,7 +31,7 @@ committing a move. If the budget expires before that evidence exists, initializa
 review run stops with an explicit diagnostic. A prior-only move would obscure whether the reviewed choice
 was produced by PUCT. Once that minimum is met, ordinary budget exhaustion may return the best searched
 action and the match continues; neither exhaustive turn coverage nor equal root coverage is required.
-With [verified tree reuse](temp-issue607-puct-tree-reuse-is-configurable.md), inherited completed backups
+With [verified tree reuse](0204-puct-tree-reuse-is-configurable.md), inherited completed backups
 supporting a currently legal root action may meet this floor even when no new simulation finishes.
 
 An actual decision with exactly one legal action before admissibility filtering may execute immediately,
@@ -78,6 +78,6 @@ presented as an additive wall-time breakdown. Cached work is attributed when per
 when reused. These records support later tuning without mistaking missing or duplicated cost for progress.
 
 Concurrent reservations and interrupted work follow the accepted
-[coordinated stage design](temp-issue607-puct-coordinates-reproducible-batches.md).
+[coordinated stage design](0203-puct-coordinates-reproducible-batches.md).
 The numerical limits used in the discussion were illustrative, not accepted defaults. Initial numerical
 tuning remains subject to representative measurements under the accepted generous inspection policy.

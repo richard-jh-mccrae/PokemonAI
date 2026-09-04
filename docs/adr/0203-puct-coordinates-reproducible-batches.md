@@ -1,4 +1,4 @@
-# ADR-TEMP-607: PUCT coordinates reproducible batches
+# ADR-0203: PUCT coordinates reproducible batches
 
 Accepted and implemented for Issue #607.
 

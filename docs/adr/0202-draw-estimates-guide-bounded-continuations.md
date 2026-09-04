@@ -1,4 +1,4 @@
-# ADR-TEMP-607: Draw estimates guide bounded continuations
+# ADR-0202: Draw estimates guide bounded continuations
 
 Accepted and implemented for Issue #607.
 
@@ -33,6 +33,6 @@ Prior evidence alone creates no completed PUCT visits or backed-up returns. Insp
 configured sample slots, resolved slots, distinct successor states, and repeat search visits. Repeated
 visits do not constitute additional draw samples; observed return variation is not automatically a
 calibrated confidence interval. These evidence distinctions follow the accepted accuracy requirement.
-State retention follows the accepted [stop-at-cap policy](temp-issue607-puct-operation-limits.md).
+State retention follows the accepted [stop-at-cap policy](0200-puct-operation-limits.md).
 Parallel work follows the accepted
-[coordinated batch design](temp-issue607-puct-coordinates-reproducible-batches.md).
+[coordinated batch design](0203-puct-coordinates-reproducible-batches.md).

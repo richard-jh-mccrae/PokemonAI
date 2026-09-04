@@ -1,4 +1,4 @@
-# ADR-TEMP-607: PUCT tree reuse is configurable
+# ADR-0204: PUCT tree reuse is configurable
 
 Accepted and implemented for Issue #607.
 
