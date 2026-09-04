@@ -15,7 +15,8 @@ from common.decision.puct import (
     PuctPriorEvidence,
 )
 from common.decision.turn import (ChancePlan, NodeKind, ProviderCompletion, SearchContractError,
-                                  SearchNode, TurnAction)
+                                  SearchNode, TurnAction, DirectTurnSearchProvider,
+                                  WorkerTurnSearchProvider)
 from common.decision.action_policy import admissible_actions
 from common.ledger.policy import LedgerPolicyModel
 from common.ledger.search import UniformPolicyModel
@@ -95,7 +96,14 @@ class PuctSearch:
     reset = close
 
     def search(self, request, evaluator, policy_model, provider, configuration):
+        if isinstance(provider, WorkerTurnSearchProvider):
+            worker_backed = True
+        elif isinstance(provider, DirectTurnSearchProvider):
+            worker_backed = False
+        else:
+            raise TypeError("PUCT provider does not satisfy a supported provider contract")
         session = _Session(request, evaluator, policy_model, provider, configuration)
+        session.worker_backed = worker_backed
         previous = self.previous
         self.previous = None
         if configuration.reuse_tree:
@@ -133,6 +141,7 @@ class _Session:
         self.batches = self.peak_pending = 0
         self.reuse_reason = "fresh_requested"
         self.convergence = []
+        self.worker_backed = False
 
     def inherit(self, previous):
         compatibility = lambda session: (
@@ -149,8 +158,7 @@ class _Session:
             self.reuse_reason = "state_not_retained"
             return
         candidate = candidates[0]
-        transfer = getattr(self.provider, "reuse_from", None)
-        if transfer is None or not transfer(previous.provider, candidate.state):
+        if not self.provider.reuse_from(previous.provider, candidate.state):
             self.reuse_reason = "ownership_or_state_unverified"
             return
         self.root, self.nodes = candidate, previous.nodes
@@ -200,9 +208,8 @@ class _Session:
         finally:
             try:
                 self.workers.close()
-                release = getattr(self.provider, "release_worker_states", None)
-                if release is not None:
-                    self.budget.release(release())
+                if self.worker_backed:
+                    self.budget.release(self.provider.release_worker_states())
             except Exception as exc:
                 failure = DecisionFailure.capture(DecisionFailureStage.PROVIDER, exc)
                 outcome, stop_reason = PuctOutcome.HARD_FAILURE, "cleanup_failure"
@@ -305,7 +312,7 @@ class _Session:
             self.budget.check()
             self.budget.cache()
             self.stage = DecisionFailureStage.PROVIDER
-            requested = action if hasattr(self.provider, "work_item") else action.identity
+            requested = action if self.worker_backed else action.identity
             self.transitions[key] = self.provider_call("transitions", node, "transition", (requested,))
         return self.transitions[key]
 
@@ -324,10 +331,10 @@ class _Session:
         result = self.budget.call(category, lambda: self.perform(
             item.function, item.arguments, item.affinity),
                                   creates_state=item.states, units=item.capacity)
-        return self.provider.accept_work(result) if hasattr(self.provider, "work_item") else result.node
+        return self.provider.accept_work(result) if self.worker_backed else result.node
 
     def provider_operation(self, category, node, operation, arguments):
-        if hasattr(self.provider, "work_item"):
+        if self.worker_backed:
             item = self.provider.work_item(node, operation, arguments)
             return _Operation(
                 category, item.function, item.arguments, item.state_capacity,
@@ -352,7 +359,7 @@ class _Session:
             if grant is not None:
                 if result and result[0].error_type is None and isinstance(result[0].value, ProviderCompletion):
                     completion = result[0].value
-                    if hasattr(self.provider, "observe_completion"):
+                    if self.worker_backed:
                         self.provider.observe_completion(completion, item.affinity)
                 self.budget.settle(
                     grant, started=item.task_id in self.workers.started_tasks,
@@ -379,13 +386,13 @@ class _Session:
 
     def async_provider(self, category, node, operation, arguments):
         result = yield self.provider_operation(category, node, operation, arguments)
-        return self.provider.accept_work(result) if hasattr(self.provider, "work_item") else result.node
+        return self.provider.accept_work(result) if self.worker_backed else result.node
 
     def async_transition(self, node, action):
         key = (node.observation.decision_key, action.identity, tuple(action.selection))
         if key not in self.transitions:
             self.budget.cache()
-            requested = action if hasattr(self.provider, "work_item") else action.identity
+            requested = action if self.worker_backed else action.identity
             self.transitions[key] = yield from self.async_provider(
                 "transitions", node, "transition", (requested,))
         return self.transitions[key]
@@ -460,8 +467,7 @@ class _Session:
                         error = error or _WorkFailure(grants[result.task_id].category, result)
                     else:
                         value = result.value
-                        if isinstance(value, ProviderCompletion) and hasattr(
-                            self.provider, "observe_completion"):
+                        if isinstance(value, ProviderCompletion) and self.worker_backed:
                             self.provider.observe_completion(
                                 value, affinities[result.task_id])
                         active[indices[result.task_id]] = value.value if isinstance(value, ProviderCompletion) else value
@@ -529,6 +535,14 @@ class _Session:
             edge.pending += 1
             if edge.child is None:
                 successor = yield from self.async_transition(node.state, edge.action)
+                if successor.kind is NodeKind.UNAVAILABLE or successor.failure:
+                    edge.exclusion = successor.failure or "provider returned an unavailable node"
+                    edge.pending -= 1
+                    path.pop()
+                    if any(item.exclusion is None for item in node.edges):
+                        seen.discard(id(node))
+                        continue
+                    break
                 edge.child = yield from self.async_initialize(successor)
                 node = edge.child
                 if node.chance_plan is None:
@@ -571,13 +585,12 @@ class _Session:
                               convergence=tuple(self.convergence), tree_nodes=len(self.nodes),
                               cache_entries=len(self.values) + len(self.transitions) + len(self.samples),
                               cache_capacity_charged=self.budget.cache_entries,
-                              retained_engine_states=getattr(self.provider, "retained_states", None),
-                              peak_retained_engine_states=getattr(
-                                  self.provider, "peak_retained_states", None),
+                              retained_engine_states=self.provider.retained_states,
+                              peak_retained_engine_states=(
+                                  self.provider.peak_retained_states
+                                  if self.worker_backed else self.provider.retained_states),
                               principal_variation_stop_reason=variation_stop,
-                              reproduction_input=(
-                                  self.provider.reproduction_input()
-                                  if hasattr(self.provider, "reproduction_input") else None),
+                              reproduction_input=self.provider.reproduction_input(),
                               prior_distributions=tuple(PuctPriorEvidence(
                                   node.state.observation.decision_key, node.distribution,
                                   node.preparation_limited) for node in self.nodes.values()

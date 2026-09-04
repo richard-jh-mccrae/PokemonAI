@@ -12,6 +12,7 @@ import sys
 import hashlib
 import json
 from collections.abc import Mapping
+from types import ModuleType
 
 from common.api import RootDecision
 from common.decision import (DecisionCoordinator, DecisionDeadlineExceeded,
@@ -68,6 +69,9 @@ def _identity_input(value):
         return sorted((_identity_input(child) for child in value), key=repr)
     if value is None or isinstance(value, (bool, int, float, str)):
         return value
+    if isinstance(value, ModuleType):
+        return {"module": value.__name__,
+                "identity": getattr(value, "ENGINE_IMPLEMENTATION_IDENTITY", None)}
     identity = getattr(value, "identity", None)
     if identity is not None:
         return {"type": f"{type(value).__module__}.{type(value).__qualname__}",
@@ -82,7 +86,7 @@ def _identity_input(value):
 class LedgerDecider:
     def __init__(self, deck, deck_name: str, ctx: EvaluationModel, *,
                  provider_factory=LedgerNativeProvider, provider_kwargs=None, gap_sink=None,
-                 compute=None, parity_oracle=None):
+                 compute=None, parity_oracle=None, provider_backend=None):
         self.deck = tuple(int(card_id) for card_id in deck)
         self.deck_name = str(deck_name)
         self.ctx = ctx
@@ -93,6 +97,8 @@ class LedgerDecider:
         #: fact-needing options (bench damage, energy typing) at zero (ADR-0148).
         self.provider_kwargs = dict(provider_kwargs or {})
         descriptor = _provider_descriptor(self.provider_factory, self.provider_kwargs)
+        if provider_backend is not None:
+            descriptor["backend"] = str(provider_backend)
         self._provider_configuration = {
             "identity": _provider_identity(
                 self.provider_factory, self.provider_kwargs, descriptor),

@@ -174,11 +174,14 @@ def build_snapshot(*, bundles_root: Path, output_root: Path,
         bundle_ids.append(manifest["bundle_id"])
         for decision in decisions:
             if decision["decision"]["variant"] != "ledger":
+                reason = ("pregame_not_ledger"
+                          if decision["decision"]["variant"] == "declarative_pregame"
+                          else "puct_not_ledger")
                 exclusion = {
                     "decision_id": decision["record_id"],
                     "bundle_id": manifest["bundle_id"],
                     "telemetry_receipt_id": receipt["record_id"],
-                    "reason": "pregame_not_ledger",
+                    "reason": reason,
                     "receipt_certified": receipt["certified"],
                 }
                 training_exclusions.append(exclusion)

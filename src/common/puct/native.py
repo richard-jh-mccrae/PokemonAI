@@ -8,7 +8,8 @@ from pathlib import Path
 
 from common.algebra import Chance, Deterministic, Refresh, Terminal, Unknown
 from common.api import ActionIdentity
-from common.decision.turn import (BoundaryReason, ChancePlan, NodeKind, ProviderCompletion,
+from common.decision.turn import (BoundaryReason, ChancePlan, EngineBackendDescriptor,
+                                  NATIVE_ENGINE_BACKEND, NodeKind, ProviderCompletion,
                                   ProviderJob, SearchContractError, SearchNode, SearchStateKey,
                                   TurnAction)
 from common.ledger.decision import evaluator_semantics_identity
@@ -105,7 +106,8 @@ def _classify(state: ProviderState, root_turn: int) -> tuple[NodeKind, int | Non
     return kind, state.actor_seat, None
 
 
-def _node(handle, root_turn: int, origin: str, *, kind=None, reason=None) -> SearchNode:
+def _node(handle, root_turn: int, origin: str, *, kind=None, reason=None,
+          failure=None) -> SearchNode:
     state = handle.state
     if kind is None:
         kind, actor, reason = _classify(state, root_turn)
@@ -113,7 +115,7 @@ def _node(handle, root_turn: int, origin: str, *, kind=None, reason=None) -> Sea
         actor = None
     key = SearchStateKey(_digest(origin, handle.path, state.observation.decision_key, kind, reason))
     return SearchNode(kind, actor, state.observation.seat, state.observation, key,
-                      root_turn, reason, None, handle)
+                      root_turn, reason, failure, handle)
 
 
 def _result_state(result):
@@ -162,9 +164,8 @@ def _advance(provider, state, step: _ReplayStep):
     return _result_state(result.children[step.branch].node)
 
 
-def _native_transition_job(root, handle, action, root_turn, origin, affinity):
-    from cg import api
-
+def _native_transition_job(backend, root, handle, action, root_turn, origin, affinity):
+    api = backend.resolve()
     counted = _CountingApi(api)
     owned = affinity in _NATIVE_SESSIONS
     provider = (_NATIVE_SESSIONS[affinity] if owned else LedgerNativeProvider(
@@ -193,7 +194,12 @@ def _native_transition_job(root, handle, action, root_turn, origin, affinity):
             child = _node(child_handle, root_turn, origin, kind=NodeKind.CHANCE,
                           reason=BoundaryReason.RANDOM_REVEAL)
         elif isinstance(result, Unknown):
-            raise SearchContractError(f"{result.reason}: {result.missing_fact}")
+            child_handle = _StateHandle(
+                handle.path + (_ReplayStep(action.identity, tuple(action.selection)),), state,
+                handle.hidden_order_token, affinity, handle.path_origin)
+            child = _node(
+                child_handle, root_turn, origin, kind=NodeKind.UNAVAILABLE,
+                failure=f"{result.reason}: {result.missing_fact}")
         else:
             child_state = _result_state(result)
             child_handle = _StateHandle(
@@ -224,9 +230,8 @@ def _sample_engine_chance(handle, slot, root_turn, origin):
     return ProviderCompletion(_node(child_handle, root_turn, origin), 1, 0, retained)
 
 
-def _sample_refresh(root, handle, seed, slot, root_turn, origin, affinity, sample_key):
-    from cg import api
-
+def _sample_refresh(backend, root, handle, seed, slot, root_turn, origin, affinity, sample_key):
+    api = backend.resolve()
     if sample_key in _NATIVE_SAMPLE_RESULTS:
         provider = _NATIVE_SESSIONS.get(affinity)
         retained = None if provider is None else provider.retained_states
@@ -277,19 +282,29 @@ def _sample_refresh(root, handle, seed, slot, root_turn, origin, affinity, sampl
 
 
 class NativeTurnSearchProvider:
-    identity = "native-bounded-replay-v1:" + evaluator_semantics_identity((
+    adapter_identity = "bounded-observation-replay-v2:" + evaluator_semantics_identity((
         Path(__file__), Path(__file__).parents[1] / "native_engine.py",
         Path(__file__).parents[1] / "ledger" / "chance.py",
         Path(__file__).parents[1] / "ledger" / "seam.py"))
 
-    def __init__(self, root: ProviderState):
+    @classmethod
+    def identity_for(cls, backend: EngineBackendDescriptor) -> str:
+        return f"{cls.adapter_identity}:{backend.name}:{backend.implementation_identity}"
+
+    def __init__(self, root: ProviderState, *,
+                 backend: EngineBackendDescriptor = NATIVE_ENGINE_BACKEND):
         if not isinstance(root, ProviderState):
             raise TypeError("native turn search requires a ProviderState root")
+        if not isinstance(backend, EngineBackendDescriptor):
+            raise TypeError("turn search backend must be an EngineBackendDescriptor")
         self._source = root
+        self.backend = backend
+        self.identity = self.identity_for(backend)
         self._root_turn = root.observation.turn.number
         self._origin = _digest(
             root.observation.decision_key, root.observation.position_key,
-            self._root_turn, root.observation.seat)
+            self._root_turn, root.observation.seat, backend.name,
+            backend.implementation_identity)
         self.root = _node(
             _StateHandle((), root, path_origin=self._origin),
             self._root_turn, self._origin)
@@ -298,14 +313,15 @@ class NativeTurnSearchProvider:
         self._peak_retained_states = 0
 
     @classmethod
-    def from_observation(cls, payload: dict, observation: ObservationState):
+    def from_observation(cls, payload: dict, observation: ObservationState, *,
+                         backend: EngineBackendDescriptor = NATIVE_ENGINE_BACKEND):
         prizes = (observation.knowledge.own_prizes.cards
                   if isinstance(observation.knowledge.own_prizes, KnownOwnPrizes) else ())
         root = ProviderState(
             payload, observation, token=observation.decision_key,
             deck=observation.decklist or (), deck_counts=observation.deck_counts or (),
             prize_counts=prizes)
-        return cls(root)
+        return cls(root, backend=backend)
 
     @property
     def retained_states(self) -> int:
@@ -326,6 +342,8 @@ class NativeTurnSearchProvider:
     def reproduction_input(self) -> str:
         return json.dumps({
             "schema": "native-puct-replay-input", "schema_version": 1,
+            "backend": self.backend.name,
+            "backend_implementation": self.backend.implementation_identity,
             "payload": provider_payload(self._source),
             "deck": list(self._source.deck),
             "deck_counts": [list(item) for item in self._source.deck_counts],
@@ -380,7 +398,8 @@ class NativeTurnSearchProvider:
             capacity = max(1, 3 * (len(handle.path) + 1))
             return ProviderJob(
                 _native_transition_job,
-                (self._source, handle, action, self._root_turn, self._origin, affinity),
+                (self.backend, self._source, handle, action,
+                 self._root_turn, self._origin, affinity),
                 capacity + 1, capacity, affinity)
         if operation == "sample_for_search" and isinstance(handle, _EngineChanceHandle):
             return ProviderJob(_sample_engine_chance,
@@ -391,7 +410,7 @@ class NativeTurnSearchProvider:
                 self._origin, handle.path, arguments[0], arguments[1])
             affinity = handle.affinity or sample_key
             return ProviderJob(_sample_refresh,
-                               (self._source, handle, arguments[0], arguments[1],
+                               (self.backend, self._source, handle, arguments[0], arguments[1],
                                 self._root_turn, self._origin, affinity, sample_key),
                                max(1, 3 * (len(handle.path) + 1)),
                                max(1, 3 * (len(handle.path) + 1)) + 1,

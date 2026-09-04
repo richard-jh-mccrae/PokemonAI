@@ -5,6 +5,7 @@ from dataclasses import replace
 import pytest
 
 from common.api import ActionIdentity
+from common.decision.turn import WorkerTurnSearchProvider
 from common.observation.nodes import HiddenHand
 from cgpy.engine import Engine
 from cgpy.experiment import (ChanceBranchKind, ChanceExpansion,
@@ -54,6 +55,7 @@ def test_exact_snapshot_opens_a_hidden_safe_player_decision_root():
     assert environment.state_key(root) == environment.state_key(fork)
     assert environment.state_key(root).schema_version == 1
     assert not hasattr(root, "_engine")
+    assert isinstance(environment, WorkerTurnSearchProvider)
 
 
 def test_primitive_transition_replays_by_action_identity():
@@ -217,7 +219,7 @@ def test_unavailable_state_key_excludes_exception_wording(monkeypatch):
     assert first_result.result_state_key == second_result.result_state_key
 
 
-def test_end_stops_at_the_turn_boundary_before_the_next_draw():
+def test_end_stops_at_the_turn_boundary_after_the_hidden_next_draw():
     environment = TurnSearchEnvironment.from_snapshot(
         ExperimentSnapshot.capture(_start_of_turn(), seat=0))
     root = environment.root
@@ -231,8 +233,32 @@ def test_end_stops_at_the_turn_boundary_before_the_next_draw():
     assert environment.is_turn_boundary(transition.node)
     assert environment.actor(transition.node) is None
     assert environment.legal_actions(transition.node) == ()
-    assert environment.observation(transition.node).turn.number == environment.observation(
-        root).turn.number
+    before = environment.observation(root)
+    after = environment.observation(transition.node)
+    assert after.turn.number == before.turn.number + 1
+    assert after.them.deck_count == before.them.deck_count - 1
+    assert after.them.hand.count == before.them.hand.count + 1
+    assert isinstance(after.them.hand, HiddenHand)
+
+
+def test_opponent_draw_identity_cannot_change_the_turn_boundary_key():
+    first_engine = _start_of_turn()
+    second_engine = first_engine.fork()
+    opponent = 1 - first_engine.select_seat
+    second_engine.gs.players[opponent].deck[-2:] = reversed(
+        second_engine.gs.players[opponent].deck[-2:])
+    environments = [
+        TurnSearchEnvironment.from_engine(engine, perspective_seat=engine.select_seat)
+        for engine in (first_engine, second_engine)]
+
+    boundaries = []
+    for environment in environments:
+        end = next(action for action in environment.legal_actions(environment.root)
+                   if action.identity.kind == "end")
+        boundaries.append(environment.transition(environment.root, end.identity).node)
+
+    assert boundaries[0].state_key == boundaries[1].state_key
+    assert boundaries[0].observation == boundaries[1].observation
 
 
 def test_nondecision_node_kinds_have_no_strategic_actor():

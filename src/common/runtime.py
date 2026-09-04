@@ -1,4 +1,4 @@
-"""Agent runtime shared by every deck: declarative pregame plus the Ledger decider."""
+"""Agent runtime shared by every deck: declarative pregame plus a configured decision route."""
 from __future__ import annotations
 
 import gc
@@ -6,7 +6,8 @@ import math
 import os
 import sys
 import traceback
-from dataclasses import replace
+from dataclasses import dataclass, replace
+from enum import Enum
 from time import perf_counter
 
 from common import telemetry
@@ -24,6 +25,9 @@ from common.ledger import (ComputeConfiguration, DeckOverlay, EvaluationModel,
                            LedgerDecider, OpponentProfile, ValuationConfiguration,
                            preview_provider_factory)
 from common.ledger.worth import content_identity
+from common.puct import PuctConfiguration, PuctDecider, play_profile
+from common.decision.turn import (EngineBackendDescriptor, NATIVE_ENGINE_BACKEND,
+                                  engine_backend)
 from common.opponent import (OpponentEvidence, OpponentKnowledgeBase, OpponentModel,
                              OpponentSnapshot)
 from common.scouting.artifact import load_artifact
@@ -44,6 +48,28 @@ from common.strategy.context import (
 
 _ENGINE = object()
 PROTOCOL_BYPASS_ALLOWLIST = frozenset({"deck_submission"})
+
+
+class DecisionPilot(str, Enum):
+    LEDGER = "ledger"
+    PUCT = "puct"
+
+
+@dataclass(frozen=True, slots=True)
+class DecisionSearchConfiguration:
+    pilot: DecisionPilot = DecisionPilot.LEDGER
+    engine_backend: EngineBackendDescriptor = NATIVE_ENGINE_BACKEND
+    puct: PuctConfiguration | None = None
+
+    def __post_init__(self):
+        if not isinstance(self.pilot, DecisionPilot):
+            raise TypeError("decision pilot must be a DecisionPilot")
+        if not isinstance(self.engine_backend, EngineBackendDescriptor):
+            raise TypeError("engine backend must be an EngineBackendDescriptor")
+        if self.pilot is DecisionPilot.PUCT and not isinstance(self.puct, PuctConfiguration):
+            raise ValueError("PUCT pilot requires a PuctConfiguration")
+        if self.pilot is DecisionPilot.LEDGER and self.puct is not None:
+            raise ValueError("Ledger pilot cannot carry PUCT configuration")
 
 
 class _StoreFacts:
@@ -91,16 +117,20 @@ class _ProviderFactSources:
 
 
 class AgentRuntime:
-    """Deployment shell: declarative pregame followed by coordinated Ledger decisions."""
+    """Deployment shell for declarative pregame and one configured decision pilot."""
 
     def __init__(self, strategy, deck, *, stats=_ENGINE, knowledge_base=None,
                  opponent_model_factory=OpponentModel, provider_factory=None,
                  valuation_configuration=None, compute_configuration=None,
-                 decision_parity_oracle=None, decision_containment_seconds=None):
+                 decision_parity_oracle=None, decision_containment_seconds=None,
+                 decision_configuration: DecisionSearchConfiguration | None = None):
         self.strategy = strategy
         self.deck = tuple(int(card_id) for card_id in deck)
+        self.decision_configuration = decision_configuration or DecisionSearchConfiguration()
+        selected_api = (None if provider_factory is not None
+                        else self.decision_configuration.engine_backend.resolve())
         if stats is _ENGINE:
-            stats = EngineCardStatProvider()
+            stats = EngineCardStatProvider(selected_api)
             stats.warm()
         self.stats = stats
         self.roles = strategy.roles.resolve(self.deck)
@@ -134,15 +164,27 @@ class AgentRuntime:
                     inclusion[name])
                 for name, profile in profiles.items()
             })
+        provider_kwargs = {
+            "registry": _ProviderFactSources(evaluation_model.store_identity),
+            "stats": self.stats,
+        }
+        selected_backend = self.decision_configuration.engine_backend
+        if selected_api is not None and selected_backend != NATIVE_ENGINE_BACKEND:
+            provider_kwargs["api_module"] = selected_api
         self.ledger = LedgerDecider(
             self.deck, strategy.name, evaluation_model,
             provider_factory=preview_provider_factory(self.provider_factory),
-            provider_kwargs={
-                "registry": _ProviderFactSources(evaluation_model.store_identity),
-                "stats": self.stats,
-            },
+            provider_kwargs=provider_kwargs,
             compute=compute_configuration or ComputeConfiguration(),
-            parity_oracle=decision_parity_oracle)
+            parity_oracle=decision_parity_oracle,
+            provider_backend=(selected_backend.name
+                              if selected_backend != NATIVE_ENGINE_BACKEND else None))
+        self.puct = (PuctDecider(
+            self.deck, strategy.name, evaluation_model,
+            backend=self.decision_configuration.engine_backend,
+            configuration=self.decision_configuration.puct)
+            if self.decision_configuration.pilot is DecisionPilot.PUCT else None)
+        self.decision = self.puct or self.ledger
 
     def _option_card_id(self, state: ObservationState, option) -> int | None:
         option_type = option.type
@@ -231,6 +273,8 @@ class AgentRuntime:
         self.knowledge = LegalKnowledge()
         self.last_state = None
         self.ledger.reset_turn()
+        if self.puct is not None:
+            self.puct.reset_turn()
 
     def decide(self, observation: dict) -> RootDecision:
         try:
@@ -240,12 +284,19 @@ class AgentRuntime:
         except Exception as exc:
             if os.environ.get("AGENT_BRAIN_STRICT") == "1":
                 raise
+            if self.puct is not None:
+                raise
             if getattr(exc, "coordinator_entered", False):
                 raise
             failure = DecisionFailure.capture(DecisionFailureStage.RUNTIME, exc)
-            return self.ledger.fail_safe(
+            decision = self.ledger.fail_safe(
                 observation, failure, opponent=self.opponent_snapshot,
                 knowledge=self.knowledge, state=getattr(self, "last_state", None))
+            return replace(decision, diagnostics={
+                **decision.diagnostics,
+                "pilot": DecisionPilot.LEDGER.value,
+                "engine_backend": self.decision_configuration.engine_backend.name,
+            })
 
     def _decide(self, observation: dict) -> RootDecision:
         state, parent_valuation, delta = self._advance_observation(observation)
@@ -280,9 +331,11 @@ class AgentRuntime:
         builder = ObservationStateBuilder(self.deck)
         if same_turn:
             state, delta = builder.advance(previous, observation, knowledge=self.knowledge)
-            parent_valuation = self.ledger.last_valuation
+            parent_valuation = self.decision.last_valuation
         else:
             self.ledger.reset_turn()
+            if self.puct is not None:
+                self.puct.reset_turn()
             state = builder.root(observation, knowledge=self.knowledge)
             delta = None
             parent_valuation = None
@@ -331,11 +384,19 @@ class AgentRuntime:
         snapshot = self._observe_matchup(state)
         state, snapshot, delta = self._bind_ledger_observation(
             state, parent_valuation, self._observation_delta, snapshot)
-        return self.ledger.decide(
-            observation, opponent=snapshot,
-            knowledge=self.knowledge, state=state,
+        if self.puct is not None:
+            return self.puct.decide(
+                observation, state=state, parent_valuation=parent_valuation,
+                observation_delta=delta, execution_guard=execution_guard)
+        decision = self.ledger.decide(
+            observation, opponent=snapshot, knowledge=self.knowledge, state=state,
             parent_valuation=parent_valuation, observation_delta=delta,
             execution_guard=execution_guard)
+        return replace(decision, diagnostics={
+            **decision.diagnostics,
+            "pilot": DecisionPilot.LEDGER.value,
+            "engine_backend": self.decision_configuration.engine_backend.name,
+        })
 
 def build_runtime(strategy, deck, **kwargs) -> AgentRuntime:
     """Construct the one shared runtime; injectable seams keep tests engine-independent."""
@@ -385,6 +446,32 @@ def _decision_containment_seconds_from_environment() -> float | None:
     return max(0.1, seconds - _decision_reserve_seconds(seconds))
 
 
+def _decision_configuration_from_environment(strategy) -> DecisionSearchConfiguration:
+    pilot_value = os.environ.get("AGENT_DECISION_PILOT")
+    route_value = os.environ.get("AGENT_DECISION_ROUTE")
+    if pilot_value is not None and route_value is not None and pilot_value != route_value:
+        raise ValueError("AGENT_DECISION_PILOT and AGENT_DECISION_ROUTE disagree")
+    raw_pilot = pilot_value or route_value or DecisionPilot.LEDGER.value
+    try:
+        pilot = DecisionPilot(raw_pilot)
+    except ValueError:
+        raise ValueError("decision pilot must be ledger or puct") from None
+    backend_value = os.environ.get("AGENT_ENGINE_BACKEND")
+    puct_backend_value = os.environ.get("PUCT_ENGINE_BACKEND")
+    if (backend_value is not None and puct_backend_value is not None
+            and backend_value != puct_backend_value):
+        raise ValueError("AGENT_ENGINE_BACKEND and PUCT_ENGINE_BACKEND disagree")
+    backend = engine_backend(
+        backend_value or puct_backend_value or NATIVE_ENGINE_BACKEND.name)
+    if pilot is DecisionPilot.LEDGER:
+        return DecisionSearchConfiguration(pilot, backend)
+    seconds = _external_decision_seconds_from_environment()
+    limits = {} if seconds is None else {
+        "time_limit_seconds": max(1.0, seconds - _decision_reserve_seconds(seconds))}
+    return DecisionSearchConfiguration(
+        pilot, backend, play_profile(strategy.name, reuse_tree=True, **limits))
+
+
 def track_own_cards(runtime: AgentRuntime) -> AgentRuntime:
     """Attach the legal own-prize and known-top tracker used by deployed agents."""
     own_cards = OwnCardModel(runtime.deck)
@@ -420,6 +507,7 @@ def make_agent(strategy):
     runtime = build_runtime(
         strategy, _read_deck(),
         compute_configuration=_compute_configuration_from_environment(),
+        decision_configuration=_decision_configuration_from_environment(strategy),
         decision_containment_seconds=_decision_containment_seconds_from_environment())
     track_own_cards(runtime)
     telemetry_on = os.environ.get("AGENT_NO_TELEMETRY") != "1"
@@ -446,9 +534,9 @@ def make_agent(strategy):
                                state=state,
                                decision_seconds=perf_counter() - started,
                                session=runtime.telemetry_session,
-                               evaluation_model=runtime.ledger.ctx,
-                               compute_configuration=runtime.ledger.compute,
-                               provider_configuration=runtime.ledger.provider_configuration,
+                                evaluation_model=runtime.decision.ctx,
+                                compute_configuration=runtime.decision.compute,
+                                provider_configuration=runtime.decision.provider_configuration,
                                provenance=telemetry.runtime_provenance(
                                    deck_name=runtime.ledger.deck_name,
                                    opponent_knowledge_identity=getattr(
@@ -462,4 +550,5 @@ def make_agent(strategy):
     return agent
 
 
-__all__ = ["AgentRuntime", "build_runtime", "make_agent", "track_own_cards"]
+__all__ = ["AgentRuntime", "DecisionPilot", "DecisionSearchConfiguration",
+           "build_runtime", "make_agent", "track_own_cards"]

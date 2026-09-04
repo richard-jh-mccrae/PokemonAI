@@ -273,11 +273,7 @@ def _setup_apply(gs: GameState, indices: list[int]) -> None:
 # ---------------------------------------------------------------------------- turns
 
 def begin_turn(gs: GameState, seat: int) -> None:
-    from .execution import before_begin_turn
-
-    hook = before_begin_turn.get()
-    if hook is not None:
-        hook(gs, seat)
+    from .execution import after_begin_turn
     gs.turn += 1
     gs.turn_action_count = 0
     gs.supporter_played = False
@@ -294,6 +290,9 @@ def begin_turn(gs: GameState, seat: int) -> None:
     gs.phase = "TURN"
     gs.phase_data = {"seat": seat}
     pose_main(gs, seat)
+    hook = after_begin_turn.get()
+    if hook is not None:
+        hook(gs, seat)
 
 
 def _end_turn(gs: GameState, seat: int) -> None:

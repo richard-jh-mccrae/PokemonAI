@@ -206,9 +206,7 @@ Projection failure must preserve the existing explicit unavailable-candidate/fal
 it must not silently become a complete result, disappear from candidate accounting, or expose raw
 payloads in error strings. A sanitized parent fallback is diagnostic, not a claimed successor value.
 
-The original implementation preserved CGPy `TurnSearchEnvironment`'s `before_begin_turn` hook.
-PUCT backend selection now owns horizon alignment; see
-[PUCT engine selection](puct-engine-selection.md).
+PUCT backend selection now aligns exact CGPy and native replay at the post-draw public turn boundary.
 
 ## Records, identities, and compatibility
 
@@ -277,8 +275,8 @@ The acceptance matrix must include all of the following:
   publicly visible movements and promotion targets survive. Ambiguous cross-view hidden movement
   is unavailable. Equal-count focal hand replacement must not reuse the old hand.
 - **Boundary/terminal cases:** attack-triggered turn completion, knockout/prize resolution, deck-out,
-  and terminal result preserve public consequences. CGPy `TurnSearchEnvironment` stops before
-  opponent draw and suppresses the opponent prompt.
+  and terminal result preserve public consequences. CGPy `TurnSearchEnvironment` executes the
+  opponent draw, exposes public counts, and suppresses its identity and prompt.
 - **Isolation and persistence:** siblings do not mutate each other; projection precedes incremental
   fingerprints; record ingress and egress reject illegal typed events; telemetry cannot bypass the
   validator. Failed projections still release native sessions and emit only safe diagnostics.
@@ -327,7 +325,7 @@ Relevant accepted boundaries:
 ## Implementation verification, 2026-09-02
 
 The shared projection, provider-only controls, record validation, and provider version 3 are built.
-Native and CGPy End retain their original horizons. Native binaries, Evaluation Models, weights,
+Native and direct one-ply CGPy End retain their original horizons. Native binaries, Evaluation Models, weights,
 scouting inference, and correction expectations are unchanged. Both code reviews completed without
 outstanding findings after fixing event type validation, hidden-zone movement evidence, and budget
 accounting for unavailable nodes.

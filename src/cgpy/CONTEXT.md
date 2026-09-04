@@ -1,7 +1,7 @@
 # cgpy — the pure-Python twin of the native engine (ADR-0059)
 
-**Runtime boundary:** offline diagnostics, tests, and simulation only. This package is never a
-Kaggle dependency and must never be copied into a submission. Production agents use native `cg`;
+**Runtime boundary:** local diagnostics, tests, simulation, and an explicitly selected local agent
+backend only. This package is never a Kaggle dependency and must never be copied into a submission;
 the package and exact-artifact gates reject any ZIP path or file content mentioning `cgpy`.
 
 A standalone reimplementation of the `src/cg` native engine (`cg.dll`/`libcg.so`), at exact
@@ -44,6 +44,8 @@ parity, verified by trace replay. `src/cg/` is never modified; cgpy never import
   one Primitive Action even when it names several cards.
 - **Turn Search Environment** — the cgpy experiment interface that exposes one Primitive Action per
   transition while keeping exact engine state private from PUCT policy and value consumers.
+- **Turn Boundary** — the fixed-seat public observation after the next player begins their turn and
+  draws. Public deck/hand counts advance; the drawn identity and opponent prompt do not enter its key.
 - **Search Node** — an immutable, typed search position whose exact engine state remains owned by
   its Turn Search Environment.
 - **Search State Key** — the versioned canonical identity of a Search Node's rule-relevant state and

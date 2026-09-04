@@ -28,16 +28,24 @@ def evaluation_profile(agent: str, *, reuse_tree: bool, **limits) -> PuctConfigu
     return _profile("evaluation", agent, reuse_tree=reuse_tree, **limits)
 
 
-def build_puct_coordinator(evaluation_model, *, baseline_identity: str, baseline_path, calibration_path,
+def build_puct_coordinator(evaluation_model, *, baseline_identity: str | None = None,
+                           baseline_path=None, calibration_path=None,
                            prior_mode: str, configuration: PuctConfiguration,
                            provider_identity: str, search: PuctSearch | None = None) -> DecisionCoordinator:
     if prior_mode not in ("uniform", "ledger"):
         raise ValueError("prior_mode must be uniform or ledger")
     evaluator = LedgerValueEvaluator()
-    ledger = LedgerPolicyModel.load_calibrated(baseline_identity, baseline_path, calibration_path)
-    ledger.validate_source(PolicySourceIdentity(
-        baseline_identity, evaluator.identity, evaluation_model.identity, evaluator.value_scale.identity))
-    policy = ledger if prior_mode == "ledger" else UniformPolicyModel()
+    if prior_mode == "ledger":
+        if baseline_identity is None or baseline_path is None or calibration_path is None:
+            raise ValueError("ledger prior requires baseline and calibration artifacts")
+        ledger = LedgerPolicyModel.load_calibrated(
+            baseline_identity, baseline_path, calibration_path)
+        ledger.validate_source(PolicySourceIdentity(
+            baseline_identity, evaluator.identity, evaluation_model.identity,
+            evaluator.value_scale.identity))
+        policy = ledger
+    else:
+        policy = UniformPolicyModel()
     search = PuctSearch() if search is None else search
     selection = PuctDecisionPolicy()
     identity = BehaviorIdentity(

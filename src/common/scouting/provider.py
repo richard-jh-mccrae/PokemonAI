@@ -407,7 +407,8 @@ def _build_cache(card_data, attacks) -> dict[int, CardStat]:
 class EngineCardStatProvider:
     """Lazily build a ``{cardId: CardStat}`` cache from the native engine (runtime only)."""
 
-    def __init__(self):
+    def __init__(self, api_module=None):
+        self._api = api_module
         self._cache: dict[int, CardStat] | None = None
         self._attack_stats: dict[int, AttackStat] | None = None
         self._forward: _ForwardIndex | None = None
@@ -417,9 +418,11 @@ class EngineCardStatProvider:
     def _ensure_cache(self) -> None:
         """The single build site for all three tables, so they never diverge (ADR-0056)."""
         if self._cache is None:
-            from cg.api import all_attack, all_card_data  # runtime only
-            attacks = all_attack()
-            self._cache = _build_cache(all_card_data(), attacks)
+            if self._api is None:
+                from cg import api
+                self._api = api
+            attacks = self._api.all_attack()
+            self._cache = _build_cache(self._api.all_card_data(), attacks)
             self._attack_stats = build_attack_stats(attacks, load_attack_overrides())
             self._forward = _build_forward_index(self._cache)
 

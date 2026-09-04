@@ -3,6 +3,8 @@ from enum import IntEnum
 import json
 import ctypes
 
+ENGINE_IMPLEMENTATION_IDENTITY = "native-cg-api-v1"
+
 from .sim import lib
 from .utils import to_dataclass, json_to_dataclass
 

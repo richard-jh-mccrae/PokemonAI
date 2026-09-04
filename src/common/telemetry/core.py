@@ -1,4 +1,4 @@
-"""Strict Ledger record, framing, session, and emission implementation."""
+"""Strict decision record, framing, session, and emission implementation."""
 from __future__ import annotations
 
 import dataclasses
@@ -236,20 +236,18 @@ def _validate_candidate(value) -> None:
             _validate_action(action)
 
 
-def _validate_configuration(value, *, pregame: bool) -> None:
-    _exact_fields(value, {"evaluation_model", "compute", "provider"},
-                  "decision configuration")
-    if pregame:
-        if value != {"evaluation_model": None, "compute": None, "provider": None}:
-            raise ValueError("pregame record contains Ledger configuration")
-        return
-    model = value["evaluation_model"]
-    compute = value["compute"]
-    provider = value["provider"]
-    if compute.get("schema_version") not in {1, 2}:
-        raise ValueError("unsupported compute configuration schema version")
-    if compute.get("search", {}).get("schema_version") not in {1, 4, 5}:
-        raise ValueError("unsupported search configuration schema version")
+def _validate_provider_configuration(provider) -> None:
+    _exact_fields(provider, {
+        "identity", "backend", "factory", "version", "kwargs", "factory_kwargs",
+    }, "provider configuration")
+    if not all(isinstance(provider[field], str) and provider[field]
+               for field in ("identity", "backend", "factory")) \
+            or not isinstance(provider["kwargs"], dict) \
+            or not isinstance(provider["factory_kwargs"], dict):
+        raise ValueError("invalid provider configuration")
+
+
+def _validate_evaluation_model(model) -> None:
     _exact_fields(model, {
         "identity", "card_store_identity", "valuation", "roles", "prize_plan",
         "opponent_profiles",
@@ -261,6 +259,35 @@ def _validate_configuration(value, *, pregame: bool) -> None:
     for profile in model["opponent_profiles"].values():
         _exact_fields(profile, {"roles", "traits", "mechanics", "resources"},
                       "opponent profile")
+
+
+def _validate_configuration(value, *, variant: str) -> None:
+    _exact_fields(value, {"evaluation_model", "compute", "provider"},
+                  "decision configuration")
+    if variant == "declarative_pregame":
+        if value != {"evaluation_model": None, "compute": None, "provider": None}:
+            raise ValueError("pregame record contains Ledger configuration")
+        return
+    model = value["evaluation_model"]
+    compute = value["compute"]
+    provider = value["provider"]
+    _validate_evaluation_model(model)
+    _validate_provider_configuration(provider)
+    if variant == "puct":
+        from common.puct import PuctConfiguration
+
+        expected = {field.name for field in dataclasses.fields(PuctConfiguration)} | {"identity"}
+        _exact_fields(compute, expected, "PUCT configuration")
+        if not isinstance(compute["identity"], str) or not compute["identity"]:
+            raise ValueError("invalid PUCT configuration identity")
+        material = {key: value for key, value in compute.items() if key != "identity"}
+        if PuctConfiguration(**material).identity != compute["identity"]:
+            raise ValueError("PUCT configuration identity mismatch")
+        return
+    if compute.get("schema_version") not in {1, 2}:
+        raise ValueError("unsupported compute configuration schema version")
+    if compute.get("search", {}).get("schema_version") not in {1, 4, 5}:
+        raise ValueError("unsupported search configuration schema version")
     compute_fields = {"identity", "schema_version", "search", "policy"}
     if compute.get("schema_version") == 2:
         compute_fields.add("profile")
@@ -277,14 +304,43 @@ def _validate_configuration(value, *, pregame: bool) -> None:
         "identity", "schema_version", "noise_tolerance", "tie_seed", "accepted_statuses",
         "unavailable_fallback",
     }, "policy configuration")
-    _exact_fields(provider, {
-        "identity", "backend", "factory", "version", "kwargs", "factory_kwargs",
-    }, "provider configuration")
-    if not all(isinstance(provider[field], str) and provider[field]
-               for field in ("identity", "backend", "factory")) \
-            or not isinstance(provider["kwargs"], dict) \
-            or not isinstance(provider["factory_kwargs"], dict):
-        raise ValueError("invalid provider configuration")
+
+
+def _validate_puct_candidate(value) -> None:
+    _exact_fields(value, {
+        "action_id", "disposition", "status", "prior", "gaps", "visits",
+        "value_sum", "mean_value", "inherited_visits", "exclusion", "tie_break",
+    }, "PUCT candidate")
+    _number(value["prior"], "PUCT prior", minimum=0.0, maximum=1.0)
+    _number(value["visits"], "PUCT visits", minimum=0, integer=True)
+    _number(value["value_sum"], "PUCT value sum")
+    _number(value["inherited_visits"], "PUCT inherited visits", minimum=0, integer=True)
+    if value["mean_value"] is not None:
+        _number(value["mean_value"], "PUCT mean value")
+    if value["inherited_visits"] > value["visits"]:
+        raise ValueError("invalid PUCT inherited visits")
+
+
+def _validate_puct_evidence(value) -> None:
+    expected = {
+        "simulations", "principal_variation", "configuration_identity", "work",
+        "chance_nodes", "schema_version", "outcome", "prior_distributions", "timing",
+        "batches", "peak_pending", "reuse_reason", "inherited_visits", "resources",
+        "convergence", "tree_nodes", "cache_entries", "cache_capacity_charged",
+        "retained_engine_states", "peak_retained_engine_states",
+        "principal_variation_stop_reason",
+    }
+    _exact_fields(value, expected, "PUCT evidence")
+    for field in ("simulations", "batches", "peak_pending", "inherited_visits",
+                  "tree_nodes", "cache_entries", "cache_capacity_charged"):
+        _number(value[field], f"PUCT {field}", minimum=0, integer=True)
+    _exact_fields(value["work"], {
+        "transitions", "evaluations", "chances", "state_capacity_charged",
+    }, "PUCT work")
+    for field in value["work"]:
+        _number(value["work"][field], f"PUCT work {field}", minimum=0, integer=True)
+    if "reproduction_input" in value:
+        raise ValueError("private PUCT reproduction input entered telemetry")
 
 
 def validate_record(record: dict) -> dict:
@@ -369,9 +425,7 @@ def validate_record(record: dict) -> dict:
                     or record["search"] is not None \
                     or record["completeness"] != "not_evaluated":
                 raise ValueError("pregame record contains Ledger evidence")
-        else:
-            if variant != "ledger":
-                raise ValueError("unknown decision variant")
+        elif variant == "ledger":
             _exact_fields(record["decision"], {
                 "variant", "index", "parent_id", "seat", "turn", "position_key", "decision_key",
                 "chosen_action_id", "selection", "policy_reason",
@@ -395,8 +449,27 @@ def validate_record(record: dict) -> dict:
             _validate_valuation(record["root"])
             for candidate in record["candidates"]:
                 _validate_candidate(candidate)
-        _validate_configuration(record["configuration"],
-                                pregame=variant == "declarative_pregame")
+        elif variant == "puct":
+            _exact_fields(record["decision"], {
+                "variant", "index", "parent_id", "seat", "turn", "position_key", "decision_key",
+                "chosen_action_id", "selection", "outcome",
+            }, "PUCT decision")
+            _exact_fields(record["search"], {
+                "nodes_visited", "stop_reason", "failure", "puct",
+            }, "PUCT search")
+            _number(record["search"]["nodes_visited"], "search nodes", minimum=0, integer=True)
+            if record["search"]["failure"] is not None:
+                _exact_fields(record["search"]["failure"], {
+                    "stage", "error_type",
+                }, "search failure")
+            _validate_puct_evidence(record["search"]["puct"])
+            if record["root"] is not None:
+                _validate_valuation(record["root"])
+            for candidate in record["candidates"]:
+                _validate_puct_candidate(candidate)
+        else:
+            raise ValueError("unknown decision variant")
+        _validate_configuration(record["configuration"], variant=variant)
         _exact_fields(record["timing"], {
             "decision_seconds", "decision_limit_seconds", "deadline_hit",
         }, "decision timing")
@@ -418,7 +491,7 @@ def validate_record(record: dict) -> dict:
             action_ids.index(record["decision"]["chosen_action_id"])]
         if record["decision"]["selection"] != chosen_action["selection"]:
             raise ValueError("decision selection differs from the chosen legal action")
-        if variant == "ledger" \
+        if variant in {"ledger", "puct"} \
                 and [candidate["action_id"] for candidate in record["candidates"]] != action_ids:
             raise ValueError("candidate roster does not match legal actions")
         if record["opponent_snapshot"] is not None:
@@ -443,7 +516,7 @@ def validate_record(record: dict) -> dict:
                     "kind", "source", "raw_kind", "player_index", "card_id", "from_area",
                     "to_area", "public_fields", "recognized", "sequence", "turn",
                 }, "opponent event")
-        if variant == "ledger":
+        if variant in {"ledger", "puct"}:
             if record["behavior_identity"] is not None:
                 _exact_fields(record["behavior_identity"], {
                     "evaluator", "evaluation_model", "search", "policy_model", "decision_policy",
@@ -700,6 +773,10 @@ def _evaluation_model_configuration(value) -> dict:
 def _compute_configuration(value) -> dict:
     if isinstance(value, dict):
         return _allowed(value)
+    from common.puct import PuctConfiguration
+
+    if isinstance(value, PuctConfiguration):
+        return {"identity": value.identity, **_allowed(dataclasses.asdict(value))}
     from common.decision import ComputeConfiguration
 
     if not isinstance(value, ComputeConfiguration):
@@ -815,6 +892,17 @@ def build_decision_record(result, state, *, episode_key: str, decision_index: in
                           opponent_snapshot=None) -> dict:
     """Build one lossless, hidden-safe record from the typed coordinator result."""
 
+    if result.search.puct is not None:
+        return build_puct_decision_record(
+            result, state, episode_key=episode_key, decision_index=decision_index,
+            parent_decision_id=parent_decision_id, selection=selection,
+            evaluation_model=evaluation_model,
+            compute_configuration=compute_configuration,
+            provider_configuration=provider_configuration, provenance=provenance,
+            decision_seconds=decision_seconds,
+            decision_limit_seconds=decision_limit_seconds, deadline_hit=deadline_hit,
+            opponent_snapshot=opponent_snapshot)
+
     if not result.roster.legal_actions_proven:
         raise ValueError("telemetry requires an authoritative legal-action roster proof")
     legal_actions = tuple(state.legal_actions)
@@ -919,6 +1007,106 @@ def build_decision_record(result, state, *, episode_key: str, decision_index: in
         ) else "estimated" if any(
             candidate.status.value == "estimated" for candidate in completeness_candidates
         ) else "complete"),
+    }
+    record["record_id"] = _record_identifier(record)
+    return validate_record(record)
+
+
+def build_puct_decision_record(result, state, *, episode_key: str, decision_index: int,
+                               parent_decision_id: str | None, selection: tuple[int, ...],
+                               evaluation_model, compute_configuration,
+                               provider_configuration: dict, provenance: dict,
+                               decision_seconds: float,
+                               decision_limit_seconds: float | None = None,
+                               deadline_hit: bool | None = None,
+                               opponent_snapshot=None) -> dict:
+    evidence = result.search.puct
+    if evidence is None:
+        raise ValueError("PUCT telemetry requires PUCT search evidence")
+    if not result.roster.legal_actions_proven:
+        raise ValueError("telemetry requires an authoritative legal-action roster proof")
+    legal_actions = tuple(state.legal_actions)
+    legal_proof = tuple((action.identity, tuple(action.selection)) for action in legal_actions)
+    if legal_proof != result.roster.legal_action_identities:
+        raise ValueError("telemetry legal actions differ from the proven candidate roster")
+    actions = [_action(action) for action in legal_actions]
+    action_ids = {
+        tuple(getattr(action, "selection", ())): saved["id"]
+        for action, saved in zip(legal_actions, actions)
+    }
+    candidates = []
+    for candidate in result.roster.candidates:
+        statistics = candidate.puct
+        if statistics is None or candidate.prior is None:
+            raise ValueError("PUCT candidate lacks search statistics or prior")
+        action_id = action_ids.get(tuple(getattr(candidate.action, "selection", ())))
+        if action_id is None:
+            raise ValueError("candidate cannot join the ObservationState legal action table")
+        candidates.append({
+            "action_id": action_id,
+            "disposition": candidate.disposition.value,
+            "status": candidate.status.value,
+            "prior": float(candidate.prior),
+            "gaps": list(candidate.gaps),
+            "visits": int(statistics.visits),
+            "value_sum": float(statistics.value_sum),
+            "mean_value": statistics.mean_value,
+            "inherited_visits": int(statistics.inherited_visits),
+            "exclusion": statistics.exclusion,
+            "tie_break": statistics.tie_break,
+        })
+    chosen = result.chosen_candidate
+    if chosen is None:
+        raise ValueError("PUCT decision requires a chosen candidate")
+    chosen_id = action_ids[tuple(getattr(chosen.action, "selection", ()))]
+    wire_evidence = dataclasses.asdict(evidence)
+    wire_evidence.pop("reproduction_input", None)
+    record = {
+        "schema": SCHEMA,
+        "schema_version": SCHEMA_VERSION,
+        "record_type": "decision",
+        "record_id": "",
+        "episode": {"key": str(episode_key)},
+        "decision": {
+            "variant": "puct",
+            "index": int(decision_index),
+            "parent_id": parent_decision_id,
+            "seat": int(state.seat),
+            "turn": int(state.turn.number),
+            "position_key": state.position_key,
+            "decision_key": state.decision_key,
+            "chosen_action_id": chosen_id,
+            "selection": list(selection),
+            "outcome": evidence.outcome.value,
+        },
+        "observation": _observation(state),
+        "opponent_snapshot": _opponent_snapshot(opponent_snapshot),
+        "actions": actions,
+        "root": None if result.baseline is None else _valuation(result.baseline),
+        "candidates": candidates,
+        "search": {
+            "nodes_visited": int(result.search.nodes_visited),
+            "stop_reason": result.search.stop_reason,
+            "failure": (None if result.search.failure is None else {
+                "stage": result.search.failure.stage.value,
+                "error_type": result.search.failure.error_type,
+            }),
+            "puct": _allowed(wire_evidence),
+        },
+        "behavior_identity": _behavior_identity(result.behavior_identity),
+        "configuration": {
+            "evaluation_model": _evaluation_model_configuration(evaluation_model),
+            "compute": _compute_configuration(compute_configuration),
+            "provider": _allowed(provider_configuration),
+        },
+        "provenance": _allowed(provenance),
+        "timing": {
+            "decision_seconds": float(decision_seconds),
+            "decision_limit_seconds": (None if decision_limit_seconds is None
+                                       else float(decision_limit_seconds)),
+            "deadline_hit": None if deadline_hit is None else bool(deadline_hit),
+        },
+        "completeness": ("complete" if evidence.outcome.permits_action else "unavailable"),
     }
     record["record_id"] = _record_identifier(record)
     return validate_record(record)
@@ -1313,7 +1501,8 @@ def capture_records(*, suppress_output: bool = False):
 
 __all__ = [
     "MAX_FRAME_BYTES", "RecordAssembler", "TAG", "TelemetrySession",
-    "build_decision_record", "build_episode_receipt", "build_outcome_record",
+    "build_decision_record", "build_puct_decision_record", "build_episode_receipt",
+    "build_outcome_record",
     "capture_records", "emit", "episode_context", "flush", "frame_record",
     "migrate_record", "runtime_provenance", "take_caller_seconds",
     "validate_record",
