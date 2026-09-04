@@ -126,9 +126,11 @@ class AgentRuntime:
                  decision_configuration: DecisionSearchConfiguration | None = None):
         self.strategy = strategy
         self.deck = tuple(int(card_id) for card_id in deck)
+        configured_route = decision_configuration is not None
         self.decision_configuration = decision_configuration or DecisionSearchConfiguration()
-        selected_api = (None if provider_factory is not None
-                        else self.decision_configuration.engine_backend.resolve())
+        selected_api = (self.decision_configuration.engine_backend.resolve()
+                        if provider_factory is None and (configured_route or stats is _ENGINE)
+                        else None)
         if stats is _ENGINE:
             stats = EngineCardStatProvider(selected_api)
             stats.warm()

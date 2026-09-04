@@ -25,6 +25,19 @@ def test_every_deck_builds_the_shared_ledger_runtime(name):
     assert runtime.ledger.compute.policy.identity
 
 
+def test_unconfigured_injected_runtime_does_not_force_the_native_descriptor(monkeypatch):
+    from common.decision.turn import EngineBackendDescriptor
+
+    def forbidden(_backend):
+        raise AssertionError("implicit legacy route must use the installed process engine")
+
+    monkeypatch.setattr(EngineBackendDescriptor, "resolve", forbidden)
+
+    runtime = build_runtime(strategy("mega_starmie"), deck("mega_starmie"), stats=None)
+
+    assert runtime.decision_configuration.pilot is DecisionPilot.LEDGER
+
+
 def test_environment_selects_pilot_and_registered_backend_independently(monkeypatch):
     from cgpy.puct import ENGINE_BACKEND, register_backend
 
