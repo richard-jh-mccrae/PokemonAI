@@ -1,10 +1,7 @@
-"""The preview seam: engine successors WITHOUT the per-node DecisionState build (ADR-0146).
+"""Engine successors bind a fixed-perspective ObservationState and separate selection control.
 
-The Ledger's preview needs neither the canonical state copy nor the semantic key the providers
-built per successor to key their engine maps: the preview walk never merges transpositions, so
-a per-successor identity token keys the map for free, and `PreviewState` carries just the raw
-printout, the seat, and a lazily-enumerated menu. Offline providers keep their full successors
-through the same `_bind`/`_key` hooks. Measurements live in ADR-0146.
+Private per-successor identity tokens preserve engine branches without merging hidden worlds.
+The preview seam avoids constructing the legacy state layer (ADR-0146).
 
 This module must stay free of any offline-engine reference: it ships in the Kaggle bundle,
 whose packager scans content. Offline providers REGISTER their preview variants here
@@ -27,13 +24,13 @@ class PreviewState(ProviderState):
 
     def __init__(self, payload, observation, preview_key: str, *,
                  deck=(), deck_counts=(), prize_counts=(), actor_seat=None,
-                 belief_token=None, recycled_card_ids=(), **_ignored):
+                 belief_token=None, recycled_card_ids=(), control=None, **_ignored):
         if not hasattr(observation, "seat"):
             observation = ObservationStateBuilder(deck or None).root(payload)
         super().__init__(payload, observation, token=preview_key, deck=deck,
                          deck_counts=deck_counts, prize_counts=prize_counts,
                          actor_seat=actor_seat, belief_token=belief_token,
-                         recycled_card_ids=recycled_card_ids)
+                         recycled_card_ids=recycled_card_ids, control=control)
         self.preview_key = preview_key
 
     @property
@@ -53,12 +50,14 @@ class PreviewBinding:
             lineage = self._preview_lineage = {}
         lineage[child.valuation_key] = (state.observation, delta)
         metadata = getattr(self, "_provider_metadata", {}).pop(id(observation), {})
-        return PreviewState(observation, child, f"preview:{next(self._preview_tokens)}",
+        successor = PreviewState(observation, child, f"preview:{next(self._preview_tokens)}",
                             deck=state.deck, deck_counts=child.deck_counts or (),
                             prize_counts=(getattr(child.knowledge.own_prizes, "cards", ())),
                             actor_seat=metadata.get("actor_seat"),
                             belief_token=metadata.get("belief_token"),
-                            recycled_card_ids=metadata.get("recycled_card_ids", ()))
+                            recycled_card_ids=metadata.get("recycled_card_ids", ()),
+                            control=metadata.get("control"))
+        return successor
 
     def _key(self, state) -> str:
         key = getattr(state, "preview_key", None)
@@ -67,7 +66,7 @@ class PreviewBinding:
 
 class LedgerNativeProvider(PreviewBinding, NativeCgTransitionProvider):
     backend = "native-cg-ledger"
-    version = 2
+    version = 3
     requires_observation_roster = True
 
     def __init__(self, root, **kwargs):

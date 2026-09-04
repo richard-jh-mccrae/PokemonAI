@@ -8,6 +8,7 @@ from functools import cached_property
 
 from common.cards.functions.attack_lock import fold_attack_locks
 from common.options import enumerate_legal_actions
+from .event_visibility import visible_event
 from .knowledge import (KnownAttackLocks, KnownDeckTop, KnownOwnPrizes, LegalKnowledge,
                         UnknownAttackLocks, UnknownDeckTop, UnknownOwnPrizes, reduce_knowledge)
 
@@ -30,14 +31,6 @@ _LEGAL_RAW_FIELDS = frozenset({
     "minCount", "number", "option", "paralyzed", "playerIndex", "poisoned", "preEvolution",
     "prize", "remainDamageCounter", "remainEnergyCost", "serial", "specialConditionType",
     "stadium", "toolIndex", "tools", "type",
-})
-_EVENT_FIELDS = frozenset({
-    "area", "attackId", "cardId", "cardIdActive", "cardIdAfter", "cardIdBefore",
-    "cardIdBench", "cardIdTarget", "count", "damage", "drawcount", "energyIndex",
-    "fromArea", "index", "inPlayArea", "inPlayIndex", "isRecover", "playerIndex",
-    "putDamageCounter", "reason", "result", "serial", "serialActive", "serialAfter",
-    "serialBefore", "serialBench", "serialTarget", "specialConditionType", "toArea",
-    "toolIndex", "value",
 })
 
 
@@ -301,7 +294,7 @@ def _build(cls, printout, seat, decklist, parent, knowledge=None):
     looking = _looking(build, current)
     select = _select(build, printout)
     own_prizes, known_top, attack_locks = _extras(build, printout)
-    legal_actions = enumerate_legal_actions(printout)
+    legal_actions = enumerate_legal_actions(printout) if select is not None else ()
     events = _observation_events(build, printout.get("logs"))
     resolved_knowledge = (LegalKnowledge(
                               own_prizes=(KnownOwnPrizes(own_prizes)
@@ -487,18 +480,10 @@ def _remaining_deck_counts(decklist, seat, me: Side, stadium, own_prizes):
     return tuple(sorted((card_id, count) for card_id, count in remaining.items() if count > 0))
 
 
-def _events(logs) -> tuple[ObservationEvent, ...]:
+def _events(logs, seat) -> tuple[ObservationEvent, ...]:
     events = []
     for row in logs or ():
-        if not isinstance(row, dict):
-            events.append(ObservationEvent(None, (), False))
-            continue
-        kind = row.get("type")
-        kind = int(kind) if kind is not None else None
-        recognized = kind is not None and 0 <= kind <= 23
-        fields = tuple((str(key), value) for key, value in sorted(row.items())
-                       if key in _EVENT_FIELDS
-                       and (value is None or isinstance(value, (bool, int, float, str))))
+        kind, fields, recognized = visible_event(row, seat)
         event_type = ({15: AttackEvent, 6: MoveCardEvent, 7: MoveCardEvent,
                        4: DrawEvent, 5: DrawEvent, 0: ShuffleEvent}.get(
             kind, KnownObservationEvent) if recognized else UnknownObservationEvent)
@@ -507,7 +492,7 @@ def _events(logs) -> tuple[ObservationEvent, ...]:
 
 
 def _observation_events(build: _Build, logs) -> tuple[ObservationEvent, ...]:
-    events = _events(logs)
+    events = _events(logs, build.seat)
     identity = tuple((event.kind, event.public_fields, event.recognized) for event in events)
     if build.reuse(("events",), identity):
         return build.parent.events

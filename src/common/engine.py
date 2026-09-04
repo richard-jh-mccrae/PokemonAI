@@ -15,7 +15,8 @@ from .information import draw_outcomes, reveal_sets
 from .cards.functions.fetch import WINDOW, fetch_target_matches
 from .native_engine import _own_hidden_zones
 from .refresh import refresh_transition
-from .observation.provider import provider_payload as _payload
+from .observation.provider import ProviderBinding, provider_payload as _payload
+from .observation.projection import ProjectionError, SelectionVisibility, project_successor
 from common.strategy.context import (
     _ACTIVE, _ATTACH_FROM, _BENCH, _CARD, _DAMAGE, _DECK, _DISCARD, _DISCARD_ENERGY, _HAND,
     _LOOKING, _MAIN, _MOVE_CARD, _SWITCH, _TO_ACTIVE, _TO_HAND, _YES, _NO,
@@ -132,7 +133,7 @@ def terminal_effects_supported(state, action, *, card_id, recipient_id, effects,
     return True
 
 
-class CgpyTransitionProvider:
+class CgpyTransitionProvider(ProviderBinding):
     """Forkable full-rules engine adapter.  It enumerates and applies; it never ranks."""
 
     backend = "cgpy-bellman"
@@ -173,11 +174,6 @@ class CgpyTransitionProvider:
     def available(self) -> bool:
         return not self._error
 
-    def _bind(self, state, observation):
-        """Successor state construction — the Ledger preview seam overrides this to skip the
-        DecisionState build per node (ADR-0146)."""
-        return state.with_observation(observation)
-
     def _key(self, state) -> str:
         """The engine-map key for a state; the preview seam substitutes identity tokens."""
         return state.semantic_key
@@ -206,6 +202,9 @@ class CgpyTransitionProvider:
     def actions(self, state) -> tuple[LegalAction, ...]:
         if not self._local_nested and self._key(state) not in self._engines:
             return ()
+        control = self.control(state)
+        if control is not None and control.visibility is not SelectionVisibility.FOCAL:
+            return control.actions
         return state.legal_actions
 
     def actor(self, state) -> Actor:
@@ -585,14 +584,18 @@ class CgpyTransitionProvider:
     def _state_from_engine(self, state, child, action):
         from cgpy.search import export_token
 
-        observation = child.observation(
+        raw = child.observation(
             viewer=state.root_seat, sbi_token=export_token(child.gs))
+        observation, control = project_successor(
+            raw, _payload(state), state.root_seat,
+            source_seat=state.root_seat, actor_seat=child.select_seat)
         recycled = recycled_card_ids(
             _payload(state), action, self.registry, state.root_seat,
             carried=getattr(state, "recycled_card_ids", ()),
             actor_seat=getattr(state, "actor_seat", state.root_seat))
         self._provider_metadata[id(observation)] = {
-            "actor_seat": int(child.select_seat),
+            "actor_seat": control.actor_seat,
+            "control": control,
             "recycled_card_ids": recycled,
         }
         return self._bind(state, observation)
@@ -609,6 +612,9 @@ class CgpyTransitionProvider:
             if child.result != -1:
                 result = "win" if child.result == state.root_seat else "loss"
                 return Terminal(successor, result)
+            control = self.control(successor)
+            if control is not None and control.visibility is SelectionVisibility.PRIVATE:
+                return Unknown("private opponent selection unavailable", "focal information boundary")
             pending = child.gs.pending
             passed_turn = (pending is not None and pending.seat != state.root_seat
                            and int(child.gs.turn) != self._root_turn
@@ -616,8 +622,10 @@ class CgpyTransitionProvider:
             if committed and passed_turn:
                 return Terminal(successor, "attack resolved")
             return Deterministic(successor)
+        except ProjectionError as exc:
+            return Unknown("cgpy observation unavailable", str(exc))
         except Exception as exc:  # noqa: BLE001 - an engine gap is explicit
-            return Unknown("cgpy transition failed", f"{type(exc).__name__}: {exc}")
+            return Unknown("cgpy transition failed", type(exc).__name__)
 
     def _coin_transition(self, state, child, action):
         edges = []
@@ -644,7 +652,7 @@ class LedgerCgpyProvider(PreviewBinding, CgpyTransitionProvider):
     excludes this module and scans shipped content for offline-engine references."""
 
     backend = "cgpy-ledger"
-    version = 2
+    version = 3
 
     def __init__(self, root, **kwargs):
         self._preview_tokens = _count()

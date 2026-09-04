@@ -1,6 +1,9 @@
 # PokémonAI Policy-Guided Turn Search
 ## Codex Handoff for GitHub Issue Creation and Implementation
 
+> Historical handoff. Bounded PUCT replaced the proposed exhaustive Teacher; Teacher-specific
+> issues and acceptance criteria below are retired as of 2026-09-04.
+
 **Repository:** `richard-jh-mccrae/PokemonAI`  
 **Purpose:** Create the remaining GitHub issues, link their dependencies, and implement them in order.  
 **Competition boundary:** **Issue 11 is the explicit stopping point for the Kaggle Pokémon AI Strategy Competition submission.**

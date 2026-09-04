@@ -128,7 +128,8 @@ def test_an_unavailable_provider_is_closed_before_the_fail_safe_result():
 
     decider = LedgerDecider((DRAGAPULT,) * 60, "test", EvaluationModel.build(),
                             provider_factory=lambda _s, **_kw: HalfOpenProvider())
-    decision = decider.decide(printout(me=player(active=body(DRAGAPULT, 1))))
+    decision = decider.decide(printout(me=player(active=body(DRAGAPULT, 1)),
+                                      select={"context": 0, "minCount": 0, "maxCount": 0, "option": []}))
 
     assert decision.diagnostics["failure"]["stage"] == "provider"
     assert closed == [True]

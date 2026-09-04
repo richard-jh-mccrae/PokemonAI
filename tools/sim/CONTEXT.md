@@ -7,8 +7,6 @@ These tools exercise packaged agents through the competition environment and nat
   environment; unrelated native libraries such as OpenSpiel never load.
 - `battle.py`: generic local head-to-heads and the persistent process-isolated agent server.
 - `correction_run.py`: owns repeatable focal-agent evidence batches for human Ledger review.
-- `teacher_review_run.py`: owns resumable Teacher Review Runs against one-ply Ledger opponents;
-  complete replays feed the existing blunder-correction viewer.
 - `strategy_bench.py`: timing diagnostics only; it is not a Correction Run or corpus builder.
 - `artifacts.py`: legacy replay tags and inspector-log compatibility for Arena/bench artifacts.
 - `strategy_bench.py`'s `--no-emit` runs the contestants

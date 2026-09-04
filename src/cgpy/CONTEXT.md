@@ -43,13 +43,7 @@ parity, verified by trace replay. `src/cg/` is never modified; cgpy never import
 - **Primitive Action** — one complete answer to the current engine menu. A multi-select answer is
   one Primitive Action even when it names several cards.
 - **Turn Search Environment** — the cgpy experiment interface that exposes one Primitive Action per
-  transition while keeping exact engine state private from policy and value consumers.
-- **Within-Horizon Teacher** — an offline fixed-perspective search that compares complete or
-  near-complete Contingent Turn Policies from one Experiment Root through turn end, terminal state,
-  Information Boundary, or an explicit safety cap, using Ledger at leaves.
-- **Contingent Turn Policy** — the state-keyed Primitive Action choice for every reached decision
-  branch of one turn. A displayed principal variation is one diagnostic path through this policy,
-  not the policy itself.
+  transition while keeping exact engine state private from PUCT policy and value consumers.
 - **Search Node** — an immutable, typed search position whose exact engine state remains owned by
   its Turn Search Environment.
 - **Search State Key** — the versioned canonical identity of a Search Node's rule-relevant state and
@@ -85,8 +79,9 @@ building + ordering) · `turn.py` (setup/mulligan machine, turn loop, KO/prize/p
 `damage.py` (base→mods→×W→−R→mods) · `chain.py` (the DSL interpreter) · `engine.py` (facade:
 start/step/observation/clone/`fork()`) · `verify/` (trace/differ/replayer) ·
 `search.py` (M3: `state_from_obs`/`state_from_visualize` structured seeding, the state
-token, clone-per-step sessions) · `experiment/` (versioned exact roots, legal-view policy roots,
-primitive and chance turn-search nodes, paired-seed matches, parity manifests, branch keys) ·
+token, clone-per-step sessions) · `experiment/` (the CGPy PUCT provider, versioned exact roots,
+legal-view policy roots, primitive and chance turn-search nodes, paired-seed matches, parity manifests,
+branch keys) ·
 `game.py` (M3: the `cg/game.py`-shaped battle singleton,
 `visualize_data`) · `compat/` + `alias.py` (M3: the `cg` package surface + `sys.modules`
 mapping, env `CG_ENGINE=py`).

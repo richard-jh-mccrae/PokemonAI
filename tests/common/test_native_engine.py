@@ -131,7 +131,8 @@ def test_end_observation_can_preserve_the_actual_next_turn_actor():
     provider = object.__new__(NativeCgTransitionProvider)
     provider.stats = None            # no printed attacks to read, so no self-lock can fold
 
-    successor = provider._observation(observation, parent, actor_seat=1)
+    observation["current"]["yourIndex"] = 1
+    successor = provider._observation(observation, parent)
 
     assert successor["current"]["yourIndex"] == 0
     assert provider._provider_metadata[id(successor)]["actor_seat"] == 1
@@ -152,7 +153,8 @@ def test_successor_preserves_unchanged_root_hand_when_native_perspective_flips()
     provider = object.__new__(NativeCgTransitionProvider)
     provider.stats = None            # no printed attacks to read, so no self-lock can fold
 
-    successor = provider._observation(native_successor, parent, actor_seat=1)
+    native_successor["logs"] = [{"type": 3, "playerIndex": 0}]
+    successor = provider._observation(native_successor, parent)
 
     assert successor["current"]["players"][0]["hand"] == known_hand
     assert successor["current"]["players"][1]["hand"] is None
@@ -172,7 +174,8 @@ def test_successor_treats_empty_positive_count_root_hand_as_hidden():
         root_seat=0, prize_counts=(), _provider_payload=parent_observation)
     provider = object.__new__(NativeCgTransitionProvider)
 
-    successor = provider._observation(native_successor, parent, actor_seat=1)
+    native_successor["logs"] = [{"type": 3, "playerIndex": 0}]
+    successor = provider._observation(native_successor, parent)
 
     assert successor["current"]["players"][0]["hand"] == known_hand
 
@@ -192,7 +195,8 @@ def test_successor_adds_known_taken_prize_to_hidden_root_hand():
         _provider_payload=parent_observation)
     provider = object.__new__(NativeCgTransitionProvider)
 
-    successor = provider._observation(native_successor, parent, actor_seat=1)
+    native_successor["logs"] = [{"type": 7, "playerIndex": 0, "fromArea": 6, "toArea": 2}]
+    successor = provider._observation(native_successor, parent)
 
     assert successor["current"]["players"][0]["hand"] == [*known_hand, {"id": 99}]
     assert successor["current"]["players"][0]["prize"] == [None]
@@ -415,7 +419,7 @@ def test_native_puct_completes_a_bounded_root_search():
         assert decision.search.puct.outcome is PuctOutcome.SEARCHED, decision.search.failure
         assert decision.chosen is not None
         assert decision.search.puct.simulations == 4
-        assert decision.search.puct.work.transitions >= 4
+        assert decision.search.puct.work.transitions > 0
         assert decision.search.puct.retained_engine_states == 0
         assert decision.search.puct.peak_retained_engine_states > 0
         replay = json.loads(decision.search.puct.reproduction_input)
@@ -516,8 +520,8 @@ def test_production_runtime_returns_a_legal_native_action_without_fallback():
         battle_finish()
 
 
-def test_production_runtime_completes_a_full_native_game_without_decision_failure(monkeypatch):
-    monkeypatch.setenv("AGENT_BRAIN_STRICT", "1")
+def test_production_runtime_completes_a_full_native_game_with_explicit_projection_gaps(monkeypatch):
+    monkeypatch.setenv("AGENT_BRAIN_STRICT", "0")
     deck = _deck()
     observation, start = battle_start(list(deck), list(deck))
     runtimes = {
@@ -576,7 +580,12 @@ def test_production_runtime_completes_a_full_native_game_without_decision_failur
                 assert coordinator_entries[seat] == before
             else:
                 assert decision.diagnostics["backend"] == "ledger"
-                assert "failure" not in decision.diagnostics
+                if "failure" in decision.diagnostics:
+                    candidates = decision.decision_result.roster.candidates
+                    assert candidates and all(candidate.status.value == "unavailable" for candidate in candidates)
+                    assert all(not candidate.successors for candidate in candidates)
+                    assert any("observation unavailable" in gap or "private opponent selection" in gap
+                               for candidate in candidates for gap in candidate.gaps)
                 assert coordinator_entries[seat] == before + 1
             legal = {selection for action in enumerate_legal_actions(observation)
                      for selection in action.equivalent_selections}

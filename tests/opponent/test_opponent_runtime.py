@@ -74,3 +74,22 @@ def test_protocol_pregame_boundary_constructs_one_fresh_model_per_match():
     runtime.decide(pregame)
 
     assert len(models) == 2
+
+
+def test_real_search_successors_do_not_update_live_opponent_evidence():
+    from common.engine import LedgerCgpyProvider
+    from sim.scenario import BodySpec, observation, scenario
+
+    model = _Model()
+    engine, _ = scenario("mega_starmie", me_active=BodySpec((1030,)),
+                         me_hand=(3,), them_active=BodySpec((1030,)))
+    runtime = build_runtime(
+        strategy("mega_starmie"), deck("mega_starmie"),
+        provider_factory=LedgerCgpyProvider, opponent_model_factory=lambda *_args, **_kwargs: model)
+    decision = runtime.decide(observation(engine, 0))
+
+    assert decision.diagnostics["backend"] == "ledger"
+    assert len(model.calls) == 1
+    assert all(event.kind != 4 or dict(event.public_fields).get("playerIndex") == 0
+               for event in model.calls[0].events)
+    assert runtime.opponent_snapshot.evidence is model.calls[0]

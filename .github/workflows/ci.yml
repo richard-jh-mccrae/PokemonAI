@@ -146,8 +146,7 @@ jobs:
             targets: >-
               tests/sim/test_audit_attacks_engine.py tests/sim/test_battle.py
               tests/sim/test_check_agent.py tests/sim/test_correction_run.py
-              tests/sim/test_retreat_lock_engine.py tests/sim/test_teacher_agent.py
-              tests/sim/test_teacher_review_run.py tests/sim/test_transients_engine.py
+              tests/sim/test_retreat_lock_engine.py tests/sim/test_transients_engine.py
           - shard: analysis
             workers: auto
             targets: >-
@@ -203,25 +202,31 @@ jobs:
         run: >-
           python -m pytest tests/ledger/test_real_engine_timing.py
           -q -s --tb=short --durations=20
-      - name: Gate Teacher compute and timing on the frozen corpus
-        run: >-
-          python tools/train/search_timing.py run
-          --jobs 2 --repetitions 3 --time-cap 120 --root-timeout 140
-          --assert-baseline data/benchmarks/search_timing/teacher_live_ci_baseline.json
-          --out data/search-timing-runs/ci/teacher.json
-      - name: Publish search timing summary
-        if: always()
-        shell: bash
-        run: |
-          report=data/search-timing-runs/ci/teacher.gate.md
-          if [ -f "$report" ]; then cat "$report" >> "$GITHUB_STEP_SUMMARY"; fi
-      - uses: actions/upload-artifact@v4
-        if: always()
+
+  test-native-visibility:
+    name: tests / native visibility / ${{ matrix.os }}
+    needs: plan
+    if: needs.plan.outputs.src == 'true'
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 10
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    env:
+      PYTHONHASHSEED: '0'
+      REQUIRE_NATIVE_VISIBILITY: '1'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
         with:
-          name: search-timing-${{ github.sha }}
-          path: data/search-timing-runs/ci/
-          if-no-files-found: warn
-          retention-days: 30
+          python-version: '3.12'
+          cache: pip
+      - run: python -m pip install --upgrade pip && pip install -r requirements.txt
+      - name: Require native End projection privacy
+        run: >-
+          python -m pytest tests/parity/test_native_search_visibility.py
+          -q --tb=short
 
   test-src:
     name: tests / src
@@ -246,7 +251,7 @@ jobs:
       - name: Run parallel source contracts
         run: >-
           python -m pytest tests/observation tests/cards tests/common tests/decision
-          tests/ledger tests/parity tests/scouting tests/blunder tests/train
+          tests/ledger tests/parity tests/scouting tests/opponent tests/telemetry tests/blunder tests/train
           tests/test_import_hygiene.py tests/test_source_reachability.py
           -q -n auto --tb=short
           --ignore=tests/ledger/test_real_engine_timing.py

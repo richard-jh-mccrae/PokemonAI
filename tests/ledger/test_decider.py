@@ -379,7 +379,8 @@ def test_an_unavailable_provider_returns_a_typed_fail_safe_decision():
 
     decider = LedgerDecider(DECK, "test", EvaluationModel.build(),
                             provider_factory=lambda _s, **_kw: DeadProvider())
-    decision = decider.decide(printout(me=player(active=body(DRAGAPULT, 1))))
+    decision = decider.decide(printout(me=player(active=body(DRAGAPULT, 1)),
+                                      select={"context": 0, "minCount": 0, "maxCount": 0, "option": []}))
 
     assert decision.diagnostics["policy_reason"] == "fail_safe_provider_failure"
     assert decision.diagnostics["failure"]["stage"] == "provider"
@@ -452,7 +453,8 @@ def test_fail_safe_policy_failure_returns_one_typed_last_resort_result():
         decider.coordinator, fail_safe_policy=BrokenFailSafe())
 
     decision = decider.decide(
-        printout(me=player(active=body(DRAGAPULT, 1), hand=[FIRE_E])))
+        printout(me=player(active=body(DRAGAPULT, 1), hand=[FIRE_E]),
+                 select={"context": 0, "minCount": 0, "maxCount": 0, "option": []}))
 
     assert decision.decision_result is not None
     assert decision.diagnostics["policy_reason"] == "fail_safe_policy_failure"

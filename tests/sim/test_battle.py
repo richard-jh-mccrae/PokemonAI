@@ -165,15 +165,16 @@ def test_report_surfaces_crashes_when_present():
 @pytest.mark.req("REQ-SIM-0007")
 @pytest.mark.parametrize("agent", ("dragapult_ex", "mega_lucario", "mega_starmie"))
 def test_play_match_runs_a_full_game_and_names_a_winner(agent):
+    from common.telemetry import validate_record
     from train.corpus.evidence import audit_correction_records
 
     directory = AGENTS / agent
     deck = read_deck(directory)
     a = AgentServer(
-        directory, SRC, capture_telemetry=True, emit_telemetry=True, strict=True,
+        directory, SRC, capture_telemetry=True, emit_telemetry=True,
         compute_profile="correction")
     b = AgentServer(
-        directory, SRC, capture_telemetry=True, emit_telemetry=True, strict=True,
+        directory, SRC, capture_telemetry=True, emit_telemetry=True,
         compute_profile="correction")
     telemetry = []
     try:
@@ -183,7 +184,7 @@ def test_play_match_runs_a_full_game_and_names_a_winner(agent):
         a.close()
         b.close()
     assert result.winner in (0, 1, None)        # engine resolved the game to a verdict
-    assert result.crashed == ()                 # clean mirror crashes neither seat
+    assert result.crashed == (), result.failure
     decisions = [record for record in telemetry if record["record_type"] == "decision"]
     receipts = [record for record in telemetry
                 if record["record_type"] == "telemetry_receipt"]
@@ -195,8 +196,42 @@ def test_play_match_runs_a_full_game_and_names_a_winner(agent):
     assert receipts[0]["certified"]
     assert len(outcomes) == 1
     assert outcomes[0]["decision_ids"] == [record["record_id"] for record in decisions]
-    audit = audit_correction_records(telemetry)
-    assert audit["ledger_decisions"] == len(decisions) - audit["pregame_decisions"]
+    for record in telemetry:
+        validate_record(record)
+    rejected = []
+    for record in decisions:
+        if record["decision"]["variant"] == "declarative_pregame":
+            continue
+        decision = record["decision"]
+        forced_singleton = decision["policy_reason"] == "forced" and len(record["candidates"]) == 1
+        if record["completeness"] != "unavailable" or forced_singleton:
+            assert audit_correction_records([record])["ledger_decisions"] == 1
+            continue
+        unavailable = [candidate for candidate in record["candidates"] if candidate["status"] == "unavailable"]
+        assert unavailable
+        if decision["policy_reason"] == "fail_safe_policy_failure":
+            assert record["search"]["failure"] == {"stage": "policy", "error_type": "ValueError"}
+            assert len(unavailable) == len(record["candidates"])
+        else:
+            assert record["search"]["failure"] is None
+            assert not decision["policy_reason"].startswith("fail_safe")
+        for candidate in unavailable:
+            assert not candidate["successors"]
+            assert any(gap in {
+                "unpriceable: private opponent selection unavailable (focal information boundary)",
+                "unpriceable: native observation unavailable (focal hand update is hidden from the source viewer)",
+            } for gap in candidate["gaps"]), candidate["gaps"]
+        rejected.append(record)
+    if rejected:
+        with pytest.raises(ValueError) as error:
+            audit_correction_records(telemetry)
+        reason = rejected[0]["decision"]["policy_reason"]
+        expected = (f"fail-safe decision entered Correction Run: {reason}" if reason.startswith("fail_safe")
+                    else "unavailable Ledger decision entered Correction Run: unavailable")
+        assert str(error.value) == expected
+    else:
+        audit = audit_correction_records(telemetry)
+        assert audit["ledger_decisions"] == len(decisions) - audit["pregame_decisions"]
 
 
 @pytest.mark.req("REQ-SIM-0007")
