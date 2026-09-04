@@ -61,6 +61,10 @@ class DecisionCoordinator:
                     DecisionFailureStage.SEARCH, exc)
                 result = self.failure_handler(request, failure)
         result = self._prove_roster(state, result)
+        if result.puct is not None and not result.puct.outcome.permits_action:
+            return DecisionResult(None, result.baseline, result.roster, result,
+                                  self._trace(result, None), DecisionReason.SEARCH_STOPPED,
+                                  self.behavior_identity)
         if not result.roster.candidates:
             return DecisionResult(None, result.baseline, result.roster, result,
                                   self._trace(result, None), DecisionReason.EMPTY_ROSTER,

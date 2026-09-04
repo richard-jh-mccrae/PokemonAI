@@ -7,39 +7,19 @@ from enum import Enum
 
 from common.api import ActionIdentity
 from common.observation import ObservationState
+from common.decision.turn import (
+    SEARCH_STATE_KEY_SCHEMA_VERSION, BoundaryReason, NodeKind, SearchContractError, SearchNode, SearchStateKey,
+)
 
 from .chance import ChanceBranchKey, ChanceBranchKind, ChanceSampleKey
 
 
-SEARCH_STATE_KEY_SCHEMA_VERSION = 1
 PRIMITIVE_TRANSITION_SCHEMA_VERSION = 1
 PRIMITIVE_TRANSITION_SCHEMA = "cgpy-primitive-transition"
 CHANCE_TRANSITION_SCHEMA_VERSION = 2
 CHANCE_TRANSITION_SCHEMA = "cgpy-chance-transition"
 CHANCE_EXPANSION_SCHEMA_VERSION = 1
 CHANCE_EXPANSION_SCHEMA = "cgpy-chance-expansion"
-
-
-class NodeKind(str, Enum):
-    PLAYER_DECISION = "player_decision"
-    FORCED_DECISION = "forced_decision"
-    CHANCE = "chance"
-    TERMINAL = "terminal"
-    INFORMATION_BOUNDARY = "information_boundary"
-    TURN_BOUNDARY = "turn_boundary"
-    UNAVAILABLE = "unavailable"
-
-
-class BoundaryReason(str, Enum):
-    SHUFFLE_DRAW = "shuffle_draw"
-    RANDOM_REVEAL = "random_reveal"
-    OPPONENT_DECISION = "opponent_decision"
-    TURN_TRANSITION = "turn_transition"
-    UNSUPPORTED_HIDDEN_TRANSITION = "unsupported_hidden_transition"
-
-
-class SearchContractError(ValueError):
-    pass
 
 
 class ChanceExpansionStatus(str, Enum):
@@ -60,32 +40,6 @@ class ChanceExpansionRequest:
             raise ValueError("exact outcome limit must be positive")
         if self.sample_count < 1:
             raise ValueError("sample count must be positive")
-
-
-@dataclass(frozen=True, slots=True)
-class SearchStateKey:
-    digest: str
-    schema_version: int = SEARCH_STATE_KEY_SCHEMA_VERSION
-
-    def __post_init__(self):
-        if self.schema_version < 1 or len(self.digest) != 64:
-            raise ValueError("invalid Search State Key")
-
-    def __str__(self) -> str:
-        return self.digest
-
-
-@dataclass(frozen=True, slots=True)
-class SearchNode:
-    kind: NodeKind
-    actor_seat: int | None
-    perspective_seat: int
-    observation: ObservationState
-    state_key: SearchStateKey
-    root_turn: int
-    boundary_reason: BoundaryReason | None
-    failure: str | None
-    _handle: object = field(repr=False, compare=False)
 
 
 def _key_document(value: SearchStateKey) -> dict:

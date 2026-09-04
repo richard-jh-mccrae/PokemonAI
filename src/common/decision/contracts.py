@@ -8,6 +8,7 @@ from typing import Protocol
 
 from common.api import ActionIdentity
 from common.observation import ObservationState, TransitionTrace
+from .puct import PuctEdgeStatistics, PuctEvidence
 
 
 class EvaluationStatus(str, Enum):
@@ -86,6 +87,7 @@ class DecisionReason(str, Enum):
     FAIL_SAFE_PRESENTATION_FAILURE = "fail_safe_presentation_failure"
     FAIL_SAFE_RUNTIME_FAILURE = "fail_safe_runtime_failure"
     EMPTY_ROSTER = "empty_roster"
+    SEARCH_STOPPED = "search_stopped"
 
 
 class PolicyFallbackReason(str, Enum):
@@ -255,6 +257,7 @@ class ValuedCandidate:
     prior: float | None = None
     policy_tie_break: tuple[object, ...] = ()
     policy_evidence: object | None = None
+    puct: PuctEdgeStatistics | None = None
 
     def __post_init__(self):
         if self.status is EvaluationStatus.UNAVAILABLE and self.delta is not None:
@@ -559,12 +562,13 @@ class EvaluationRequest:
 
 @dataclass(frozen=True, slots=True)
 class SearchResult:
-    baseline: StateValuation
+    baseline: StateValuation | None
     roster: CandidateRoster
     nodes_visited: int = 0
     stop_reason: str = "complete"
     frontier: tuple[object, ...] = ()
     failure: DecisionFailure | None = None
+    puct: PuctEvidence | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -579,7 +583,7 @@ class SearchTrace:
 @dataclass(frozen=True, slots=True)
 class DecisionResult:
     chosen: object
-    baseline: StateValuation
+    baseline: StateValuation | None
     roster: CandidateRoster
     search: SearchResult
     trace: SearchTrace | None = None
@@ -590,7 +594,8 @@ class DecisionResult:
         if self.search.roster != self.roster:
             raise ValueError("decision and search candidate rosters differ")
         if self.chosen is None:
-            if self.roster.candidates:
+            stopped = self.search.puct is not None and not self.search.puct.outcome.permits_action
+            if self.roster.candidates and not stopped:
                 raise ValueError("non-empty candidate roster requires a chosen action")
             return
         chosen_identity = getattr(self.chosen, "identity", self.chosen)

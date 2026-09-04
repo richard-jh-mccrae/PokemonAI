@@ -5,8 +5,10 @@ from observation_builders import build_observation, advance_observation
 from contextlib import ExitStack
 from functools import partial
 import importlib.util
+import json
 import os
 import random
+import time
 from copy import deepcopy
 from pathlib import Path
 from types import SimpleNamespace
@@ -261,6 +263,237 @@ def test_production_provider_branches_a_live_native_search_without_hidden_zone_l
         if provider is not None:
             provider.close()
         battle_finish()
+
+
+def test_native_puct_adapter_replays_inside_a_spawned_worker():
+    from common.puct import NativeTurnSearchProvider
+    from common.puct.workers import BoundedWorkers, WorkItem
+    from common.decision.turn import NodeKind, ProviderCompletion
+
+    deck = _deck()
+    observation, start = battle_start(list(deck), list(deck))
+    workers = BoundedWorkers(1, outstanding_limit=1)
+    try:
+        assert start.errorPlayer == -1
+        observation = _first_main(observation)
+        board = build_observation(observation, decklist=deck)
+        provider = NativeTurnSearchProvider.from_observation(observation, board)
+        end = next(action for action in provider.legal_actions(provider.root)
+                   if action.identity.kind == "end")
+        job = provider.work_item(provider.root, "transition", (end.identity,))
+
+        result = workers.run_batch(
+            (WorkItem(0, job.function, job.arguments),), deadline=time.monotonic() + 20)
+
+        assert len(result) == 1 and result[0].error_type is None
+        completion = result[0].value
+        assert isinstance(completion, ProviderCompletion)
+        assert completion.operation_units >= 1
+        assert completion.state_capacity >= 2
+        assert completion.value.kind in (NodeKind.TURN_BOUNDARY, NodeKind.INFORMATION_BOUNDARY)
+    finally:
+        workers.close()
+        battle_finish()
+
+
+def test_native_puct_search_identity_ignores_private_replay_input():
+    from common.puct import NativeTurnSearchProvider
+
+    deck = _deck()
+    observation, start = battle_start(list(deck), list(deck))
+    try:
+        assert start.errorPlayer == -1
+        observation = _first_main(observation)
+        board = build_observation(observation, decklist=deck)
+        changed = deepcopy(observation)
+        changed["search_begin_input"] = "private-replay-data-must-not-key-search"
+
+        first = NativeTurnSearchProvider.from_observation(observation, board)
+        second = NativeTurnSearchProvider.from_observation(changed, board)
+
+        assert first.root.state_key == second.root.state_key
+    finally:
+        battle_finish()
+
+
+def test_native_puct_samples_shuffle_draw_and_replays_the_continuation():
+    from common.puct import NativeTurnSearchProvider
+    from common.puct.workers import BoundedWorkers, WorkItem
+    from common.decision.turn import NodeKind, ProviderCompletion
+
+    deck = _deck()
+    workers = BoundedWorkers(1, outstanding_limit=1)
+    observation = None
+    try:
+        for _attempt in range(20):
+            candidate, start = battle_start(list(deck), list(deck))
+            assert start.errorPlayer == -1
+            candidate = _first_main(candidate)
+            for _step in range(100):
+                actions = enumerate_legal_actions(candidate)
+                if any(action.identity.kind == "play" and "1227" in str(action.identity.parts)
+                       for action in actions):
+                    observation = candidate
+                    break
+                end = next((action for action in actions if action.identity.kind == "end"), None)
+                chosen = end or (actions[0] if actions else None)
+                if chosen is None:
+                    break
+                candidate = battle_select(list(chosen.selection))
+            if observation is not None:
+                break
+            battle_finish()
+        assert observation is not None, "native setup did not deal the configured draw Supporter"
+        board = build_observation(observation, decklist=deck)
+        provider = NativeTurnSearchProvider.from_observation(observation, board)
+        lillie = next(action for action in provider.legal_actions(provider.root)
+                      if action.identity.kind == "play" and "1227" in str(action.identity.parts))
+        transition = provider.work_item(provider.root, "transition", (lillie.identity,))
+        first = workers.run_batch(
+            (WorkItem(0, transition.function, transition.arguments),),
+            deadline=time.monotonic() + 20)[0]
+        assert first.error_type is None and isinstance(first.value, ProviderCompletion)
+        chance = first.value.value
+        assert chance.kind is NodeKind.CHANCE
+        assert provider.chance_plan(chance, 8).method == "bounded_shuffle_draw"
+
+        sample = provider.work_item(chance, "sample_for_search", (607, 3))
+        second = workers.run_batch(
+            (WorkItem(1, sample.function, sample.arguments, sample.affinity),),
+            deadline=time.monotonic() + 20)[0]
+
+        assert second.error_type is None and isinstance(second.value, ProviderCompletion)
+        assert second.value.value.kind is NodeKind.PLAYER_DECISION
+        assert second.value.value.observation.me.hand_count == 8
+        assert provider.legal_actions(second.value.value)
+        repeated = workers.run_batch(
+            (WorkItem(3, sample.function, sample.arguments, sample.affinity),),
+            deadline=time.monotonic() + 20)[0]
+        assert repeated.error_type is None
+        assert (repeated.value.value.observation.decision_key
+                == second.value.value.observation.decision_key)
+        follow = provider.legal_actions(second.value.value)[0]
+        continuation = provider.work_item(second.value.value, "transition", (follow.identity,))
+        third = workers.run_batch(
+            (WorkItem(2, continuation.function, continuation.arguments,
+                      continuation.affinity),),
+            deadline=time.monotonic() + 20)[0]
+        assert third.error_type is None and isinstance(third.value, ProviderCompletion)
+    finally:
+        workers.close()
+        battle_finish()
+
+
+def test_native_puct_completes_a_bounded_root_search():
+    from common.puct import (NativeTurnSearchProvider, PuctConfiguration,
+                             build_puct_coordinator)
+    from common.decision.puct import PuctOutcome
+
+    baseline = "98a582d49a32146b18e59beed0019041ce1745fd653e94f7d9c86f8cf0aec92d"
+    deck = _deck()
+    observation, start = battle_start(list(deck), list(deck))
+    search = None
+    try:
+        assert start.errorPlayer == -1
+        observation = _first_main(observation)
+        runtime = build_runtime(_strategy(), deck)
+        board = build_observation(observation, decklist=deck)
+        provider = NativeTurnSearchProvider.from_observation(observation, board)
+        coordinator = build_puct_coordinator(
+            runtime.ledger.ctx, baseline_identity=baseline,
+            baseline_path=REPO / "data" / "ledger-baselines" / baseline / "manifest.json",
+            calibration_path=REPO / "data" / "ledger-policy-calibrations" / f"{baseline}.json",
+            prior_mode="uniform", provider_identity=provider.identity,
+            configuration=PuctConfiguration(
+                simulation_limit=4, batch_size=2, worker_count=2, chance_samples=4,
+                transition_limit=100, evaluation_limit=100, chance_limit=20,
+                state_limit=200, time_limit_seconds=30, cleanup_reserve_seconds=2))
+        search = coordinator.search
+
+        decision = coordinator.decide(provider.root, provider=provider, strict=True)
+
+        assert decision.search.puct.outcome is PuctOutcome.SEARCHED, decision.search.failure
+        assert decision.chosen is not None
+        assert decision.search.puct.simulations == 4
+        assert decision.search.puct.work.transitions >= 4
+        assert decision.search.puct.retained_engine_states == 0
+        assert decision.search.puct.peak_retained_engine_states > 0
+        replay = json.loads(decision.search.puct.reproduction_input)
+        assert replay["payload"]["search_begin_input"] == observation["search_begin_input"]
+        transitions = next(item for item in decision.search.puct.resources
+                           if item.category == "transitions")
+        assert transitions.reserved > transitions.attempted >= transitions.completed
+    finally:
+        if search is not None:
+            search.close()
+        battle_finish()
+
+
+def test_native_puct_reuses_a_verified_deterministic_subtree_after_actual_action():
+    from common.puct import NativeTurnSearchProvider
+    from common.puct.workers import BoundedWorkers, WorkItem
+    from common.decision.turn import NodeKind, ProviderCompletion
+
+    deck = _deck()
+    workers = BoundedWorkers(1, outstanding_limit=1)
+    active = False
+    try:
+        selected = child = None
+        task = 0
+        for _attempt in range(20):
+            observation, start = battle_start(list(deck), list(deck))
+            active = True
+            assert start.errorPlayer == -1
+            observation = _first_main(observation)
+            board = build_observation(observation, decklist=deck)
+            previous = NativeTurnSearchProvider.from_observation(observation, board)
+            for action in previous.legal_actions(previous.root):
+                job = previous.work_item(previous.root, "transition", (action,))
+                result = workers.run_batch(
+                    (WorkItem(task, job.function, job.arguments),),
+                    deadline=time.monotonic() + 20)[0]
+                task += 1
+                if (result.error_type is None and isinstance(result.value, ProviderCompletion)
+                        and result.value.value.kind is NodeKind.PLAYER_DECISION):
+                    selected, child = action, result.value.value
+                    break
+            if selected is not None:
+                break
+            battle_finish()
+            active = False
+        assert selected is not None and child is not None
+
+        actual = battle_select(list(selected.selection))
+        current = NativeTurnSearchProvider.from_observation(
+            actual, advance_observation(board, actual))
+
+        assert current.reuse_from(previous, child), (
+            current.root.observation.decision_key, child.observation.decision_key,
+            current.root.root_turn, child.root_turn,
+            current.root.perspective_seat, child.perspective_seat,
+            current.root.observation.knowledge == child.observation.knowledge)
+        follow = current.legal_actions(child)[0]
+        continuation = current.work_item(child, "transition", (follow,))
+        result = workers.run_batch(
+            (WorkItem(999, continuation.function, continuation.arguments,
+                      continuation.affinity),),
+            deadline=time.monotonic() + 20)[0]
+        assert result.error_type is None and isinstance(result.value, ProviderCompletion)
+        descendant = result.value.value
+        assert (current._local_handle(descendant._handle).path
+                == descendant._handle.path)
+        if descendant.kind is NodeKind.PLAYER_DECISION:
+            next_action = current.legal_actions(descendant)[0]
+            next_job = current.work_item(descendant, "transition", (next_action,))
+            next_result = workers.run_batch(
+                (WorkItem(1000, next_job.function, next_job.arguments,
+                          next_job.affinity),),
+                deadline=time.monotonic() + 20)[0]
+            assert next_result.error_type is None
+    finally:
+        workers.close()
+        if active:
+            battle_finish()
 
 
 def test_production_runtime_returns_a_legal_native_action_without_fallback():

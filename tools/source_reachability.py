@@ -11,6 +11,7 @@ DYNAMIC_CARD_PACKAGES = (
     "common.cards.trainer_cards.",
 )
 OFFLINE_MODULES = frozenset({"common.engine", "common.information"})
+PUBLIC_API_MODULES = frozenset({"common.puct.native", "common.puct.runtime", "common.puct.record"})
 EXTERNAL_FUNCTIONS = frozenset({
     "common.cards.pokemon_default_roles",
     "common.ledger.__getattr__",
@@ -153,6 +154,7 @@ def analyze(root: Path) -> ReachabilityReport:
     roots = {name for name in modules
              if name.startswith("agents.") and name.endswith(".main")}
     roots.add("cg.game")
+    roots.update(PUBLIC_API_MODULES)
     reachable = set(roots)
     pending = list(roots)
     while pending:

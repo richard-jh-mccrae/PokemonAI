@@ -71,7 +71,8 @@ class _RunningValuation:
 
 
 def refresh_outcomes(observation, board: ObservationState, card_id: int,
-                     draws, opponent_shuffles: bool, evaluate_fn, compute, ctx=None):
+                     draws, opponent_shuffles: bool, evaluate_fn, compute, ctx=None,
+                     before_sample=None):
     compute = getattr(compute, "search", compute)
     gaps = set()
     seat = board.seat
@@ -98,6 +99,7 @@ def refresh_outcomes(observation, board: ObservationState, card_id: int,
             compute.chance_sample_budget,
             max(MIN_ADAPTIVE_SAMPLES, len(draws) * SAMPLES_PER_OUTCOME))
         for index in range(compute.chance_sample_budget):
+            sample_completed = None if before_sample is None else before_sample()
             own_draw, opponent_draw = draws[index % len(draws)]
             rng = random.Random(_sample_seed(seed, index))
             sampled = _sample(rng, pool, int(own_draw))
@@ -106,6 +108,8 @@ def refresh_outcomes(observation, board: ObservationState, card_id: int,
                 int(card_id), int(opponent_draw), opponent_shuffles)
             successor = ObservationStateBuilder(board.decklist).root(
                 synthetic, knowledge=board.knowledge)
+            if sample_completed is not None:
+                sample_completed()
             valuation = evaluate_fn(successor)
             gaps.update(valuation.gaps)
             running.add(valuation)

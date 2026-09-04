@@ -361,7 +361,8 @@ class _Walk:
         if isinstance(node, Refresh):
             valuation, gaps, summary, landings = refresh_outcomes(
                 _payload(state), board, node.card_id, node.draws, node.opponent_shuffles,
-                self.valuation, self.compute, self.ctx)
+                self.valuation, self.compute, self.ctx,
+                before_sample=getattr(self.provider, "before_chance_sample", None))
             self.gaps.extend(gaps)
             self.chance_summaries.append(summary)
             if not summary.sample_count and summary.method == "sampled":
