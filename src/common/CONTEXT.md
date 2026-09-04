@@ -169,6 +169,11 @@ A hidden-safe, versioned prior assignment covering every action in one authorita
 Roster, with evidence naming its derivation and behavior identity.
 _Avoid_: Candidate score, Decision Policy, visit distribution
 
+**Chance Sample Set**:
+A bounded, reproducible collection of outcome samples approximating one PUCT chance distribution.
+Multiple samples can yield the same successor; revisiting a sample adds no new draw evidence.
+_Avoid_: Complete outcome distribution, search visit count, predicted actual hand
+
 **Decision Policy**:
 The replaceable rule that chooses from a Search Algorithm's completed candidate results.
 _Avoid_: Policy Model, Value Evaluator, transition provider
@@ -234,6 +239,17 @@ The deterministic Compute Configuration used by Correction Runs to complete root
 under structural work bounds. Wall time is failure containment, never a search allocation; expiry
 rejects the decision rather than publishing partial correction evidence.
 _Avoid_: Submission profile, Performance Profile, unlimited search
+
+**PUCT Inspection Profile**:
+A PUCT compute profile for manual review of match decisions with uniform or Ledger priors under generous
+finite limits. Choices require completed simulation evidence, which may be verified inherited evidence;
+single-legal-action decisions are exempt. This minimum does not certify decision quality.
+_Avoid_: Separate planner, exhaustive search, quality certificate
+
+**Bounded Native Replay Adapter**:
+The production PUCT provider that reconstructs deterministic legal paths inside bounded workers and keeps
+sampled shuffle continuations on their owning worker. Only legal observations and evidence cross processes.
+_Avoid_: Native handle transport, synthetic engine state, offline provider
 
 **Search Configuration**:
 The versioned depth, node, time, chance-sampling, and randomness controls bounding Search Algorithm

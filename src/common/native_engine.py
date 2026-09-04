@@ -121,6 +121,17 @@ def _stratified_order(cards: tuple[int, ...], world_index: int, world_count: int
     return list(balanced[offset:] + balanced[:offset])
 
 
+def _seeded_order(cards: tuple[int, ...], token: str, world_index: int) -> tuple[int, ...]:
+    """Permute physical positions reproducibly without reading their card identities."""
+    ranked = sorted(
+        range(len(cards)),
+        key=lambda index: hashlib.blake2b(
+            f"{token}:{world_index}:{index}".encode("utf-8"),
+            digest_size=PHASE_DIGEST_BYTES, person=b"puct-draw",
+        ).digest())
+    return tuple(cards[index] for index in ranked)
+
+
 def _own_hidden_zones(root, player: dict, *, world_index: int,
                       world_count: int) -> tuple[tuple[int, ...], tuple[int, ...]]:
     deck_count = max(0, int(player.get("deckCount", 0)))
@@ -157,7 +168,8 @@ class NativeCgTransitionProvider:
     backend = "native-cg-bellman"
 
     def __init__(self, root, *, registry=None, effects=None, stats=None,
-                 api_module=None, world_count: int = NATIVE_BELIEF_WORLD_COUNT, cards=None):
+                 api_module=None, world_count: int = NATIVE_BELIEF_WORLD_COUNT, cards=None,
+                 analytic_refresh: bool = True, hidden_order_token: str | None = None):
         self.root = root
         self.registry = registry
         self.effects = effects
@@ -165,6 +177,8 @@ class NativeCgTransitionProvider:
         #: Card records by id — the unified store unless a test injects its own records.
         self.cards = card_store() if cards is None else cards
         self.world_count = max(1, int(world_count))
+        self.analytic_refresh = bool(analytic_refresh)
+        self.hidden_order_token = hidden_order_token
         self._worlds: dict[str, tuple[_NativeWorld, ...]] = {}
         self._provider_metadata: dict[int, dict] = {}
         self._root_turn = int((_payload(root).get("current") or {}).get("turn") or 0)
@@ -182,6 +196,10 @@ class NativeCgTransitionProvider:
     @property
     def available(self) -> bool:
         return not self._error and bool(self._worlds.get(self._key(self.root)))
+
+    @property
+    def retained_states(self) -> int:
+        return sum(len(worlds) for worlds in self._worlds.values())
 
     def close(self) -> None:
         if self._api is not None and self._search_open:
@@ -210,7 +228,7 @@ class NativeCgTransitionProvider:
         worlds = self._worlds.get(self._key(state))
         if not worlds:
             return Unknown("native search state unavailable", self._key(state))
-        refresh = refresh_transition(state, action, self.cards)
+        refresh = refresh_transition(state, action, self.cards) if self.analytic_refresh else None
         if refresh is not None:
             return refresh
         children = []
@@ -252,6 +270,8 @@ class NativeCgTransitionProvider:
         for index in range(self.world_count):
             own_deck, own_prize = _own_hidden_zones(
                 root, mine, world_index=index, world_count=self.world_count)
+            if self.hidden_order_token is not None:
+                own_deck = _seeded_order(own_deck, self.hidden_order_token, index)
             state = self._api.search_begin(
                 native_observation,
                 list(own_deck),

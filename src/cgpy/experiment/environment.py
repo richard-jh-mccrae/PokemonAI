@@ -6,6 +6,9 @@ from itertools import permutations
 from math import perm
 
 from common.api import ActionIdentity
+from common.decision.turn import ChancePlan, ProviderCompletion, ProviderJob
+from copy import copy
+from common.observation.provider import ProviderState
 from common.observation import (KnownDeckTop, KnownOwnPrizes, LegalKnowledge,
                                 ObservationState, ObservationStateBuilder,
                                 UnknownDeckTop)
@@ -533,6 +536,7 @@ class TurnSearchEnvironment:
         root_engine = engine.fork()
         self._root_turn = root_engine.gs.turn
         self._root = self._make_node(root_engine, knowledge=knowledge)
+        self._search_sample_origin = self._chance_information_key(self._root)
 
     @classmethod
     def from_snapshot(cls, snapshot: ExperimentSnapshot, *,
@@ -790,21 +794,24 @@ class TurnSearchEnvironment:
         )
 
     def transition(self, node: SearchNode,
-                   action: ActionIdentity) -> PrimitiveTransition:
+                   action: object) -> PrimitiveTransition:
         state = self._node_state(node)
         if node.kind not in (NodeKind.PLAYER_DECISION, NodeKind.FORCED_DECISION):
             raise SearchContractError(f"cannot transition a {node.kind.value} Search Node")
-        if not isinstance(action, ActionIdentity):
+        identity = getattr(action, "identity", action)
+        selection = getattr(action, "selection", None)
+        if not isinstance(identity, ActionIdentity):
             raise TypeError("Primitive Action must be an ActionIdentity")
         matching = tuple(candidate for candidate in self.legal_actions(node)
-                         if candidate.identity == action)
+                         if candidate.identity == identity
+                         and (selection is None or tuple(candidate.selection) == tuple(selection)))
         if len(matching) != 1:
             detail = "missing" if not matching else "ambiguous"
             raise SearchContractError(f"Primitive Action identity is {detail}")
         child = self._run_plan(node, _ReplayPlan(
-            state.engine, tuple(matching[0].selection), action, ()))
+            state.engine, tuple(matching[0].selection), identity, ()))
         return PrimitiveTransition(
-            node.state_key, action, child.state_key, child.kind,
+            node.state_key, identity, child.state_key, child.kind,
             child.boundary_reason, child.failure, child)
 
     def replay(self, node: SearchNode,
@@ -815,6 +822,72 @@ class TurnSearchEnvironment:
             raise SearchContractError("Primitive Transition replay diverged")
         return replayed
 
+    @property
+    def retained_states(self) -> int:
+        return len(self._states)
+
+    def ledger_state(self, node: SearchNode) -> ProviderState:
+        state = self._node_state(node)
+        payload = state.engine.observation(viewer=self.perspective_seat, sbi_token=None)
+        return ProviderState(payload, node.observation, token=node.observation.decision_key,
+                             deck=node.observation.decklist, deck_counts=node.observation.deck_counts or ())
+
+    def work_item(self, node: SearchNode, operation: str, arguments: tuple) -> ProviderJob:
+        self._node_state(node)
+        isolated = copy(self)
+        handles = {self.root._handle, node._handle}
+        isolated._states = {handle: self._states[handle] for handle in handles}
+        isolated._information_keys = {
+            str(item.state_key): item.observation.decision_key for item in (self.root, node)}
+        return ProviderJob(_execute_turn_operation, (isolated, node, operation, arguments), 6)
+
+    def accept_work(self, result) -> SearchNode:
+        node, state = result
+        self._states[node._handle] = state
+        self._information_keys[str(node.state_key)] = node.observation.decision_key
+        return node
+
+    def reuse_from(self, previous, node: SearchNode) -> bool:
+        if (not isinstance(previous, TurnSearchEnvironment)
+                or node._handle not in previous._states
+                or self.root.state_key != node.state_key
+                or self.root.observation.decision_key != node.observation.decision_key
+                or self.root.root_turn != node.root_turn):
+            return False
+        self._states, previous._states = previous._states, {}
+        self._information_keys, previous._information_keys = previous._information_keys, {}
+        self._search_sample_origin = previous._search_sample_origin
+        self._root = node
+        return True
+
+    def close(self) -> None:
+        self._states.clear()
+        self._information_keys.clear()
+
+    def chance_plan(self, node: SearchNode, sample_count: int) -> ChancePlan:
+        state = self._node_state(node)
+        if node.kind is not NodeKind.CHANCE or sample_count < 1:
+            raise SearchContractError("chance plan requires a chance node and positive sample count")
+        method = state.chance_method or "coin"
+        probabilities = (0.5, 0.5) if method == "coin" else (1.0 / sample_count,) * sample_count
+        return ChancePlan(self._chance_information_key(node), method, probabilities, method != "coin")
+
+    def sample_for_search(self, node: SearchNode, experiment_seed: int,
+                          sample_index: int) -> ChanceTransition:
+        state = self._node_state(node)
+        action = state.replay_plan.action if state.replay_plan is not None else ActionIdentity("coin")
+        if state.chance_method in (None, "coin"):
+            if sample_index not in (0, 1):
+                raise SearchContractError("exact coin slot must be zero or one")
+            branch = ChanceBranchKey.exact(
+                method="coin", index=sample_index,
+                root_state_key=self._search_sample_origin,
+                node_state_key=self._chance_information_key(node), action=action)
+            return self._resolve_coin(node, bool(sample_index), branch, 0.5)
+        return self.sample(node, ChanceSampleKey(
+            experiment_seed, self._search_sample_origin,
+            self._chance_information_key(node), action, sample_index))
+
     def sample(self, node: SearchNode, sample: ChanceSampleKey) -> ChanceTransition:
         state = self._node_state(node)
         if node.kind is not NodeKind.CHANCE:
@@ -822,7 +895,7 @@ class TurnSearchEnvironment:
         if not isinstance(sample, ChanceSampleKey):
             raise TypeError("sample requires a Chance Sample Key")
         root_keys = {self.root.state_key.digest,
-                     self._chance_information_key(self.root)}
+                     self._chance_information_key(self.root), self._search_sample_origin}
         if sample.root_state_key not in root_keys:
             raise SearchContractError("Chance Sample root key does not match")
         node_keys = {node.state_key.digest, self._chance_information_key(node)}
@@ -1069,6 +1142,16 @@ class TurnSearchEnvironment:
                 "mill_bind", "prize_take",
             }
         )
+
+
+def _execute_turn_operation(environment, node, operation, arguments):
+    try:
+        transition = (environment.transition(node, *arguments) if operation == "transition"
+                      else environment.sample_for_search(node, *arguments))
+        value = transition.node, environment._node_state(transition.node)
+        return ProviderCompletion(value, 1, environment.retained_states)
+    finally:
+        environment.close()
 
 
 __all__ = ("TurnSearchEnvironment",)

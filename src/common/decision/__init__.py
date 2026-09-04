@@ -34,7 +34,8 @@ from .contracts import (
     ValuedCandidate,
 )
 from .coordinator import DecisionCoordinator, neutral_lottery_choice
-from .configuration import (BudgetController, ComputeConfiguration, DecisionDeadlineExceeded,
+from .configuration import (BudgetController, ComputeConfiguration, DecisionCancellation, DecisionCancelled,
+                            DecisionDeadlineExceeded,
                             DecisionExecutionGuard, PolicyConfiguration, SearchConfiguration,
                             correction_compute_profile)
 from .fail_safe import fail_safe_request, safe_legal_selection
@@ -43,7 +44,8 @@ __all__ = (
     "BudgetController", "CandidateDisposition", "CandidateRoster", "ComputeConfiguration",
     "ContinuationOpportunity", "ContinuationResult", "OpportunityRef",
     "DecisionChoice", "DecisionCoordinator", "DecisionDelta", "DecisionFailure",
-    "DecisionDeadlineExceeded", "DecisionExecutionGuard", "DecisionFailureStage",
+    "DecisionCancellation", "DecisionCancelled", "DecisionDeadlineExceeded",
+    "DecisionExecutionGuard", "DecisionFailureStage",
     "DecisionReason",
     "DecisionPolicy", "DecisionResult", "EvaluationRequest", "EvaluationStatus",
     "FailSafeRequest", "PolicyActionEvidence", "PolicyActionIdentity",

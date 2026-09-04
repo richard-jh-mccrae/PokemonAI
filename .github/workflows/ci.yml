@@ -245,11 +245,15 @@ jobs:
             --decks mega_starmie mega_lucario dragapult_ex
       - name: Run parallel source contracts
         run: >-
-          python -m pytest tests/observation tests/cards tests/common
+          python -m pytest tests/observation tests/cards tests/common tests/decision
           tests/ledger tests/parity tests/scouting tests/blunder tests/train
           tests/test_import_hygiene.py tests/test_source_reachability.py
           -q -n auto --tb=short
           --ignore=tests/ledger/test_real_engine_timing.py
+      - name: Typecheck bounded PUCT contracts
+        run: >-
+          python -m mypy --check-untyped-defs --follow-imports=skip --ignore-missing-imports
+          src/common/puct src/common/decision/puct.py src/common/decision/turn.py
 
   test-cgpy:
     name: tests / cgpy

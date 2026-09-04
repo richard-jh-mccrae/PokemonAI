@@ -13,6 +13,23 @@ class DecisionDeadlineExceeded(RuntimeError):
     pass
 
 
+class DecisionCancelled(RuntimeError):
+    pass
+
+
+class DecisionCancellation:
+    def __init__(self):
+        from threading import Event
+        self._event = Event()
+
+    def cancel(self):
+        self._event.set()
+
+    def check(self):
+        if self._event.is_set():
+            raise DecisionCancelled("decision cancelled")
+
+
 class DecisionExecutionGuard:
     def __init__(self, limit_seconds: float, *, clock=monotonic):
         if not math.isfinite(limit_seconds) or limit_seconds <= 0:
@@ -155,6 +172,7 @@ def correction_compute_profile() -> ComputeConfiguration:
     )
 
 
-__all__ = ("BudgetController", "ComputeConfiguration", "DecisionDeadlineExceeded",
+__all__ = ("BudgetController", "ComputeConfiguration", "DecisionCancellation", "DecisionCancelled",
+           "DecisionDeadlineExceeded",
            "DecisionExecutionGuard", "PolicyConfiguration", "SearchConfiguration",
            "correction_compute_profile")
