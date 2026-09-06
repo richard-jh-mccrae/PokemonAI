@@ -11,8 +11,9 @@ from multiprocessing.process import BaseProcess
 from types import MappingProxyType
 from typing import Callable, Protocol
 from queue import Empty, Queue
-from threading import Thread
+from threading import Lock, Thread
 from common.cards.card_facts import Clause
+from common.decision.puct import PuctTransport
 
 
 class _Pipe(Protocol):
@@ -70,6 +71,14 @@ class WorkStarted:
 
 
 def _serve(connection, message_limit):
+    profile_dir = os.environ.get("PUCT_WORKER_PROFILE_DIR")
+    profiler = None
+    profile_path = None
+    if profile_dir:
+        import cProfile
+
+        profiler = cProfile.Profile()
+        profile_path = os.path.join(profile_dir, f"worker-{os.getpid()}.pstats")
     try:
         while True:
             packet = connection.recv_bytes(message_limit)
@@ -78,12 +87,21 @@ def _serve(connection, message_limit):
             item = pickle.loads(packet)
             connection.send_bytes(_encode(WorkStarted(item.task_id)))
             started = time.monotonic()
+            if profiler is not None:
+                profiler.enable()
             try:
                 value = item.function(*item.arguments)
                 result = WorkResult(item.task_id, value, None, None, os.getpid(), time.monotonic() - started, started)
             except Exception as exc:
                 result = WorkResult(item.task_id, None, type(exc).__name__, str(exc)[:2000],
                                     os.getpid(), time.monotonic() - started, started)
+            finally:
+                if profiler is not None and profile_path is not None:
+                    profiler.disable()
+                    try:
+                        profiler.dump_stats(profile_path)
+                    except OSError:
+                        pass
             encoded = _encode(result)
             if len(encoded) > message_limit:
                 encoded = _encode(WorkResult(item.task_id, None, "MessageLimit", "worker result exceeds IPC cap",
@@ -110,14 +128,51 @@ class BoundedWorkers:
         self.dispatched_tasks: set[int] = set()
         self.interrupted = False
         self.affinities: dict[str, _Pipe] = {}
+        self._transport_lock = Lock()
+        self._startup_started: float | None = None
+        self._ready_connections: set[_Pipe] = set()
+        self.startup_seconds = 0.0
+        self.request_messages = 0
+        self.response_messages = 0
+        self.request_bytes = 0
+        self.response_bytes = 0
+
+    @property
+    def transport(self) -> PuctTransport:
+        return PuctTransport(
+            len(self.processes), self.startup_seconds,
+            self.request_messages, self.response_messages,
+            self.request_bytes, self.response_bytes)
+
+    def _record_transport(self, *, request_bytes=0, response_bytes=0,
+                          requests=0, responses=0):
+        with self._transport_lock:
+            self.request_bytes += request_bytes
+            self.response_bytes += response_bytes
+            self.request_messages += requests
+            self.response_messages += responses
+
+    def _record_ready(self, connection):
+        with self._transport_lock:
+            if connection in self._ready_connections or self._startup_started is None:
+                return
+            self._ready_connections.add(connection)
+            self.startup_seconds = max(
+                self.startup_seconds, time.monotonic() - self._startup_started)
 
     def _exchange(self, connection, packet, task_id, replies):
         try:
+            self._record_transport(request_bytes=len(packet), requests=1)
             connection.send_bytes(packet)
-            result = pickle.loads(connection.recv_bytes(self.message_limit))
+            encoded = connection.recv_bytes(self.message_limit)
+            self._record_transport(response_bytes=len(encoded), responses=1)
+            result = pickle.loads(encoded)
             if isinstance(result, WorkStarted):
+                self._record_ready(connection)
                 replies.put((connection, result))
-                result = pickle.loads(connection.recv_bytes(self.message_limit))
+                encoded = connection.recv_bytes(self.message_limit)
+                self._record_transport(response_bytes=len(encoded), responses=1)
+                result = pickle.loads(encoded)
         except Exception as exc:
             result = WorkResult(task_id, None, type(exc).__name__, str(exc), 0, 0.0)
         replies.put((connection, result))
@@ -125,6 +180,7 @@ class BoundedWorkers:
     def _start(self):
         if self.processes:
             return
+        self._startup_started = time.monotonic()
         context = multiprocessing.get_context("spawn")
         try:
             for _ in range(self.count):

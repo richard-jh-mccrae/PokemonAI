@@ -64,4 +64,5 @@ htmlcov/
 .move_*.json
 
 /data/correction-runs/
+/data/search-timing-runs/
 /ledger-correction-gate*.json

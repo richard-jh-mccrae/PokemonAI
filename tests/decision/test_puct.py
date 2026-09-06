@@ -12,17 +12,12 @@ from common.decision.turn import (DirectTurnSearchProvider, NodeKind, SearchNode
                                   SearchStateKey)
 from common.decision.turn import ChancePlan
 from common.decision.puct import PuctOutcome
-from common.observation import ObservationStateBuilder
+from common.observation import ObservationRecord, ObservationStateBuilder
+from common.options import LegalAction
 from ledger_helpers import DARK_E, DRAGAPULT, body, player, printout
 
 
 SCALE = ValueScale("test-worth", 1)
-
-
-@dataclass(frozen=True)
-class GraphAction:
-    identity: ActionIdentity
-    selection: tuple[int, ...]
 
 
 class GraphEnvironment:
@@ -39,7 +34,7 @@ class GraphEnvironment:
         self.private = private
         self.reuse_allowed = reuse_allowed
         for index, name in enumerate(values):
-            actions = tuple(GraphAction(ActionIdentity(label), (i,))
+            actions = tuple(LegalAction(ActionIdentity(label), (i,), ((i,),), ())
                             for i, (label, _) in enumerate(edges.get(name, ())))
             observation = replace(ObservationStateBuilder((DRAGAPULT, DARK_E) * 30).root(
                 printout(me=player(active=body(DRAGAPULT, 1, hp=100 - index)))),
@@ -165,6 +160,58 @@ def test_puct_discovers_same_player_sequence_that_beats_greedy_leaf_value():
     assert tuple(step.action for step in result.search.puct.principal_variation) == (
         ActionIdentity("setup"), ActionIdentity("finish"))
     assert result.search.puct.principal_variation_stop_reason == "turn_boundary"
+
+
+def test_tree_inspection_is_opt_in_and_contains_only_legal_observations():
+    values = {"root": 0.0, "setup": 1.0, "finish": 4.0}
+    edges = {"root": (("setup", "setup"), ("finish", "finish"))}
+
+    ordinary = decide(
+        GraphEnvironment(values, edges),
+        PuctConfiguration(simulation_limit=2))
+    inspected = decide(
+        GraphEnvironment(values, edges, private="must-not-leak"),
+        PuctConfiguration(simulation_limit=2),
+        search=PuctSearch(capture_tree=True))
+
+    assert ordinary.search.puct.inspection is None
+    graph = inspected.search.puct.inspection
+    assert graph is not None
+    assert (ordinary.search.puct.configuration_identity
+            == inspected.search.puct.configuration_identity)
+    assert graph.root_node_id == 0
+    assert len(graph.nodes) == 3
+    assert len(graph.edges) == 2
+    assert graph.nodes[0].visits == 2
+    assert graph.nodes[0].outgoing_visits == 2
+    assert graph.nodes[0].valuation.total == 0.0
+    assert graph.nodes[0].valuation.components == ()
+    assert graph.edges[0].action == ActionIdentity("setup")
+    assert sum(edge.visits for edge in graph.edges) == 2
+    leaves = [node for node in graph.nodes if node.depth == 1]
+    assert sum(node.visits for node in leaves) == 2
+    assert all(node.outgoing_visits == 0 for node in leaves)
+    for node in graph.nodes:
+        restored = ObservationRecord.loads(node.observation).to_state()
+        assert restored.decision_key == node.decision_key
+        assert "must-not-leak" not in node.observation
+
+
+def test_puct_reports_measured_worker_transport_costs():
+    environment = GraphEnvironment(
+        {"root": 0.0, "left": 1.0, "right": 2.0},
+        {"root": (("left", "left"), ("right", "right"))})
+
+    result = decide(environment, PuctConfiguration(
+        simulation_limit=2, worker_count=2, batch_size=2))
+
+    transport = result.search.puct.transport
+    assert transport.worker_count == 2
+    assert transport.startup_seconds >= 0
+    assert transport.request_messages > 0
+    assert transport.response_messages >= transport.request_messages
+    assert transport.request_bytes > 0
+    assert transport.response_bytes > 0
 
 
 def test_policy_priors_change_root_allocation_without_becoming_values():
