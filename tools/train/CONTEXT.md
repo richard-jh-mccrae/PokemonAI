@@ -17,6 +17,8 @@ as its frozen acceptance evidence (ADR-0149).
 - `ledger_certify.py`, `ledger_baseline.py`: certify and freeze one three-Deck Ledger Baseline.
 - `ledger_tune.py`: the §7 nudge / keep-best / adoption-gate loop over the Ledger's general
   Valuation Configuration; every trial lands in `docs/tuning/runs/`.
+- `search_timing.py`: one CLI for isolated Ledger/PUCT timing, CPU/allocation profiles, and PUCT
+  tree inspection across native-cg and cgpy; `run.json` is authoritative and `report.html` its view.
 
 Deck behavior changes in shared runtime code or declarative deck Roles, not generated `tuned.json`.
 

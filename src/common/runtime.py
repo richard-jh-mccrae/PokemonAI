@@ -123,7 +123,8 @@ class AgentRuntime:
                  opponent_model_factory=OpponentModel, provider_factory=None,
                  valuation_configuration=None, compute_configuration=None,
                  decision_parity_oracle=None, decision_containment_seconds=None,
-                 decision_configuration: DecisionSearchConfiguration | None = None):
+                 decision_configuration: DecisionSearchConfiguration | None = None,
+                 puct_capture_tree: bool = False):
         self.strategy = strategy
         self.deck = tuple(int(card_id) for card_id in deck)
         configured_route = decision_configuration is not None
@@ -184,7 +185,8 @@ class AgentRuntime:
         self.puct = (PuctDecider(
             self.deck, strategy.name, evaluation_model,
             backend=self.decision_configuration.engine_backend,
-            configuration=self.decision_configuration.puct)
+            configuration=self.decision_configuration.puct,
+            capture_tree=puct_capture_tree)
             if self.decision_configuration.pilot is DecisionPilot.PUCT else None)
         self.decision = self.puct or self.ledger
 

@@ -17,13 +17,14 @@ class PuctUnavailable(RuntimeError):
 
 class PuctDecider:
     def __init__(self, deck, deck_name: str, evaluation_model, *,
-                 backend: EngineBackendDescriptor, configuration: PuctConfiguration):
+                 backend: EngineBackendDescriptor, configuration: PuctConfiguration,
+                 capture_tree: bool = False):
         self.deck = tuple(int(card_id) for card_id in deck)
         self.deck_name = str(deck_name)
         self.ctx = evaluation_model
         self.backend = backend
         self.compute = configuration
-        self._search = PuctSearch()
+        self._search = PuctSearch(capture_tree=capture_tree)
         self.coordinator = build_puct_coordinator(
             evaluation_model, prior_mode="uniform", configuration=configuration,
             provider_identity=NativeTurnSearchProvider.identity_for(backend),

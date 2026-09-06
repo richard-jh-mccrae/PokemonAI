@@ -328,7 +328,7 @@ def _validate_puct_evidence(value) -> None:
         "batches", "peak_pending", "reuse_reason", "inherited_visits", "resources",
         "convergence", "tree_nodes", "cache_entries", "cache_capacity_charged",
         "retained_engine_states", "peak_retained_engine_states",
-        "principal_variation_stop_reason",
+        "principal_variation_stop_reason", "transport",
     }
     _exact_fields(value, expected, "PUCT evidence")
     for field in ("simulations", "batches", "peak_pending", "inherited_visits",
@@ -339,6 +339,16 @@ def _validate_puct_evidence(value) -> None:
     }, "PUCT work")
     for field in value["work"]:
         _number(value["work"][field], f"PUCT work {field}", minimum=0, integer=True)
+    _exact_fields(value["transport"], {
+        "worker_count", "startup_seconds", "request_messages", "response_messages",
+        "request_bytes", "response_bytes",
+    }, "PUCT transport")
+    for field in ("worker_count", "request_messages", "response_messages",
+                  "request_bytes", "response_bytes"):
+        _number(value["transport"][field], f"PUCT transport {field}",
+                minimum=0, integer=True)
+    _number(value["transport"]["startup_seconds"],
+            "PUCT transport startup_seconds", minimum=0)
     if "reproduction_input" in value:
         raise ValueError("private PUCT reproduction input entered telemetry")
 
@@ -1061,6 +1071,7 @@ def build_puct_decision_record(result, state, *, episode_key: str, decision_inde
     chosen_id = action_ids[tuple(getattr(chosen.action, "selection", ()))]
     wire_evidence = dataclasses.asdict(evidence)
     wire_evidence.pop("reproduction_input", None)
+    wire_evidence.pop("inspection", None)
     record = {
         "schema": SCHEMA,
         "schema_version": SCHEMA_VERSION,

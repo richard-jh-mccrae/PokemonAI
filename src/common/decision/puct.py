@@ -121,10 +121,80 @@ class PuctTiming:
 
 
 @dataclass(frozen=True, slots=True)
+class PuctTransport:
+    worker_count: int = 0
+    startup_seconds: float = 0.0
+    request_messages: int = 0
+    response_messages: int = 0
+    request_bytes: int = 0
+    response_bytes: int = 0
+
+
+@dataclass(frozen=True, slots=True)
 class PuctConvergence:
     simulations: int
     visits: tuple[int, ...]
     means: tuple[float | None, ...]
+
+
+@dataclass(frozen=True, slots=True)
+class PuctInspectionComponent:
+    key: str
+    activation: float
+    coefficient: float
+    value: float
+
+
+@dataclass(frozen=True, slots=True)
+class PuctInspectionValuation:
+    total: float
+    status: str
+    components: tuple[PuctInspectionComponent, ...] = ()
+    gaps: tuple[str, ...] = ()
+
+
+@dataclass(frozen=True, slots=True)
+class PuctInspectionNode:
+    node_id: int
+    state_key: str
+    decision_key: str
+    observation: str
+    kind: str
+    actor_seat: int | None
+    boundary_reason: str | None
+    depth: int | None
+    visits: int
+    outgoing_visits: int
+    selections: int
+    valuation: PuctInspectionValuation | None
+
+
+@dataclass(frozen=True, slots=True)
+class PuctInspectionEdge:
+    source_node_id: int
+    target_node_id: int | None
+    kind: str
+    action: ActionIdentity | None = None
+    selection: tuple[int, ...] = ()
+    prior: float | None = None
+    visits: int = 0
+    value_sum: float = 0.0
+    inherited_visits: int = 0
+    exclusion: str | None = None
+    chance_slot: int | None = None
+    probability: float | None = None
+
+    @property
+    def mean_value(self) -> float | None:
+        return self.value_sum / self.visits if self.visits else None
+
+
+@dataclass(frozen=True, slots=True)
+class PuctInspection:
+    root_node_id: int
+    nodes: tuple[PuctInspectionNode, ...]
+    edges: tuple[PuctInspectionEdge, ...]
+    schema_version: int = 2
 
 
 @dataclass(frozen=True, slots=True)
@@ -134,7 +204,7 @@ class PuctEvidence:
     configuration_identity: str
     work: PuctWork = PuctWork()
     chance_nodes: tuple[PuctChanceStatistics, ...] = ()
-    schema_version: int = 1
+    schema_version: int = 2
     outcome: PuctOutcome = PuctOutcome.SEARCHED
     prior_distributions: tuple[PuctPriorEvidence, ...] = ()
     timing: PuctTiming | None = None
@@ -151,3 +221,5 @@ class PuctEvidence:
     peak_retained_engine_states: int | None = None
     principal_variation_stop_reason: PuctPathStop = PuctPathStop.NO_COMPLETED_EDGE
     reproduction_input: str | None = None
+    inspection: PuctInspection | None = None
+    transport: PuctTransport = PuctTransport()

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from collections import deque
 import hashlib
 import math
 import random
@@ -11,7 +12,9 @@ from common.decision import (
     EvaluationStatus, PolicyRequest, PolicySourceIdentity, SearchResult, SearchValue, StateValuation, ValuedCandidate,
 )
 from common.decision.puct import (
-    PuctChanceStatistics, PuctConvergence, PuctEdgeStatistics, PuctEvidence, PuctOutcome, PuctPathStep, PuctPathStop,
+    PuctChanceStatistics, PuctConvergence, PuctEdgeStatistics, PuctEvidence,
+    PuctInspection, PuctInspectionComponent, PuctInspectionEdge, PuctInspectionNode,
+    PuctInspectionValuation, PuctOutcome, PuctPathStep, PuctPathStop,
     PuctPriorEvidence,
 )
 from common.decision.turn import (ChancePlan, NodeKind, ProviderCompletion, SearchContractError,
@@ -21,6 +24,7 @@ from common.decision.action_policy import admissible_actions
 from common.ledger.policy import LedgerPolicyModel
 from common.ledger.search import UniformPolicyModel
 from common.ledger.decision import evaluator_semantics_identity
+from common.observation import ObservationRecord
 from .budget import PreparationExhausted, SearchBudget, SearchBudgetExhausted, SearchCancelled
 from .priors import prepare_ledger_candidates
 from .workers import BoundedWorkers, WorkItem, WorkResult
@@ -85,8 +89,11 @@ class PuctSearch:
     identity = "bounded-puct-v1:" + evaluator_semantics_identity(tuple(
         Path(__file__).with_name(name) for name in ("search.py", "budget.py", "priors.py", "workers.py")))
 
-    def __init__(self):
-        self.previous = None
+    def __init__(self, *, capture_tree: bool = False):
+        if type(capture_tree) is not bool:
+            raise ValueError("capture_tree must be a boolean")
+        self.previous: _Session | None = None
+        self.capture_tree = capture_tree
 
     def close(self):
         if self.previous is not None:
@@ -102,7 +109,9 @@ class PuctSearch:
             worker_backed = False
         else:
             raise TypeError("PUCT provider does not satisfy a supported provider contract")
-        session = _Session(request, evaluator, policy_model, provider, configuration)
+        session = _Session(
+            request, evaluator, policy_model, provider, configuration,
+            capture_tree=self.capture_tree)
         session.worker_backed = worker_backed
         previous = self.previous
         self.previous = None
@@ -126,7 +135,7 @@ class PuctSearch:
 
 
 class _Session:
-    def __init__(self, request, evaluator, policy_model, provider, configuration):
+    def __init__(self, request, evaluator, policy_model, provider, configuration, *, capture_tree):
         self.request, self.evaluator, self.policy_model = request, evaluator, policy_model
         self.provider, self.configuration = provider, configuration
         self.budget = SearchBudget(configuration, execution_guard=request.execution_guard)
@@ -142,6 +151,7 @@ class _Session:
         self.reuse_reason = "fresh_requested"
         self.convergence = []
         self.worker_backed = False
+        self.capture_tree = capture_tree
 
     def inherit(self, previous):
         compatibility = lambda session: (
@@ -594,7 +604,70 @@ class _Session:
                               prior_distributions=tuple(PuctPriorEvidence(
                                   node.state.observation.decision_key, node.distribution,
                                   node.preparation_limited) for node in self.nodes.values()
-                                  if node.distribution is not None)))
+                                  if node.distribution is not None),
+                              inspection=(self.inspection() if self.capture_tree else None),
+                              transport=self.workers.transport))
+
+    def inspection(self):
+        ordered = tuple(self.nodes.values())
+        node_ids = {id(node): index for index, node in enumerate(ordered)}
+        depths = {id(self.root): 0}
+        frontier = deque((self.root,))
+        while frontier:
+            current = frontier.popleft()
+            children = [edge.child for edge in current.edges if edge.child is not None]
+            children.extend(current.samples.values())
+            for child in children:
+                depth = depths[id(current)] + 1
+                if id(child) not in depths or depth < depths[id(child)]:
+                    depths[id(child)] = depth
+                    frontier.append(child)
+        incoming_visits = {id(node): 0 for node in ordered}
+        for node in ordered:
+            for edge in node.edges:
+                if edge.child is not None:
+                    incoming_visits[id(edge.child)] += edge.visits
+            for slot, child in node.samples.items():
+                incoming_visits[id(child)] += node.sample_visits.get(slot, 0)
+        incoming_visits[id(self.root)] = self.completed
+        nodes = []
+        edges = []
+        for node in ordered:
+            valuation = None
+            if node.valuation is not None:
+                valuation = PuctInspectionValuation(
+                    node.valuation.total, node.valuation.status.value,
+                    tuple(PuctInspectionComponent(
+                        item.key, item.activation, item.coefficient, item.value)
+                          for item in node.valuation.components),
+                    tuple(node.valuation.gaps))
+            outgoing_visits = (sum(node.sample_visits.values())
+                               if node.chance_plan is not None
+                               else sum(edge.visits for edge in node.edges))
+            nodes.append(PuctInspectionNode(
+                node_ids[id(node)], str(node.state.state_key),
+                node.state.observation.decision_key,
+                ObservationRecord.from_state(node.state.observation).dumps(),
+                node.state.kind.value, node.state.actor_seat,
+                (None if node.state.boundary_reason is None
+                 else node.state.boundary_reason.value),
+                depths.get(id(node)), incoming_visits[id(node)], outgoing_visits,
+                node.selections, valuation))
+            for edge in node.edges:
+                edges.append(PuctInspectionEdge(
+                    node_ids[id(node)],
+                    None if edge.child is None else node_ids[id(edge.child)],
+                    "action", edge.action.identity, tuple(edge.action.selection),
+                    edge.prior, edge.visits, edge.total, edge.inherited_visits,
+                    edge.exclusion))
+            if node.chance_plan is not None:
+                for slot, child in sorted(node.samples.items()):
+                    edges.append(PuctInspectionEdge(
+                        node_ids[id(node)], node_ids[id(child)], "chance",
+                        visits=node.sample_visits.get(slot, 0),
+                        chance_slot=slot,
+                        probability=node.chance_plan.probabilities[slot]))
+        return PuctInspection(node_ids[id(self.root)], tuple(nodes), tuple(edges))
 
     def variation(self):
         variation, seen = [], set()

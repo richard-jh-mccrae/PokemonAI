@@ -3,10 +3,12 @@ from __future__ import annotations
 
 import json
 import re
-from dataclasses import dataclass
+from copy import deepcopy
+from dataclasses import dataclass, field
+import hashlib
 from pathlib import Path
 
-from meta_tracker.parse import load_replay
+from meta_tracker.parse import extract_decks, load_replay
 from train.blunder.store import jsonl_files
 
 
@@ -53,6 +55,44 @@ class SavedMoment:
     obs_recorded: bool = False
 
 
+@dataclass(frozen=True, slots=True)
+class SavedEpisode:
+    episode_id: int
+    source_path: Path
+    source_sha256: str
+    decks: tuple[tuple[int, ...], tuple[int, ...]]
+    replay: dict = field(repr=False)
+
+    def agent_observation(self, step: int, seat: int) -> dict:
+        if step < 0 or seat not in (0, 1):
+            raise LookupError(f"invalid Episode observation coordinates: step={step}, seat={seat}")
+        try:
+            observation = self.replay["steps"][step][seat]["observation"]
+        except (IndexError, KeyError, TypeError) as exc:
+            raise LookupError(
+                f"Episode {self.episode_id} has no agent observation at step {step}, seat {seat}"
+            ) from exc
+        if not isinstance(observation, dict):
+            raise LookupError(
+                f"Episode {self.episode_id} has no agent observation at step {step}, seat {seat}")
+        return deepcopy(observation)
+
+
+def load_saved_episode(path: Path) -> SavedEpisode:
+    source_path = Path(path)
+    source = source_path.read_bytes()
+    replay = load_replay(source_path)
+    episode_id = (replay.get("info") or {}).get("EpisodeId")
+    if not isinstance(episode_id, int):
+        raise ValueError(f"{source_path} has no EpisodeId")
+    decks = extract_decks(replay)
+    if len(decks) != 2:
+        raise ValueError(f"{source_path} does not contain two decks")
+    return SavedEpisode(
+        episode_id, source_path, hashlib.sha256(source).hexdigest(),
+        (tuple(decks[0]), tuple(decks[1])), replay)
+
+
 def _film(replay: dict) -> list:
     steps = replay.get("steps") or []
     if not steps or not steps[0]:
@@ -74,8 +114,12 @@ def _corrections_in(path: Path):
 def _from_correction(record: dict, path: Path) -> SavedMoment:
     decision = record.get("decision") or {}
     current = decision.get("current") or {}
+    episode_id = record.get("episode_id")
+    frame = decision.get("frame")
+    if not isinstance(episode_id, int) or not isinstance(frame, int):
+        raise ValueError("Correction has no Episode/frame coordinates")
     return SavedMoment(
-        episode_id=record.get("episode_id"), frame=decision.get("frame"), current=current,
+        episode_id=episode_id, frame=frame, current=current,
         source="Correction log — its embedded full-information snapshot", source_path=path,
         turn=decision.get("turn"), asked_seat=current.get("yourIndex", record.get("seat")),
         chosen=record.get("chosen"), correction=record, obs_recorded=bool(record.get("obs")),
@@ -90,13 +134,14 @@ def _from_film(replay: dict, path: Path, episode_id: int, frame: int) -> SavedMo
         return None
     entry = film[frame] or {}
     current = entry.get("current") or {}
-    select = entry.get("select") if isinstance(entry.get("select"), dict) else {}
-    following = film[frame + 1] if frame + 1 < len(film) else None
+    raw_select = entry.get("select")
+    select: dict = raw_select if isinstance(raw_select, dict) else {}
+    following: dict = (film[frame + 1] or {}) if frame + 1 < len(film) else {}
     return SavedMoment(
         episode_id=episode_id, frame=frame, current=current,
         source=f"Replay film, frame {frame} of {len(film)} — full information",
         source_path=path, turn=current.get("turn"), asked_seat=current.get("yourIndex"),
-        chosen=(following or {}).get("selected"), obs_recorded=bool((following or {}).get("obs")),
+        chosen=following.get("selected"), obs_recorded=bool(following.get("obs")),
         select_context=select.get("context"), select_type=select.get("type"),
         options=select.get("option") or [],
     )
@@ -105,7 +150,8 @@ def _from_film(replay: dict, path: Path, episode_id: int, frame: int) -> SavedMo
 def _from_fixture(record: dict, path: Path, episode_id: int, frame: int) -> SavedMoment:
     obs = record.get("obs") or {}
     current = obs.get("current") or {}
-    select = obs.get("select") if isinstance(obs.get("select"), dict) else {}
+    raw_select = obs.get("select")
+    select: dict = raw_select if isinstance(raw_select, dict) else {}
     correction = ({"correct": record.get("correct"), "rationale": record.get("note")}
                   if record.get("correct") is not None or record.get("note") else None)
     return SavedMoment(
