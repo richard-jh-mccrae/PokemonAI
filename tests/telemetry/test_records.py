@@ -39,7 +39,9 @@ from common.decision import (
 from common.observation import ObservationStateBuilder, TransitionTrace, VisibleHand
 from common.options import LegalAction
 from common.ledger import BehaviorIdentity, EvaluationModel, PrizeMap
-from common.ledger.evidence import LedgerCandidateEvidence, LedgerEvidence
+from common.ledger.evidence import (
+    LedgerCandidateEvidence, LedgerEvidence, LedgerPolicyDecisionEvidence,
+)
 from common.telemetry import (
     MAX_FRAME_BYTES,
     RecordAssembler,
@@ -235,6 +237,40 @@ def test_decision_record_keeps_the_complete_typed_candidate_roster():
     assert record["behavior_identity"]["provider"] == "provider"
     assert record["timing"]["decision_seconds"] == 0.125
     assert record["completeness"] == "complete"
+
+
+def test_action_ids_join_on_exact_identity_and_selection():
+    state = ObservationStateBuilder().root(printout())
+    scale = ValueScale("ledger-worth", 1)
+    actions = (
+        Action(ActionIdentity("card", ("same",)), (0,)),
+        Action(ActionIdentity("card", ("same",)), (1,)),
+    )
+    state = replace(state, legal_actions=actions)
+    baseline = StateValuation(
+        state.position_key, 0.0, scale, state.seat, "ledger-linear-v1")
+    candidates = tuple(ValuedCandidate(
+        action, DecisionDelta(float(index), scale),
+        CandidateDisposition.CONTINUES_TURN, EvaluationStatus.COMPLETE)
+        for index, action in enumerate(actions))
+    result = typed_ledger_result(state, baseline, candidates, actions[1])
+    result = replace(result, resolution=PolicySelection(
+        result.roster.identities[1],
+        LedgerPolicyDecisionEvidence(
+            1, result.roster.identities[1], "best_delta")))
+
+    record = build_decision_record(
+        result, state, episode_key="exact-choice", decision_index=0,
+        parent_decision_id=None, selection=(1,),
+        evaluation_model=EvaluationModel.build(),
+        compute_configuration=ComputeConfiguration(),
+        provider_configuration=_provider_configuration(),
+        provenance={"agent": "test", "artifact": "fixture", "code": "abc",
+                    "data": {}}, decision_seconds=0.0)
+
+    assert len({action["id"] for action in record["actions"]}) == 2
+    assert record["decision"]["chosen_action_id"] == record["actions"][1]["id"]
+    assert record["decision"]["policy_reason"] == "best_delta"
 
 
 @pytest.mark.parametrize(("stop_reason", "expected"), (

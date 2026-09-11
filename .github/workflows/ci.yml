@@ -266,6 +266,8 @@ jobs:
           src/common/decision/outcomes.py src/common/decision/statistics.py
           src/common/decision/components.py src/common/decision/results.py
           src/common/decision/contracts.py src/common/decision/coordinator.py
+          src/common/decision/compatibility.py src/common/ledger/evidence.py
+          src/common/puct/policy.py
           tests/decision/test_neutral_contract_search.py
 
   test-cgpy:

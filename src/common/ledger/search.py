@@ -10,13 +10,20 @@ from pathlib import Path
 from common.decision import (
     ActionChoiceIdentity,
     BudgetController,
+    CandidateDisposition,
+    CandidateResult,
+    CandidateRoster,
     CollaboratorKind,
     ComponentContract,
     ContinuationOpportunity,
     ContinuationResult,
     DecisionDelta,
+    DecisionDeltaStatistic,
     DecisionDeadlineExceeded,
+    DecisionFailure,
+    DecisionFailureStage,
     DecisionPolicyRequest,
+    DecisionReason,
     EvaluationStatus,
     EvaluationRequest,
     FailSafePolicyRequest,
@@ -26,6 +33,12 @@ from common.decision import (
     PolicyModelRequest,
     PolicySourceIdentity,
     RealizedOutcome,
+    SearchCoverage,
+    SearchOutcome,
+    SearchOutcomeStatus,
+    SearchResult,
+    SearchTermination,
+    StatisticCoverage,
     StateValuation,
     validate_state_valuation,
     neutral_lottery_choice,
@@ -34,20 +47,6 @@ from common.decision import (
 from common.decision.compatibility import (
     DECISION_DELTA_STATISTIC,
     legacy_roster_from_policy_request,
-    policy_model_request_from_legacy,
-    search_result_from_legacy,
-)
-from common.decision.compatibility_contracts import (
-    CandidateDisposition,
-    CandidateRoster,
-    DecisionChoice,
-    DecisionFailure,
-    DecisionFailureStage,
-    DecisionReason,
-    FailSafeRequest,
-    SearchResult as LegacySearchResult,
-    SearchValue,
-    ValuedCandidate,
 )
 from common.observation.provider import provider_payload
 from common.strategy.context import _MAIN
@@ -145,6 +144,7 @@ class LedgerOnePlySearch:
     contract = ComponentContract(
         identity,
         "SearchConfiguration",
+        produced_statistics=frozenset((DECISION_DELTA_STATISTIC,)),
         required_collaborators=frozenset(required_collaborators),
     )
 
@@ -318,24 +318,16 @@ class LedgerOnePlySearch:
         if (cached_identity is None and len(actions) == 1
                 and actions[0].identity.kind == "end"
                 and isinstance(provider, TransitionProviderSource)):
-            candidate = ValuedCandidate(
-                actions[0], None, CandidateDisposition.FORCED,
-                EvaluationStatus.UNAVAILABLE,
-                gaps=("forced action not priced",))
-            roster = CandidateRoster.from_legal_actions(
-                actions, (candidate,), forced=True)
-            roster, distribution = _apply_policy(
-                board, roster, policy_source, policy_model)
-            legacy = LegacySearchResult(
-                baseline,
-                roster,
-                nodes_visited=budget.nodes,
-                stop_reason=budget.stop_reason,
-                frontier=tuple(budget.frontier),
-            )
-            return search_result_from_legacy(
-                request, legacy, "ledger",
-                evidence=_ledger_evidence(legacy, distribution))
+            roster = CandidateRoster(actions, board.decision_key, forced=True)
+            candidates = (CandidateResult(
+                roster.identities[0], CandidateDisposition.FORCED,
+                delta_gaps=("forced action not priced",)),)
+            distribution = _apply_policy(
+                board, roster, candidates, policy_source, policy_model)
+            evidence_candidates = (LedgerCandidateEvidence(roster.identities[0]),)
+            return _ledger_result(
+                baseline, roster, candidates, budget.nodes, budget.stop_reason,
+                tuple(budget.frontier), distribution, evidence_candidates)
         try:
             check_guard()
             provider = provider.open() if isinstance(provider, TransitionProviderSource) else provider
@@ -362,6 +354,7 @@ class LedgerOnePlySearch:
         forced = (cached_identity is not None
                   or (_MAIN if context_value is None else int(context_value)) != _MAIN)
         candidates = []
+        evidence_candidates = []
         self._last_continuation_policies = {
             price.action.identity: price.continuation_policy for price in prices}
         for price in prices:
@@ -373,7 +366,9 @@ class LedgerOnePlySearch:
             components = value_components(price.footprint.contributions)
             status = (EvaluationStatus.UNAVAILABLE if rejected_by_cache else price.status)
             delta = (None if status is EvaluationStatus.UNAVAILABLE else
-                     DecisionDelta(price.swing, baseline.scale, components))
+                     DecisionDelta(
+                         price.swing, baseline.scale, components,
+                         perspective=baseline.perspective))
             footprint = price.footprint
             continuation = ContinuationResult(
                 footprint.state_delta,
@@ -393,76 +388,100 @@ class LedgerOnePlySearch:
             successors = price.successors
             if any(successor.valuation.scale != baseline.scale for successor in successors):
                 raise ValueError("search cannot mix value scales")
-            candidates.append(ValuedCandidate(
-                price.action, delta, disposition, status,
-                (() if rejected_by_cache else successors),
-                ((*price.gaps, "not selected by cached compound policy")
-                 if rejected_by_cache else price.gaps), continuation,
-                None if delta is None else SearchValue(
-                    baseline.total + delta.total, baseline.scale),
-                None,
+            choice = ActionChoiceIdentity.from_action(price.action)
+            candidates.append(CandidateResult(
+                choice=choice,
+                disposition=disposition,
+                delta=delta,
+                delta_status=status,
+                delta_gaps=(
+                    (*price.gaps, "not selected by cached compound policy")
+                    if rejected_by_cache else price.gaps),
+                successors=(() if rejected_by_cache else successors),
+                continuation=(None if status is EvaluationStatus.UNAVAILABLE
+                              else continuation),
+                continuation_status=status,
+                continuation_gaps=(price.gaps if status is not EvaluationStatus.UNAVAILABLE
+                                   else ()),
+            ))
+            evidence_candidates.append(LedgerCandidateEvidence(
+                choice,
                 (-sum(component.value for component in continuation.policy_components
                       if component.key == "action.evolution_target_commitment"),
                  *(() if price.prize_map is None else price.prize_map.plan_rank_key())),
                 price.prize_map))
         legal_actions = (actions if getattr(provider, "requires_observation_roster", False)
                          else tuple(price.action for price in prices))
-        priced_roster = CandidateRoster.from_legal_actions(
-            legal_actions, tuple(candidates), forced=forced)
-        if not priced_roster.candidates:
-            legacy = LegacySearchResult(
-                baseline,
-                priced_roster,
-                nodes_visited=budget.nodes,
-                stop_reason=("cached_continuation"
-                             if cached_identity is not None else budget.stop_reason),
-                frontier=tuple(budget.frontier),
-            )
-            return search_result_from_legacy(
-                request, legacy, "ledger", evidence=_ledger_evidence(legacy, None))
-        priced_roster, distribution = _apply_policy(
-            board, priced_roster, policy_source, policy_model)
-        legacy = LegacySearchResult(
-            baseline,
-            priced_roster,
-            nodes_visited=budget.nodes,
-            stop_reason=("cached_continuation"
-                         if cached_identity is not None else budget.stop_reason),
-            frontier=tuple(budget.frontier),
-        )
-        return search_result_from_legacy(
-            request, legacy, "ledger",
-            evidence=_ledger_evidence(legacy, distribution))
+        priced_roster = CandidateRoster(
+            legal_actions, board.decision_key, forced=forced)
+        stop_reason = ("cached_continuation"
+                       if cached_identity is not None else budget.stop_reason)
+        if not priced_roster.actions:
+            return _ledger_result(
+                baseline, priced_roster, tuple(candidates), budget.nodes,
+                stop_reason, tuple(budget.frontier), None,
+                tuple(evidence_candidates))
+        distribution = _apply_policy(
+            board, priced_roster, tuple(candidates), policy_source, policy_model)
+        return _ledger_result(
+            baseline, priced_roster, tuple(candidates), budget.nodes,
+            stop_reason, tuple(budget.frontier), distribution,
+            tuple(evidence_candidates))
 
 
-def _apply_policy(board, roster, source, policy_model):
-    distribution = policy_model.priors(
-        policy_model_request_from_legacy(board, roster, source))
+def _apply_policy(board, roster, candidates, source, policy_model):
+    request = PolicyModelRequest(board, roster, candidates, (), source)
+    distribution = policy_model.priors(request)
     if not isinstance(distribution, PolicyDistribution):
         raise TypeError("policy model must return a Policy Distribution")
-    expected = tuple(ActionChoiceIdentity.from_action(candidate.action)
-                     for candidate in roster.candidates)
+    expected = roster.identities
     actual = tuple(item.choice for item in distribution.actions)
     if actual != expected:
         raise ValueError("policy distribution does not match priced candidates")
-    priors = tuple(item.final_prior for item in distribution.actions)
-    return roster.with_priors(priors), distribution
+    return distribution
 
 
-def _ledger_evidence(result, distribution):
+def _ledger_evidence(nodes_visited, frontier, candidates, distribution):
     return LedgerEvidence(
         1,
-        result.nodes_visited,
-        tuple(str(item) for item in result.frontier),
+        nodes_visited,
+        tuple(str(item) for item in frontier),
         distribution,
-        tuple(LedgerCandidateEvidence(
-            choice,
-            tuple(candidate.policy_tie_break),
-            candidate.policy_evidence,
-        ) for choice, candidate in zip(
-            (ActionChoiceIdentity.from_action(item.action)
-             for item in result.roster.candidates),
-            result.roster.candidates)),
+        tuple(candidates),
+    )
+
+
+def _ledger_result(
+        baseline, roster, candidates, nodes_visited, stop_reason, frontier,
+        distribution, evidence_candidates, failure=None):
+    statistics = tuple(DecisionDeltaStatistic(
+        candidate.choice, candidate.delta, candidate.delta_status)
+        for candidate in candidates)
+    covered = frozenset(
+        candidate.choice for candidate in candidates if candidate.delta is not None)
+    if failure is not None:
+        status = SearchOutcomeStatus.HARD_FAILURE
+    elif stop_reason in {"node_budget", "time_budget"}:
+        status = (SearchOutcomeStatus.BUDGET_LIMITED if covered else
+                  SearchOutcomeStatus.INSUFFICIENT_INITIALIZATION)
+    elif not roster.forced and not covered:
+        status = SearchOutcomeStatus.INSUFFICIENT_INITIALIZATION
+    else:
+        status = SearchOutcomeStatus.COMPLETE
+    return SearchResult(
+        baseline,
+        roster,
+        candidates,
+        SearchOutcome(
+            status,
+            SearchCoverage((StatisticCoverage(
+                DECISION_DELTA_STATISTIC, covered),)),
+            SearchTermination("ledger", stop_reason or status.value, 1),
+            failure,
+        ),
+        statistics,
+        _ledger_evidence(
+            nodes_visited, frontier, evidence_candidates, distribution),
     )
 
 
@@ -737,7 +756,9 @@ def preservation_frontier(candidates, noise_tolerance=0.0):
 class GreedyDecisionPolicy:
     identity = f"ledger-spend-then-end-v1:{SEARCH_SEMANTICS_IDENTITY}"
     required_statistics = (DECISION_DELTA_STATISTIC,)
-    contract = ComponentContract(identity, "PolicyConfiguration")
+    contract = ComponentContract(
+        identity, "PolicyConfiguration",
+        required_statistics=frozenset(required_statistics))
 
     def choose(self, request: DecisionPolicyRequest):
         return self.choose_with_evidence(request).choice
@@ -1151,63 +1172,54 @@ class FailSafeDecisionPolicy:
     }
 
     def choose(self, request: FailSafePolicyRequest):
-        roster = CandidateRoster(tuple(
-            ValuedCandidate(
-                action,
-                candidate.delta,
-                candidate.disposition,
-                candidate.delta_status,
-                candidate.successors,
-                candidate.delta_gaps,
-                candidate.continuation,
-            )
-            for action, candidate in zip(request.roster.actions, request.candidates)
-        ))
+        return self.choose_with_evidence(request).choice
+
+    def choose_with_evidence(self, request: FailSafePolicyRequest):
         state = request.observation
         failure = request.failure
         payload = (None if request.context is None
                    else provider_payload(request.context))
         selection = (() if payload is None
                      else tuple(safe_legal_selection(payload)))
-        candidate = next((item for item in roster.candidates
-                          if selection in getattr(item.action, "equivalent_selections", ())), None)
-        if candidate is None:
-            choices = tuple(ActionChoiceIdentity.from_action(item.action)
-                            for item in roster.candidates)
-            choice = neutral_lottery_choice(choices, request.configuration)
-            return choice
-        return ActionChoiceIdentity.from_action(candidate.action)
+        action = next((item for item in request.roster.actions
+                       if selection in getattr(item, "equivalent_selections", ())), None)
+        if action is None:
+            choice = neutral_lottery_choice(
+                request.roster.identities, request.configuration)
+            return LedgerPolicyDecisionEvidence(
+                1, choice, self._REASONS[failure.stage].value)
+        return LedgerPolicyDecisionEvidence(
+            1, ActionChoiceIdentity.from_action(action),
+            self._REASONS[failure.stage].value)
 
 
 def unavailable_ledger_result(request, failure):
     from .decision import LEDGER_VALUE_SCALE, LedgerValueEvaluator
 
     root = request.state
-    fail_safe = isinstance(root, FailSafeRequest)
-    board = None if fail_safe else getattr(root, "observation", root)
+    board = getattr(root, "observation", root)
     baseline = StateValuation(
-        root.state_key if fail_safe else board.position_key,
-        0.0, LEDGER_VALUE_SCALE, root.seat if fail_safe else board.seat,
+        board.position_key,
+        0.0, LEDGER_VALUE_SCALE, board.seat,
         LedgerValueEvaluator.identity, status=EvaluationStatus.UNAVAILABLE,
         gaps=(f"{failure.stage.value}:{failure.error_type}",),
         evaluation_model_identity=request.evaluation_model.identity,
     )
     actions = tuple(root.legal_actions)
     forced = len(actions) == 1
-    candidates = tuple(ValuedCandidate(
-        action, None,
+    roster = CandidateRoster(actions, board.decision_key, forced=forced)
+    candidates = tuple(CandidateResult(
+        choice,
         CandidateDisposition.FORCED if forced else
         CandidateDisposition.ENDS_TURN if action.identity.kind == "end" else
         CandidateDisposition.CONTINUES_TURN,
-        EvaluationStatus.UNAVAILABLE,
-        gaps=baseline.gaps,
-    ) for action in actions)
-    legacy = LegacySearchResult(
-        baseline, CandidateRoster.from_legal_actions(actions, candidates, forced=forced),
-        stop_reason=failure.stage.value,
-        failure=failure)
-    return search_result_from_legacy(
-        request, legacy, "ledger", evidence=_ledger_evidence(legacy, None))
+        delta_gaps=baseline.gaps,
+    ) for action, choice in zip(actions, roster.identities))
+    evidence_candidates = tuple(LedgerCandidateEvidence(choice)
+                                for choice in roster.identities)
+    return _ledger_result(
+        baseline, roster, candidates, 0, failure.stage.value, (), None,
+        evidence_candidates, failure)
 
 
 __all__ = ("FailSafeDecisionPolicy", "GreedyDecisionPolicy", "LedgerOnePlySearch",

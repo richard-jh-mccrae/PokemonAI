@@ -1,8 +1,10 @@
 from __future__ import annotations
 
 from common.algebra import Actor, Chance, Deterministic, Terminal, WeightedEdge
-from common.decision import DecisionDelta, SearchConfiguration
-from common.decision.compatibility_contracts import CandidateDisposition, ValuedCandidate
+from common.decision import (
+    ActionChoiceIdentity, CandidateDisposition, CandidateResult, DecisionDelta,
+    SearchConfiguration,
+)
 from common.decision.action_policy import admissible_actions
 from common.decision.turn import NodeKind, SearchContractError
 from common.ledger.decision import ledger_valuation_from_state
@@ -20,10 +22,14 @@ def prepare_ledger_candidates(session, node, actions):
         state, node.state.observation, node.valuation.total, bridge, session.request.evaluation_model,
         compute=compute, valuation_fn=lambda board: ledger_valuation_from_state(session.evaluate(board)),
         state_valuation_fn=session.evaluate)
-    return tuple(ValuedCandidate(
-        price.action, DecisionDelta(price.swing, node.valuation.scale),
-        CandidateDisposition.ENDS_TURN if price.ends_turn else CandidateDisposition.CONTINUES_TURN,
-        price.status, gaps=price.gaps) for price in prices)
+    return tuple(CandidateResult(
+        ActionChoiceIdentity.from_action(price.action),
+        CandidateDisposition.ENDS_TURN if price.ends_turn
+        else CandidateDisposition.CONTINUES_TURN,
+        DecisionDelta(
+            price.swing, node.valuation.scale,
+            perspective=node.valuation.perspective),
+        price.status, delta_gaps=price.gaps) for price in prices)
 
 
 class _PreviewBridge:

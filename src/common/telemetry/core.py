@@ -121,7 +121,8 @@ def _validate_action(value) -> None:
             or not all(isinstance(item, int) and not isinstance(item, bool)
                        for item in value["selection"]):
         raise ValueError("invalid action")
-    if value["id"] != _identifier(identity):
+    if value["id"] != _identifier({
+            "identity": identity, "selection": value["selection"]}):
         raise ValueError("action id mismatch")
 
 
@@ -823,8 +824,19 @@ def _action(action) -> dict:
     else:
         wire_identity = _allowed(identity)
     selection = list(getattr(action, "selection", ()))
-    return {"id": _identifier(wire_identity),
+    return {"id": _identifier({"identity": wire_identity, "selection": selection}),
             "identity": wire_identity, "selection": selection}
+
+
+def _decision_reason(resolution) -> str:
+    evidence = getattr(resolution, "evidence", None)
+    reason = getattr(evidence, "reason", None)
+    if reason is not None:
+        return str(reason)
+    failure_stage = getattr(resolution, "failure_stage", None)
+    if failure_stage is not None:
+        return f"fail_safe_{failure_stage.value}_failure"
+    return type(resolution).__name__
 
 
 def _continuation(value) -> dict | None:
@@ -926,8 +938,8 @@ def build_decision_record(result, state, *, episode_key: str, decision_index: in
         raise ValueError("telemetry legal actions differ from the proven candidate roster")
     actions = [_action(action) for action in legal_actions]
     action_ids = {
-        tuple(getattr(action, "selection", ())): saved["id"]
-        for action, saved in zip(legal_actions, actions)
+        choice: saved["id"]
+        for choice, saved in zip(result.roster.identities, actions)
     }
     from common.ledger.evidence import LedgerEvidence
 
@@ -941,7 +953,7 @@ def build_decision_record(result, state, *, episode_key: str, decision_index: in
     for index, (action, candidate) in enumerate(zip(
             result.roster.actions, result.search.candidates)):
         delta = candidate.delta
-        action_id = action_ids.get(tuple(action.selection))
+        action_id = action_ids.get(candidate.choice)
         if action_id is None:
             raise ValueError("candidate cannot join the ObservationState legal action table")
         algorithm = evidence_by_choice[candidate.choice]
@@ -964,7 +976,7 @@ def build_decision_record(result, state, *, episode_key: str, decision_index: in
     chosen = result.chosen
     if chosen is None:
         raise ValueError("Ledger decision requires a chosen candidate")
-    chosen_id = action_ids[tuple(chosen.selection)]
+    chosen_id = action_ids[result.resolution.choice]
     chosen_index = result.roster.identities.index(
         result.resolution.choice)
     chosen_candidate = result.search.candidates[chosen_index]
@@ -988,7 +1000,7 @@ def build_decision_record(result, state, *, episode_key: str, decision_index: in
             "decision_key": state.decision_key,
             "chosen_action_id": chosen_id,
             "selection": list(selection),
-            "policy_reason": type(result.resolution).__name__,
+            "policy_reason": _decision_reason(result.resolution),
         },
         "observation": _observation(state),
         "opponent_snapshot": _opponent_snapshot(opponent_snapshot),
@@ -1051,8 +1063,8 @@ def build_puct_decision_record(result, state, *, episode_key: str, decision_inde
         raise ValueError("telemetry legal actions differ from the proven candidate roster")
     actions = [_action(action) for action in legal_actions]
     action_ids = {
-        tuple(getattr(action, "selection", ())): saved["id"]
-        for action, saved in zip(legal_actions, actions)
+        choice: saved["id"]
+        for choice, saved in zip(result.roster.identities, actions)
     }
     candidates = []
     root_distribution = evidence.prior_distributions[0].distribution
@@ -1061,7 +1073,7 @@ def build_puct_decision_record(result, state, *, episode_key: str, decision_inde
             result.roster.actions, result.search.candidates,
             evidence.root_edges, priors):
         statistics = edge.statistics
-        action_id = action_ids.get(tuple(action.selection))
+        action_id = action_ids.get(candidate.choice)
         if action_id is None:
             raise ValueError("candidate cannot join the ObservationState legal action table")
         candidates.append({
@@ -1080,7 +1092,7 @@ def build_puct_decision_record(result, state, *, episode_key: str, decision_inde
     chosen = result.chosen
     if chosen is None:
         raise ValueError("PUCT decision requires a chosen candidate")
-    chosen_id = action_ids[tuple(chosen.selection)]
+    chosen_id = action_ids[result.resolution.choice]
     wire_evidence = dataclasses.asdict(evidence)
     wire_evidence.pop("reproduction_input", None)
     wire_evidence.pop("inspection", None)
@@ -1148,6 +1160,8 @@ def build_pregame_record(decision, state, *, episode_key: str, decision_index: i
         raise ValueError("pregame selection is not in the legal action table")
     chosen = actions[chosen_index]
     chosen["selection"] = list(decision.chosen)
+    chosen["id"] = _identifier({
+        "identity": chosen["identity"], "selection": chosen["selection"]})
     policy_action = _action(decision.action)
     record = {
         "schema": SCHEMA,

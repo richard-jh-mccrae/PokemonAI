@@ -65,15 +65,21 @@ class CollaboratorKind(str, Enum):
 @dataclass(frozen=True, slots=True)
 class ReuseProvenance:
     behavior_identity: str
+    provider_identity: str
+    evaluator_identity: str
+    policy_model_identity: str
     evaluation_model_identity: str
     value_scale_identity: str
     root_decision_key: str
     configuration_identity: str
+    horizon_identity: str
 
     def __post_init__(self) -> None:
-        if not all((self.behavior_identity, self.evaluation_model_identity,
+        if not all((self.behavior_identity, self.provider_identity,
+                    self.evaluator_identity, self.policy_model_identity,
+                    self.evaluation_model_identity,
                     self.value_scale_identity, self.root_decision_key,
-                    self.configuration_identity)):
+                    self.configuration_identity, self.horizon_identity)):
             raise ValueError("reuse provenance requires every semantic identity")
 
 
@@ -106,8 +112,8 @@ class SearchReuse(Protocol):
 class ComponentContract:
     identity: str
     configuration_identity: str
-    requirements: frozenset[str] = frozenset()
-    capabilities: frozenset[str] = frozenset()
+    required_statistics: frozenset[StatisticIdentity] = frozenset()
+    produced_statistics: frozenset[StatisticIdentity] = frozenset()
     required_collaborators: frozenset[CollaboratorKind] = frozenset()
     optional_collaborators: frozenset[CollaboratorKind] = frozenset()
 
@@ -334,6 +340,8 @@ class FailSafePolicyRequest:
     observation: ObservationState
     roster: CandidateRoster
     candidates: tuple[CandidateResult, ...]
+    outcome: SearchOutcome
+    evidence: SearchEvidence | None
     failure: DecisionFailure
     configuration: IdentifiedConfiguration | str
     context: FailSafeContext | None = None

@@ -11,9 +11,13 @@ from common.decision import (
     ComponentContract,
     DecisionCoordinator,
     DecisionDelta,
+    DecisionDeltaStatistic,
+    DecisionFailureStage,
     DecisionPolicyRequest,
     EvaluationRequest,
     EvaluationStatus,
+    FailSafePolicyRequest,
+    FailSafeSelection,
     PolicySelection,
     SearchCoverage,
     SearchOutcome,
@@ -94,6 +98,8 @@ class ContractSearch:
                 coverage,
                 SearchTermination("contract-search", "complete", 1),
             ),
+            statistics=(DecisionDeltaStatistic(
+                choice, candidates[0].delta, EvaluationStatus.COMPLETE, DELTA),),
         )
 
 
@@ -188,3 +194,47 @@ def test_coordinator_rejects_a_component_configuration_mismatch() -> None:
             decision_policy=Policy(),
             policy_configuration="contract-policy-config-v1",
         )
+
+
+def test_coordinator_rejects_static_statistic_incompatibility() -> None:
+    class ContractedSearch(ContractSearch):
+        contract = ComponentContract(
+            ContractSearch.identity, "contract-search-config-v1")
+
+    class ContractedPolicy(Policy):
+        contract = ComponentContract(
+            Policy.identity, "contract-policy-config-v1",
+            required_statistics=frozenset((DELTA,)))
+
+    with pytest.raises(ValueError, match="cannot produce"):
+        DecisionCoordinator(
+            evaluator=Evaluator(), evaluation_model=Model(), search=ContractedSearch(),
+            search_configuration="contract-search-config-v1",
+            decision_policy=ContractedPolicy(),
+            policy_configuration="contract-policy-config-v1")
+
+
+def test_policy_failure_reaches_fail_safe_as_non_permitting_outcome() -> None:
+    class RaisingPolicy(Policy):
+        def choose(self, request: DecisionPolicyRequest) -> ActionChoiceIdentity:
+            raise RuntimeError("policy failed")
+
+    class FailSafe:
+        identity = "contract-fail-safe-v1"
+
+        def choose(self, request: FailSafePolicyRequest) -> ActionChoiceIdentity:
+            assert request.outcome.status is SearchOutcomeStatus.HARD_FAILURE
+            assert not request.outcome.permits_action
+            assert request.failure.stage is DecisionFailureStage.POLICY
+            return request.roster.identities[0]
+
+    result = DecisionCoordinator(
+        evaluator=Evaluator(), evaluation_model=Model(), search=ContractSearch(),
+        search_configuration="contract-search-config-v1",
+        decision_policy=RaisingPolicy(),
+        policy_configuration="contract-policy-config-v1",
+        fail_safe_policy=FailSafe(),
+    ).decide(OBSERVATION)
+
+    assert isinstance(result.resolution, FailSafeSelection)
+    assert result.search.outcome.status is SearchOutcomeStatus.HARD_FAILURE

@@ -1,4 +1,4 @@
-"""Issue #611 legacy decision shapes. New code must not import this module."""
+"""Issue #611 legacy shapes. Only compatibility projections may import this module."""
 from __future__ import annotations
 
 import math

@@ -7,6 +7,7 @@ import pytest
 from common.algebra import Chance, Deterministic, WeightedEdge
 from common.decision import (
     CandidateDisposition,
+    CandidateResult,
     CandidateRoster as StructuralCandidateRoster,
     ContinuationResult,
     DecisionDelta,
@@ -22,10 +23,7 @@ from common.decision import (
     ValueComponent,
     ValuedCandidate,
 )
-from common.decision.compatibility import (
-    DECISION_DELTA_STATISTIC,
-    candidate_results_from_legacy,
-)
+from common.decision.compatibility import DECISION_DELTA_STATISTIC
 from common.decision.components import DecisionPolicyRequest
 from common.decision.compatibility_contracts import CandidateRoster
 from common.ledger import (
@@ -80,13 +78,24 @@ def _search(root, model, evaluator, policy_model, provider, configuration,
 
 
 def _choose(candidates, configuration, *, forced=False):
-    legacy = CandidateRoster(tuple(candidates), forced=forced)
     roster = StructuralCandidateRoster(
         tuple(candidate.action for candidate in candidates),
         "test-decision",
         forced,
     )
-    typed = candidate_results_from_legacy(roster, legacy)
+    typed = tuple(CandidateResult(
+        choice,
+        candidate.disposition,
+        candidate.delta,
+        candidate.status,
+        candidate.gaps,
+        candidate.successors,
+        (None if candidate.status is EvaluationStatus.UNAVAILABLE
+         else candidate.continuation),
+        (candidate.status if candidate.continuation is not None
+         and candidate.status is not EvaluationStatus.UNAVAILABLE
+         else EvaluationStatus.UNAVAILABLE),
+    ) for choice, candidate in zip(roster.identities, candidates))
     covered = tuple(candidate.choice for candidate in typed
                     if candidate.delta is not None)
     outcome = SearchOutcome(

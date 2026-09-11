@@ -86,6 +86,10 @@ class GraphEnvironment:
         return f'{{"private":"{self.private}","schema":"controlled-graph-input","version":1}}'
 
 
+class DifferentProviderGraphEnvironment(GraphEnvironment):
+    identity = "different-controlled-turn-graph-v1"
+
+
 class GraphEvaluator:
     identity = "controlled-value-v1"
     value_scale = SCALE
@@ -535,6 +539,10 @@ def test_tree_and_cache_caps_stop_before_an_unsupported_backup(limit, reason):
     (lambda values, edges: (GraphEnvironment(values, edges),
                             GraphEnvironment(values, edges, root="setup", reuse_allowed=False)),
      "ownership_or_state_unverified"),
+    (lambda values, edges: (GraphEnvironment(values, edges),
+                            DifferentProviderGraphEnvironment(
+                                values, edges, root="setup")),
+     "configuration_or_horizon_changed"),
     (lambda values, edges: (GraphEnvironment(values, edges),
                             GraphEnvironment(values, edges, root="missing")),
      "state_not_retained"),

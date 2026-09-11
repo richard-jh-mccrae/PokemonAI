@@ -40,6 +40,10 @@ class LedgerPolicyDecisionEvidence:
     reason: str
 
 
+LedgerFailSafeDecisionEvidence = LedgerPolicyDecisionEvidence
+
+
 __all__ = (
-    "LedgerCandidateEvidence", "LedgerEvidence", "LedgerPolicyDecisionEvidence",
+    "LedgerCandidateEvidence", "LedgerEvidence", "LedgerFailSafeDecisionEvidence",
+    "LedgerPolicyDecisionEvidence",
 )

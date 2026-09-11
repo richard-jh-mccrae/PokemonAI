@@ -129,10 +129,30 @@ class SearchResult:
         choices = tuple(candidate.choice for candidate in self.candidates)
         if choices != self.roster.identities:
             raise ValueError("Search Result requires one ordered Candidate Result per roster member")
+        if self.baseline is not None:
+            for candidate in self.candidates:
+                if candidate.delta is not None and (
+                        candidate.delta.scale != self.baseline.scale
+                        or candidate.delta.perspective != self.baseline.perspective):
+                    raise ValueError(
+                        "candidate delta differs from search baseline scale or perspective")
         roster_choices = set(self.roster.identities)
+        statistic_keys: set[tuple[object, ActionChoiceIdentity]] = set()
+        supplied: dict[object, set[ActionChoiceIdentity]] = {}
+        for statistic in self.statistics:
+            if statistic.choice not in roster_choices:
+                raise ValueError("decision statistic contains a choice outside Candidate Roster")
+            key = (statistic.identity, statistic.choice)
+            if key in statistic_keys:
+                raise ValueError("duplicate decision statistic for choice")
+            statistic_keys.add(key)
+            if getattr(statistic, "status", None) is not EvaluationStatus.UNAVAILABLE:
+                supplied.setdefault(statistic.identity, set()).add(statistic.choice)
         for covered in self.outcome.coverage.statistics:
             if not covered.choices.issubset(roster_choices):
                 raise ValueError("search coverage contains a choice outside Candidate Roster")
+            if covered.choices != frozenset(supplied.get(covered.statistic, set())):
+                raise ValueError("search coverage differs from supplied decision statistics")
 
     def candidate_for(self, choice: ActionChoiceIdentity) -> CandidateResult:
         try:

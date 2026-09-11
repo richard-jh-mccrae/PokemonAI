@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import hashlib
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from typing import Callable, Protocol, cast
 
 from common.observation import ObservationDelta, ObservationState
@@ -15,7 +15,10 @@ from .components import (
 )
 from .configuration import DecisionDeadlineExceeded
 from .identity import ActionChoiceIdentity
-from .outcomes import DecisionFailure, DecisionFailureStage, SearchOutcomeStatus
+from .outcomes import (
+    DecisionFailure, DecisionFailureStage, SearchOutcome, SearchOutcomeStatus,
+    SearchTermination,
+)
 from .results import (
     BehaviorIdentity, DecisionEvidence, DecisionResult, FailSafeSelection, ForcedSelection,
     NoSelection, PolicySelection, SearchResult,
@@ -60,6 +63,10 @@ class SearchWithPolicyModelAndProvider(Protocol):
 
 class DecisionPolicyWithEvidence(Protocol):
     def choose_with_evidence(self, request: DecisionPolicyRequest) -> DecisionEvidence: ...
+
+
+class FailSafePolicyWithEvidence(Protocol):
+    def choose_with_evidence(self, request: FailSafePolicyRequest) -> DecisionEvidence: ...
 
 
 def neutral_lottery_choice(candidates: tuple[ActionChoiceIdentity, ...],
@@ -116,6 +123,13 @@ class DecisionCoordinator:
                     or search_contract.optional_collaborators
                     != frozenset(self.search.optional_collaborators)):
                 raise ValueError("search collaborator declarations differ from its contract")
+        policy_contract = getattr(self.decision_policy, "contract", None)
+        if search_contract is not None and policy_contract is not None:
+            declared_required = frozenset(self.decision_policy.required_statistics)
+            if policy_contract.required_statistics != declared_required:
+                raise ValueError("decision-policy statistic declarations differ from its contract")
+            if not declared_required.issubset(search_contract.produced_statistics):
+                raise ValueError("search cannot produce decision-policy required statistics")
         accepted_model = getattr(self.evaluator, "accepted_model_identity", None)
         if accepted_model not in (None, "*", self.evaluation_model.identity):
             raise ValueError("evaluator does not accept the Evaluation Model")
@@ -265,19 +279,29 @@ class DecisionCoordinator:
             state: ObservationState,
             result: SearchResult,
             context: FailSafeContext | None = None,
+            failure: DecisionFailure | None = None,
     ) -> DecisionResult:
         if self.fail_safe_policy is None:
             raise ValueError("failed search result requires a fail-safe policy")
-        failure = result.outcome.failure or DecisionFailure(
+        failure = failure or result.outcome.failure or DecisionFailure(
             DecisionFailureStage.SEARCH,
             "InsufficientInitialization",
             "search produced no comparable candidate",
         )
-        choice = self.fail_safe_policy.choose(FailSafePolicyRequest(
-            state, result.roster, result.candidates, failure,
-            self.policy_configuration, context))
+        request = FailSafePolicyRequest(
+            state, result.roster, result.candidates, result.outcome, result.evidence,
+            failure, self.policy_configuration, context)
+        choose_with_evidence = getattr(self.fail_safe_policy, "choose_with_evidence", None)
+        if choose_with_evidence is None:
+            choice = self.fail_safe_policy.choose(request)
+            evidence = None
+        else:
+            evidence = cast(
+                FailSafePolicyWithEvidence, self.fail_safe_policy,
+            ).choose_with_evidence(request)
+            choice = evidence.choice
         return DecisionResult(
-            result, FailSafeSelection(choice, failure), self.behavior_identity)
+            result, FailSafeSelection(choice, failure, evidence), self.behavior_identity)
 
     def recover(
             self,
@@ -286,13 +310,13 @@ class DecisionCoordinator:
             failure: DecisionFailure,
             context: FailSafeContext | None = None,
     ) -> DecisionResult:
-        if self.fail_safe_policy is None:
-            raise ValueError("decision recovery requires a fail-safe policy")
-        choice = self.fail_safe_policy.choose(FailSafePolicyRequest(
-            state, result.roster, result.candidates, failure,
-            self.policy_configuration, context))
-        return DecisionResult(
-            result, FailSafeSelection(choice, failure), self.behavior_identity)
+        failed = replace(result, outcome=SearchOutcome(
+            SearchOutcomeStatus.HARD_FAILURE,
+            result.outcome.coverage,
+            SearchTermination("coordinator", failure.stage.value, 1),
+            failure,
+        ))
+        return self._recover(state, failed, context, failure)
 
     def _validate_search_result(
             self,

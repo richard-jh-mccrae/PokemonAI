@@ -126,6 +126,7 @@ class DecisionDelta:
     total: float
     scale: ValueScale
     components: tuple[ValueComponent, ...] = ()
+    perspective: int | str = 0
 
     def __post_init__(self) -> None:
         if not math.isfinite(self.total):
@@ -165,6 +166,7 @@ class SampledMean:
     total: float
     scale: ValueScale
     samples: int
+    perspective: int | str = 0
 
     def __post_init__(self) -> None:
         if not math.isfinite(self.total) or self.samples <= 0:
@@ -175,6 +177,7 @@ class SampledMean:
 class ExpectedContinuation:
     total: float
     scale: ValueScale
+    perspective: int | str = 0
 
     def __post_init__(self) -> None:
         if not math.isfinite(self.total):
@@ -185,6 +188,7 @@ class ExpectedContinuation:
 class BestContinuation:
     total: float
     scale: ValueScale
+    perspective: int | str = 0
 
     def __post_init__(self) -> None:
         if not math.isfinite(self.total):

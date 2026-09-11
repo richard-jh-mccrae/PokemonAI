@@ -14,15 +14,13 @@ import pytest
 
 from common.algebra import Deterministic, Refresh, Terminal, Unknown
 from common.decision import (
-    CandidateDisposition, CandidateRoster, DecisionDelta, DecisionPolicyRequest,
+    CandidateDisposition, CandidateResult, CandidateRoster, DecisionDelta,
+    DecisionPolicyRequest,
     ComputeConfiguration, EvaluationStatus, RealizedOutcome, SearchCoverage,
     SearchConfiguration, SearchOutcome, SearchOutcomeStatus, SearchTermination,
     ValuedCandidate,
 )
-from common.decision.compatibility import (
-    DECISION_DELTA_STATISTIC, candidate_results_from_legacy,
-)
-from common.decision.compatibility_contracts import CandidateRoster as LegacyCandidateRoster
+from common.decision.compatibility import DECISION_DELTA_STATISTIC
 from common.ledger import EvaluationModel, LedgerDecider, PrizeMap
 from common.ledger.decider import LedgerUnavailable
 from common.ledger.decision import LEDGER_VALUE_SCALE
@@ -73,10 +71,18 @@ def choose_prices(decider, prices, *, forced=False):
                           else price.prize_map.plan_rank_key()),
         policy_evidence=price.prize_map,
     ) for price in prices)
-    legacy = LegacyCandidateRoster(candidates, forced)
     roster = CandidateRoster(
         tuple(candidate.action for candidate in candidates), "test-decision", forced)
-    typed = candidate_results_from_legacy(roster, legacy)
+    typed = tuple(CandidateResult(
+        choice,
+        candidate.disposition,
+        candidate.delta,
+        candidate.status,
+        candidate.gaps,
+        candidate.successors,
+        candidate.continuation,
+        candidate.status,
+    ) for choice, candidate in zip(roster.identities, candidates))
     covered = tuple(candidate.choice for candidate in typed)
     outcome = SearchOutcome(
         SearchOutcomeStatus.COMPLETE,
