@@ -12,7 +12,7 @@ from common.decision.components import (
 from common.decision.coordinator import DecisionCoordinator
 from common.decision.identity import ActionChoiceIdentity
 from common.decision.outcomes import (
-    DecisionFailureStage, SearchCoverage, SearchOutcome, SearchOutcomeStatus,
+    DecisionFailure, DecisionFailureStage, SearchCoverage, SearchOutcome, SearchOutcomeStatus,
     SearchTermination,
 )
 from common.decision.results import (
@@ -245,9 +245,17 @@ def test_optional_provider_identity_matches_each_runtime_injection() -> None:
         search_configuration="contract-search-config-v1", decision_policy=Policy(),
         policy_configuration="contract-policy-config-v1",
         behavior_identity=behavior_identity(provider="provider-v1"),
-        compute_identity="contract-compute-v1")
+        compute_identity="contract-compute-v1",
+        failure_handler=lambda request, _failure: ContractSearch().search(
+            request, Evaluator(), "contract-search-config-v1"))
     with pytest.raises(ValueError, match="injected provider"):
         with_provider.decide(OBSERVATION)
+    recovered = with_provider.decide(
+        OBSERVATION,
+        failure=DecisionFailure.capture(
+            DecisionFailureStage.PROVIDER, RuntimeError("provider failed")))
+
+    assert isinstance(recovered.resolution, PolicySelection)
 
 
 def test_coordinator_requires_every_core_component_contract() -> None:

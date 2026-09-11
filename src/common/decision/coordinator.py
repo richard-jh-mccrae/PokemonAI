@@ -188,9 +188,10 @@ class DecisionCoordinator:
         )
         if provider is not None and CollaboratorKind.PROVIDER not in collaborators:
             raise ValueError("search does not accept a provider")
-        provider_identity = (
-            NO_PROVIDER_IDENTITY if provider is None else provider.identity)
-        if provider_identity != self.behavior_identity.provider:
+        if ((provider is not None
+             and provider.identity != self.behavior_identity.provider)
+                or (provider is None and failure is None
+                    and self.behavior_identity.provider != NO_PROVIDER_IDENTITY)):
             raise ValueError("Behavior Identity does not match injected provider")
         request = EvaluationRequest(
             state=state,
