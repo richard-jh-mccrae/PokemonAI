@@ -1,4 +1,4 @@
-# ADR-TEMP-676 — Search value semantics remain distinct types
+# ADR-0215 — Search value semantics remain distinct types
 
 State Valuation, root-relative Decision Delta, Sampled Mean, Expected Continuation, and Best Continuation
 remain semantically distinct value types carrying scale and perspective; no neutral contract exposes a

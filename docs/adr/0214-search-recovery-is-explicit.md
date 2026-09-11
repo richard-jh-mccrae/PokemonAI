@@ -1,4 +1,4 @@
-# ADR-TEMP-676 — Search recovery is explicit
+# ADR-0214 — Search recovery is explicit
 
 A non-permitting Search Outcome never enters normal Decision Policy. An explicitly configured Fail-safe
 Policy may recover only the outcome classes and roster evidence declared compatible, while Decision Result

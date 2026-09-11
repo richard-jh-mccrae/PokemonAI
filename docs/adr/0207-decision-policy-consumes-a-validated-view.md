@@ -1,4 +1,4 @@
-# ADR-TEMP-676 — Decision policy consumes a validated result view
+# ADR-0207 — Decision policy consumes a validated result view
 
 Decision Policy receives a narrow Decision Policy Request containing the authoritative roster, outcome,
 coverage, typed final statistics, and optional typed search evidence after Component Contract validation.

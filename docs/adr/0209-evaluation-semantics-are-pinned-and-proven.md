@@ -1,4 +1,4 @@
-# ADR-TEMP-676 — Evaluation semantics are pinned and proven
+# ADR-0209 — Evaluation semantics are pinned and proven
 
 Each Evaluation Request pins a legal Observation State, Evaluation Model identity, and root perspective;
 the Value Evaluator contract declares its identity, accepted model contract, and Value Scale. Every returned

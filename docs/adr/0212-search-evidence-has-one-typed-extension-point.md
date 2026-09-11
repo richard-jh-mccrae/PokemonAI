@@ -1,4 +1,4 @@
-# ADR-TEMP-676 — Search evidence has one typed extension point
+# ADR-0212 — Search evidence has one typed extension point
 
 Search Result carries at most one optional Search Evidence value identified by algorithm and schema,
 and consumers narrow it to a concrete evidence type. PUCT implements this extension point while simple

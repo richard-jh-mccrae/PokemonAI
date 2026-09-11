@@ -1,4 +1,4 @@
-# ADR-TEMP-676 — Policy model input is explicit
+# ADR-0211 — Policy model input is explicit
 
 Policy Model receives a typed request containing the legal Observation State, structural Candidate Roster,
 source identities, Candidate Results, and available Decision Statistics. Its Component Contract declares

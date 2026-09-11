@@ -1,4 +1,4 @@
-# ADR-TEMP-676 — Candidate rosters are structural
+# ADR-0205 — Candidate rosters are structural
 
 Candidate Roster is the immutable ordered legal root menu and contains no values, priors, successor results,
 or algorithm evidence. Search Result carries one neutral Candidate Result per Action Choice Identity, while

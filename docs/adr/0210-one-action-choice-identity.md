@@ -1,4 +1,4 @@
-# ADR-TEMP-676 — One action-choice identity spans search and selection
+# ADR-0210 — One action-choice identity spans search and selection
 
 One neutral Action Choice Identity combines semantic Action Identity with the exact submitted selection
 and identifies Candidate Roster members across search, coverage, policy, and final-result validation.

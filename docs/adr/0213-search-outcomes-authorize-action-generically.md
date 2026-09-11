@@ -1,4 +1,4 @@
-# ADR-TEMP-676 — Search outcomes authorize action generically
+# ADR-0213 — Search outcomes authorize action generically
 
 Every Search Algorithm returns one validated, algorithm-neutral Search Outcome that owns completion,
 coverage, failure, and action permission. Permission follows from outcome status while algorithm-specific

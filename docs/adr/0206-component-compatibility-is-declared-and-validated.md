@@ -1,4 +1,4 @@
-# ADR-TEMP-676 — Component compatibility is declared and validated
+# ADR-0206 — Component compatibility is declared and validated
 
 Each evaluator, policy model, search algorithm, and decision policy exposes an immutable Component
 Contract declaring inputs, outputs, configuration, value semantics, and optional capabilities. The
