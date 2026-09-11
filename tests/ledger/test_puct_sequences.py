@@ -30,7 +30,7 @@ def test_post_draw_boundary_choices_with_frozen_ledger(
         runtime.ledger.ctx, baseline_identity=BASELINE,
         baseline_path=ROOT / "data" / "ledger-baselines" / BASELINE / "manifest.json",
         calibration_path=ROOT / "data" / "ledger-policy-calibrations" / f"{BASELINE}.json",
-        prior_mode="uniform", provider_identity="turn-search-v1",
+        prior_mode="uniform", provider_identity=environment.identity,
         configuration=PuctConfiguration(simulation_limit=512, batch_size=4, worker_count=2,
                                         chance_samples=8, exploration=32.0))
 

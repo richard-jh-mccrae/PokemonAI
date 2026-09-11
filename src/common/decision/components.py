@@ -65,6 +65,21 @@ class CollaboratorKind(str, Enum):
     PROVIDER = "provider"
 
 
+class SearchProvider(Protocol):
+    @property
+    def identity(self) -> str: ...
+
+
+@dataclass(frozen=True, order=True, slots=True)
+class EvidenceIdentity:
+    owner: str
+    schema_version: int
+
+    def __post_init__(self) -> None:
+        if not self.owner or self.schema_version <= 0:
+            raise ValueError("evidence identity requires owner and positive schema")
+
+
 @dataclass(frozen=True, slots=True)
 class ReuseProvenance:
     behavior_identity: str
@@ -119,6 +134,8 @@ class ComponentContract:
     produced_statistics: frozenset[StatisticIdentity] = frozenset()
     required_collaborators: frozenset[CollaboratorKind] = frozenset()
     optional_collaborators: frozenset[CollaboratorKind] = frozenset()
+    accepted_outcomes: frozenset[SearchOutcomeStatus] = frozenset()
+    accepted_evidence: frozenset[EvidenceIdentity | None] = frozenset()
 
     def __post_init__(self) -> None:
         if not self.identity or not self.configuration_identity:
@@ -429,6 +446,9 @@ class ValueEvaluator(Protocol):
     @property
     def accepted_model_identity(self) -> str: ...
 
+    @property
+    def contract(self) -> ComponentContract: ...
+
     def evaluate(self, request: EvaluationRequest) -> StateValuation: ...
 
 
@@ -460,6 +480,9 @@ class PolicyModel(Protocol):
     @property
     def identity(self) -> str: ...
 
+    @property
+    def contract(self) -> ComponentContract: ...
+
     def priors(self, request: PolicyModelRequest) -> PolicyDistribution: ...
 
 
@@ -473,11 +496,50 @@ class SearchAlgorithm(Protocol):
     @property
     def optional_collaborators(self) -> tuple[CollaboratorKind, ...]: ...
 
+    @property
+    def contract(self) -> ComponentContract: ...
+
+
+class SearchWithoutCollaborators(SearchAlgorithm, Protocol):
     def search(
             self,
             request: EvaluationRequest,
             evaluator: ValueEvaluator,
             configuration: IdentifiedConfiguration | str,
+    ) -> SearchResult: ...
+
+
+class SearchWithPolicyModel(SearchAlgorithm, Protocol):
+    def search(
+            self,
+            request: EvaluationRequest,
+            evaluator: ValueEvaluator,
+            configuration: IdentifiedConfiguration | str,
+            *,
+            policy_model: PolicyModel,
+    ) -> SearchResult: ...
+
+
+class SearchWithProvider(SearchAlgorithm, Protocol):
+    def search(
+            self,
+            request: EvaluationRequest,
+            evaluator: ValueEvaluator,
+            configuration: IdentifiedConfiguration | str,
+            *,
+            provider: SearchProvider,
+    ) -> SearchResult: ...
+
+
+class SearchWithPolicyModelAndProvider(SearchAlgorithm, Protocol):
+    def search(
+            self,
+            request: EvaluationRequest,
+            evaluator: ValueEvaluator,
+            configuration: IdentifiedConfiguration | str,
+            *,
+            policy_model: PolicyModel,
+            provider: SearchProvider,
     ) -> SearchResult: ...
 
 
@@ -488,6 +550,9 @@ class DecisionPolicy(Protocol):
     @property
     def required_statistics(self) -> tuple[StatisticIdentity, ...]: ...
 
+    @property
+    def contract(self) -> ComponentContract: ...
+
     def choose(self, request: DecisionPolicyRequest) -> ActionChoiceIdentity: ...
 
 
@@ -495,17 +560,22 @@ class FailSafePolicy(Protocol):
     @property
     def identity(self) -> str: ...
 
+    @property
+    def contract(self) -> ComponentContract: ...
+
     def choose(self, request: FailSafePolicyRequest) -> ActionChoiceIdentity: ...
 
 
 __all__ = (
     "CollaboratorKind", "ComponentContract", "DecisionPolicy", "DecisionPolicyRequest",
     "DecisionRequirements", "EvaluationModel", "EvaluationRequest", "FailSafePolicy",
-    "FailSafeContext", "FailSafePolicyRequest", "IdentifiedConfiguration",
+    "EvidenceIdentity", "FailSafeContext", "FailSafePolicyRequest", "IdentifiedConfiguration",
     "PolicyActionEvidence",
     "PolicyDistribution", "PolicyFallbackReason", "PolicyModel", "PolicyModelRequest",
     "PolicySourceIdentity",
     "RetainedSearchState", "ReuseProvenance", "ReuseVerdict", "SearchAlgorithm",
-    "SearchLifecycle", "SearchReuse", "SearchSnapshot", "ValueEvaluator",
+    "SearchLifecycle", "SearchProvider", "SearchReuse", "SearchSnapshot",
+    "SearchWithPolicyModel", "SearchWithPolicyModelAndProvider", "SearchWithProvider",
+    "SearchWithoutCollaborators", "ValueEvaluator",
     "validate_state_valuation",
 )

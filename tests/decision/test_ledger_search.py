@@ -9,6 +9,7 @@ from common.decision import (
     CandidateDisposition,
     CandidateResult,
     CandidateRoster as StructuralCandidateRoster,
+    ComponentContract,
     ContinuationResult,
     EvaluationRequest,
     EvaluationStatus,
@@ -295,6 +296,7 @@ def test_every_candidate_delta_is_expected_successor_ledger_minus_root_ledger():
 def test_search_rejects_non_distribution_policy_priors():
     class InvalidPolicyModel:
         identity = "invalid-priors"
+        contract = ComponentContract(identity, identity)
 
         def priors(self, request):
             return tuple(0.75 for _candidate in request.candidates)

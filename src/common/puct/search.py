@@ -11,9 +11,10 @@ from common.decision import (
     ActionChoiceIdentity, CandidateDisposition, CandidateResult, CandidateRoster,
     CollaboratorKind, ComponentContract, DecisionDelta, DecisionDeltaStatistic,
     DecisionFailure, DecisionFailureStage, DecisionRequirements, EvaluationStatus,
-    PolicyModelRequest,
+    EvaluationRequest, IdentifiedConfiguration, PolicyModel, PolicyModelRequest,
     PolicySourceIdentity, ReuseProvenance, ReuseVerdict, SearchCoverage,
-    SearchOutcome, SearchResult, SearchTermination, StateValuation,
+    SearchOutcome, SearchProvider, SearchResult, SearchTermination, StateValuation,
+    ValueEvaluator,
     validate_state_valuation,
 )
 from common.decision.outcomes import SearchOutcomeStatus, StatisticCoverage
@@ -33,6 +34,7 @@ from common.ledger.search import UniformPolicyModel
 from common.ledger.decision import evaluator_semantics_identity
 from common.observation import ObservationRecord
 from .budget import PreparationExhausted, SearchBudget, SearchBudgetExhausted, SearchCancelled
+from .configuration import PuctConfiguration
 from .priors import prepare_ledger_candidates
 from .workers import BoundedWorkers, WorkItem, WorkResult
 
@@ -120,7 +122,17 @@ class PuctSearch:
 
     reset = close
 
-    def search(self, request, evaluator, configuration, *, policy_model, provider):
+    def search(
+            self,
+            request: EvaluationRequest,
+            evaluator: ValueEvaluator,
+            configuration: IdentifiedConfiguration | str,
+            *,
+            policy_model: PolicyModel,
+            provider: SearchProvider,
+    ) -> SearchResult:
+        if not isinstance(configuration, PuctConfiguration):
+            raise TypeError("PUCT search requires PuctConfiguration")
         if isinstance(provider, WorkerTurnSearchProvider):
             worker_backed = True
         elif isinstance(provider, DirectTurnSearchProvider):
@@ -334,9 +346,7 @@ class _Session:
                 statistics = tuple(DecisionDeltaStatistic(
                     candidate.choice, candidate.delta, candidate.delta_status)
                     for candidate in candidates)
-                contract = getattr(self.policy_model, "contract", None)
-                required = (() if contract is None else
-                            tuple(contract.required_statistics))
+                required = tuple(self.policy_model.contract.required_statistics)
                 request = PolicyModelRequest(
                     state.observation,
                     roster,

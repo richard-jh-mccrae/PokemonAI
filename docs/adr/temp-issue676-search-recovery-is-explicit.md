@@ -3,7 +3,7 @@
 A non-permitting Search Outcome never enters normal Decision Policy. An explicitly configured Fail-safe
 Policy may recover only the outcome classes and roster evidence declared compatible, while Decision Result
 preserves the original failure and recovery reason; otherwise no action is returned. Ledger retains its
-current typed fail-safe through a compatibility adapter, while PUCT retains stop-on-unusable behavior and
+typed fail-safe, while PUCT retains stop-on-unusable behavior and
 independent algorithms receive no fallback automatically.
 
 Fail-safe Policy consumes its own typed request carrying the original outcome, failure, roster, and surviving

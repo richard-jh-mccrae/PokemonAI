@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Protocol
 
 from .identity import ActionChoiceIdentity
@@ -39,7 +39,10 @@ class DecisionDeltaStatistic:
     choice: ActionChoiceIdentity
     value: DecisionDelta | None
     status: EvaluationStatus
-    identity: StatisticIdentity = DECISION_DELTA
+    identity: StatisticIdentity = field(default=DECISION_DELTA, init=False)
+
+    def __post_init__(self) -> None:
+        _validate_availability(self.status, self.value, "decision delta")
 
 
 @dataclass(frozen=True, slots=True)
@@ -47,7 +50,10 @@ class SampledMeanStatistic:
     choice: ActionChoiceIdentity
     value: SampledMean | None
     status: EvaluationStatus
-    identity: StatisticIdentity = SAMPLED_MEAN
+    identity: StatisticIdentity = field(default=SAMPLED_MEAN, init=False)
+
+    def __post_init__(self) -> None:
+        _validate_availability(self.status, self.value, "sampled mean")
 
 
 @dataclass(frozen=True, slots=True)
@@ -55,7 +61,10 @@ class ExpectedContinuationStatistic:
     choice: ActionChoiceIdentity
     value: ExpectedContinuation | None
     status: EvaluationStatus
-    identity: StatisticIdentity = EXPECTED_CONTINUATION
+    identity: StatisticIdentity = field(default=EXPECTED_CONTINUATION, init=False)
+
+    def __post_init__(self) -> None:
+        _validate_availability(self.status, self.value, "expected continuation")
 
 
 @dataclass(frozen=True, slots=True)
@@ -63,7 +72,18 @@ class BestContinuationStatistic:
     choice: ActionChoiceIdentity
     value: BestContinuation | None
     status: EvaluationStatus
-    identity: StatisticIdentity = BEST_CONTINUATION
+    identity: StatisticIdentity = field(default=BEST_CONTINUATION, init=False)
+
+    def __post_init__(self) -> None:
+        _validate_availability(self.status, self.value, "best continuation")
+
+
+def _validate_availability(status: EvaluationStatus, value: object | None,
+                           label: str) -> None:
+    if status is EvaluationStatus.UNAVAILABLE and value is not None:
+        raise ValueError(f"unavailable {label} cannot carry a value")
+    if status is not EvaluationStatus.UNAVAILABLE and value is None:
+        raise ValueError(f"available {label} requires a value")
 
 
 __all__ = (

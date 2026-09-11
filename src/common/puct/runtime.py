@@ -61,4 +61,5 @@ def build_puct_coordinator(evaluation_model, *, baseline_identity: str | None = 
         policy_configuration=PolicyConfiguration(),
         behavior_identity=identity,
         ledger_baseline_identity=baseline_identity,
+        compute_identity=configuration.identity,
     )

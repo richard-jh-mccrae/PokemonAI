@@ -19,7 +19,9 @@ from common.decision import (
     DecisionFailureStage,
     DecisionPolicyRequest,
     DecisionRequirements,
+    EvidenceIdentity,
     EvaluationRequest,
+    IdentifiedConfiguration,
     FailSafePolicyRequest,
     PolicyActionEvidence,
     PolicyDistribution,
@@ -31,6 +33,7 @@ from common.decision import (
     SearchOutcome,
     SearchOutcomeStatus,
     SearchResult,
+    SearchProvider,
     SearchTermination,
     StatisticCoverage,
     StateValuation,
@@ -38,6 +41,8 @@ from common.decision import (
     neutral_lottery_choice,
     safe_legal_selection,
 )
+from common.decision.components import PolicyModel, ValueEvaluator
+from common.decision.configuration import SearchConfiguration
 from common.decision.results import CandidateDisposition, CandidateResult, CandidateRoster
 from common.decision.statistics import DECISION_DELTA, DecisionDeltaStatistic
 from common.decision.values import ContinuationResult, DecisionDelta, EvaluationStatus
@@ -52,6 +57,7 @@ from .evidence import (
     LedgerCandidateEvidence, LedgerDecisionReason, LedgerEvidence,
     LedgerPolicyDecisionEvidence,
 )
+from .evaluate import EvaluationSnapshot
 from .portfolio_solver import TurnPortfolioMemo
 from .preview import price_actions
 
@@ -85,6 +91,7 @@ class TransitionProviderSource:
     factory: Callable[..., object]
     state: ProviderState
     kwargs: dict[str, object]
+    identity: str = "transition-provider-source-v1"
     instance: object | None = None
     close_failure: DecisionFailure | None = None
 
@@ -144,11 +151,12 @@ class LedgerOnePlySearch:
         required_collaborators=frozenset(required_collaborators),
     )
 
-    def __init__(self):
-        self._previous_evaluation_state = None
-        self._previous_evaluator_identity = None
-        self._active_continuation_policy = {}
-        self._last_continuation_policies = {}
+    def __init__(self) -> None:
+        self._previous_evaluation_state: EvaluationSnapshot | None = None
+        self._previous_evaluator_identity: str | None = None
+        self._active_continuation_policy: dict[tuple[object, ...], object] = {}
+        self._last_continuation_policies: dict[
+            object, tuple[tuple[tuple[object, ...], object], ...]] = {}
         self._served_cached_continuation = False
         self._portfolio_memo = TurnPortfolioMemo()
 
@@ -205,7 +213,19 @@ class LedgerOnePlySearch:
         self._served_cached_continuation = True
         return chosen_identity
 
-    def search(self, request, evaluator, configuration, *, policy_model, provider):
+    def search(
+            self,
+            request: EvaluationRequest,
+            evaluator: ValueEvaluator,
+            configuration: IdentifiedConfiguration | str,
+            *,
+            policy_model: PolicyModel,
+            provider: SearchProvider,
+    ) -> SearchResult:
+        if not isinstance(configuration, SearchConfiguration):
+            raise TypeError("Ledger search requires SearchConfiguration")
+        if not isinstance(provider, TransitionProviderSource):
+            raise TypeError("Ledger search requires TransitionProviderSource")
         board = request.state
         root = (provider.state if isinstance(provider, TransitionProviderSource)
                 else request.state)
@@ -429,8 +449,7 @@ def _apply_policy(board, roster, candidates, source, policy_model):
     statistics = tuple(DecisionDeltaStatistic(
         candidate.choice, candidate.delta, candidate.delta_status)
         for candidate in candidates)
-    contract = getattr(policy_model, "contract", None)
-    required = (() if contract is None else tuple(contract.required_statistics))
+    required = tuple(policy_model.contract.required_statistics)
     request = PolicyModelRequest(
         board, roster, candidates, statistics, source,
         DecisionRequirements(required))
@@ -1210,7 +1229,12 @@ class GreedyDecisionPolicy:
 
 class FailSafeDecisionPolicy:
     identity = f"ledger-fail-safe-v1:{SEARCH_SEMANTICS_IDENTITY}"
-    contract = ComponentContract(identity, "PolicyConfiguration")
+    contract = ComponentContract(
+        identity,
+        "PolicyConfiguration",
+        accepted_outcomes=frozenset((SearchOutcomeStatus.HARD_FAILURE,)),
+        accepted_evidence=frozenset((EvidenceIdentity("ledger", 1),)),
+    )
 
     _REASONS = {
         DecisionFailureStage.EVALUATION: LedgerDecisionReason.FAIL_SAFE_EVALUATION_FAILURE,

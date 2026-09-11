@@ -3,7 +3,7 @@
 Every Search Algorithm returns one validated, algorithm-neutral Search Outcome that owns completion,
 coverage, failure, and action permission. Permission follows from outcome status while algorithm-specific
 evidence stays separate, preventing contradictory fields and removing PUCT knowledge from shared coordination;
-the accepted cost is a coordinated migration of producers, telemetry, compatibility adapters, and tests.
+the accepted cost is a coordinated migration of producers, telemetry, and tests.
 
 Search Coverage records the exact Candidate Roster members supporting each typed Decision Statistic.
 It does not estimate explored state-space coverage; Decision Policies validate their declared statistic
@@ -14,5 +14,5 @@ not failure. Exhaustion before that floor is insufficient initialization and doe
 the exact stop cause remains separate from this generic semantic status.
 
 Exact causes use algorithm-owned typed Search Terminations with owner and schema identity. Shared code never
-branches on these namespaced reasons; compatibility projections retain legacy stop-reason strings until #611.
-Hard failure requires Decision Failure, cancellation does not, and only validated completed evidence survives.
+branches on these namespaced reasons. Hard failure requires Decision Failure, cancellation does not, and only
+validated completed evidence survives.

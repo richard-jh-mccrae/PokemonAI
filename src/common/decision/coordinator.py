@@ -8,10 +8,12 @@ from common.observation import ObservationDelta, ObservationState
 
 from .components import (
     CollaboratorKind, DecisionPolicy, DecisionPolicyRequest, DecisionRequirements,
-    EvaluationModel,
+    EvidenceIdentity, EvaluationModel,
     EvaluationRequest, FailSafeContext, FailSafePolicy, FailSafePolicyRequest,
     IdentifiedConfiguration,
-    PolicyModel, SearchAlgorithm, ValueEvaluator,
+    PolicyModel, SearchAlgorithm, SearchProvider, SearchWithPolicyModel,
+    SearchWithPolicyModelAndProvider, SearchWithProvider, SearchWithoutCollaborators,
+    ValueEvaluator,
 )
 from .configuration import DecisionDeadlineExceeded
 from .identity import ActionChoiceIdentity
@@ -27,11 +29,7 @@ from .values import StateValuation
 
 
 LOTTERY_DIGEST_BYTES = 8
-
-
-class SearchProvider(Protocol):
-    @property
-    def identity(self) -> str: ...
+NO_FAIL_SAFE_POLICY_IDENTITY = "stop-with-evidence-v1"
 
 
 class ExecutionGuard(Protocol):
@@ -41,24 +39,6 @@ class ExecutionGuard(Protocol):
 SearchConfiguration = IdentifiedConfiguration | str
 PolicyConfiguration = IdentifiedConfiguration | str
 FailureHandler = Callable[[EvaluationRequest, DecisionFailure], SearchResult]
-
-
-class SearchWithPolicyModel(Protocol):
-    def search(self, request: EvaluationRequest, evaluator: ValueEvaluator,
-               configuration: SearchConfiguration, *,
-               policy_model: PolicyModel) -> SearchResult: ...
-
-
-class SearchWithProvider(Protocol):
-    def search(self, request: EvaluationRequest, evaluator: ValueEvaluator,
-               configuration: SearchConfiguration, *,
-               provider: SearchProvider) -> SearchResult: ...
-
-
-class SearchWithPolicyModelAndProvider(Protocol):
-    def search(self, request: EvaluationRequest, evaluator: ValueEvaluator,
-               configuration: SearchConfiguration, *, policy_model: PolicyModel,
-               provider: SearchProvider) -> SearchResult: ...
 
 
 class DecisionPolicyWithEvidence(Protocol):
@@ -92,6 +72,7 @@ class DecisionCoordinator:
     fail_safe_policy: FailSafePolicy | None = None
     failure_handler: FailureHandler | None = None
     ledger_baseline_identity: str | None = None
+    compute_identity: str | None = None
 
     def __post_init__(self) -> None:
         bindings = (
@@ -106,7 +87,7 @@ class DecisionCoordinator:
                 continue
             contract = getattr(component, "contract", None)
             if contract is None:
-                continue
+                raise ValueError("core component requires a Component Contract")
             if contract.identity != component.identity:
                 raise ValueError("component identity differs from its Component Contract")
             if configuration is not None:
@@ -116,36 +97,56 @@ class DecisionCoordinator:
                 }
                 if contract.configuration_identity not in configuration_identities:
                     raise ValueError("component rejects its injected configuration")
-        search_contract = getattr(self.search, "contract", None)
-        if search_contract is not None:
-            if (search_contract.required_collaborators
-                    != frozenset(self.search.required_collaborators)
-                    or search_contract.optional_collaborators
-                    != frozenset(self.search.optional_collaborators)):
-                raise ValueError("search collaborator declarations differ from its contract")
-        policy_contract = getattr(self.decision_policy, "contract", None)
-        if search_contract is not None and policy_contract is not None:
-            declared_required = frozenset(self.decision_policy.required_statistics)
-            if policy_contract.required_statistics != declared_required:
-                raise ValueError("decision-policy statistic declarations differ from its contract")
-            if not declared_required.issubset(search_contract.produced_statistics):
-                raise ValueError("search cannot produce decision-policy required statistics")
-        accepted_model = getattr(self.evaluator, "accepted_model_identity", None)
-        if accepted_model not in (None, "*", self.evaluation_model.identity):
+        search_contract = self.search.contract
+        if (search_contract.required_collaborators
+                != frozenset(self.search.required_collaborators)
+                or search_contract.optional_collaborators
+                != frozenset(self.search.optional_collaborators)):
+            raise ValueError("search collaborator declarations differ from its contract")
+        policy_contract = self.decision_policy.contract
+        declared_required = frozenset(self.decision_policy.required_statistics)
+        if policy_contract.required_statistics != declared_required:
+            raise ValueError("decision-policy statistic declarations differ from its contract")
+        if not declared_required.issubset(search_contract.produced_statistics):
+            raise ValueError("search cannot produce decision-policy required statistics")
+        if (self.policy_model is not None
+                and not self.policy_model.contract.required_statistics.issubset(
+                    search_contract.produced_statistics)):
+            raise ValueError("search cannot produce policy-model required statistics")
+        if self.fail_safe_policy is not None:
+            fail_safe_contract = self.fail_safe_policy.contract
+            if (not fail_safe_contract.accepted_outcomes
+                    or any(status.permits_action
+                           for status in fail_safe_contract.accepted_outcomes)):
+                raise ValueError("fail-safe policy must declare non-permitting outcomes")
+            if not fail_safe_contract.accepted_evidence:
+                raise ValueError("fail-safe policy must declare accepted evidence")
+        accepted_model = self.evaluator.accepted_model_identity
+        if accepted_model not in ("*", self.evaluation_model.identity):
             raise ValueError("evaluator does not accept the Evaluation Model")
-        required = tuple(getattr(self.search, "required_collaborators", ()))
+        required = self.search.required_collaborators
+        optional = self.search.optional_collaborators
         if (CollaboratorKind.POLICY_MODEL in required
                 and self.policy_model is None):
             raise ValueError("search requires a policy model")
+        if (self.policy_model is not None
+                and CollaboratorKind.POLICY_MODEL not in (*required, *optional)):
+            raise ValueError("search does not accept a policy model")
         identity = self.behavior_identity
         if identity is None:
             return
+        if self.compute_identity is None:
+            raise ValueError("Behavior Identity requires a verified compute identity")
         actual = (
             self.evaluator.identity,
             self.evaluation_model.identity,
             self.search.identity,
             "" if self.policy_model is None else self.policy_model.identity,
             self.decision_policy.identity,
+            (NO_FAIL_SAFE_POLICY_IDENTITY if self.fail_safe_policy is None
+             else self.fail_safe_policy.identity),
+            self.compute_identity,
+            str(getattr(getattr(self.evaluation_model, "prize_plan", None), "identity", "")),
         )
         declared = (
             identity.evaluator,
@@ -153,6 +154,9 @@ class DecisionCoordinator:
             identity.search,
             identity.policy_model,
             identity.decision_policy,
+            identity.fail_safe_policy,
+            identity.compute,
+            identity.prize_plan,
         )
         if actual != declared:
             raise ValueError("Behavior Identity does not match injected components")
@@ -169,6 +173,15 @@ class DecisionCoordinator:
             failure: DecisionFailure | None = None,
             recovery_context: FailSafeContext | None = None,
     ) -> DecisionResult:
+        collaborators = (
+            *self.search.required_collaborators,
+            *self.search.optional_collaborators,
+        )
+        if provider is not None and CollaboratorKind.PROVIDER not in collaborators:
+            raise ValueError("search does not accept a provider")
+        if (provider is not None and self.behavior_identity is not None
+                and provider.identity != self.behavior_identity.provider):
+            raise ValueError("Behavior Identity does not match injected provider")
         request = EvaluationRequest(
             state=state,
             evaluation_model=self.evaluation_model,
@@ -209,7 +222,7 @@ class DecisionCoordinator:
         if result.roster.forced and len(result.roster.actions) == 1:
             return DecisionResult(
                 result, ForcedSelection(result.roster.identities[0]), self.behavior_identity)
-        required = tuple(getattr(self.decision_policy, "required_statistics", ()))
+        required = self.decision_policy.required_statistics
         missing = tuple(statistic for statistic in required
                         if not result.outcome.coverage.choices_for(statistic))
         if missing:
@@ -245,15 +258,20 @@ class DecisionCoordinator:
             request: EvaluationRequest,
             provider: SearchProvider | None,
     ) -> SearchResult:
-        required = tuple(getattr(self.search, "required_collaborators", ()))
-        needs_policy = CollaboratorKind.POLICY_MODEL in required
-        needs_provider = CollaboratorKind.PROVIDER in required
+        required = self.search.required_collaborators
+        optional = self.search.optional_collaborators
         policy_model = self.policy_model
         provider_value = provider
-        if needs_policy and policy_model is None:
+        if CollaboratorKind.POLICY_MODEL in required and policy_model is None:
             raise ValueError("search requires a policy model")
-        if needs_provider and provider_value is None:
+        if CollaboratorKind.PROVIDER in required and provider_value is None:
             raise ValueError("search requires a provider")
+        needs_policy = (CollaboratorKind.POLICY_MODEL in required
+                        or (CollaboratorKind.POLICY_MODEL in optional
+                            and policy_model is not None))
+        needs_provider = (CollaboratorKind.PROVIDER in required
+                          or (CollaboratorKind.PROVIDER in optional
+                              and provider_value is not None))
         if needs_policy and needs_provider:
             assert policy_model is not None and provider_value is not None
             combined = cast(SearchWithPolicyModelAndProvider, self.search)
@@ -272,7 +290,8 @@ class DecisionCoordinator:
             return provider_search.search(
                 request, self.evaluator, self.search_configuration,
                 provider=provider_value)
-        return self.search.search(request, self.evaluator, self.search_configuration)
+        return cast(SearchWithoutCollaborators, self.search).search(
+            request, self.evaluator, self.search_configuration)
 
     def _recover(
             self,
@@ -300,6 +319,13 @@ class DecisionCoordinator:
             state, result.roster, result.candidates, recovery_outcome,
             result.outcome, result.evidence, failure,
             self.policy_configuration, context)
+        contract = self.fail_safe_policy.contract
+        evidence_identity = (None if result.evidence is None else EvidenceIdentity(
+            result.evidence.owner, result.evidence.schema_version))
+        if (recovery_outcome.status not in contract.accepted_outcomes
+                or evidence_identity not in contract.accepted_evidence):
+            return DecisionResult(
+                result, NoSelection(recovery_outcome.status), self.behavior_identity)
         choose_with_evidence = getattr(self.fail_safe_policy, "choose_with_evidence", None)
         if choose_with_evidence is None:
             choice = self.fail_safe_policy.choose(request)
@@ -334,6 +360,9 @@ class DecisionCoordinator:
             raise ValueError("search roster differs from ordered legal actions")
         baseline = result.baseline
         if baseline is None:
+            forced_without_comparison = result.roster.forced and len(result.roster.actions) == 1
+            if result.outcome.permits_action and not forced_without_comparison:
+                raise ValueError("permitting search result requires a semantic baseline")
             return
         expected = (
             request.state.position_key, request.root_perspective,

@@ -1,11 +1,13 @@
 from dataclasses import dataclass, replace
+from typing import TYPE_CHECKING, cast
 
 import pytest
 
 from common.api import ActionIdentity
 from common.decision.components import (
-    CollaboratorKind, ComponentContract, DecisionPolicyRequest, EvaluationRequest,
-    FailSafePolicyRequest, IdentifiedConfiguration, ValueEvaluator,
+    CollaboratorKind, ComponentContract, DecisionPolicyRequest, EvidenceIdentity,
+    EvaluationRequest, FailSafePolicyRequest, IdentifiedConfiguration, ValueEvaluator,
+    SearchAlgorithm, SearchWithPolicyModelAndProvider,
 )
 from common.decision.coordinator import DecisionCoordinator
 from common.decision.identity import ActionChoiceIdentity
@@ -33,6 +35,13 @@ OBSERVATION = replace(
 )
 DELTA = StatisticIdentity("common", "decision-delta", 1)
 
+if TYPE_CHECKING:
+    from common.ledger.search import LedgerOnePlySearch
+    from common.puct.search import PuctSearch
+
+    ledger_adapter: SearchWithPolicyModelAndProvider = LedgerOnePlySearch()
+    puct_adapter: SearchWithPolicyModelAndProvider = PuctSearch()
+
 
 @dataclass(frozen=True)
 class Model:
@@ -43,6 +52,7 @@ class Evaluator:
     identity = "contract-evaluator-v1"
     value_scale = SCALE
     accepted_model_identity = Model.identity
+    contract = ComponentContract(identity, "Model")
 
     def evaluate(self, request: EvaluationRequest) -> StateValuation:
         return StateValuation(
@@ -59,6 +69,9 @@ class ContractSearch:
     identity = "contract-search-v1"
     required_collaborators: tuple[CollaboratorKind, ...] = ()
     optional_collaborators: tuple[CollaboratorKind, ...] = ()
+    contract = ComponentContract(
+        identity, "contract-search-config-v1",
+        produced_statistics=frozenset((DELTA,)))
 
     def search(
             self,
@@ -88,13 +101,16 @@ class ContractSearch:
                 SearchTermination("contract-search", "complete", 1),
             ),
             statistics=(DecisionDeltaStatistic(
-                choice, candidates[0].delta, EvaluationStatus.COMPLETE, DELTA),),
+                choice, candidates[0].delta, EvaluationStatus.COMPLETE),),
         )
 
 
 class Policy:
     identity = "contract-policy-v1"
     required_statistics = (DELTA,)
+    contract = ComponentContract(
+        identity, "contract-policy-config-v1",
+        required_statistics=frozenset(required_statistics))
 
     def choose(self, request: DecisionPolicyRequest) -> ActionChoiceIdentity:
         return request.roster.identities[0]
@@ -187,6 +203,21 @@ def test_coordinator_rejects_a_component_configuration_mismatch() -> None:
         )
 
 
+def test_coordinator_requires_every_core_component_contract() -> None:
+    class UncontractedSearch:
+        identity = ContractSearch.identity
+        required_collaborators = ContractSearch.required_collaborators
+        optional_collaborators = ContractSearch.optional_collaborators
+        search = ContractSearch.search
+
+    with pytest.raises(ValueError, match="Component Contract"):
+        DecisionCoordinator(
+            evaluator=Evaluator(), evaluation_model=Model(),
+            search=cast(SearchAlgorithm, UncontractedSearch()),
+            search_configuration="contract-search-config-v1",
+            decision_policy=Policy(), policy_configuration="contract-policy-config-v1")
+
+
 def test_coordinator_rejects_static_statistic_incompatibility() -> None:
     class ContractedSearch(ContractSearch):
         contract = ComponentContract(
@@ -212,6 +243,10 @@ def test_policy_failure_reaches_fail_safe_as_non_permitting_outcome() -> None:
 
     class FailSafe:
         identity = "contract-fail-safe-v1"
+        contract = ComponentContract(
+            identity, "contract-policy-config-v1",
+            accepted_outcomes=frozenset((SearchOutcomeStatus.HARD_FAILURE,)),
+            accepted_evidence=frozenset((None,)))
 
         def choose(self, request: FailSafePolicyRequest) -> ActionChoiceIdentity:
             assert request.outcome.status is SearchOutcomeStatus.HARD_FAILURE
@@ -230,3 +265,42 @@ def test_policy_failure_reaches_fail_safe_as_non_permitting_outcome() -> None:
 
     assert isinstance(result.resolution, FailSafeSelection)
     assert result.search.outcome.status is SearchOutcomeStatus.COMPLETE
+
+
+def test_fail_safe_declines_undeclared_search_evidence() -> None:
+    @dataclass(frozen=True)
+    class Evidence:
+        owner: str = "other"
+        schema_version: int = 1
+
+    class RaisingPolicy(Policy):
+        def choose(self, request: DecisionPolicyRequest) -> ActionChoiceIdentity:
+            raise RuntimeError("policy failed")
+
+    class FailSafe:
+        identity = "contract-fail-safe-v1"
+        contract = ComponentContract(
+            identity, "contract-policy-config-v1",
+            accepted_outcomes=frozenset((SearchOutcomeStatus.HARD_FAILURE,)),
+            accepted_evidence=frozenset((EvidenceIdentity("ledger", 1),)))
+
+        def choose(self, request: FailSafePolicyRequest) -> ActionChoiceIdentity:
+            raise AssertionError("incompatible recovery must not run")
+
+    class ForeignEvidenceSearch(ContractSearch):
+        def search(
+                self,
+                request: EvaluationRequest,
+                evaluator: ValueEvaluator,
+                configuration: IdentifiedConfiguration | str,
+        ) -> SearchResult:
+            return replace(super().search(request, evaluator, configuration), evidence=Evidence())
+
+    result = DecisionCoordinator(
+        evaluator=Evaluator(), evaluation_model=Model(), search=ForeignEvidenceSearch(),
+        search_configuration="contract-search-config-v1",
+        decision_policy=RaisingPolicy(), policy_configuration="contract-policy-config-v1",
+        fail_safe_policy=FailSafe(),
+    ).decide(OBSERVATION)
+
+    assert isinstance(result.resolution, NoSelection)

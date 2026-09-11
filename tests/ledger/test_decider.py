@@ -24,7 +24,7 @@ from common.decision.statistics import DECISION_DELTA
 from common.ledger import EvaluationModel, LedgerDecider, PrizeMap
 from common.ledger.decider import LedgerUnavailable
 from common.ledger.decision import LEDGER_VALUE_SCALE
-from common.ledger.search import GreedyDecisionPolicy
+from common.ledger.search import FailSafeDecisionPolicy, GreedyDecisionPolicy
 from common.ledger.evidence import LedgerCandidateEvidence, LedgerEvidence
 from common.ledger.preview import ContinuationFootprint
 from common.observation import ObservationStateBuilder
@@ -488,6 +488,9 @@ def test_fail_safe_policy_failure_is_not_hidden_by_an_implicit_lottery():
             pass
 
     class BrokenFailSafe:
+        identity = FailSafeDecisionPolicy.identity
+        contract = FailSafeDecisionPolicy.contract
+
         def choose(self, *_args, **_kwargs):
             raise RuntimeError("fail-safe policy failed")
 

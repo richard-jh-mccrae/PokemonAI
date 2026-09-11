@@ -165,7 +165,9 @@ class LedgerDecider:
                              prize_counts=(board.knowledge.own_prizes.cards
                                            if isinstance(board.knowledge.own_prizes,
                                                          KnownOwnPrizes) else ()))
-        provider = TransitionProviderSource(self.provider_factory, state, self.provider_kwargs)
+        provider = TransitionProviderSource(
+            self.provider_factory, state, self.provider_kwargs,
+            identity=self._provider_configuration["identity"])
         coordinator_entered = False
         try:
             try:
@@ -255,6 +257,7 @@ class LedgerDecider:
             behavior_identity=self.behavior_identity,
             fail_safe_policy=FailSafeDecisionPolicy(),
             failure_handler=unavailable_ledger_result,
+            compute_identity=self.compute.identity,
         )
 
     @staticmethod

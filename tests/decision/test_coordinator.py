@@ -139,6 +139,35 @@ def test_search_result_rejects_statistic_perspective_and_missing_coverage():
         replace(search, statistics=(valid,))
 
 
+def test_decision_statistic_identity_and_availability_are_not_forgeable():
+    search = result_for((action("end", 0),))
+    choice = search.roster.identities[0]
+
+    with pytest.raises(TypeError, match="identity"):
+        DecisionDeltaStatistic(
+            choice, DecisionDelta(1.0, SCALE, perspective=0),
+            EvaluationStatus.COMPLETE,
+            identity=search.outcome.termination,  # type: ignore[arg-type,call-arg]
+        )
+    with pytest.raises(ValueError, match="available decision delta requires a value"):
+        DecisionDeltaStatistic(choice, None, EvaluationStatus.COMPLETE)
+
+
+def test_permitting_search_result_requires_a_semantic_baseline():
+    search = result_for((action("end", 0),))
+
+    with pytest.raises(ValueError, match="permitting search result requires a baseline"):
+        replace(search, baseline=None)
+
+    with pytest.raises(ValueError, match="cannot carry decision deltas"):
+        replace(
+            search,
+            baseline=None,
+            roster=replace(search.roster, forced=True),
+            candidates=(replace(search.candidates[0], disposition=CandidateDisposition.FORCED),),
+        )
+
+
 def test_no_selection_rejects_a_permitting_nonempty_search():
     search = result_for((action("end", 0),))
 

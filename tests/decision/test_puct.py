@@ -5,7 +5,8 @@ import pytest
 
 from common.api import ActionIdentity
 from common.decision import (
-    ActionChoiceIdentity, DecisionCoordinator, PolicyConfiguration, StateValuation, ValueScale,
+    ActionChoiceIdentity, BehaviorIdentity, ComponentContract, DecisionCoordinator,
+    PolicyConfiguration, StateValuation, ValueScale,
 )
 from common.ledger.search import UniformPolicyModel
 from common.puct import (PuctConfiguration, PuctDecisionPolicy, PuctSearch, decision_record,
@@ -94,6 +95,7 @@ class GraphEvaluator:
     identity = "controlled-value-v1"
     value_scale = SCALE
     accepted_model_identity = "controlled-model-v1"
+    contract = ComponentContract(identity, "SimpleNamespace")
 
     def __init__(self, values):
         self.values = values
@@ -136,6 +138,37 @@ def test_direct_provider_contract_is_explicit_and_incomplete_providers_are_rejec
         coordinator.decide(incomplete.root.observation, provider=incomplete, strict=True)
 
 
+def test_behavior_identity_rejects_a_different_runtime_provider():
+    environment = GraphEnvironment({"root": 0.0}, {})
+    configuration = PuctConfiguration(simulation_limit=1)
+    evaluator = GraphEvaluator(environment.valuation_values)
+    model = SimpleNamespace(
+        identity="controlled-model-v1",
+        prize_plan=SimpleNamespace(identity="controlled-prize-plan-v1"),
+    )
+    policy = UniformPolicyModel()
+    selection = PuctDecisionPolicy()
+    search = PuctSearch()
+    coordinator = DecisionCoordinator(
+        evaluator=evaluator,
+        evaluation_model=model,
+        search=search,
+        search_configuration=configuration,
+        policy_model=policy,
+        decision_policy=selection,
+        policy_configuration=PolicyConfiguration(),
+        behavior_identity=BehaviorIdentity(
+            evaluator.identity, model.identity, search.identity, policy.identity,
+            selection.identity, "stop-with-evidence-v1", "different-provider-v1",
+            configuration.identity, model.prize_plan.identity,
+        ),
+        compute_identity=configuration.identity,
+    )
+
+    with pytest.raises(ValueError, match="injected provider"):
+        coordinator.decide(environment.root.observation, provider=environment, strict=True)
+
+
 class DelayGraphEvaluator(GraphEvaluator):
     def __init__(self, values, delayed_value):
         super().__init__(values)
@@ -149,6 +182,7 @@ class DelayGraphEvaluator(GraphEvaluator):
 
 class BiasedPolicy:
     identity = "controlled-biased-prior-v1"
+    contract = ComponentContract(identity, identity)
 
     def priors(self, request):
         distribution = UniformPolicyModel().priors(request)

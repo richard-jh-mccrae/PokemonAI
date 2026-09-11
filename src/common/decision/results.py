@@ -144,6 +144,12 @@ class SearchResult:
         choices = tuple(candidate.choice for candidate in self.candidates)
         if choices != self.roster.identities:
             raise ValueError("Search Result requires one ordered Candidate Result per roster member")
+        forced_without_comparison = self.roster.forced and len(self.roster.actions) == 1
+        if self.outcome.permits_action and self.baseline is None and not forced_without_comparison:
+            raise ValueError("permitting search result requires a baseline")
+        if self.baseline is None and any(
+                candidate.delta is not None for candidate in self.candidates):
+            raise ValueError("search result without a baseline cannot carry decision deltas")
         if self.baseline is not None:
             for candidate in self.candidates:
                 if candidate.delta is not None and (
@@ -173,6 +179,12 @@ class SearchResult:
                         or value.perspective != self.baseline.perspective):
                     raise ValueError(
                         "decision statistic differs from search baseline scale or perspective")
+            if self.baseline is None and isinstance(statistic, (
+                    DecisionDeltaStatistic, SampledMeanStatistic,
+                    ExpectedContinuationStatistic, BestContinuationStatistic)):
+                if statistic.value is not None:
+                    raise ValueError(
+                        "search result without a baseline cannot carry value statistics")
         for covered in self.outcome.coverage.statistics:
             if not covered.choices.issubset(roster_choices):
                 raise ValueError("search coverage contains a choice outside Candidate Roster")
@@ -228,7 +240,7 @@ class DecisionResult:
 
     def __post_init__(self) -> None:
         if isinstance(self.resolution, NoSelection):
-            if self.search.roster.actions and self.search.outcome.permits_action:
+            if self.search.roster.actions and self.resolution.outcome.permits_action:
                 raise ValueError("permitting non-empty search requires a selection")
             return
         if self.resolution.choice not in self.search.roster.identities:
