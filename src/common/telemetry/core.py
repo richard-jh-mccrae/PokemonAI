@@ -809,7 +809,7 @@ def _compute_configuration(value) -> dict:
 def _behavior_identity(value) -> dict | str | None:
     if value is None or isinstance(value, str):
         return value
-    from common.ledger import BehaviorIdentity
+    from common.decision import BehaviorIdentity
 
     if not isinstance(value, BehaviorIdentity):
         raise TypeError("behavior_identity must be a BehaviorIdentity")

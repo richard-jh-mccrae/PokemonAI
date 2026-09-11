@@ -1,11 +1,10 @@
 from __future__ import annotations
 
 from common.decision import (
-    DecisionCoordinator, NO_FAIL_SAFE_POLICY_IDENTITY, PolicyConfiguration,
-    PolicySourceIdentity,
+    BehaviorIdentity, DecisionCoordinator, NO_FAIL_SAFE_POLICY_IDENTITY,
+    PolicyConfiguration, PolicySourceIdentity,
 )
 from common.ledger import LedgerPolicyModel, UniformPolicyModel
-from common.ledger.configuration import BehaviorIdentity
 from common.ledger.decision import LedgerValueEvaluator
 from common.decision.action_policy import action_policy_for_agent
 from .configuration import PuctConfiguration

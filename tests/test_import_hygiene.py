@@ -177,6 +177,22 @@ def test_neutral_decision_contracts_do_not_import_algorithm_packages():
     assert offenders == [], f"neutral decision contracts import algorithms — {offenders}"
 
 
+def test_active_consumers_import_behavior_identity_from_the_neutral_contract():
+    offenders = []
+    for path in (REPO / "src/common").rglob("*.py"):
+        relative = path.relative_to(REPO).as_posix()
+        if relative.startswith("src/common/ledger/"):
+            continue
+        tree = ast.parse(path.read_text(encoding="utf-8-sig"), filename=str(path))
+        for node in ast.walk(tree):
+            if (isinstance(node, ast.ImportFrom)
+                    and node.module in ("common.ledger", "common.ledger.configuration")
+                    and any(alias.name == "BehaviorIdentity" for alias in node.names)):
+                offenders.append(f"{relative}:{node.lineno}")
+    assert offenders == [], (
+        f"active consumers import BehaviorIdentity through Ledger — {offenders}")
+
+
 def test_legacy_decision_contracts_are_absent_from_shipped_source():
     offenders = []
     for path in (REPO / "src").rglob("*.py"):
