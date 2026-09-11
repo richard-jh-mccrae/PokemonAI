@@ -7,7 +7,7 @@ from common.api import ActionIdentity
 from common.decision.components import (
     CollaboratorKind, ComponentContract, DecisionPolicyRequest, EvidenceIdentity,
     EvaluationRequest, FailSafePolicyRequest, IdentifiedConfiguration, ValueEvaluator,
-    SearchAlgorithm, SearchWithPolicyModelAndProvider,
+    SearchAlgorithm, SearchProvider, SearchWithPolicyModelAndProvider,
 )
 from common.decision.coordinator import DecisionCoordinator
 from common.decision.identity import ActionChoiceIdentity
@@ -40,11 +40,12 @@ DELTA = StatisticIdentity("common", "decision-delta", 1)
 
 def behavior_identity(
         fail_safe_policy: str = NO_FAIL_SAFE_POLICY_IDENTITY,
+        provider: str = NO_PROVIDER_IDENTITY,
 ) -> BehaviorIdentity:
     return BehaviorIdentity(
         Evaluator.identity, Model.identity, ContractSearch.identity,
         NO_POLICY_MODEL_IDENTITY, Policy.identity, fail_safe_policy,
-        NO_PROVIDER_IDENTITY, "contract-compute-v1", NO_PRIZE_PLAN_IDENTITY,
+        provider, "contract-compute-v1", NO_PRIZE_PLAN_IDENTITY,
     )
 
 if TYPE_CHECKING:
@@ -221,6 +222,32 @@ def test_coordinator_rejects_a_component_configuration_mismatch() -> None:
             behavior_identity=behavior_identity(),
             compute_identity="contract-compute-v1",
         )
+
+
+def test_optional_provider_identity_matches_each_runtime_injection() -> None:
+    class OptionalProviderSearch(ContractSearch):
+        optional_collaborators = (CollaboratorKind.PROVIDER,)
+        contract = replace(
+            ContractSearch.contract,
+            optional_collaborators=frozenset(optional_collaborators))
+
+    without_provider = DecisionCoordinator(
+        evaluator=Evaluator(), evaluation_model=Model(), search=OptionalProviderSearch(),
+        search_configuration="contract-search-config-v1", decision_policy=Policy(),
+        policy_configuration="contract-policy-config-v1",
+        behavior_identity=behavior_identity(), compute_identity="contract-compute-v1")
+    with pytest.raises(ValueError, match="injected provider"):
+        without_provider.decide(
+            OBSERVATION, provider=cast(SearchProvider, Model("provider-v1")))
+
+    with_provider = DecisionCoordinator(
+        evaluator=Evaluator(), evaluation_model=Model(), search=OptionalProviderSearch(),
+        search_configuration="contract-search-config-v1", decision_policy=Policy(),
+        policy_configuration="contract-policy-config-v1",
+        behavior_identity=behavior_identity(provider="provider-v1"),
+        compute_identity="contract-compute-v1")
+    with pytest.raises(ValueError, match="injected provider"):
+        with_provider.decide(OBSERVATION)
 
 
 def test_coordinator_requires_every_core_component_contract() -> None:

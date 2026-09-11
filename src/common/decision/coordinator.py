@@ -138,8 +138,11 @@ class DecisionCoordinator:
         identity = self.behavior_identity
         if self.compute_identity is None:
             raise ValueError("Behavior Identity requires a verified compute identity")
-        accepts_provider = CollaboratorKind.PROVIDER in (*required, *optional)
-        if accepts_provider == (identity.provider == NO_PROVIDER_IDENTITY):
+        requires_provider = CollaboratorKind.PROVIDER in required
+        accepts_provider = requires_provider or CollaboratorKind.PROVIDER in optional
+        if ((requires_provider and identity.provider == NO_PROVIDER_IDENTITY)
+                or (not accepts_provider
+                    and identity.provider != NO_PROVIDER_IDENTITY)):
             raise ValueError("Behavior Identity does not match provider capability")
         actual = (
             self.evaluator.identity,
@@ -185,8 +188,9 @@ class DecisionCoordinator:
         )
         if provider is not None and CollaboratorKind.PROVIDER not in collaborators:
             raise ValueError("search does not accept a provider")
-        if (provider is not None
-                and provider.identity != self.behavior_identity.provider):
+        provider_identity = (
+            NO_PROVIDER_IDENTITY if provider is None else provider.identity)
+        if provider_identity != self.behavior_identity.provider:
             raise ValueError("Behavior Identity does not match injected provider")
         request = EvaluationRequest(
             state=state,
