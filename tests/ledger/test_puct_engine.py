@@ -1,7 +1,10 @@
 from cgpy.experiment import TurnSearchEnvironment
 from common.decision.turn import NodeKind
 from real_engine_helpers import BodySpec, lock_main_allowances, observation, scenario
-from common.decision import DecisionCoordinator, EvaluationStatus, PolicyConfiguration
+from common.decision import (
+    BehaviorIdentity, DecisionCoordinator, EvaluationStatus, NO_FAIL_SAFE_POLICY_IDENTITY,
+    PolicyConfiguration,
+)
 from common.ledger import LedgerPolicyBaseline, LedgerPolicyConfiguration, LedgerPolicyModel
 from common.ledger.decision import LedgerValueEvaluator
 from common.ledger.search import UniformPolicyModel
@@ -75,16 +78,25 @@ def test_real_ledger_priors_are_bounded_and_search_continues_after_preparation_f
     baseline = LedgerPolicyBaseline("puct-test", evaluator.identity, (model.identity,), evaluator.value_scale.identity)
     policy = LedgerPolicyModel(LedgerPolicyConfiguration(
         8.0, 0.01, (EvaluationStatus.COMPLETE, EvaluationStatus.ESTIMATED)), baseline)
+    search = PuctSearch()
+    configuration = PuctConfiguration(
+        simulation_limit=24, prior_node_operations=prior_limit,
+        prior_total_operations=prior_limit * 2)
+    selection = PuctDecisionPolicy()
     coordinator = DecisionCoordinator(
         evaluator=evaluator,
         evaluation_model=model,
-        search=PuctSearch(),
-        search_configuration=PuctConfiguration(
-            simulation_limit=24, prior_node_operations=prior_limit,
-            prior_total_operations=prior_limit * 2),
-        decision_policy=PuctDecisionPolicy(),
+        search=search,
+        search_configuration=configuration,
+        decision_policy=selection,
         policy_configuration=PolicyConfiguration(),
         policy_model=policy,
+        behavior_identity=BehaviorIdentity(
+            evaluator.identity, model.identity, search.identity, policy.identity,
+            selection.identity, NO_FAIL_SAFE_POLICY_IDENTITY, environment.identity,
+            configuration.identity, model.prize_plan.identity,
+        ),
+        compute_identity=configuration.identity,
         ledger_baseline_identity="puct-test",
     )
 
@@ -120,16 +132,27 @@ def test_fixed_work_ledger_and_puct_share_neutral_decision_semantics():
     ledger = agent.ledger.decide(observation(engine)).decision_result
     environment = TurnSearchEnvironment.from_engine(engine, perspective_seat=0)
     evaluator = LedgerValueEvaluator()
+    model = agent.ledger.ctx
+    search = PuctSearch()
+    configuration = PuctConfiguration(
+        simulation_limit=24, prior_node_operations=512,
+        prior_total_operations=1024)
+    policy = UniformPolicyModel()
+    selection = PuctDecisionPolicy()
     coordinator = DecisionCoordinator(
         evaluator=evaluator,
-        evaluation_model=agent.ledger.ctx,
-        search=PuctSearch(),
-        search_configuration=PuctConfiguration(
-            simulation_limit=24, prior_node_operations=512,
-            prior_total_operations=1024),
-        decision_policy=PuctDecisionPolicy(),
+        evaluation_model=model,
+        search=search,
+        search_configuration=configuration,
+        decision_policy=selection,
         policy_configuration=PolicyConfiguration(),
-        policy_model=UniformPolicyModel(),
+        policy_model=policy,
+        behavior_identity=BehaviorIdentity(
+            evaluator.identity, model.identity, search.identity, policy.identity,
+            selection.identity, NO_FAIL_SAFE_POLICY_IDENTITY, environment.identity,
+            configuration.identity, model.prize_plan.identity,
+        ),
+        compute_identity=configuration.identity,
     )
 
     puct = coordinator.decide(

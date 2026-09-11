@@ -36,4 +36,6 @@ retain ownership of lifecycle mechanics and saved-root provenance respectively.
 
 Components declare stable identities and accepted configuration identities. Runtime supplies a typed resolved
 Behavior Identity aggregate, which the coordinator verifies against actual injection and carries into results
-and reuse provenance; #678 retains ownership of canonical recipe construction and resolution.
+and reuse provenance. Missing optional policy models, providers, fail-safe policies, and prize plans use explicit
+namespaced absence identities rather than empty strings; #678 retains ownership of canonical recipe construction
+and resolution.

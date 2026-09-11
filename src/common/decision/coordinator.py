@@ -23,13 +23,13 @@ from .outcomes import (
 )
 from .results import (
     BehaviorIdentity, DecisionEvidence, DecisionResult, FailSafeSelection, ForcedSelection,
-    NoSelection, PolicySelection, SearchResult,
+    NO_FAIL_SAFE_POLICY_IDENTITY, NO_POLICY_MODEL_IDENTITY, NO_PRIZE_PLAN_IDENTITY,
+    NO_PROVIDER_IDENTITY, NoSelection, PolicySelection, SearchResult,
 )
 from .values import StateValuation
 
 
 LOTTERY_DIGEST_BYTES = 8
-NO_FAIL_SAFE_POLICY_IDENTITY = "stop-with-evidence-v1"
 
 
 class ExecutionGuard(Protocol):
@@ -67,8 +67,8 @@ class DecisionCoordinator:
     search_configuration: SearchConfiguration
     decision_policy: DecisionPolicy
     policy_configuration: PolicyConfiguration
+    behavior_identity: BehaviorIdentity
     policy_model: PolicyModel | None = None
-    behavior_identity: BehaviorIdentity | None = None
     fail_safe_policy: FailSafePolicy | None = None
     failure_handler: FailureHandler | None = None
     ledger_baseline_identity: str | None = None
@@ -109,6 +109,9 @@ class DecisionCoordinator:
             raise ValueError("decision-policy statistic declarations differ from its contract")
         if not declared_required.issubset(search_contract.produced_statistics):
             raise ValueError("search cannot produce decision-policy required statistics")
+        if not policy_contract.required_evidence.issubset(
+                search_contract.produced_evidence):
+            raise ValueError("search cannot produce decision-policy required evidence")
         if (self.policy_model is not None
                 and not self.policy_model.contract.required_statistics.issubset(
                     search_contract.produced_statistics)):
@@ -133,20 +136,23 @@ class DecisionCoordinator:
                 and CollaboratorKind.POLICY_MODEL not in (*required, *optional)):
             raise ValueError("search does not accept a policy model")
         identity = self.behavior_identity
-        if identity is None:
-            return
         if self.compute_identity is None:
             raise ValueError("Behavior Identity requires a verified compute identity")
+        accepts_provider = CollaboratorKind.PROVIDER in (*required, *optional)
+        if accepts_provider == (identity.provider == NO_PROVIDER_IDENTITY):
+            raise ValueError("Behavior Identity does not match provider capability")
         actual = (
             self.evaluator.identity,
             self.evaluation_model.identity,
             self.search.identity,
-            "" if self.policy_model is None else self.policy_model.identity,
+            (NO_POLICY_MODEL_IDENTITY if self.policy_model is None
+             else self.policy_model.identity),
             self.decision_policy.identity,
             (NO_FAIL_SAFE_POLICY_IDENTITY if self.fail_safe_policy is None
              else self.fail_safe_policy.identity),
             self.compute_identity,
-            str(getattr(getattr(self.evaluation_model, "prize_plan", None), "identity", "")),
+            str(getattr(getattr(self.evaluation_model, "prize_plan", None), "identity",
+                        NO_PRIZE_PLAN_IDENTITY)),
         )
         declared = (
             identity.evaluator,
@@ -179,7 +185,7 @@ class DecisionCoordinator:
         )
         if provider is not None and CollaboratorKind.PROVIDER not in collaborators:
             raise ValueError("search does not accept a provider")
-        if (provider is not None and self.behavior_identity is not None
+        if (provider is not None
                 and provider.identity != self.behavior_identity.provider):
             raise ValueError("Behavior Identity does not match injected provider")
         request = EvaluationRequest(
@@ -231,6 +237,12 @@ class DecisionCoordinator:
             result.roster, result.candidates, result.outcome,
             result.statistics, result.evidence, self.policy_configuration,
             DecisionRequirements(required))
+        supplied_evidence = (None if result.evidence is None else EvidenceIdentity(
+            result.evidence.owner, result.evidence.schema_version))
+        policy_contract = self.decision_policy.contract
+        if (policy_contract.required_evidence
+                and supplied_evidence not in policy_contract.required_evidence):
+            raise ValueError("decision policy required evidence is not supplied")
         try:
             choose_with_evidence = getattr(
                 self.decision_policy, "choose_with_evidence", None)
@@ -324,8 +336,19 @@ class DecisionCoordinator:
             result.evidence.owner, result.evidence.schema_version))
         if (recovery_outcome.status not in contract.accepted_outcomes
                 or evidence_identity not in contract.accepted_evidence):
+            reason = ("unsupported_outcome"
+                      if recovery_outcome.status not in contract.accepted_outcomes
+                      else "incompatible_evidence")
             return DecisionResult(
-                result, NoSelection(recovery_outcome.status), self.behavior_identity)
+                result,
+                NoSelection(
+                    recovery_outcome.status,
+                    failure,
+                    SearchTermination("coordinator", reason, 1),
+                    result.outcome,
+                ),
+                self.behavior_identity,
+            )
         choose_with_evidence = getattr(self.fail_safe_policy, "choose_with_evidence", None)
         if choose_with_evidence is None:
             choice = self.fail_safe_policy.choose(request)
@@ -358,6 +381,11 @@ class DecisionCoordinator:
                                 for action in request.state.legal_actions)
         if result.roster.identities != request_choices:
             raise ValueError("search roster differs from ordered legal actions")
+        if result.evidence is not None:
+            evidence_identity = EvidenceIdentity(
+                result.evidence.owner, result.evidence.schema_version)
+            if evidence_identity not in self.search.contract.produced_evidence:
+                raise ValueError("search returned undeclared evidence")
         baseline = result.baseline
         if baseline is None:
             forced_without_comparison = result.roster.forced and len(result.roster.actions) == 1

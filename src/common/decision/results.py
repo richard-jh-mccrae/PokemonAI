@@ -7,7 +7,10 @@ from typing import Protocol
 from common.options import LegalAction
 
 from .identity import ActionChoiceIdentity
-from .outcomes import DecisionFailure, DecisionFailureStage, SearchOutcome, SearchOutcomeStatus
+from .outcomes import (
+    DecisionFailure, DecisionFailureStage, SearchOutcome, SearchOutcomeStatus,
+    SearchTermination,
+)
 from .statistics import (
     BestContinuationStatistic, DecisionDeltaStatistic, DecisionStatistic,
     ExpectedContinuationStatistic, SampledMeanStatistic, StatisticIdentity,
@@ -46,6 +49,12 @@ class DecisionEvidence(Protocol):
     def choice(self) -> ActionChoiceIdentity: ...
 
 
+NO_POLICY_MODEL_IDENTITY = "common.policy-model.none.v1"
+NO_FAIL_SAFE_POLICY_IDENTITY = "common.fail-safe-policy.none.v1"
+NO_PROVIDER_IDENTITY = "common.search-provider.none.v1"
+NO_PRIZE_PLAN_IDENTITY = "common.prize-plan.none.v1"
+
+
 @dataclass(frozen=True, slots=True)
 class BehaviorIdentity:
     evaluator: str
@@ -56,12 +65,13 @@ class BehaviorIdentity:
     fail_safe_policy: str
     provider: str
     compute: str
-    prize_plan: str = ""
+    prize_plan: str = NO_PRIZE_PLAN_IDENTITY
 
     def __post_init__(self) -> None:
         if not all((self.evaluator, self.evaluation_model, self.search,
                     self.policy_model, self.decision_policy,
-                    self.fail_safe_policy, self.provider, self.compute)):
+                    self.fail_safe_policy, self.provider, self.compute,
+                    self.prize_plan)):
             raise ValueError("Behavior Identity requires every resolved component")
 
 
@@ -227,6 +237,16 @@ class FailSafeSelection:
 @dataclass(frozen=True, slots=True)
 class NoSelection:
     outcome: SearchOutcomeStatus
+    failure: DecisionFailure | None = None
+    recovery_termination: SearchTermination | None = None
+    original_outcome: SearchOutcome | None = None
+
+    def __post_init__(self) -> None:
+        recovery = self.original_outcome is not None
+        if recovery != (self.failure is not None and self.recovery_termination is not None):
+            raise ValueError("declined recovery requires failure, termination, and original outcome")
+        if recovery and self.outcome.permits_action:
+            raise ValueError("declined recovery must be non-permitting")
 
 
 DecisionResolution = PolicySelection | ForcedSelection | FailSafeSelection | NoSelection
@@ -236,12 +256,17 @@ DecisionResolution = PolicySelection | ForcedSelection | FailSafeSelection | NoS
 class DecisionResult:
     search: SearchResult
     resolution: DecisionResolution
-    behavior_identity: BehaviorIdentity | None = None
+    behavior_identity: BehaviorIdentity
 
     def __post_init__(self) -> None:
         if isinstance(self.resolution, NoSelection):
-            if self.search.roster.actions and self.resolution.outcome.permits_action:
-                raise ValueError("permitting non-empty search requires a selection")
+            if self.resolution.original_outcome is None:
+                if self.resolution.outcome is not self.search.outcome.status:
+                    raise ValueError("no-selection outcome differs from Search Outcome")
+                if self.search.roster.actions and self.search.outcome.permits_action:
+                    raise ValueError("permitting non-empty search requires a selection")
+            elif self.resolution.original_outcome != self.search.outcome:
+                raise ValueError("declined recovery does not preserve original Search Outcome")
             return
         if self.resolution.choice not in self.search.roster.identities:
             raise ValueError("selected choice is not in Candidate Roster")
@@ -279,5 +304,7 @@ __all__ = (
     "BehaviorIdentity", "CandidateDisposition", "CandidateResult", "CandidateRoster",
     "DecisionEvidence",
     "DecisionResolution", "DecisionResult", "FailSafeSelection", "ForcedSelection",
-    "NoSelection", "PolicySelection", "SearchEvidence", "SearchResult",
+    "NO_FAIL_SAFE_POLICY_IDENTITY", "NO_POLICY_MODEL_IDENTITY",
+    "NO_PRIZE_PLAN_IDENTITY", "NO_PROVIDER_IDENTITY", "NoSelection",
+    "PolicySelection", "SearchEvidence", "SearchResult",
 )

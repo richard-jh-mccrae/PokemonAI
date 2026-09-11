@@ -16,8 +16,10 @@ from common.decision.outcomes import (
     SearchTermination,
 )
 from common.decision.results import (
-    CandidateDisposition, CandidateResult, CandidateRoster, FailSafeSelection,
-    NoSelection, PolicySelection, SearchResult,
+    BehaviorIdentity, CandidateDisposition, CandidateResult, CandidateRoster,
+    FailSafeSelection, NO_FAIL_SAFE_POLICY_IDENTITY, NO_POLICY_MODEL_IDENTITY,
+    NO_PRIZE_PLAN_IDENTITY, NO_PROVIDER_IDENTITY, NoSelection, PolicySelection,
+    SearchResult,
 )
 from common.decision.statistics import DecisionDeltaStatistic, StatisticIdentity
 from common.decision.values import DecisionDelta, EvaluationStatus, StateValuation, ValueScale
@@ -34,6 +36,16 @@ OBSERVATION = replace(
     legal_actions=(ACTION,),
 )
 DELTA = StatisticIdentity("common", "decision-delta", 1)
+
+
+def behavior_identity(
+        fail_safe_policy: str = NO_FAIL_SAFE_POLICY_IDENTITY,
+) -> BehaviorIdentity:
+    return BehaviorIdentity(
+        Evaluator.identity, Model.identity, ContractSearch.identity,
+        NO_POLICY_MODEL_IDENTITY, Policy.identity, fail_safe_policy,
+        NO_PROVIDER_IDENTITY, "contract-compute-v1", NO_PRIZE_PLAN_IDENTITY,
+    )
 
 if TYPE_CHECKING:
     from common.ledger.search import LedgerOnePlySearch
@@ -124,6 +136,8 @@ def test_independent_search_runs_through_the_coordinator_without_puct_collaborat
         search_configuration="contract-search-config-v1",
         decision_policy=Policy(),
         policy_configuration="contract-policy-config-v1",
+        behavior_identity=behavior_identity(),
+        compute_identity="contract-compute-v1",
     )
 
     result = coordinator.decide(OBSERVATION)
@@ -166,6 +180,8 @@ def test_non_permitting_outcome_produces_no_selection() -> None:
         search_configuration="contract-search-config-v1",
         decision_policy=Policy(),
         policy_configuration="contract-policy-config-v1",
+        behavior_identity=behavior_identity(),
+        compute_identity="contract-compute-v1",
     ).decide(OBSERVATION)
 
     assert result.chosen is None
@@ -185,6 +201,8 @@ def test_coordinator_rejects_an_evaluator_for_another_model() -> None:
             search_configuration="contract-search-config-v1",
             decision_policy=Policy(),
             policy_configuration="contract-policy-config-v1",
+            behavior_identity=behavior_identity(),
+            compute_identity="contract-compute-v1",
         )
 
 
@@ -200,6 +218,8 @@ def test_coordinator_rejects_a_component_configuration_mismatch() -> None:
             search_configuration="contract-search-config-v1",
             decision_policy=Policy(),
             policy_configuration="contract-policy-config-v1",
+            behavior_identity=behavior_identity(),
+            compute_identity="contract-compute-v1",
         )
 
 
@@ -215,7 +235,8 @@ def test_coordinator_requires_every_core_component_contract() -> None:
             evaluator=Evaluator(), evaluation_model=Model(),
             search=cast(SearchAlgorithm, UncontractedSearch()),
             search_configuration="contract-search-config-v1",
-            decision_policy=Policy(), policy_configuration="contract-policy-config-v1")
+            decision_policy=Policy(), policy_configuration="contract-policy-config-v1",
+            behavior_identity=behavior_identity(), compute_identity="contract-compute-v1")
 
 
 def test_coordinator_rejects_static_statistic_incompatibility() -> None:
@@ -233,7 +254,24 @@ def test_coordinator_rejects_static_statistic_incompatibility() -> None:
             evaluator=Evaluator(), evaluation_model=Model(), search=ContractedSearch(),
             search_configuration="contract-search-config-v1",
             decision_policy=ContractedPolicy(),
-            policy_configuration="contract-policy-config-v1")
+            policy_configuration="contract-policy-config-v1",
+            behavior_identity=behavior_identity(), compute_identity="contract-compute-v1")
+
+
+def test_coordinator_rejects_static_evidence_incompatibility() -> None:
+    class EvidencePolicy(Policy):
+        contract = ComponentContract(
+            Policy.identity, "contract-policy-config-v1",
+            required_statistics=frozenset((DELTA,)),
+            required_evidence=frozenset((EvidenceIdentity("ledger", 1),)),
+        )
+
+    with pytest.raises(ValueError, match="required evidence"):
+        DecisionCoordinator(
+            evaluator=Evaluator(), evaluation_model=Model(), search=ContractSearch(),
+            search_configuration="contract-search-config-v1",
+            decision_policy=EvidencePolicy(), policy_configuration="contract-policy-config-v1",
+            behavior_identity=behavior_identity(), compute_identity="contract-compute-v1")
 
 
 def test_policy_failure_reaches_fail_safe_as_non_permitting_outcome() -> None:
@@ -261,6 +299,8 @@ def test_policy_failure_reaches_fail_safe_as_non_permitting_outcome() -> None:
         decision_policy=RaisingPolicy(),
         policy_configuration="contract-policy-config-v1",
         fail_safe_policy=FailSafe(),
+        behavior_identity=behavior_identity(FailSafe.identity),
+        compute_identity="contract-compute-v1",
     ).decide(OBSERVATION)
 
     assert isinstance(result.resolution, FailSafeSelection)
@@ -288,6 +328,12 @@ def test_fail_safe_declines_undeclared_search_evidence() -> None:
             raise AssertionError("incompatible recovery must not run")
 
     class ForeignEvidenceSearch(ContractSearch):
+        contract = ComponentContract(
+            ContractSearch.identity, "contract-search-config-v1",
+            produced_statistics=frozenset((DELTA,)),
+            produced_evidence=frozenset((EvidenceIdentity("other", 1),)),
+        )
+
         def search(
                 self,
                 request: EvaluationRequest,
@@ -301,6 +347,13 @@ def test_fail_safe_declines_undeclared_search_evidence() -> None:
         search_configuration="contract-search-config-v1",
         decision_policy=RaisingPolicy(), policy_configuration="contract-policy-config-v1",
         fail_safe_policy=FailSafe(),
+        behavior_identity=behavior_identity(FailSafe.identity),
+        compute_identity="contract-compute-v1",
     ).decide(OBSERVATION)
 
     assert isinstance(result.resolution, NoSelection)
+    assert result.resolution.failure is not None
+    assert result.resolution.failure.stage is DecisionFailureStage.POLICY
+    assert result.resolution.original_outcome is result.search.outcome
+    assert result.resolution.recovery_termination is not None
+    assert result.resolution.recovery_termination.code == "incompatible_evidence"

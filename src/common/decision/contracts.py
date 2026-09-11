@@ -10,7 +10,8 @@ from .components import (
     PolicyModelRequest, PolicySourceIdentity, RetainedSearchState, ReuseProvenance,
     ReuseVerdict, SearchAlgorithm, SearchLifecycle, SearchProvider, SearchReuse, SearchSnapshot,
     SearchWithPolicyModel, SearchWithPolicyModelAndProvider, SearchWithProvider,
-    SearchWithoutCollaborators, ValueEvaluator, validate_state_valuation,
+    SearchWithoutCollaborators, ValueEvaluator, validate_policy_distribution,
+    validate_state_valuation,
 )
 from .identity import ActionChoice, ActionChoiceIdentity, PolicyActionIdentity
 from .outcomes import (
@@ -21,7 +22,8 @@ from .results import (
     BehaviorIdentity, CandidateDisposition, CandidateResult, CandidateRoster, DecisionEvidence,
     DecisionResolution,
     DecisionResult, FailSafeSelection, ForcedSelection, NoSelection, PolicySelection,
-    SearchEvidence, SearchResult,
+    NO_FAIL_SAFE_POLICY_IDENTITY, NO_POLICY_MODEL_IDENTITY, NO_PRIZE_PLAN_IDENTITY,
+    NO_PROVIDER_IDENTITY, SearchEvidence, SearchResult,
 )
 from .statistics import (
     BEST_CONTINUATION, DECISION_DELTA, EXPECTED_CONTINUATION, SAMPLED_MEAN,
@@ -48,7 +50,8 @@ __all__ = (
     "ExpectedContinuation",
     "ExpectedContinuationStatistic", "FailSafeContext", "FailSafePolicy",
     "FailSafePolicyRequest", "FailSafeSelection", "ForcedSelection", "IdentifiedConfiguration",
-    "NoSelection",
+    "NO_FAIL_SAFE_POLICY_IDENTITY", "NO_POLICY_MODEL_IDENTITY", "NO_PRIZE_PLAN_IDENTITY",
+    "NO_PROVIDER_IDENTITY", "NoSelection",
     "OpportunityRef", "PolicyActionEvidence", "PolicyActionIdentity", "PolicyDistribution",
     "PolicyFallbackReason",
     "PolicyModel", "PolicyModelRequest", "PolicySelection", "PolicySourceIdentity",
@@ -60,4 +63,5 @@ __all__ = (
     "SearchWithPolicyModelAndProvider", "SearchWithProvider", "SearchWithoutCollaborators",
     "StateValuation", "StatisticCoverage", "StatisticIdentity", "SuccessorResult",
     "ValueComponent", "ValueEvaluator", "ValueScale", "validate_state_valuation",
+    "validate_policy_distribution",
 )

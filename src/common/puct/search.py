@@ -11,11 +11,11 @@ from common.decision import (
     ActionChoiceIdentity, CandidateDisposition, CandidateResult, CandidateRoster,
     CollaboratorKind, ComponentContract, DecisionDelta, DecisionDeltaStatistic,
     DecisionFailure, DecisionFailureStage, DecisionRequirements, EvaluationStatus,
-    EvaluationRequest, IdentifiedConfiguration, PolicyModel, PolicyModelRequest,
+    EvaluationRequest, EvidenceIdentity, IdentifiedConfiguration, PolicyModel, PolicyModelRequest,
     PolicySourceIdentity, ReuseProvenance, ReuseVerdict, SearchCoverage,
     SearchOutcome, SearchProvider, SearchResult, SearchTermination, StateValuation,
     ValueEvaluator,
-    validate_state_valuation,
+    validate_policy_distribution, validate_state_valuation,
 )
 from common.decision.outcomes import SearchOutcomeStatus, StatisticCoverage
 from common.decision.statistics import DECISION_DELTA
@@ -106,6 +106,7 @@ class PuctSearch:
         identity,
         "PuctConfiguration",
         produced_statistics=frozenset((DECISION_DELTA, PUCT_VISIT_STATISTIC)),
+        produced_evidence=frozenset((EvidenceIdentity("puct", 2),)),
         required_collaborators=frozenset(required_collaborators),
     )
 
@@ -360,9 +361,11 @@ class _Session:
                 try:
                     self.budget.prepare(len(actions))
                     distribution = self.policy_model.priors(request)
+                    validate_policy_distribution(request, self.policy_model, distribution)
                 except PreparationExhausted:
                     node.preparation_limited = True
                     distribution = UniformPolicyModel().priors(request)
+                    validate_policy_distribution(request, UniformPolicyModel(), distribution)
             node.distribution = distribution
             for edge, prior in zip(node.edges, distribution.priors_for(request.roster)):
                 edge.prior = prior

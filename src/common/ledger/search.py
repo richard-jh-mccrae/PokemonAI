@@ -37,6 +37,7 @@ from common.decision import (
     SearchTermination,
     StatisticCoverage,
     StateValuation,
+    validate_policy_distribution,
     validate_state_valuation,
     neutral_lottery_choice,
     safe_legal_selection,
@@ -148,6 +149,7 @@ class LedgerOnePlySearch:
         identity,
         "SearchConfiguration",
         produced_statistics=frozenset((DECISION_DELTA,)),
+        produced_evidence=frozenset((EvidenceIdentity("ledger", 1),)),
         required_collaborators=frozenset(required_collaborators),
     )
 
@@ -456,10 +458,7 @@ def _apply_policy(board, roster, candidates, source, policy_model):
     distribution = policy_model.priors(request)
     if not isinstance(distribution, PolicyDistribution):
         raise TypeError("policy model must return a Policy Distribution")
-    expected = roster.identities
-    actual = tuple(item.choice for item in distribution.actions)
-    if actual != expected:
-        raise ValueError("policy distribution does not match priced candidates")
+    validate_policy_distribution(request, policy_model, distribution)
     return distribution
 
 
@@ -797,7 +796,8 @@ class GreedyDecisionPolicy:
     required_statistics = (DECISION_DELTA,)
     contract = ComponentContract(
         identity, "PolicyConfiguration",
-        required_statistics=frozenset(required_statistics))
+        required_statistics=frozenset(required_statistics),
+        required_evidence=frozenset((EvidenceIdentity("ledger", 1),)))
 
     def choose(self, request: DecisionPolicyRequest):
         return self.choose_with_evidence(request).choice

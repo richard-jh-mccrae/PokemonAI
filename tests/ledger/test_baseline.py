@@ -18,9 +18,10 @@ def _bundle(run: Path, partition: str, episode: int) -> Path:
     from common.api import ActionIdentity
     from common.decision import (
         ActionChoiceIdentity, CandidateDisposition, CandidateResult, CandidateRoster,
-        ComputeConfiguration, DecisionDelta, DecisionResult, EvaluationStatus,
+        BehaviorIdentity, ComputeConfiguration, DecisionDelta, DecisionResult, EvaluationStatus,
         ForcedSelection, SearchCoverage, SearchOutcome, SearchOutcomeStatus, SearchResult,
         SearchTermination, StateValuation, ValueScale,
+        NO_FAIL_SAFE_POLICY_IDENTITY, NO_POLICY_MODEL_IDENTITY,
     )
     from common.ledger.evidence import LedgerCandidateEvidence, LedgerEvidence
     from common.ledger import EvaluationModel
@@ -54,10 +55,20 @@ def _bundle(run: Path, partition: str, episode: int) -> Path:
         evidence=LedgerEvidence(
             1, 0, (), None, (LedgerCandidateEvidence(choice),)),
     )
+    evaluation_model = EvaluationModel.build()
+    compute_configuration = ComputeConfiguration()
     decision = build_decision_record(
-        DecisionResult(search, ForcedSelection(choice)), state,
+        DecisionResult(
+            search,
+            ForcedSelection(choice),
+            BehaviorIdentity(
+                "fixture", evaluation_model.identity, "fixture-search", NO_POLICY_MODEL_IDENTITY,
+                "fixture-policy", NO_FAIL_SAFE_POLICY_IDENTITY, "fixture-provider",
+                compute_configuration.identity, evaluation_model.prize_plan.identity,
+            ),
+        ), state,
         episode_key=str(episode), decision_index=0, parent_decision_id=None, selection=(0,),
-        evaluation_model=EvaluationModel.build(), compute_configuration=ComputeConfiguration(),
+        evaluation_model=evaluation_model, compute_configuration=compute_configuration,
         provider_configuration={
             "identity": "fixture-provider", "backend": "fixture",
             "factory": "tests.FixtureProvider", "version": 2,

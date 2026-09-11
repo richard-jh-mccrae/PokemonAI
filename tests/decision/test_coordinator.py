@@ -5,6 +5,7 @@ import pytest
 from common.api import ActionIdentity
 from common.decision import (
     ActionChoiceIdentity,
+    BehaviorIdentity,
     CandidateDisposition,
     CandidateResult,
     CandidateRoster,
@@ -24,6 +25,9 @@ from common.decision import (
     StateValuation,
     ValueScale,
     neutral_lottery_choice,
+    NO_FAIL_SAFE_POLICY_IDENTITY,
+    NO_POLICY_MODEL_IDENTITY,
+    NO_PROVIDER_IDENTITY,
 )
 from common.options import LegalAction
 from common.observation import ObservationStateBuilder
@@ -31,6 +35,11 @@ from ledger_helpers import DARK_E, DRAGAPULT, body, player, printout
 
 
 SCALE = ValueScale("fixture", 1)
+BEHAVIOR = BehaviorIdentity(
+    "fixture-evaluator", "fixture-model", "fixture-search",
+    NO_POLICY_MODEL_IDENTITY, "fixture-policy", NO_FAIL_SAFE_POLICY_IDENTITY,
+    NO_PROVIDER_IDENTITY, "fixture-compute",
+)
 BASE = ObservationStateBuilder((DRAGAPULT, DARK_E) * 30).root(
     printout(me=player(active=body(DRAGAPULT, 1))))
 
@@ -89,13 +98,14 @@ def test_decision_result_joins_selection_by_exact_choice_identity():
     actions = (action("same", 0), action("same", 1))
     search = result_for(actions)
 
-    result = DecisionResult(search, PolicySelection(search.roster.identities[1]))
+    result = DecisionResult(search, PolicySelection(search.roster.identities[1]), BEHAVIOR)
 
     assert result.chosen is actions[1]
     with pytest.raises(ValueError, match="not in Candidate Roster"):
         DecisionResult(
             search,
             PolicySelection(ActionChoiceIdentity(ActionIdentity("same"), (2,))),
+            BEHAVIOR,
         )
 
 
@@ -113,6 +123,7 @@ def test_decision_result_rejects_evidence_for_another_choice():
             search,
             PolicySelection(search.roster.identities[0], Evidence(
                 search.roster.identities[1])),
+            BEHAVIOR,
         )
 
 
@@ -172,4 +183,4 @@ def test_no_selection_rejects_a_permitting_nonempty_search():
     search = result_for((action("end", 0),))
 
     with pytest.raises(ValueError, match="requires a selection"):
-        DecisionResult(search, NoSelection(SearchOutcomeStatus.COMPLETE))
+        DecisionResult(search, NoSelection(SearchOutcomeStatus.COMPLETE), BEHAVIOR)

@@ -134,6 +134,8 @@ class ComponentContract:
     produced_statistics: frozenset[StatisticIdentity] = frozenset()
     required_collaborators: frozenset[CollaboratorKind] = frozenset()
     optional_collaborators: frozenset[CollaboratorKind] = frozenset()
+    required_evidence: frozenset[EvidenceIdentity] = frozenset()
+    produced_evidence: frozenset[EvidenceIdentity] = frozenset()
     accepted_outcomes: frozenset[SearchOutcomeStatus] = frozenset()
     accepted_evidence: frozenset[EvidenceIdentity | None] = frozenset()
 
@@ -385,6 +387,29 @@ class PolicyDistribution:
         )
 
 
+def validate_policy_distribution(
+        request: PolicyModelRequest,
+        model: PolicyModel,
+        distribution: PolicyDistribution,
+) -> None:
+    if not isinstance(distribution, PolicyDistribution):
+        raise TypeError("policy model must return a Policy Distribution")
+    expected = (
+        model.identity,
+        model.contract.configuration_identity,
+        request.source,
+        set(request.roster.identities),
+    )
+    actual = (
+        distribution.model_identity,
+        distribution.configuration_identity,
+        distribution.source,
+        {item.choice for item in distribution.actions},
+    )
+    if actual != expected:
+        raise ValueError("policy distribution does not prove Policy Model Request semantics")
+
+
 @dataclass(frozen=True, slots=True)
 class DecisionPolicyRequest:
     roster: CandidateRoster
@@ -577,5 +602,5 @@ __all__ = (
     "SearchLifecycle", "SearchProvider", "SearchReuse", "SearchSnapshot",
     "SearchWithPolicyModel", "SearchWithPolicyModelAndProvider", "SearchWithProvider",
     "SearchWithoutCollaborators", "ValueEvaluator",
-    "validate_state_valuation",
+    "validate_policy_distribution", "validate_state_valuation",
 )

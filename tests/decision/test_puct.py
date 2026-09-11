@@ -6,7 +6,7 @@ import pytest
 from common.api import ActionIdentity
 from common.decision import (
     ActionChoiceIdentity, BehaviorIdentity, ComponentContract, DecisionCoordinator,
-    PolicyConfiguration, StateValuation, ValueScale,
+    NO_FAIL_SAFE_POLICY_IDENTITY, PolicyConfiguration, StateValuation, ValueScale,
 )
 from common.ledger.search import UniformPolicyModel
 from common.puct import (PuctConfiguration, PuctDecisionPolicy, PuctSearch, decision_record,
@@ -108,13 +108,26 @@ class GraphEvaluator:
 
 
 def decide(environment, configuration=None, *, search=None, policy=None, guard=None, evaluator=None):
+    evaluator = evaluator or GraphEvaluator(environment.valuation_values)
+    model = SimpleNamespace(
+        identity="controlled-model-v1",
+        prize_plan=SimpleNamespace(identity="controlled-prize-plan-v1"),
+    )
+    search = search or PuctSearch()
+    configuration = configuration or PuctConfiguration(simulation_limit=64)
+    policy = policy or UniformPolicyModel()
+    selection = PuctDecisionPolicy()
     coordinator = DecisionCoordinator(
-        evaluator=evaluator or GraphEvaluator(environment.valuation_values),
-        evaluation_model=SimpleNamespace(identity="controlled-model-v1"),
-        search=search or PuctSearch(),
-        search_configuration=configuration or PuctConfiguration(simulation_limit=64),
-        policy_model=policy or UniformPolicyModel(),
-        decision_policy=PuctDecisionPolicy(), policy_configuration=PolicyConfiguration())
+        evaluator=evaluator, evaluation_model=model, search=search,
+        search_configuration=configuration, policy_model=policy,
+        decision_policy=selection, policy_configuration=PolicyConfiguration(),
+        behavior_identity=BehaviorIdentity(
+            evaluator.identity, model.identity, search.identity, policy.identity,
+            selection.identity, NO_FAIL_SAFE_POLICY_IDENTITY, environment.identity,
+            configuration.identity, model.prize_plan.identity,
+        ),
+        compute_identity=configuration.identity,
+    )
     return coordinator.decide(
         environment.root.observation,
         provider=environment,
@@ -128,12 +141,26 @@ def test_direct_provider_contract_is_explicit_and_incomplete_providers_are_rejec
     assert isinstance(environment, DirectTurnSearchProvider)
 
     incomplete = SimpleNamespace(root=environment.root, identity="incomplete")
+    evaluator = GraphEvaluator(environment.valuation_values)
+    model = SimpleNamespace(
+        identity="controlled-model-v1",
+        prize_plan=SimpleNamespace(identity="controlled-prize-plan-v1"),
+    )
+    search = PuctSearch()
+    configuration = PuctConfiguration(simulation_limit=1)
+    policy = UniformPolicyModel()
+    selection = PuctDecisionPolicy()
     coordinator = DecisionCoordinator(
-        evaluator=GraphEvaluator(environment.valuation_values),
-        evaluation_model=SimpleNamespace(identity="controlled-model-v1"),
-        search=PuctSearch(), search_configuration=PuctConfiguration(simulation_limit=1),
-        policy_model=UniformPolicyModel(), decision_policy=PuctDecisionPolicy(),
-        policy_configuration=PolicyConfiguration())
+        evaluator=evaluator, evaluation_model=model, search=search,
+        search_configuration=configuration, policy_model=policy,
+        decision_policy=selection, policy_configuration=PolicyConfiguration(),
+        behavior_identity=BehaviorIdentity(
+            evaluator.identity, model.identity, search.identity, policy.identity,
+            selection.identity, NO_FAIL_SAFE_POLICY_IDENTITY, incomplete.identity,
+            configuration.identity, model.prize_plan.identity,
+        ),
+        compute_identity=configuration.identity,
+    )
     with pytest.raises(TypeError, match="supported provider contract"):
         coordinator.decide(incomplete.root.observation, provider=incomplete, strict=True)
 
@@ -159,7 +186,7 @@ def test_behavior_identity_rejects_a_different_runtime_provider():
         policy_configuration=PolicyConfiguration(),
         behavior_identity=BehaviorIdentity(
             evaluator.identity, model.identity, search.identity, policy.identity,
-            selection.identity, "stop-with-evidence-v1", "different-provider-v1",
+            selection.identity, NO_FAIL_SAFE_POLICY_IDENTITY, "different-provider-v1",
             configuration.identity, model.prize_plan.identity,
         ),
         compute_identity=configuration.identity,
@@ -187,7 +214,11 @@ class BiasedPolicy:
     def priors(self, request):
         distribution = UniformPolicyModel().priors(request)
         if len(distribution.actions) != 2:
-            return distribution
+            return replace(
+                distribution,
+                model_identity=self.identity,
+                configuration_identity=self.identity,
+            )
         actions = tuple(
             replace(item, normalized_score=prior, final_prior=prior)
             for item, prior in zip(distribution.actions, (0.99, 0.01)))

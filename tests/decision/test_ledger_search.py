@@ -314,6 +314,38 @@ def test_search_rejects_non_distribution_policy_priors():
             InvalidPolicyModel(), provider, SearchConfiguration())
 
 
+def test_search_validates_policy_distribution_provenance_and_joins_by_choice():
+    class ReorderedPolicyModel(UniformPolicyModel):
+        def __init__(self, *, wrong_identity=False):
+            self.wrong_identity = wrong_identity
+
+        def priors(self, request):
+            distribution = super().priors(request)
+            return replace(
+                distribution,
+                model_identity=("wrong" if self.wrong_identity else distribution.model_identity),
+                actions=tuple(reversed(distribution.actions)),
+            )
+
+    observation = printout(me=player(active=body(DRAGAPULT, 1)))
+    board = ObservationStateBuilder(DECK).root(observation)
+    root = PreviewState(observation, board, "root", deck=DECK,
+                        deck_counts=board.deck_counts or ())
+    provider = ScriptedProvider(menus={"root": (action("end", (0,)),
+                                                       action("end", (1,)))}, nodes={})
+
+    result = _search(
+        root, EvaluationModel.build(), LedgerValueEvaluator(),
+        ReorderedPolicyModel(), provider, SearchConfiguration())
+
+    assert result.evidence.policy_distribution.actions[0].choice == result.roster.identities[1]
+
+    with pytest.raises(ValueError, match="does not prove"):
+        _search(
+            root, EvaluationModel.build(), LedgerValueEvaluator(),
+            ReorderedPolicyModel(wrong_identity=True), provider, SearchConfiguration())
+
+
 @pytest.mark.parametrize("mismatch", ("baseline", "evaluator", "model", "scale"))
 def test_search_rejects_p0_v0_identity_mismatch_before_evaluation(mismatch):
     observation = printout(me=player(active=body(DRAGAPULT, 1)))

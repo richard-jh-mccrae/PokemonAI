@@ -364,7 +364,8 @@ _Avoid_: Search budget, Valuation Configuration
 
 **Behavior Identity**:
 The resolved aggregate identity of every replaceable behavior component and effective configuration.
-Each component declares its identity; the Decision Coordinator verifies the supplied aggregate.
+Each component declares its identity; the Decision Coordinator verifies the supplied aggregate. Missing optional
+components use explicit namespaced absence identities.
 _Avoid_: Weights-only hash, deck name
 
 **Indifference Set**:
