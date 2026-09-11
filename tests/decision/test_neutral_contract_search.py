@@ -240,14 +240,25 @@ def test_optional_provider_identity_matches_each_runtime_injection() -> None:
         without_provider.decide(
             OBSERVATION, provider=cast(SearchProvider, Model("provider-v1")))
 
+    def preserving_failure_handler(
+            request: EvaluationRequest,
+            failure: DecisionFailure,
+    ) -> SearchResult:
+        result = ContractSearch().search(
+            request, Evaluator(), "contract-search-config-v1")
+        return replace(result, outcome=SearchOutcome(
+            SearchOutcomeStatus.HARD_FAILURE,
+            result.outcome.coverage,
+            SearchTermination("contract-search", "provider", 1),
+            failure))
+
     with_provider = DecisionCoordinator(
         evaluator=Evaluator(), evaluation_model=Model(), search=OptionalProviderSearch(),
         search_configuration="contract-search-config-v1", decision_policy=Policy(),
         policy_configuration="contract-policy-config-v1",
         behavior_identity=behavior_identity(provider="provider-v1"),
         compute_identity="contract-compute-v1",
-        failure_handler=lambda request, _failure: ContractSearch().search(
-            request, Evaluator(), "contract-search-config-v1"))
+        failure_handler=preserving_failure_handler)
     with pytest.raises(ValueError, match="injected provider"):
         with_provider.decide(OBSERVATION)
     recovered = with_provider.decide(
@@ -255,7 +266,25 @@ def test_optional_provider_identity_matches_each_runtime_injection() -> None:
         failure=DecisionFailure.capture(
             DecisionFailureStage.PROVIDER, RuntimeError("provider failed")))
 
-    assert isinstance(recovered.resolution, PolicySelection)
+    assert isinstance(recovered.resolution, NoSelection)
+    assert recovered.search.outcome.failure is not None
+    assert recovered.search.outcome.failure.stage is DecisionFailureStage.PROVIDER
+
+
+def test_failure_handler_cannot_erase_the_supplied_failure() -> None:
+    coordinator = DecisionCoordinator(
+        evaluator=Evaluator(), evaluation_model=Model(), search=ContractSearch(),
+        search_configuration="contract-search-config-v1", decision_policy=Policy(),
+        policy_configuration="contract-policy-config-v1",
+        behavior_identity=behavior_identity(), compute_identity="contract-compute-v1",
+        failure_handler=lambda request, _failure: ContractSearch().search(
+            request, Evaluator(), "contract-search-config-v1"))
+
+    with pytest.raises(ValueError, match="preserve the Decision Failure"):
+        coordinator.decide(
+            OBSERVATION,
+            failure=DecisionFailure.capture(
+                DecisionFailureStage.PROVIDER, RuntimeError("provider failed")))
 
 
 def test_coordinator_requires_every_core_component_contract() -> None:

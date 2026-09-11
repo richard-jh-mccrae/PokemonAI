@@ -203,9 +203,7 @@ class DecisionCoordinator:
             baseline_identity=self.ledger_baseline_identity,
         )
         if failure is not None:
-            if self.failure_handler is None:
-                raise ValueError("decision failure requires a failure handler")
-            result = self.failure_handler(request, failure)
+            result = self._handle_failure(request, failure)
         else:
             try:
                 result = self._search(request, provider)
@@ -216,7 +214,7 @@ class DecisionCoordinator:
                     raise
                 captured = getattr(exc, "failure", None) or DecisionFailure.capture(
                     DecisionFailureStage.SEARCH, exc)
-                result = self.failure_handler(request, captured)
+                result = self._handle_failure(request, captured)
         self._validate_search_result(request, result)
         if not result.roster.actions:
             return DecisionResult(result, NoSelection(result.outcome.status), self.behavior_identity)
@@ -269,6 +267,19 @@ class DecisionCoordinator:
                 state, result,
                 DecisionFailure.capture(DecisionFailureStage.POLICY, exc),
                 recovery_context)
+
+    def _handle_failure(
+            self,
+            request: EvaluationRequest,
+            failure: DecisionFailure,
+    ) -> SearchResult:
+        if self.failure_handler is None:
+            raise ValueError("decision failure requires a failure handler")
+        result = self.failure_handler(request, failure)
+        if (result.outcome.status is not SearchOutcomeStatus.HARD_FAILURE
+                or result.outcome.failure != failure):
+            raise ValueError("failure handler must preserve the Decision Failure")
+        return result
 
     def _search(
             self,
