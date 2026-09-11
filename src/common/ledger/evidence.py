@@ -1,11 +1,26 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from enum import Enum
 from typing import ClassVar
 
-from common.decision import ActionChoiceIdentity, PolicyDistribution
+from common.decision.components import PolicyDistribution
+from common.decision.identity import ActionChoiceIdentity
 
 from .prizes import PrizeMap
+
+
+class LedgerDecisionReason(str, Enum):
+    FORCED = "forced"
+    BEST_DELTA = "best_delta"
+    POSITIVE_CONTINUATION = "positive_continuation"
+    BEST_TURN_ENDER = "best_turn_ender"
+    FAIL_SAFE_EVALUATION_FAILURE = "fail_safe_evaluation_failure"
+    FAIL_SAFE_PROVIDER_FAILURE = "fail_safe_provider_failure"
+    FAIL_SAFE_SEARCH_FAILURE = "fail_safe_search_failure"
+    FAIL_SAFE_POLICY_FAILURE = "fail_safe_policy_failure"
+    FAIL_SAFE_PRESENTATION_FAILURE = "fail_safe_presentation_failure"
+    FAIL_SAFE_RUNTIME_FAILURE = "fail_safe_runtime_failure"
 
 
 @dataclass(frozen=True, slots=True)
@@ -44,6 +59,7 @@ LedgerFailSafeDecisionEvidence = LedgerPolicyDecisionEvidence
 
 
 __all__ = (
-    "LedgerCandidateEvidence", "LedgerEvidence", "LedgerFailSafeDecisionEvidence",
+    "LedgerCandidateEvidence", "LedgerDecisionReason", "LedgerEvidence",
+    "LedgerFailSafeDecisionEvidence",
     "LedgerPolicyDecisionEvidence",
 )

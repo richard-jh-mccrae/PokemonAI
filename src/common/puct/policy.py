@@ -1,8 +1,8 @@
 from dataclasses import dataclass
 
-from common.decision import (
-    ActionChoiceIdentity, ComponentContract, DecisionPolicyRequest, StatisticIdentity,
-)
+from common.decision.components import ComponentContract, DecisionPolicyRequest
+from common.decision.identity import ActionChoiceIdentity
+from common.decision.statistics import StatisticIdentity
 from common.decision.puct import PUCT_VISIT_STATISTIC, PuctRootEdge
 
 

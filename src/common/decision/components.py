@@ -10,18 +10,20 @@ from common.observation import ObservationDelta, ObservationState
 
 from .identity import ActionChoiceIdentity
 from .identity import WireValue
-from .outcomes import DecisionFailure, SearchOutcome
+from .outcomes import DecisionFailure, SearchOutcome, SearchOutcomeStatus
 from .results import CandidateResult, CandidateRoster, SearchEvidence, SearchResult
-from .statistics import DecisionStatistic, StatisticIdentity
+from .statistics import DecisionDeltaStatistic, DecisionStatistic, StatisticIdentity
 from .values import EvaluationStatus, StateValuation, ValueScale
 
 
 class EvaluationModel(Protocol):
-    identity: str
+    @property
+    def identity(self) -> str: ...
 
 
 class IdentifiedConfiguration(Protocol):
-    identity: str
+    @property
+    def identity(self) -> str: ...
 
 
 class ExecutionGuard(Protocol):
@@ -29,7 +31,8 @@ class ExecutionGuard(Protocol):
 
 
 class EvaluationReuse(Protocol):
-    identity: str
+    @property
+    def identity(self) -> str: ...
 
 
 class FailSafeContext(Protocol):
@@ -125,20 +128,65 @@ class ComponentContract:
 
 
 @dataclass(frozen=True, slots=True)
+class DecisionRequirements:
+    statistics: tuple[StatisticIdentity, ...] = ()
+
+    def __post_init__(self) -> None:
+        if len(set(self.statistics)) != len(self.statistics):
+            raise ValueError("decision requirements contain duplicate statistics")
+
+
+def _validate_candidate_view(
+        roster: CandidateRoster,
+        candidates: tuple[CandidateResult, ...],
+        statistics: tuple[DecisionStatistic, ...],
+) -> dict[StatisticIdentity, frozenset[ActionChoiceIdentity]]:
+    if tuple(candidate.choice for candidate in candidates) != roster.identities:
+        raise ValueError("candidates do not match Candidate Roster")
+    choices = set(roster.identities)
+    keyed: set[tuple[StatisticIdentity, ActionChoiceIdentity]] = set()
+    supplied: dict[StatisticIdentity, set[ActionChoiceIdentity]] = {}
+    for statistic in statistics:
+        if statistic.choice not in choices:
+            raise ValueError("decision statistic choice is outside Candidate Roster")
+        key = (statistic.identity, statistic.choice)
+        if key in keyed:
+            raise ValueError("duplicate decision statistic for choice")
+        keyed.add(key)
+        supplied.setdefault(statistic.identity, set()).add(statistic.choice)
+    return {identity: frozenset(values) for identity, values in supplied.items()}
+
+
+@dataclass(frozen=True, slots=True)
 class PolicyModelRequest:
     observation: ObservationState
     roster: CandidateRoster
     candidates: tuple[CandidateResult, ...]
     statistics: tuple[DecisionStatistic, ...]
     source: PolicySourceIdentity
+    requirements: DecisionRequirements = DecisionRequirements()
 
     def __post_init__(self) -> None:
         if not isinstance(self.observation, ObservationState):
             raise TypeError("policy model request requires an Observation State")
         if self.roster.decision_key != self.observation.decision_key:
             raise ValueError("policy model roster is not proven for Observation State")
-        if tuple(candidate.choice for candidate in self.candidates) != self.roster.identities:
-            raise ValueError("policy model candidates do not match Candidate Roster")
+        legal = tuple(ActionChoiceIdentity.from_action(action)
+                      for action in self.observation.legal_actions)
+        if self.roster.identities != legal:
+            raise ValueError("policy model roster differs from Observation State legal actions")
+        supplied = _validate_candidate_view(
+            self.roster, self.candidates, self.statistics)
+        for statistic in self.statistics:
+            if isinstance(statistic, DecisionDeltaStatistic) and statistic.value is not None:
+                if (statistic.value.scale.identity != self.source.value_scale_identity
+                        or statistic.value.perspective != self.observation.seat):
+                    raise ValueError(
+                        "policy model candidate Value Scale or perspective differs from "
+                        "source Value Scale or observation perspective")
+        for required in self.requirements.statistics:
+            if supplied.get(required, frozenset()) != frozenset(self.roster.identities):
+                raise ValueError("policy model required statistic is not supplied for roster")
 
 
 @dataclass(frozen=True, slots=True)
@@ -274,9 +322,10 @@ class PolicyDistribution:
             raise ValueError("policy uniform mix must be between zero and one")
 
     def priors_for(self, roster: CandidateRoster) -> tuple[float, ...]:
-        if tuple(item.choice for item in self.actions) != roster.identities:
+        by_choice = {item.choice: item.final_prior for item in self.actions}
+        if set(by_choice) != set(roster.identities):
             raise ValueError("policy distribution does not match Candidate Roster")
-        return tuple(item.final_prior for item in self.actions)
+        return tuple(by_choice[choice] for choice in roster.identities)
 
     def as_dict(self) -> dict[str, WireValue]:
         return {
@@ -320,11 +369,6 @@ class PolicyDistribution:
 
 
 @dataclass(frozen=True, slots=True)
-class DecisionRequirements:
-    statistics: tuple[StatisticIdentity, ...] = ()
-
-
-@dataclass(frozen=True, slots=True)
 class DecisionPolicyRequest:
     roster: CandidateRoster
     candidates: tuple[CandidateResult, ...]
@@ -334,6 +378,16 @@ class DecisionPolicyRequest:
     configuration: IdentifiedConfiguration | str
     requirements: DecisionRequirements = DecisionRequirements()
 
+    def __post_init__(self) -> None:
+        if not self.outcome.permits_action:
+            raise ValueError("normal decision policy requires a permitting Search Outcome")
+        supplied = _validate_candidate_view(
+            self.roster, self.candidates, self.statistics)
+        for required in self.requirements.statistics:
+            covered = self.outcome.coverage.choices_for(required)
+            if not covered or not covered.issubset(supplied.get(required, frozenset())):
+                raise ValueError("decision policy required statistic is not covered")
+
 
 @dataclass(frozen=True, slots=True)
 class FailSafePolicyRequest:
@@ -341,17 +395,39 @@ class FailSafePolicyRequest:
     roster: CandidateRoster
     candidates: tuple[CandidateResult, ...]
     outcome: SearchOutcome
+    original_search_outcome: SearchOutcome
     evidence: SearchEvidence | None
     failure: DecisionFailure
     configuration: IdentifiedConfiguration | str
     context: FailSafeContext | None = None
 
+    def __post_init__(self) -> None:
+        if not isinstance(self.observation, ObservationState):
+            raise TypeError("fail-safe request requires an Observation State")
+        if self.outcome.permits_action:
+            raise ValueError("fail-safe policy requires a non-permitting outcome")
+        if self.roster.decision_key != self.observation.decision_key:
+            raise ValueError("fail-safe roster is not proven for Observation State")
+        legal = tuple(ActionChoiceIdentity.from_action(action)
+                      for action in self.observation.legal_actions)
+        if self.roster.identities != legal:
+            raise ValueError("fail-safe roster differs from Observation State legal actions")
+        _validate_candidate_view(self.roster, self.candidates, ())
+        if (self.outcome.status is SearchOutcomeStatus.HARD_FAILURE
+                and self.outcome.failure != self.failure):
+            raise ValueError("fail-safe outcome differs from Decision Failure")
+
 
 @runtime_checkable
 class ValueEvaluator(Protocol):
-    identity: str
-    value_scale: ValueScale
-    accepted_model_identity: str
+    @property
+    def identity(self) -> str: ...
+
+    @property
+    def value_scale(self) -> ValueScale: ...
+
+    @property
+    def accepted_model_identity(self) -> str: ...
 
     def evaluate(self, request: EvaluationRequest) -> StateValuation: ...
 
@@ -381,15 +457,21 @@ def validate_state_valuation(
 
 
 class PolicyModel(Protocol):
-    identity: str
+    @property
+    def identity(self) -> str: ...
 
     def priors(self, request: PolicyModelRequest) -> PolicyDistribution: ...
 
 
 class SearchAlgorithm(Protocol):
-    identity: str
-    required_collaborators: tuple[CollaboratorKind, ...]
-    optional_collaborators: tuple[CollaboratorKind, ...]
+    @property
+    def identity(self) -> str: ...
+
+    @property
+    def required_collaborators(self) -> tuple[CollaboratorKind, ...]: ...
+
+    @property
+    def optional_collaborators(self) -> tuple[CollaboratorKind, ...]: ...
 
     def search(
             self,
@@ -400,14 +482,18 @@ class SearchAlgorithm(Protocol):
 
 
 class DecisionPolicy(Protocol):
-    identity: str
-    required_statistics: tuple[StatisticIdentity, ...]
+    @property
+    def identity(self) -> str: ...
+
+    @property
+    def required_statistics(self) -> tuple[StatisticIdentity, ...]: ...
 
     def choose(self, request: DecisionPolicyRequest) -> ActionChoiceIdentity: ...
 
 
 class FailSafePolicy(Protocol):
-    identity: str
+    @property
+    def identity(self) -> str: ...
 
     def choose(self, request: FailSafePolicyRequest) -> ActionChoiceIdentity: ...
 

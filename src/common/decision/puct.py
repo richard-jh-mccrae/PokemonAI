@@ -237,6 +237,13 @@ class PuctEvidence:
     transport: PuctTransport = PuctTransport()
     root_edges: tuple[PuctRootEdge, ...] = ()
 
+    def __post_init__(self) -> None:
+        if self.schema_version != 2 or self.simulations < 0:
+            raise ValueError("invalid PUCT evidence")
+        choices = tuple(edge.choice for edge in self.root_edges)
+        if len(set(choices)) != len(choices):
+            raise ValueError("PUCT evidence contains duplicate root choices")
+
     @property
     def owner(self) -> str:
         return "puct"

@@ -1068,10 +1068,12 @@ def build_puct_decision_record(result, state, *, episode_key: str, decision_inde
     }
     candidates = []
     root_distribution = evidence.prior_distributions[0].distribution
-    priors = tuple(item.final_prior for item in root_distribution.actions)
-    for action, candidate, edge, prior in zip(
+    priors = root_distribution.priors_for(result.roster)
+    edges = {edge.choice: edge for edge in evidence.root_edges}
+    for action, candidate, prior in zip(
             result.roster.actions, result.search.candidates,
-            evidence.root_edges, priors):
+            priors):
+        edge = edges[candidate.choice]
         statistics = edge.statistics
         action_id = action_ids.get(candidate.choice)
         if action_id is None:

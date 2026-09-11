@@ -1,15 +1,3 @@
-from .compatibility_contracts import (
-    DecisionChoice,
-    DecisionReason,
-    FailSafeRequest,
-    PolicyActionEvidence,
-    PolicyDistribution,
-    PolicyFallbackReason,
-    PolicyRequest,
-    SearchTrace,
-    SearchValue,
-    ValuedCandidate,
-)
 from .contracts import (
     ActionChoice,
     ActionChoiceIdentity,
@@ -89,7 +77,7 @@ from .configuration import (
     DecisionDeadlineExceeded, DecisionExecutionGuard, PolicyConfiguration,
     SearchConfiguration, correction_compute_profile,
 )
-from .fail_safe import fail_safe_request, safe_legal_selection
+from .fail_safe import FailSafeRequest, fail_safe_request, safe_legal_selection
 
 
 __all__ = tuple(name for name in globals() if not name.startswith("_"))

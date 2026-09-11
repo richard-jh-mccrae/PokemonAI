@@ -16,9 +16,8 @@ from types import ModuleType
 
 from common.api import RootDecision
 from common.decision import (DecisionCoordinator, DecisionDeadlineExceeded,
-                             DecisionFailure, DecisionFailureStage, DecisionPolicyRequest,
+                             DecisionFailure, DecisionFailureStage,
                              FailSafeRequest, ForcedSelection, fail_safe_request)
-from common.decision.compatibility import legacy_roster_from_policy_request
 from common.observation import (KnownOwnPrizes, ObservationStateBuilder, OpponentBelief,
                                 reduce_knowledge)
 from common.strategy.context import _MAIN
@@ -306,17 +305,18 @@ class LedgerDecider:
         evidence = result.search.evidence
         if not isinstance(evidence, LedgerEvidence):
             raise LedgerUnavailable("Ledger result lacks Ledger evidence")
-        legacy_request = DecisionPolicyRequest(
-            result.roster, result.search.candidates, result.search.outcome,
-            result.search.statistics, evidence, policy_configuration)
-        candidates = legacy_roster_from_policy_request(legacy_request).candidates
+        candidates = result.search.candidates
+        priced = tuple(zip(result.roster.actions, candidates))
         chosen = result.chosen_candidate
         if chosen is None:
             raise LedgerUnavailable("no chosen candidate")
         action = result.chosen
         if action is None:
             raise LedgerUnavailable("no chosen action")
-        chosen_legacy = candidates[result.roster.identities.index(chosen.choice)]
+        evidence_by_choice = {candidate.choice: candidate for candidate in evidence.candidates}
+        chosen_evidence = evidence_by_choice.get(chosen.choice)
+        if chosen_evidence is None:
+            raise LedgerUnavailable("Ledger evidence lacks chosen candidate")
         context_value = (fail_safe_request.context if fail_safe_request is not None else
                          None if board.select is None else board.select.context)
         context = _MAIN if context_value is None else int(context_value)
@@ -325,7 +325,7 @@ class LedgerDecider:
             index for index, candidate in enumerate(candidates)
             if chosen_value is not None and candidate.delta is not None
             and abs(candidate.delta.total - chosen_value) <= policy_configuration.noise_tolerance)
-        gaps = (tuple(gap for candidate in candidates for gap in candidate.gaps)
+        gaps = (tuple(gap for candidate in candidates for gap in candidate.delta_gaps)
                 + result.baseline.gaps)
         if gaps and self.gap_sink is not None:
             self.gap_sink({"context": context,
@@ -359,8 +359,8 @@ class LedgerDecider:
                                  if fail_safe_request is not None else board.position_key),
                 "decision_key": (fail_safe_request.decision_key
                                  if fail_safe_request is not None else board.decision_key),
-                "prize_map": (chosen_legacy.policy_evidence.as_dict()
-                              if chosen_legacy.policy_evidence is not None else None),
+                "prize_map": (chosen_evidence.prize_map.as_dict()
+                              if chosen_evidence.prize_map is not None else None),
                 **({"opponent_unknown_mass": opponent.unknown_mass}
                    if opponent is not None else {}),
                 "baseline": result.baseline.total, "gaps": sorted(set(gaps)),
@@ -377,13 +377,13 @@ class LedgerDecider:
                     "traceback_tail": cleanup_failure.traceback_tail,
                 }} if cleanup_failure is not None else {}),
                 "indifference_ordinals": indifference_ordinals,
-                "prices": tuple({"action": str(candidate.action.identity),
-                                 "selection": list(candidate.action.selection),
+                "prices": tuple({"action": str(action.identity),
+                                 "selection": list(action.selection),
                                  "swing": (None if candidate.delta is None
                                            else candidate.delta.total),
                                  "ends_turn": (False if candidate.continuation is None else
                                                not candidate.continuation.continues_turn),
-                                 "status": candidate.status.value,
+                                 "status": candidate.delta_status.value,
                                  "continuation": (None if candidate.continuation is None else {
                                      "state_delta": candidate.continuation.state_delta,
                                      "action_opportunity": candidate.continuation.action_opportunity,
@@ -423,7 +423,7 @@ class LedgerDecider:
                                      } for item in (() if candidate.delta is None
                                                    else candidate.delta.components)),
                                  })}
-                                for candidate in candidates),
+                                for action, candidate in priced),
             },
             decision_result=result,
         )

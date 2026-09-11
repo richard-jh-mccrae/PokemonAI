@@ -18,9 +18,9 @@ from common.decision import (
     DecisionPolicyRequest,
     ComputeConfiguration, EvaluationStatus, RealizedOutcome, SearchCoverage,
     SearchConfiguration, SearchOutcome, SearchOutcomeStatus, SearchTermination,
-    ValuedCandidate,
 )
-from common.decision.compatibility import DECISION_DELTA_STATISTIC
+from legacy_decision_fixtures import ValuedCandidate
+from common.decision.statistics import DECISION_DELTA
 from common.ledger import EvaluationModel, LedgerDecider, PrizeMap
 from common.ledger.decider import LedgerUnavailable
 from common.ledger.decision import LEDGER_VALUE_SCALE
@@ -61,7 +61,7 @@ def make_decider(provider, deck=(DRAGAPULT, FIRE_E, DARK_E) * 20, sink=None):
 def choose_prices(decider, prices, *, forced=False):
     candidates = tuple(ValuedCandidate(
         price.action,
-        DecisionDelta(price.swing, LEDGER_VALUE_SCALE),
+        DecisionDelta(price.swing, LEDGER_VALUE_SCALE, perspective=0),
         (CandidateDisposition.FORCED if forced else
          CandidateDisposition.ENDS_TURN if price.ends_turn
          else CandidateDisposition.CONTINUES_TURN),
@@ -86,7 +86,7 @@ def choose_prices(decider, prices, *, forced=False):
     covered = tuple(candidate.choice for candidate in typed)
     outcome = SearchOutcome(
         SearchOutcomeStatus.COMPLETE,
-        SearchCoverage.covered(DECISION_DELTA_STATISTIC, covered),
+        SearchCoverage.covered(DECISION_DELTA, covered),
         SearchTermination("test", "complete", 1),
     )
     evidence = LedgerEvidence(

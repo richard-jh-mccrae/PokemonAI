@@ -3,33 +3,22 @@ from dataclasses import dataclass, replace
 import pytest
 
 from common.api import ActionIdentity
-from common.decision import (
-    ActionChoiceIdentity,
-    CandidateDisposition,
-    CandidateResult,
-    CandidateRoster,
-    ComponentContract,
-    DecisionCoordinator,
-    DecisionDelta,
-    DecisionDeltaStatistic,
-    DecisionFailureStage,
-    DecisionPolicyRequest,
-    EvaluationRequest,
-    EvaluationStatus,
-    FailSafePolicyRequest,
-    FailSafeSelection,
-    PolicySelection,
-    SearchCoverage,
-    SearchOutcome,
-    SearchOutcomeStatus,
-    SearchResult,
-    SearchTermination,
-    StateValuation,
-    StatisticIdentity,
-    ValueScale,
-    ValueEvaluator,
+from common.decision.components import (
+    CollaboratorKind, ComponentContract, DecisionPolicyRequest, EvaluationRequest,
+    FailSafePolicyRequest, IdentifiedConfiguration, ValueEvaluator,
 )
-from common.decision.components import IdentifiedConfiguration
+from common.decision.coordinator import DecisionCoordinator
+from common.decision.identity import ActionChoiceIdentity
+from common.decision.outcomes import (
+    DecisionFailureStage, SearchCoverage, SearchOutcome, SearchOutcomeStatus,
+    SearchTermination,
+)
+from common.decision.results import (
+    CandidateDisposition, CandidateResult, CandidateRoster, FailSafeSelection,
+    NoSelection, PolicySelection, SearchResult,
+)
+from common.decision.statistics import DecisionDeltaStatistic, StatisticIdentity
+from common.decision.values import DecisionDelta, EvaluationStatus, StateValuation, ValueScale
 from common.options import LegalAction
 from common.observation import ObservationStateBuilder
 from ledger_helpers import DARK_E, DRAGAPULT, body, player, printout
@@ -38,8 +27,8 @@ from ledger_helpers import DARK_E, DRAGAPULT, body, player, printout
 SCALE = ValueScale("contract", 1)
 ACTION = LegalAction(ActionIdentity("end"), (0,), ((0,),), ())
 OBSERVATION = replace(
-    ObservationStateBuilder((DRAGAPULT, DARK_E) * 30).root(
-        printout(me=player(active=body(DRAGAPULT, 1)))),
+    ObservationStateBuilder((DRAGAPULT, DARK_E) * 30).root(  # type: ignore[no-untyped-call]
+        printout(me=player(active=body(DRAGAPULT, 1)))),  # type: ignore[no-untyped-call]
     legal_actions=(ACTION,),
 )
 DELTA = StatisticIdentity("common", "decision-delta", 1)
@@ -60,7 +49,7 @@ class Evaluator:
             request.state.position_key,
             0.0,
             SCALE,
-            request.root_perspective,
+            request.state.seat,
             self.identity,
             evaluation_model_identity=request.evaluation_model.identity,
         )
@@ -68,8 +57,8 @@ class Evaluator:
 
 class ContractSearch:
     identity = "contract-search-v1"
-    required_collaborators = ()
-    optional_collaborators = ()
+    required_collaborators: tuple[CollaboratorKind, ...] = ()
+    optional_collaborators: tuple[CollaboratorKind, ...] = ()
 
     def search(
             self,
@@ -84,7 +73,7 @@ class ContractSearch:
             CandidateResult(
                 choice,
                 CandidateDisposition.FORCED,
-                delta=DecisionDelta(0.0, SCALE),
+                delta=DecisionDelta(0.0, SCALE, perspective=request.state.seat),
                 delta_status=EvaluationStatus.COMPLETE,
             ),
         )
@@ -146,6 +135,7 @@ def test_non_permitting_outcome_produces_no_selection() -> None:
             result = super().search(request, evaluator, configuration)
             return replace(
                 result,
+                statistics=(),
                 outcome=SearchOutcome(
                     SearchOutcomeStatus.INSUFFICIENT_INITIALIZATION,
                     SearchCoverage(),
@@ -163,6 +153,7 @@ def test_non_permitting_outcome_produces_no_selection() -> None:
     ).decide(OBSERVATION)
 
     assert result.chosen is None
+    assert isinstance(result.resolution, NoSelection)
     assert result.resolution.outcome is SearchOutcomeStatus.INSUFFICIENT_INITIALIZATION
 
 
@@ -225,6 +216,7 @@ def test_policy_failure_reaches_fail_safe_as_non_permitting_outcome() -> None:
         def choose(self, request: FailSafePolicyRequest) -> ActionChoiceIdentity:
             assert request.outcome.status is SearchOutcomeStatus.HARD_FAILURE
             assert not request.outcome.permits_action
+            assert request.original_search_outcome.status is SearchOutcomeStatus.COMPLETE
             assert request.failure.stage is DecisionFailureStage.POLICY
             return request.roster.identities[0]
 
@@ -237,4 +229,4 @@ def test_policy_failure_reaches_fail_safe_as_non_permitting_outcome() -> None:
     ).decide(OBSERVATION)
 
     assert isinstance(result.resolution, FailSafeSelection)
-    assert result.search.outcome.status is SearchOutcomeStatus.HARD_FAILURE
+    assert result.search.outcome.status is SearchOutcomeStatus.COMPLETE

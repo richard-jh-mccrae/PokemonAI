@@ -39,7 +39,8 @@ def _bundle(run: Path, partition: str, episode: int) -> Path:
     roster = CandidateRoster(state.legal_actions, state.decision_key, forced=True)
     choice = ActionChoiceIdentity.from_action(action)
     candidate = CandidateResult(
-        choice, CandidateDisposition.FORCED, DecisionDelta(0.0, scale),
+        choice, CandidateDisposition.FORCED,
+        DecisionDelta(0.0, scale, perspective=state.seat),
         EvaluationStatus.COMPLETE)
     search = SearchResult(
         baseline,

@@ -21,8 +21,11 @@ class StatisticIdentity:
 
 
 class DecisionStatistic(Protocol):
-    identity: StatisticIdentity
-    choice: ActionChoiceIdentity
+    @property
+    def identity(self) -> StatisticIdentity: ...
+
+    @property
+    def choice(self) -> ActionChoiceIdentity: ...
 
 
 DECISION_DELTA = StatisticIdentity("common", "decision-delta", 1)

@@ -15,10 +15,8 @@ from common.decision import (
     CandidateRoster,
     ComputeConfiguration,
     ContinuationResult,
-    DecisionDelta,
     DecisionFailure,
     DecisionFailureStage,
-    DecisionReason,
     DecisionResult,
     EvaluationStatus,
     FailSafeSelection,
@@ -29,14 +27,14 @@ from common.decision import (
     SearchOutcomeStatus,
     SearchResult,
     SearchTermination,
-    SearchTrace,
     StateValuation,
     SuccessorResult,
     ValueComponent,
     ValueScale,
-    ValuedCandidate,
 )
+from legacy_decision_fixtures import ValuedCandidate
 from common.observation import ObservationStateBuilder, TransitionTrace, VisibleHand
+from common.decision import DecisionDelta as _DecisionDelta
 from common.options import LegalAction
 from common.ledger import BehaviorIdentity, EvaluationModel, PrizeMap
 from common.ledger.evidence import (
@@ -61,6 +59,10 @@ from common.telemetry import (
 
 def Action(identity, selection):
     return LegalAction(identity, selection, (selection,), ())
+
+
+def DecisionDelta(total, scale, components=()):
+    return _DecisionDelta(total, scale, components, perspective=0)
 
 
 def _provider_configuration(identity="fixture-provider"):

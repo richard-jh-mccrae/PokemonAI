@@ -1,4 +1,4 @@
-from dataclasses import replace
+from dataclasses import dataclass, replace
 
 import pytest
 
@@ -10,6 +10,7 @@ from common.decision import (
     CandidateRoster,
     DecisionDeadlineExceeded,
     DecisionDelta,
+    DecisionDeltaStatistic,
     DecisionResult,
     EvaluationStatus,
     NoSelection,
@@ -45,7 +46,7 @@ def result_for(actions: tuple[LegalAction, ...]) -> SearchResult:
     candidates = tuple(CandidateResult(
         choice,
         CandidateDisposition.CONTINUES_TURN,
-        DecisionDelta(float(index), SCALE),
+        DecisionDelta(float(index), SCALE, perspective=state.seat),
         EvaluationStatus.COMPLETE,
     ) for index, choice in enumerate(roster.identities))
     return SearchResult(
@@ -96,6 +97,46 @@ def test_decision_result_joins_selection_by_exact_choice_identity():
             search,
             PolicySelection(ActionChoiceIdentity(ActionIdentity("same"), (2,))),
         )
+
+
+def test_decision_result_rejects_evidence_for_another_choice():
+    @dataclass(frozen=True)
+    class Evidence:
+        choice: ActionChoiceIdentity
+        owner: str = "fixture"
+        schema_version: int = 1
+
+    search = result_for((action("same", 0), action("same", 1)))
+
+    with pytest.raises(ValueError, match="evidence differs"):
+        DecisionResult(
+            search,
+            PolicySelection(search.roster.identities[0], Evidence(
+                search.roster.identities[1])),
+        )
+
+
+def test_search_result_rejects_statistic_perspective_and_missing_coverage():
+    search = result_for((action("end", 0),))
+    choice = search.roster.identities[0]
+    statistic = DecisionDeltaStatistic(
+        choice, DecisionDelta(1.0, SCALE, perspective=1), EvaluationStatus.COMPLETE)
+
+    with pytest.raises(ValueError, match="perspective"):
+        replace(
+            search,
+            outcome=replace(
+                search.outcome,
+                coverage=SearchCoverage.covered(statistic.identity, (choice,))),
+            statistics=(statistic,),
+        )
+
+    valid = replace(
+        statistic,
+        value=DecisionDelta(1.0, SCALE, perspective=search.baseline.perspective),
+    )
+    with pytest.raises(ValueError, match="absent from search coverage"):
+        replace(search, statistics=(valid,))
 
 
 def test_no_selection_rejects_a_permitting_nonempty_search():

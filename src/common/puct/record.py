@@ -13,11 +13,13 @@ def decision_record(decision, observation, configuration, *, executed_action=Non
             or configuration.identity != evidence.configuration_identity):
         raise ValueError("PUCT record requires its matching result and configuration")
     root_distribution = evidence.prior_distributions[0].distribution
-    priors = tuple(item.final_prior for item in root_distribution.actions)
+    priors = root_distribution.priors_for(decision.roster)
+    edges = {edge.choice: edge for edge in evidence.root_edges}
     candidates = []
-    for action, candidate, edge, prior in zip(
+    for action, candidate, prior in zip(
             decision.roster.actions, decision.search.candidates,
-            evidence.root_edges, priors):
+            priors):
+        edge = edges[candidate.choice]
         statistics = edge.statistics
         candidates.append({
             "action": asdict(action.identity), "selection": list(action.selection),

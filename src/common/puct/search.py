@@ -10,7 +10,8 @@ from pathlib import Path
 from common.decision import (
     ActionChoiceIdentity, CandidateDisposition, CandidateResult, CandidateRoster,
     CollaboratorKind, ComponentContract, DecisionDelta, DecisionDeltaStatistic,
-    DecisionFailure, DecisionFailureStage, EvaluationStatus, PolicyModelRequest,
+    DecisionFailure, DecisionFailureStage, DecisionRequirements, EvaluationStatus,
+    PolicyModelRequest,
     PolicySourceIdentity, ReuseProvenance, ReuseVerdict, SearchCoverage,
     SearchOutcome, SearchResult, SearchTermination, StateValuation,
     validate_state_valuation,
@@ -330,14 +331,21 @@ class _Session:
                         self.budget.stop_admission(exc.reason)
                         node.preparation_limited = True
                 self.stage = DecisionFailureStage.POLICY
+                statistics = tuple(DecisionDeltaStatistic(
+                    candidate.choice, candidate.delta, candidate.delta_status)
+                    for candidate in candidates)
+                contract = getattr(self.policy_model, "contract", None)
+                required = (() if contract is None else
+                            tuple(contract.required_statistics))
                 request = PolicyModelRequest(
                     state.observation,
                     roster,
                     candidates,
-                    (),
+                    statistics,
                     PolicySourceIdentity(
                         self.request.baseline_identity, self.evaluator.identity,
                         self.request.evaluation_model.identity, valuation.scale.identity),
+                    DecisionRequirements(required),
                 )
                 try:
                     self.budget.prepare(len(actions))

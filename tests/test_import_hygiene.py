@@ -177,16 +177,18 @@ def test_neutral_decision_contracts_do_not_import_algorithm_packages():
     assert offenders == [], f"neutral decision contracts import algorithms — {offenders}"
 
 
-def test_search_algorithms_do_not_import_legacy_decision_contracts():
+def test_legacy_decision_contracts_are_absent_from_shipped_source():
     offenders = []
-    for package in ("ledger", "puct"):
-        for path in (REPO / f"src/common/{package}").rglob("*.py"):
-            tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
-            for node in ast.walk(tree):
-                module = node.module if isinstance(node, ast.ImportFrom) else None
-                if module == "common.decision.compatibility_contracts":
-                    offenders.append(f"{path.relative_to(REPO).as_posix()}:{node.lineno}")
-    assert offenders == [], f"search algorithms import legacy contracts — {offenders}"
+    for path in (REPO / "src").rglob("*.py"):
+        relative = path.relative_to(REPO).as_posix()
+        tree = ast.parse(path.read_text(encoding="utf-8-sig"), filename=str(path))
+        for node in ast.walk(tree):
+            module = node.module if isinstance(node, ast.ImportFrom) else None
+            if (module == "common.decision.compatibility_contracts"
+                    or (isinstance(node, ast.ImportFrom) and node.level
+                        and module == "compatibility_contracts")):
+                offenders.append(f"{relative}:{node.lineno}")
+    assert offenders == [], f"legacy decision contracts re-entered shipped source — {offenders}"
 
 
 def test_live_runtime_has_no_retired_bellman_or_latch_state():

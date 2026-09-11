@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import hashlib
-from dataclasses import dataclass, replace
+from dataclasses import dataclass
 from typing import Callable, Protocol, cast
 
 from common.observation import ObservationDelta, ObservationState
@@ -288,9 +288,18 @@ class DecisionCoordinator:
             "InsufficientInitialization",
             "search produced no comparable candidate",
         )
+        recovery_outcome = result.outcome
+        if recovery_outcome.permits_action or recovery_outcome.failure != failure:
+            recovery_outcome = SearchOutcome(
+                SearchOutcomeStatus.HARD_FAILURE,
+                result.outcome.coverage,
+                SearchTermination("coordinator", failure.stage.value, 1),
+                failure,
+            )
         request = FailSafePolicyRequest(
-            state, result.roster, result.candidates, result.outcome, result.evidence,
-            failure, self.policy_configuration, context)
+            state, result.roster, result.candidates, recovery_outcome,
+            result.outcome, result.evidence, failure,
+            self.policy_configuration, context)
         choose_with_evidence = getattr(self.fail_safe_policy, "choose_with_evidence", None)
         if choose_with_evidence is None:
             choice = self.fail_safe_policy.choose(request)
@@ -310,13 +319,7 @@ class DecisionCoordinator:
             failure: DecisionFailure,
             context: FailSafeContext | None = None,
     ) -> DecisionResult:
-        failed = replace(result, outcome=SearchOutcome(
-            SearchOutcomeStatus.HARD_FAILURE,
-            result.outcome.coverage,
-            SearchTermination("coordinator", failure.stage.value, 1),
-            failure,
-        ))
-        return self._recover(state, failed, context, failure)
+        return self._recover(state, result, context, failure)
 
     def _validate_search_result(
             self,

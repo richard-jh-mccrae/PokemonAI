@@ -10,7 +10,10 @@ from common.decision import (
     CandidateDisposition,
     CandidateResult,
     CandidateRoster,
+    DECISION_DELTA,
     DecisionDelta,
+    DecisionDeltaStatistic,
+    DecisionRequirements,
     EvaluationStatus,
     PolicyFallbackReason,
     PolicyModelRequest,
@@ -56,7 +59,7 @@ def roster(*deltas: float) -> PreparedRoster:
     candidates = tuple(CandidateResult(
         choice,
         CandidateDisposition.CONTINUES_TURN,
-        DecisionDelta(delta, SCALE),
+        DecisionDelta(delta, SCALE, perspective=0),
         EvaluationStatus.COMPLETE,
     ) for choice, delta in zip(structural.identities, deltas))
     return PreparedRoster(structural, candidates)
@@ -69,7 +72,7 @@ def mixed_roster(*items, forced=False) -> PreparedRoster:
     candidates = tuple(CandidateResult(
         choice,
         CandidateDisposition.FORCED if forced else CandidateDisposition.CONTINUES_TURN,
-        None if delta is None else DecisionDelta(delta, SCALE),
+        None if delta is None else DecisionDelta(delta, SCALE, perspective=0),
         status,
     ) for choice, (delta, status) in zip(structural.identities, items))
     return PreparedRoster(structural, candidates)
@@ -82,7 +85,15 @@ def policy_request(
     observation = replace(OBSERVATION, legal_actions=prepared.roster.actions)
     proven = replace(prepared.roster, decision_key=observation.decision_key)
     return PolicyModelRequest(
-        observation, proven, prepared.candidates, (), source)
+        observation,
+        proven,
+        prepared.candidates,
+        tuple(DecisionDeltaStatistic(
+            candidate.choice, candidate.delta, candidate.delta_status)
+            for candidate in prepared.candidates),
+        source,
+        DecisionRequirements((DECISION_DELTA,)),
+    )
 
 
 def test_ledger_policy_softens_canonical_deltas_without_excluding_actions():
@@ -333,7 +344,7 @@ def test_ledger_policy_rejects_candidate_value_scale_mismatch():
     candidate = CandidateResult(
         structural.identities[0],
         CandidateDisposition.CONTINUES_TURN,
-        DecisionDelta(1.0, ValueScale("other", 1)),
+        DecisionDelta(1.0, ValueScale("other", 1), perspective=0),
         EvaluationStatus.COMPLETE,
     )
     candidates = PreparedRoster(structural, (candidate,))

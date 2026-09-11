@@ -8,7 +8,10 @@ from common.options import LegalAction
 
 from .identity import ActionChoiceIdentity
 from .outcomes import DecisionFailure, DecisionFailureStage, SearchOutcome, SearchOutcomeStatus
-from .statistics import DecisionStatistic
+from .statistics import (
+    BestContinuationStatistic, DecisionDeltaStatistic, DecisionStatistic,
+    ExpectedContinuationStatistic, SampledMeanStatistic, StatisticIdentity,
+)
 from .values import (
     ContinuationResult,
     DecisionDelta,
@@ -25,14 +28,22 @@ class CandidateDisposition(str, Enum):
 
 
 class SearchEvidence(Protocol):
-    owner: str
-    schema_version: int
+    @property
+    def owner(self) -> str: ...
+
+    @property
+    def schema_version(self) -> int: ...
 
 
 class DecisionEvidence(Protocol):
-    owner: str
-    schema_version: int
-    choice: ActionChoiceIdentity
+    @property
+    def owner(self) -> str: ...
+
+    @property
+    def schema_version(self) -> int: ...
+
+    @property
+    def choice(self) -> ActionChoiceIdentity: ...
 
 
 @dataclass(frozen=True, slots=True)
@@ -83,12 +94,16 @@ class CandidateRoster:
 
 
 class EvaluationRequestLike(Protocol):
-    state: ObservationStateLike
+    @property
+    def state(self) -> ObservationStateLike: ...
 
 
 class ObservationStateLike(Protocol):
-    decision_key: str
-    legal_actions: tuple[LegalAction, ...]
+    @property
+    def decision_key(self) -> str: ...
+
+    @property
+    def legal_actions(self) -> tuple[LegalAction, ...]: ...
 
 
 @dataclass(frozen=True, slots=True)
@@ -137,8 +152,8 @@ class SearchResult:
                     raise ValueError(
                         "candidate delta differs from search baseline scale or perspective")
         roster_choices = set(self.roster.identities)
-        statistic_keys: set[tuple[object, ActionChoiceIdentity]] = set()
-        supplied: dict[object, set[ActionChoiceIdentity]] = {}
+        statistic_keys: set[tuple[StatisticIdentity, ActionChoiceIdentity]] = set()
+        supplied: dict[StatisticIdentity, set[ActionChoiceIdentity]] = {}
         for statistic in self.statistics:
             if statistic.choice not in roster_choices:
                 raise ValueError("decision statistic contains a choice outside Candidate Roster")
@@ -146,13 +161,26 @@ class SearchResult:
             if key in statistic_keys:
                 raise ValueError("duplicate decision statistic for choice")
             statistic_keys.add(key)
+            supplied.setdefault(statistic.identity, set())
             if getattr(statistic, "status", None) is not EvaluationStatus.UNAVAILABLE:
-                supplied.setdefault(statistic.identity, set()).add(statistic.choice)
+                supplied[statistic.identity].add(statistic.choice)
+            if self.baseline is not None and isinstance(statistic, (
+                    DecisionDeltaStatistic, SampledMeanStatistic,
+                    ExpectedContinuationStatistic, BestContinuationStatistic)):
+                value = statistic.value
+                if value is not None and (
+                        value.scale != self.baseline.scale
+                        or value.perspective != self.baseline.perspective):
+                    raise ValueError(
+                        "decision statistic differs from search baseline scale or perspective")
         for covered in self.outcome.coverage.statistics:
             if not covered.choices.issubset(roster_choices):
                 raise ValueError("search coverage contains a choice outside Candidate Roster")
             if covered.choices != frozenset(supplied.get(covered.statistic, set())):
                 raise ValueError("search coverage differs from supplied decision statistics")
+        if not set(supplied).issubset(
+                item.statistic for item in self.outcome.coverage.statistics):
+            raise ValueError("available decision statistic is absent from search coverage")
 
     def candidate_for(self, choice: ActionChoiceIdentity) -> CandidateResult:
         try:
@@ -205,6 +233,9 @@ class DecisionResult:
             return
         if self.resolution.choice not in self.search.roster.identities:
             raise ValueError("selected choice is not in Candidate Roster")
+        evidence = self.resolution.evidence
+        if evidence is not None and evidence.choice != self.resolution.choice:
+            raise ValueError("decision evidence differs from selected choice")
         if (isinstance(self.resolution, (PolicySelection, ForcedSelection))
                 and not self.search.outcome.permits_action):
             raise ValueError("normal selection requires a permitting Search Outcome")

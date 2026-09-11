@@ -25,9 +25,9 @@ Neutral contracts split by ownership inside `common/decision/`: identity, values
 components, and results. `contracts.py` and package exports remain compatibility facades; import gates keep
 algorithm packages out of neutral modules and no parallel `decision/v2` model exists.
 
-Temporary runtime and serialization compatibility is one-way from authoritative new results into dedicated
-legacy views. Neutral modules neither expose old fields nor accept old objects. Every adapter names a later
-issue owner and import gates prevent compatibility dependencies from leaking back into the core.
+The Issue #611 legacy contract module is retired from shipped source. Test-only comparison fixtures remain
+outside the package while downstream parity coverage finishes; active runtime imports no projection facade,
+neutral modules neither expose old fields nor accept old objects, and import gates prevent re-entry.
 
 Lifecycle, reuse, snapshot, and cleanup are separate opt-in capability protocols. Retained state stays opaque
 outside its owner and carries typed Reuse Provenance over every behavior-affecting semantic input; the owner

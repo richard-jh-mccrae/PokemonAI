@@ -16,8 +16,11 @@ IdentityValue: TypeAlias = (
 
 
 class ActionChoice(Protocol):
-    identity: ActionIdentity
-    selection: tuple[int, ...]
+    @property
+    def identity(self) -> ActionIdentity: ...
+
+    @property
+    def selection(self) -> tuple[int, ...]: ...
 
 
 @dataclass(frozen=True, order=True, slots=True)

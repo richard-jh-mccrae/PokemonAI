@@ -8,6 +8,8 @@ from pathlib import Path
 
 from common.decision import (
     ComponentContract,
+    DECISION_DELTA,
+    DecisionRequirements,
     EvaluationStatus,
     PolicyActionEvidence,
     PolicyDistribution,
@@ -296,7 +298,11 @@ class LedgerPolicyModel:
 
     @property
     def contract(self) -> ComponentContract:
-        return ComponentContract(self.identity, self.configuration.identity)
+        return ComponentContract(
+            self.identity,
+            self.configuration.identity,
+            required_statistics=frozenset((DECISION_DELTA,)),
+        )
 
     @classmethod
     def load_calibrated(cls, expected_baseline_identity: str,
@@ -310,6 +316,8 @@ class LedgerPolicyModel:
         return cls(calibration.configuration, baseline)
 
     def priors(self, request: PolicyModelRequest) -> PolicyDistribution:
+        if request.requirements != DecisionRequirements((DECISION_DELTA,)):
+            raise ValueError("Ledger policy requires Decision Delta statistics")
         self.validate_source(request.source)
         candidates = request.candidates
         if any(candidate.delta is not None

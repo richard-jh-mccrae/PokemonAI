@@ -74,7 +74,8 @@ def _episode(tmp_path: Path, *, episode="42", include_pregame=False) -> tuple[Pa
     roster = CandidateRoster(state.legal_actions, state.decision_key, forced=True)
     choice = ActionChoiceIdentity.from_action(action)
     candidate = CandidateResult(
-        choice, CandidateDisposition.FORCED, DecisionDelta(0.0, scale),
+        choice, CandidateDisposition.FORCED,
+        DecisionDelta(0.0, scale, perspective=state.seat),
         EvaluationStatus.COMPLETE)
     search = SearchResult(
         baseline,

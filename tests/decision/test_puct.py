@@ -8,7 +8,7 @@ from common.decision import (
     ActionChoiceIdentity, DecisionCoordinator, PolicyConfiguration, StateValuation, ValueScale,
 )
 from common.ledger.search import UniformPolicyModel
-from common.puct import (PuctConfiguration, PuctDecisionPolicy, PuctSearch,
+from common.puct import (PuctConfiguration, PuctDecisionPolicy, PuctSearch, decision_record,
                          evaluation_profile, inspection_profile, play_profile)
 from common.decision.turn import (DirectTurnSearchProvider, NodeKind, SearchNode,
                                   SearchStateKey)
@@ -183,6 +183,37 @@ def test_puct_discovers_same_player_sequence_that_beats_greedy_leaf_value():
     assert tuple(step.action for step in evidence.principal_variation) == (
         ActionIdentity("setup"), ActionIdentity("finish"))
     assert evidence.principal_variation_stop_reason == "turn_boundary"
+
+
+def test_puct_record_joins_reordered_evidence_by_choice_identity():
+    environment = GraphEnvironment(
+        {"root": 0.0, "first": 1.0, "second": 2.0},
+        {"root": (("first", "first"), ("second", "second"))})
+    configuration = PuctConfiguration(simulation_limit=8, exploration=100.0)
+    result = decide(environment, configuration, policy=BiasedPolicy())
+    evidence = puct_evidence(result)
+    root_distribution = evidence.prior_distributions[0]
+    reordered_distribution = replace(
+        root_distribution.distribution,
+        actions=tuple(reversed(root_distribution.distribution.actions)),
+    )
+    reordered = replace(
+        evidence,
+        root_edges=tuple(reversed(evidence.root_edges)),
+        prior_distributions=(
+            replace(root_distribution, distribution=reordered_distribution),
+            *evidence.prior_distributions[1:],
+        ),
+    )
+    decision = replace(result, search=replace(result.search, evidence=reordered))
+
+    record = decision_record(decision, environment.root.observation, configuration)
+    edge_by_choice = {edge.choice: edge.statistics for edge in evidence.root_edges}
+    priors = root_distribution.distribution.priors_for(result.roster)
+
+    assert [row["prior"] for row in record["candidates"]] == list(priors)
+    assert [row["visits"] for row in record["candidates"]] == [
+        edge_by_choice[choice].visits for choice in result.roster.identities]
 
 
 def test_tree_inspection_is_opt_in_and_contains_only_legal_observations():

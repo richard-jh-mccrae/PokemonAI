@@ -10,7 +10,6 @@ from common.decision import (
     CandidateResult,
     CandidateRoster as StructuralCandidateRoster,
     ContinuationResult,
-    DecisionDelta,
     EvaluationRequest,
     EvaluationStatus,
     PolicyConfiguration,
@@ -21,11 +20,11 @@ from common.decision import (
     SearchOutcomeStatus,
     SearchTermination,
     ValueComponent,
-    ValuedCandidate,
 )
-from common.decision.compatibility import DECISION_DELTA_STATISTIC
+from common.decision.statistics import DECISION_DELTA
+from common.decision import DecisionDelta as _DecisionDelta
 from common.decision.components import DecisionPolicyRequest
-from common.decision.compatibility_contracts import CandidateRoster
+from legacy_decision_fixtures import CandidateRoster, ValuedCandidate
 from common.ledger import (
     EvaluationModel,
     LedgerPolicyBaseline,
@@ -51,6 +50,10 @@ from tools.train.ledger_parity import assert_decision_parity
 
 
 DECK = (DRAGAPULT, DARK_E) * 30
+
+
+def DecisionDelta(total, scale, components=()):
+    return _DecisionDelta(total, scale, components, perspective=0)
 
 
 def _search(root, model, evaluator, policy_model, provider, configuration,
@@ -100,7 +103,7 @@ def _choose(candidates, configuration, *, forced=False):
                     if candidate.delta is not None)
     outcome = SearchOutcome(
         SearchOutcomeStatus.COMPLETE,
-        SearchCoverage.covered(DECISION_DELTA_STATISTIC, covered),
+        SearchCoverage.covered(DECISION_DELTA, covered),
         SearchTermination("test", "complete", 1),
     )
     evidence = LedgerEvidence(
@@ -360,10 +363,10 @@ def test_exhausted_budget_marks_every_root_action_unavailable(monkeypatch):
 
     assert {candidate.delta_status for candidate in result.candidates} == {
         EvaluationStatus.UNAVAILABLE}
-    with pytest.raises(ValueError, match="no comparable candidates"):
-        GreedyDecisionPolicy().choose(DecisionPolicyRequest(
+    with pytest.raises(ValueError, match="permitting Search Outcome"):
+        DecisionPolicyRequest(
             result.roster, result.candidates, result.outcome, result.statistics,
-            result.evidence, PolicyConfiguration()))
+            result.evidence, PolicyConfiguration())
 
 
 def test_root_evaluation_time_is_inside_the_search_deadline(monkeypatch):
