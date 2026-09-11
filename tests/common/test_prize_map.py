@@ -6,6 +6,7 @@ from common.ledger.chance import _RunningValuation
 from common.ledger.evaluate import Valuation
 from common.opponent import OpponentSnapshot
 from common.runtime import AgentRuntime
+from common.options import enumerate_legal_actions
 from common.strategy import PrizePlan, Roles, Strategy
 from deprecated.bellman.state import DecisionState
 
@@ -36,7 +37,7 @@ def test_runtime_prefers_forcing_the_opponent_to_overrun_its_last_three_prizes(m
         me=player(active=body(CINDERACE, 2), bench=(body(MEGA_STARMIE, 1),)),
         them=player(own=False, prizes=3), select=select))
     exact_three = _state(root)
-    offer, protect = action("promote", (0,)), action("hold", (1,))
+    offer, protect = enumerate_legal_actions(root)
     provider = ScriptedProvider(
         menus={"root": (offer, protect)},
         nodes={("root", offer.identity): Deterministic(forced_four),
@@ -75,6 +76,10 @@ def test_prize_plan_breaks_only_an_equal_structural_tie(monkeypatch):
     monkeypatch.setenv("AGENT_BRAIN_STRICT", "1")
     select = {"context": 0, "minCount": 1, "maxCount": 1,
               "option": [{"type": 1, "number": 1}, {"type": 1, "number": 2}]}
+    root = printout(
+        me=player(active=body(STARYU, 3),
+                  bench=(body(CINDERACE, 2), body(MEGA_STARMIE, 1))),
+        them=player(own=False, prizes=3), select=select)
     offered = _state(printout(
         me=player(active=body(CINDERACE, 2),
                   bench=(body(STARYU, 3), body(MEGA_STARMIE, 1))),
@@ -83,7 +88,7 @@ def test_prize_plan_breaks_only_an_equal_structural_tie(monkeypatch):
         me=player(active=body(STARYU, 3),
                   bench=(body(CINDERACE, 2), body(MEGA_STARMIE, 1))),
         them=player(own=False, prizes=3), select=select))
-    offer, protect = action("promote", (0,)), action("hold", (1,))
+    offer, protect = enumerate_legal_actions(root)
     provider = ScriptedProvider(
         menus={"root": (offer, protect)},
         nodes={("root", offer.identity): Deterministic(offered),
@@ -97,11 +102,6 @@ def test_prize_plan_breaks_only_an_equal_structural_tie(monkeypatch):
         opponent_model_factory=lambda *_args, **_kwargs: _OpponentModel(),
         provider_factory=lambda _state, **_kwargs: provider,
         valuation_configuration=zero)
-    root = printout(
-        me=player(active=body(STARYU, 3),
-                  bench=(body(CINDERACE, 2), body(MEGA_STARMIE, 1))),
-        them=player(own=False, prizes=3), select=select)
-
     assert runtime.decide(root).action == offer.identity
 
 
@@ -109,6 +109,10 @@ def test_prize_plan_cannot_override_superior_ledger_value(monkeypatch):
     monkeypatch.setenv("AGENT_BRAIN_STRICT", "1")
     select = {"context": 0, "minCount": 1, "maxCount": 1,
               "option": [{"type": 1, "number": 1}, {"type": 1, "number": 2}]}
+    root = printout(
+        me=player(active=body(STARYU, 3),
+                  bench=(body(CINDERACE, 2), body(MEGA_STARMIE, 1))),
+        them=player(own=False, prizes=3), select=select)
     offered = _state(printout(
         me=player(active=body(CINDERACE, 2),
                   bench=(body(STARYU, 3), body(MEGA_STARMIE, 1))),
@@ -117,7 +121,7 @@ def test_prize_plan_cannot_override_superior_ledger_value(monkeypatch):
         me=player(active=body(STARYU, 3, energies=(3,)),
                   bench=(body(CINDERACE, 2), body(MEGA_STARMIE, 1))),
         them=player(own=False, prizes=3), select=select))
-    offer, fund = action("promote", (0,)), action("attach", (1,))
+    offer, fund = enumerate_legal_actions(root)
     provider = ScriptedProvider(
         menus={"root": (offer, fund)},
         nodes={("root", offer.identity): Deterministic(offered),
@@ -132,11 +136,6 @@ def test_prize_plan_cannot_override_superior_ledger_value(monkeypatch):
         opponent_model_factory=lambda *_args, **_kwargs: _OpponentModel(),
         provider_factory=lambda _state, **_kwargs: provider,
         valuation_configuration=funded_only)
-    root = printout(
-        me=player(active=body(STARYU, 3),
-                  bench=(body(CINDERACE, 2), body(MEGA_STARMIE, 1))),
-        them=player(own=False, prizes=3), select=select)
-
     assert runtime.decide(root).action == fund.identity
 
 

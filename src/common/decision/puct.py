@@ -7,6 +7,8 @@ import math
 from typing import TYPE_CHECKING
 
 from common.api import ActionIdentity
+from .identity import ActionChoiceIdentity
+from .statistics import StatisticIdentity
 
 if TYPE_CHECKING:
     from .contracts import PolicyDistribution
@@ -41,6 +43,16 @@ class PuctEdgeStatistics:
     @property
     def mean_value(self) -> float | None:
         return self.value_sum / self.visits if self.visits else None
+
+
+PUCT_VISIT_STATISTIC = StatisticIdentity("puct", "root-visits", 1)
+
+
+@dataclass(frozen=True, slots=True)
+class PuctRootEdge:
+    choice: ActionChoiceIdentity
+    statistics: PuctEdgeStatistics
+    identity: StatisticIdentity = PUCT_VISIT_STATISTIC
 
 
 @dataclass(frozen=True, slots=True)
@@ -223,3 +235,8 @@ class PuctEvidence:
     reproduction_input: str | None = None
     inspection: PuctInspection | None = None
     transport: PuctTransport = PuctTransport()
+    root_edges: tuple[PuctRootEdge, ...] = ()
+
+    @property
+    def owner(self) -> str:
+        return "puct"

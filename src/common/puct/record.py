@@ -4,20 +4,26 @@ import json
 from dataclasses import asdict
 
 from common.observation import ObservationRecord
+from common.decision.puct import PuctEvidence
 
 
 def decision_record(decision, observation, configuration, *, executed_action=None) -> dict:
-    evidence = decision.search.puct
-    if evidence is None or configuration.identity != evidence.configuration_identity:
+    evidence = decision.search.evidence
+    if (not isinstance(evidence, PuctEvidence)
+            or configuration.identity != evidence.configuration_identity):
         raise ValueError("PUCT record requires its matching result and configuration")
+    root_distribution = evidence.prior_distributions[0].distribution
+    priors = tuple(item.final_prior for item in root_distribution.actions)
     candidates = []
-    for candidate in decision.roster.candidates:
-        statistics = candidate.puct
+    for action, candidate, edge, prior in zip(
+            decision.roster.actions, decision.search.candidates,
+            evidence.root_edges, priors):
+        statistics = edge.statistics
         candidates.append({
-            "action": asdict(candidate.action.identity), "selection": list(candidate.action.selection),
-            "prior": candidate.prior, "visits": statistics.visits, "value_sum": statistics.value_sum,
+            "action": asdict(action.identity), "selection": list(action.selection),
+            "prior": prior, "visits": statistics.visits, "value_sum": statistics.value_sum,
             "mean_value": statistics.mean_value, "inherited_visits": statistics.inherited_visits,
-            "status": candidate.status.value, "exclusion": statistics.exclusion,
+            "status": candidate.delta_status.value, "exclusion": statistics.exclusion,
         })
     wire = asdict(evidence)
     reproduction = wire.pop("reproduction_input")
@@ -33,8 +39,9 @@ def decision_record(decision, observation, configuration, *, executed_action=Non
         "executed_action": None if executed_action is None else asdict(executed_action),
         "principal_variation_is_conditional": any(step.chance_slot is not None for step in evidence.principal_variation),
         "principal_variation_is_exhaustive": False,
-        "stop_reason": decision.search.stop_reason,
-        "failure": None if decision.search.failure is None else asdict(decision.search.failure),
+        "stop_reason": decision.search.outcome.termination.code,
+        "failure": (None if decision.search.outcome.failure is None
+                    else asdict(decision.search.outcome.failure)),
         "value_scale": None if decision.baseline is None else asdict(decision.baseline.scale),
         "behavior": None if decision.behavior_identity is None else asdict(decision.behavior_identity),
     }

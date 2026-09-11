@@ -16,14 +16,16 @@ from types import ModuleType
 
 from common.api import RootDecision
 from common.decision import (DecisionCoordinator, DecisionDeadlineExceeded,
-                             DecisionFailure, DecisionFailureStage,
-                             FailSafeRequest, fail_safe_request)
+                             DecisionFailure, DecisionFailureStage, DecisionPolicyRequest,
+                             FailSafeRequest, ForcedSelection, fail_safe_request)
+from common.decision.compatibility import legacy_roster_from_policy_request
 from common.observation import (KnownOwnPrizes, ObservationStateBuilder, OpponentBelief,
                                 reduce_knowledge)
 from common.strategy.context import _MAIN
 
 from .decision import LedgerValueEvaluator
 from .configuration import BehaviorIdentity
+from .evidence import LedgerEvidence
 from .search import (FailSafeDecisionPolicy, GreedyDecisionPolicy, LedgerOnePlySearch,
                      TransitionProviderSource, UniformPolicyModel, unavailable_ledger_result)
 from .seam import LedgerNativeProvider, PreviewState
@@ -38,6 +40,15 @@ class LedgerUnavailable(RuntimeError):
 
 class DecisionPostprocessingError(RuntimeError):
     coordinator_entered = True
+
+
+def _policy_reason(resolution) -> str:
+    if hasattr(resolution, "failure_stage"):
+        return f"fail_safe_{resolution.failure_stage.value}_failure"
+    if isinstance(resolution, ForcedSelection):
+        return "forced"
+    evidence = getattr(resolution, "evidence", None)
+    return str(getattr(evidence, "reason", type(resolution).__name__))
 
 
 def _provider_descriptor(factory, kwargs) -> dict:
@@ -161,13 +172,14 @@ class LedgerDecider:
             try:
                 coordinator_entered = True
                 result = self.coordinator.decide(
-                    state, provider=provider,
+                    board, provider=provider,
                     parent_valuation=parent_valuation,
                     observation_delta=observation_delta,
                     execution_guard=execution_guard,
+                    recovery_context=state,
                     strict=os.environ.get("AGENT_BRAIN_STRICT") == "1")
                 if result.chosen_candidate is not None:
-                    self._search.commit(result.chosen_candidate.action)
+                    self._search.commit(result.chosen)
                 self.last_valuation = result.baseline
                 search_configuration, policy_configuration = self._configurations(self.compute)
                 if self.parity_oracle is not None and provider.instance is not None:
@@ -188,7 +200,8 @@ class LedgerDecider:
                 raise
             except Exception as exc:
                 failure = DecisionFailure.capture(DecisionFailureStage.PRESENTATION, exc)
-                result = self.coordinator.recover(state, result.search, failure)
+                result = self.coordinator.recover(
+                    board, result.search, failure, context=state)
                 self.gap_sink = None
                 try:
                     return self._root_decision(
@@ -215,13 +228,16 @@ class LedgerDecider:
         else:
             board = state
         request = fail_safe_request(observation) if board is None else None
-        root = (request if request is not None else
-                PreviewState(observation, board, "root", deck=self.deck,
-                             deck_counts=board.deck_counts or (),
-                             prize_counts=(board.knowledge.own_prizes.cards
-                                           if isinstance(board.knowledge.own_prizes,
-                                                         KnownOwnPrizes) else ())))
-        result = self.coordinator.decide(root, failure=failure)
+        if board is None:
+            raise LedgerUnavailable("fail-safe observation could not be projected")
+        root = PreviewState(
+            observation, board, "root", deck=self.deck,
+            deck_counts=board.deck_counts or (),
+            prize_counts=(board.knowledge.own_prizes.cards
+                          if isinstance(board.knowledge.own_prizes,
+                                        KnownOwnPrizes) else ()))
+        result = self.coordinator.decide(
+            board, failure=failure, recovery_context=root)
         _search, policy_configuration = self._configurations(self.compute)
         return self._root_decision(
             result, board, opponent, policy_configuration, decision_parity=False,
@@ -248,13 +264,17 @@ class LedgerDecider:
         if chosen is None:
             raise LedgerUnavailable("no chosen candidate")
         value = None if chosen.delta is None else chosen.delta.total
-        failure = result.search.failure
+        failure = (getattr(result.resolution, "failure", None) or
+                   result.search.outcome.failure)
+        action = result.chosen
+        if action is None:
+            raise LedgerUnavailable("no chosen action")
         return RootDecision(
-            chosen=tuple(chosen.action.selection), action=chosen.action.identity,
+            chosen=tuple(action.selection), action=action.identity,
             value=0.0 if value is None else value, complete=value is not None,
             diagnostics={
                 "backend": "ledger", "behavior": result.behavior_identity,
-                "policy_reason": getattr(result.policy_reason, "value", result.policy_reason),
+                "policy_reason": _policy_reason(result.resolution),
                 "failure": None if failure is None else {
                     "stage": failure.stage.value, "error_type": failure.error_type,
                     "message": failure.message, "traceback_tail": failure.traceback_tail,
@@ -266,9 +286,10 @@ class LedgerDecider:
     def _root_decision(self, result, board, opponent, policy_configuration, *,
                        decision_parity, cleanup_failure=None,
                        fail_safe_request: FailSafeRequest | None = None):
-        if not result.roster.candidates:
+        if not result.roster.actions:
             raise LedgerUnavailable("no legal actions to price")
-        failure = result.search.failure
+        failure = (getattr(result.resolution, "failure", None) or
+                   result.search.outcome.failure)
         if failure is not None:
             print(
                 f"LEDGER-CRASH stage={failure.stage.value} "
@@ -282,10 +303,20 @@ class LedgerDecider:
                 file=sys.stderr, flush=True,
             )
 
-        candidates = result.roster.candidates
+        evidence = result.search.evidence
+        if not isinstance(evidence, LedgerEvidence):
+            raise LedgerUnavailable("Ledger result lacks Ledger evidence")
+        legacy_request = DecisionPolicyRequest(
+            result.roster, result.search.candidates, result.search.outcome,
+            result.search.statistics, evidence, policy_configuration)
+        candidates = legacy_roster_from_policy_request(legacy_request).candidates
         chosen = result.chosen_candidate
         if chosen is None:
             raise LedgerUnavailable("no chosen candidate")
+        action = result.chosen
+        if action is None:
+            raise LedgerUnavailable("no chosen action")
+        chosen_legacy = candidates[result.roster.identities.index(chosen.choice)]
         context_value = (fail_safe_request.context if fail_safe_request is not None else
                          None if board.select is None else board.select.context)
         context = _MAIN if context_value is None else int(context_value)
@@ -305,9 +336,9 @@ class LedgerDecider:
                                             if fail_safe_request is not None
                                             else board.decision_key),
                            "gaps": sorted(set(gaps)),
-                           "chosen": list(chosen.action.selection)})
+                           "chosen": list(action.selection)})
         return RootDecision(
-            chosen=tuple(chosen.action.selection), action=chosen.action.identity,
+            chosen=tuple(action.selection), action=action.identity,
             value=0.0 if chosen_value is None else chosen_value,
             complete=chosen_value is not None,
             diagnostics={
@@ -316,29 +347,29 @@ class LedgerDecider:
                 "compute": self.compute.identity,
                 "prize_plan": self.ctx.prize_plan.identity,
                 "behavior": self.behavior_identity,
-                "policy_reason": getattr(result.policy_reason, "value", result.policy_reason),
+                "policy_reason": _policy_reason(result.resolution),
                 "decision_parity": decision_parity,
                 "search": {
-                    "nodes_visited": result.trace.nodes_visited,
-                    "stop_reason": result.trace.stop_reason,
-                    "frontier": result.trace.frontier,
+                    "nodes_visited": evidence.nodes_visited,
+                    "stop_reason": result.search.outcome.termination.code,
+                    "frontier": evidence.frontier,
                     "portfolio_memo": self._search.portfolio_metrics,
                 },
                 "position_key": (fail_safe_request.state_key
                                  if fail_safe_request is not None else board.position_key),
                 "decision_key": (fail_safe_request.decision_key
                                  if fail_safe_request is not None else board.decision_key),
-                "prize_map": (chosen.policy_evidence.as_dict()
-                              if chosen.policy_evidence is not None else None),
+                "prize_map": (chosen_legacy.policy_evidence.as_dict()
+                              if chosen_legacy.policy_evidence is not None else None),
                 **({"opponent_unknown_mass": opponent.unknown_mass}
                    if opponent is not None else {}),
                 "baseline": result.baseline.total, "gaps": sorted(set(gaps)),
                 **({"failure": {
-                    "stage": result.search.failure.stage.value,
-                    "error_type": result.search.failure.error_type,
-                    "message": result.search.failure.message,
-                    "traceback_tail": result.search.failure.traceback_tail,
-                }} if result.search.failure is not None else {}),
+                    "stage": failure.stage.value,
+                    "error_type": failure.error_type,
+                    "message": failure.message,
+                    "traceback_tail": failure.traceback_tail,
+                }} if failure is not None else {}),
                 **({"cleanup_failure": {
                     "stage": cleanup_failure.stage.value,
                     "error_type": cleanup_failure.error_type,

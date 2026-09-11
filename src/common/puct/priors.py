@@ -1,7 +1,8 @@
 from __future__ import annotations
 
 from common.algebra import Actor, Chance, Deterministic, Terminal, WeightedEdge
-from common.decision import CandidateDisposition, DecisionDelta, SearchConfiguration, ValuedCandidate
+from common.decision import DecisionDelta, SearchConfiguration
+from common.decision.compatibility_contracts import CandidateDisposition, ValuedCandidate
 from common.decision.action_policy import admissible_actions
 from common.decision.turn import NodeKind, SearchContractError
 from common.ledger.decision import ledger_valuation_from_state

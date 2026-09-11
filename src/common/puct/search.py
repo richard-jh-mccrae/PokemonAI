@@ -8,14 +8,23 @@ from dataclasses import dataclass, field, replace
 from pathlib import Path
 
 from common.decision import (
-    CandidateDisposition, CandidateRoster, DecisionDelta, DecisionFailure, DecisionFailureStage,
-    EvaluationStatus, PolicyRequest, PolicySourceIdentity, SearchResult, SearchValue, StateValuation, ValuedCandidate,
+    ActionChoiceIdentity, CollaboratorKind, ComponentContract, DecisionDelta, DecisionFailure,
+    DecisionFailureStage, EvaluationStatus, PolicyModelRequest, PolicySourceIdentity,
+    StateValuation, validate_state_valuation,
 )
+from common.decision.compatibility import (
+    policy_model_request_from_legacy, search_result_from_legacy,
+)
+from common.decision.compatibility_contracts import (
+    CandidateDisposition, CandidateRoster,
+    SearchResult as LegacySearchResult, SearchValue, ValuedCandidate,
+)
+from common.decision.outcomes import SearchOutcomeStatus, StatisticCoverage
 from common.decision.puct import (
     PuctChanceStatistics, PuctConvergence, PuctEdgeStatistics, PuctEvidence,
     PuctInspection, PuctInspectionComponent, PuctInspectionEdge, PuctInspectionNode,
     PuctInspectionValuation, PuctOutcome, PuctPathStep, PuctPathStop,
-    PuctPriorEvidence,
+    PUCT_VISIT_STATISTIC, PuctPriorEvidence, PuctRootEdge,
 )
 from common.decision.turn import (ChancePlan, NodeKind, ProviderCompletion, SearchContractError,
                                   SearchNode, TurnAction, DirectTurnSearchProvider,
@@ -88,6 +97,16 @@ def _tie(seed, node, edge):
 class PuctSearch:
     identity = "bounded-puct-v1:" + evaluator_semantics_identity(tuple(
         Path(__file__).with_name(name) for name in ("search.py", "budget.py", "priors.py", "workers.py")))
+    required_collaborators = (
+        CollaboratorKind.POLICY_MODEL,
+        CollaboratorKind.PROVIDER,
+    )
+    optional_collaborators: tuple[CollaboratorKind, ...] = ()
+    contract = ComponentContract(
+        identity,
+        "PuctConfiguration",
+        required_collaborators=frozenset(required_collaborators),
+    )
 
     def __init__(self, *, capture_tree: bool = False):
         if type(capture_tree) is not bool:
@@ -102,7 +121,7 @@ class PuctSearch:
 
     reset = close
 
-    def search(self, request, evaluator, policy_model, provider, configuration):
+    def search(self, request, evaluator, configuration, *, policy_model, provider):
         if isinstance(provider, WorkerTurnSearchProvider):
             worker_backed = True
         elif isinstance(provider, DirectTurnSearchProvider):
@@ -131,7 +150,31 @@ class PuctSearch:
                 result = replace(result, failure=DecisionFailure.capture(DecisionFailureStage.PROVIDER, exc),
                                  stop_reason="cleanup_failure",
                                  puct=replace(result.puct, outcome=PuctOutcome.HARD_FAILURE))
-        return replace(result, puct=replace(result.puct, timing=session.budget.timing()))
+        result = replace(result, puct=replace(
+            result.puct, timing=session.budget.timing()))
+        return search_result_from_legacy(
+            request,
+            result,
+            "puct",
+            status=_search_outcome_status(result.puct.outcome, result.stop_reason),
+            evidence=result.puct,
+            statistics=result.puct.root_edges,
+            statistic_coverage=(StatisticCoverage(
+                PUCT_VISIT_STATISTIC,
+                frozenset(edge.choice for edge in result.puct.root_edges)),),
+        )
+
+
+def _search_outcome_status(outcome, stop_reason):
+    if outcome is PuctOutcome.INITIALIZATION_DEGRADED:
+        return SearchOutcomeStatus.INSUFFICIENT_INITIALIZATION
+    if outcome is PuctOutcome.CANCELLED:
+        return SearchOutcomeStatus.CANCELLED
+    if outcome is PuctOutcome.HARD_FAILURE:
+        return SearchOutcomeStatus.HARD_FAILURE
+    if outcome is PuctOutcome.SEARCHED and stop_reason != "complete":
+        return SearchOutcomeStatus.BUDGET_LIMITED
+    return SearchOutcomeStatus.COMPLETE
 
 
 class _Session:
@@ -275,10 +318,13 @@ class _Session:
                         node.preparation_limited = True
                 roster = CandidateRoster.from_legal_actions(actions, candidates)
                 self.stage = DecisionFailureStage.POLICY
-                request = PolicyRequest(
-                    state.observation, roster, PolicySourceIdentity(
+                request = policy_model_request_from_legacy(
+                    state.observation,
+                    roster,
+                    PolicySourceIdentity(
                         self.request.baseline_identity, self.evaluator.identity,
-                        self.request.evaluation_model.identity, valuation.scale.identity))
+                        self.request.evaluation_model.identity, valuation.scale.identity),
+                )
                 try:
                     self.budget.prepare(len(actions))
                     distribution = self.policy_model.priors(request)
@@ -286,7 +332,7 @@ class _Session:
                     node.preparation_limited = True
                     distribution = UniformPolicyModel().priors(request)
             node.distribution = distribution
-            for edge, prior in zip(node.edges, distribution.priors_for(roster)):
+            for edge, prior in zip(node.edges, distribution.priors_for(request.roster)):
                 edge.prior = prior
         return node
 
@@ -304,10 +350,11 @@ class _Session:
 
     def accept_valuation(self, observation, valuation):
         self.stage = DecisionFailureStage.EVALUATION
-        if (valuation.perspective != self.root.state.perspective_seat
-                or valuation.evaluator_identity != self.evaluator.identity
-                or valuation.scale != self.evaluator.value_scale
-                or valuation.status is EvaluationStatus.UNAVAILABLE):
+        try:
+            validate_state_valuation(self.request, observation, self.evaluator, valuation)
+        except ValueError as exc:
+            raise SearchContractError(str(exc)) from exc
+        if valuation.status is EvaluationStatus.UNAVAILABLE:
             raise SearchContractError("leaf valuation is unavailable or incompatible")
         if isinstance(self.policy_model, LedgerPolicyModel):
             self.policy_model.validate_source(PolicySourceIdentity(
@@ -584,29 +631,36 @@ class _Session:
             len(node.chance_plan.probabilities), len(node.samples), len({id(child) for child in node.samples.values()}),
             sum(node.sample_visits.values())) for node in self.nodes.values() if node.chance_plan is not None)
         variation, variation_stop = self.variation()
-        return SearchResult(
+        evidence = PuctEvidence(
+            self.completed, variation, self.configuration.identity,
+            self.budget.snapshot(), chances, outcome=outcome,
+            batches=self.batches, peak_pending=self.peak_pending,
+            reuse_reason=self.reuse_reason,
+            inherited_visits=sum(edge.inherited_visits for edge in self.root.edges),
+            resources=self.budget.resources(),
+            convergence=tuple(self.convergence), tree_nodes=len(self.nodes),
+            cache_entries=len(self.values) + len(self.transitions) + len(self.samples),
+            cache_capacity_charged=self.budget.cache_entries,
+            retained_engine_states=self.provider.retained_states,
+            peak_retained_engine_states=(
+                self.provider.peak_retained_states
+                if self.worker_backed else self.provider.retained_states),
+            principal_variation_stop_reason=variation_stop,
+            reproduction_input=self.provider.reproduction_input(),
+            prior_distributions=tuple(PuctPriorEvidence(
+                node.state.observation.decision_key, node.distribution,
+                node.preparation_limited) for node in self.nodes.values()
+                if node.distribution is not None),
+            inspection=(self.inspection() if self.capture_tree else None),
+            transport=self.workers.transport,
+            root_edges=tuple(PuctRootEdge(
+                ActionChoiceIdentity.from_action(edge.action),
+                candidate.puct,
+            ) for edge, candidate in zip(self.root.edges, candidates)),
+        )
+        return LegacySearchResult(
             self.root.valuation, roster, self.completed, stop_reason, failure=failure,
-            puct=PuctEvidence(self.completed, variation, self.configuration.identity,
-                              self.budget.snapshot(), chances, outcome=outcome,
-                              batches=self.batches, peak_pending=self.peak_pending,
-                              reuse_reason=self.reuse_reason,
-                              inherited_visits=sum(edge.inherited_visits for edge in self.root.edges),
-                              resources=self.budget.resources(),
-                              convergence=tuple(self.convergence), tree_nodes=len(self.nodes),
-                              cache_entries=len(self.values) + len(self.transitions) + len(self.samples),
-                              cache_capacity_charged=self.budget.cache_entries,
-                              retained_engine_states=self.provider.retained_states,
-                              peak_retained_engine_states=(
-                                  self.provider.peak_retained_states
-                                  if self.worker_backed else self.provider.retained_states),
-                              principal_variation_stop_reason=variation_stop,
-                              reproduction_input=self.provider.reproduction_input(),
-                              prior_distributions=tuple(PuctPriorEvidence(
-                                  node.state.observation.decision_key, node.distribution,
-                                  node.preparation_limited) for node in self.nodes.values()
-                                  if node.distribution is not None),
-                              inspection=(self.inspection() if self.capture_tree else None),
-                              transport=self.workers.transport))
+            puct=evidence)
 
     def inspection(self):
         ordered = tuple(self.nodes.values())

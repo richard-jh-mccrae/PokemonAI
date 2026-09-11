@@ -107,12 +107,12 @@ def test_real_evolution_contract_consumes_only_its_body_ability_source():
             ("root", second.identity): Terminal(root_state, "ability"),
         })
 
-    decision = LedgerDecider(
-        DECK, "test", EvaluationModel.build(),
-        provider_factory=lambda _state, **_kwargs: provider).decide(root_obs)
+    decision = scripted_decision(provider, root_obs)
     priced = next(
-        candidate for candidate in decision.decision_result.roster.candidates
-        if candidate.action.identity == evolve.identity)
+        candidate for action_, candidate in zip(
+            decision.decision_result.roster.actions,
+            decision.decision_result.search.candidates)
+        if action_.identity == evolve.identity)
     consumed = {
         opportunity.source for opportunity in priced.continuation.opportunities_consumed
         if str(opportunity) == "ability"}
@@ -201,6 +201,17 @@ def state_of(observation):
                                           value_registry_identity="preview-tests")
 
 
+def scripted_decision(provider, observation, evaluation_model=None):
+    board = replace(
+        ObservationStateBuilder(DECK).root(observation),
+        legal_actions=tuple(provider._menus.get("root", ())),
+    )
+    return LedgerDecider(
+        DECK, "test", evaluation_model or EvaluationModel.build(),
+        provider_factory=lambda _state, **_kwargs: provider,
+    ).decide(observation, state=board)
+
+
 def price_selected_action(observation, selected, *, deck_counts=None):
     root = state_of(observation)
     board = ObservationStateBuilder(DECK).root(observation)
@@ -228,8 +239,7 @@ def price_of(node):
     play, end = action("play", (0,)), action("end", (1,))
     provider = ScriptedProvider(menus={"root": (play, end)},
                                 nodes={("root", play.identity): node})
-    decision = LedgerDecider(DECK, "test", EvaluationModel.build(),
-                             provider_factory=lambda _s, **_kw: provider).decide(ROOT_OBS)
+    decision = scripted_decision(provider, ROOT_OBS)
     entry = next(row for row in decision.diagnostics["prices"]
                  if row["action"] == str(play.identity))
     return entry["swing"], entry["ends_turn"], decision
@@ -572,9 +582,7 @@ def test_terminal_action_delta_is_independent_of_the_end_counterfactual():
 
     swings = []
     for provider in providers:
-        decision = LedgerDecider(
-            DECK, "test", EvaluationModel.build(),
-            provider_factory=lambda _s, **_kw: provider).decide(ROOT_OBS)
+        decision = scripted_decision(provider, ROOT_OBS)
         swings.append(next(row["swing"] for row in decision.diagnostics["prices"]
                            if row["action"] == str(play.identity)))
 
@@ -634,9 +642,7 @@ def test_unavailable_end_counterfactual_still_returns_the_legal_failsafe():
             raise KeyError("pass unavailable")
     provider = UnavailableProvider(menus={"root": (end,)}, nodes={})
 
-    decision = LedgerDecider(
-        DECK, "test", EvaluationModel.build(),
-        provider_factory=lambda _state, **_kwargs: provider).decide(ROOT_OBS)
+    decision = scripted_decision(provider, ROOT_OBS)
 
     assert decision.chosen == end.selection
     assert decision.complete is False
@@ -711,9 +717,7 @@ def test_chance_activations_are_independent_of_valuation_coefficients():
                                 nodes={("root", play.identity): node})
 
     def activations(context):
-        decision = LedgerDecider(
-            DECK, "test", context,
-            provider_factory=lambda _s, **_kw: provider).decide(ROOT_OBS)
+        decision = scripted_decision(provider, ROOT_OBS, context)
         price = next(row for row in decision.diagnostics["prices"]
                      if row["action"] == str(play.identity))
         return {item["feature"]: item["activation"]
@@ -746,9 +750,7 @@ def test_mixed_chance_prices_continuation_and_allowances_by_probability():
                    WeightedEdge(0.75, "ended", Terminal(BAD, "done"))))
     provider = ScriptedProvider(menus={"root": (play, end)},
                                 nodes={("root", play.identity): node})
-    decision = LedgerDecider(
-        DECK, "test", EvaluationModel.build(),
-        provider_factory=lambda _s, **_kw: provider).decide(ROOT_OBS)
+    decision = scripted_decision(provider, ROOT_OBS)
     price = next(row for row in decision.diagnostics["prices"]
                  if row["action"] == str(play.identity))
     activations = {item["feature"]: item["activation"]
@@ -836,8 +838,7 @@ def test_a_two_menu_forced_chain_is_walked_to_its_leaf():
         nodes={("root", play.identity): Deterministic(first_menu),
                (first_menu.semantic_key, pick_one.identity): Deterministic(second_menu),
                (second_menu.semantic_key, pick_two.identity): Deterministic(GOOD)})
-    decision = LedgerDecider(DECK, "test", EvaluationModel.build(),
-                             provider_factory=lambda _s, **_kw: provider).decide(ROOT_OBS)
+    decision = scripted_decision(provider, ROOT_OBS)
     entry = next(row for row in decision.diagnostics["prices"]
                  if row["action"] == str(play.identity))
     assert entry["swing"] == pytest.approx(leaf_swing, abs=1e-9)
@@ -858,16 +859,14 @@ def test_root_preview_stops_at_the_first_return_to_main():
         nodes={("root", play.identity): Deterministic(landing),
                (landing.semantic_key, second.identity): Terminal(beyond, "done")})
 
-    decision = LedgerDecider(
-        DECK, "test", EvaluationModel.build(),
-        provider_factory=lambda _s, **_kw: provider).decide(ROOT_OBS)
+    decision = scripted_decision(provider, ROOT_OBS)
     price = next(row for row in decision.diagnostics["prices"]
                  if row["action"] == str(play.identity))
     assert math.isfinite(price["swing"])
     assert all(str(second.identity) not in tuple(map(str, successor.action_path))
-               for successor in decision.decision_result.roster.candidates[0].successors)
+               for successor in decision.decision_result.search.candidates[0].successors)
     assert {successor.state.position_key
-            for successor in decision.decision_result.roster.candidates[0].successors} == {
+            for successor in decision.decision_result.search.candidates[0].successors} == {
                 ObservationStateBuilder(DECK).root(landing.observation).position_key}
 
 
@@ -887,8 +886,7 @@ def test_a_chain_past_the_depth_cap_scores_mid_board_and_keeps_the_root():
     menus[mids[-1].semantic_key] = (step,)
     nodes[(mids[-1].semantic_key, step.identity)] = Deterministic(GOOD)
     provider = ScriptedProvider(menus=menus, nodes=nodes)
-    decision = LedgerDecider(DECK, "test", EvaluationModel.build(),
-                             provider_factory=lambda _s, **_kw: provider).decide(ROOT_OBS)
+    decision = scripted_decision(provider, ROOT_OBS)
     entry = next(row for row in decision.diagnostics["prices"]
                  if row["action"] == str(play.identity))
     assert math.isfinite(entry["swing"])           # priced, not dropped
@@ -955,8 +953,7 @@ def test_an_empty_forced_menu_logs_its_gap_and_scores_the_mid_board():
     provider = ScriptedProvider(
         menus={"root": (play, end), starved.semantic_key: ()},
         nodes={("root", play.identity): Deterministic(starved)})
-    decision = LedgerDecider(DECK, "test", EvaluationModel.build(),
-                             provider_factory=lambda _s, **_kw: provider).decide(ROOT_OBS)
+    decision = scripted_decision(provider, ROOT_OBS)
     assert any("forced menu offered no actions" in gap
                for gap in decision.diagnostics["gaps"])
 

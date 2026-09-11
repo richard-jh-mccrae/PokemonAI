@@ -16,7 +16,7 @@ from common.strategy.context import (
     _TO_FIELD,
     _TO_HAND,
 )
-from .contracts import FailSafeRequest
+from .compatibility_contracts import FailSafeRequest
 
 
 def _int_field(mapping, key, default: int) -> int:

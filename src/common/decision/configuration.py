@@ -6,7 +6,7 @@ import math
 from dataclasses import asdict, dataclass
 from time import monotonic
 
-from .contracts import EvaluationStatus
+from .values import EvaluationStatus
 
 
 class DecisionDeadlineExceeded(RuntimeError):

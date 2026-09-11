@@ -480,7 +480,7 @@ def test_a_post_coordinator_mapping_bug_returns_the_same_typed_choice_without_re
     ], context=0, turn=2))
     assert entered == 1
     assert decision.decision_result is not None
-    assert decision.chosen == tuple(decision.decision_result.chosen_candidate.action.selection)
+    assert decision.chosen == tuple(decision.decision_result.chosen.selection)
     assert decision.diagnostics["failure"]["stage"] == "presentation"
 
 

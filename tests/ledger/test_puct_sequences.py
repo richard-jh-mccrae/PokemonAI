@@ -2,7 +2,7 @@ import pytest
 from pathlib import Path
 
 from cgpy.experiment import TurnSearchEnvironment
-from common.decision.puct import PuctOutcome
+from common.decision.puct import PuctEvidence, PuctOutcome
 from common.puct import PuctConfiguration, build_puct_coordinator
 from real_engine_helpers import BodySpec, lock_main_allowances, scenario
 
@@ -34,9 +34,12 @@ def test_post_draw_boundary_choices_with_frozen_ledger(
         configuration=PuctConfiguration(simulation_limit=512, batch_size=4, worker_count=2,
                                         chance_samples=8, exploration=32.0))
 
-    result = coordinator.decide(environment.root, provider=environment, strict=True)
+    result = coordinator.decide(
+        environment.root.observation, provider=environment, strict=True)
 
-    assert result.search.puct.outcome is PuctOutcome.SEARCHED, result.search.failure
+    evidence = result.search.evidence
+    assert isinstance(evidence, PuctEvidence)
+    assert evidence.outcome is PuctOutcome.SEARCHED, result.search.outcome.failure
     assert result.chosen.identity.kind == ("attach" if expected == "prepare" else expected)
     if expected == "prepare":
         assert "1159" in str(result.chosen.identity.parts)

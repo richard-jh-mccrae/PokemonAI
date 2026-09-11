@@ -7,17 +7,27 @@ import pytest
 from common.algebra import Chance, Deterministic, WeightedEdge
 from common.decision import (
     CandidateDisposition,
-    CandidateRoster,
+    CandidateRoster as StructuralCandidateRoster,
     ContinuationResult,
     DecisionDelta,
     EvaluationRequest,
     EvaluationStatus,
     PolicyConfiguration,
     RealizedOutcome,
+    SearchCoverage,
     SearchConfiguration,
+    SearchOutcome,
+    SearchOutcomeStatus,
+    SearchTermination,
     ValueComponent,
     ValuedCandidate,
 )
+from common.decision.compatibility import (
+    DECISION_DELTA_STATISTIC,
+    candidate_results_from_legacy,
+)
+from common.decision.components import DecisionPolicyRequest
+from common.decision.compatibility_contracts import CandidateRoster
 from common.ledger import (
     EvaluationModel,
     LedgerPolicyBaseline,
@@ -28,10 +38,13 @@ from common.ledger.decision import LEDGER_VALUE_SCALE, LedgerValueEvaluator
 from common.ledger.evaluate import evaluate
 from common.ledger.preview import price_actions
 from common.ledger.search import (
-    GreedyDecisionPolicy,
+    GreedyDecisionPolicy as CoreGreedyDecisionPolicy,
     LedgerOnePlySearch,
+    TransitionProviderSource,
     UniformPolicyModel,
 )
+from common.ledger.evidence import LedgerCandidateEvidence, LedgerEvidence
+from common.observation.provider import provider_payload
 from common.ledger.seam import PreviewState
 from common.observation import ObservationStateBuilder
 from deprecated.bellman.state import DecisionState
@@ -40,6 +53,80 @@ from tools.train.ledger_parity import assert_decision_parity
 
 
 DECK = (DRAGAPULT, DARK_E) * 30
+
+
+def _search(root, model, evaluator, policy_model, provider, configuration,
+            *, baseline_identity=None, search=None, parent_valuation=None,
+            observation_delta=None):
+    legal_actions = tuple(provider.actions(root))
+    board = replace(root.observation, legal_actions=legal_actions)
+    root.observation = board
+    source = TransitionProviderSource(
+        lambda _root, **_kwargs: provider, root, {})
+    algorithm = LedgerOnePlySearch() if search is None else search
+    return algorithm.search(
+        EvaluationRequest(
+            board,
+            model,
+            parent_valuation=parent_valuation,
+            observation_delta=observation_delta,
+            baseline_identity=baseline_identity,
+        ),
+        evaluator,
+        configuration,
+        policy_model=policy_model,
+        provider=source,
+    )
+
+
+def _choose(candidates, configuration, *, forced=False):
+    legacy = CandidateRoster(tuple(candidates), forced=forced)
+    roster = StructuralCandidateRoster(
+        tuple(candidate.action for candidate in candidates),
+        "test-decision",
+        forced,
+    )
+    typed = candidate_results_from_legacy(roster, legacy)
+    covered = tuple(candidate.choice for candidate in typed
+                    if candidate.delta is not None)
+    outcome = SearchOutcome(
+        SearchOutcomeStatus.COMPLETE,
+        SearchCoverage.covered(DECISION_DELTA_STATISTIC, covered),
+        SearchTermination("test", "complete", 1),
+    )
+    evidence = LedgerEvidence(
+        1,
+        0,
+        (),
+        None,
+        tuple(LedgerCandidateEvidence(candidate.choice) for candidate in typed),
+    )
+    decision = CoreGreedyDecisionPolicy().choose_with_evidence(DecisionPolicyRequest(
+        roster,
+        typed,
+        outcome,
+        (),
+        evidence,
+        configuration,
+    ))
+    return SimpleNamespace(
+        action=roster.action_for(decision.choice),
+        reason=decision.reason,
+    )
+
+
+class GreedyDecisionPolicy:
+    def __init__(self):
+        self._core = CoreGreedyDecisionPolicy()
+
+    def choose(self, request, configuration=None):
+        if isinstance(request, CandidateRoster):
+            return _choose(
+                request.candidates,
+                configuration,
+                forced=request.forced,
+            )
+        return self._core.choose(request)
 
 
 class CountingLedgerEvaluator(LedgerValueEvaluator):
@@ -82,40 +169,38 @@ def test_one_ply_search_retains_every_candidate_and_explicit_successor():
             policy_requests.append(request)
             return super().priors(request)
 
-    result = LedgerOnePlySearch().search(
-        EvaluationRequest(root, model),
-        evaluator,
-        CapturingPolicy(),
-        provider,
-        configuration,
-    )
+    result = _search(
+        root, model, evaluator, CapturingPolicy(), provider, configuration)
 
-    assert tuple(candidate.action for candidate in result.roster.candidates) == (attach, end)
-    priced, free_end = result.roster.candidates
-    assert priced.status in {EvaluationStatus.COMPLETE, EvaluationStatus.ESTIMATED}
+    assert result.roster.actions == (attach, end)
+    priced, free_end = result.candidates
+    assert priced.delta_status in {EvaluationStatus.COMPLETE, EvaluationStatus.ESTIMATED}
     assert priced.successors
     assert sum(successor.probability for successor in priced.successors) == 1.0
     assert priced.successors[0].state.position_key == attached_board.position_key
     assert priced.successors[0].action_path == (attach.identity,)
-    assert priced.successors[0].trace.start_position_key == board.position_key
-    assert priced.successors[0].trace.actions == (attach.identity,)
-    assert priced.successors[0].trace.terminal_position_key == attached_board.position_key
-    assert priced.prior == 0.5
     assert free_end.disposition is CandidateDisposition.ENDS_TURN
     assert free_end.delta.total == 0.0
-    assert free_end.successors[0].state is board
+    assert free_end.successors[0].state.position_key == board.position_key
     assert free_end.successors[0].action_path == (end.identity,)
     assert set(evaluator.calls.values()) == {1}
     assert len(policy_requests) == 1
-    assert policy_requests[0].roster.legal_actions_proven
+    assert policy_requests[0].roster.decision_key == policy_requests[0].observation.decision_key
     assert tuple(candidate.delta.total for candidate in
-                 policy_requests[0].roster.candidates) == pytest.approx(
-                     tuple(candidate.delta.total for candidate in result.roster.candidates))
-    assert tuple(candidate.prior for candidate in result.roster.candidates) == (0.5, 0.5)
+                 policy_requests[0].candidates) == pytest.approx(
+                     tuple(candidate.delta.total for candidate in result.candidates))
+    assert result.evidence.policy_distribution.priors_for(result.roster) == (0.5, 0.5)
 
     legacy_prices = price_actions(
         root, board, evaluate(board, model).total, provider, model, configuration)
-    choice = GreedyDecisionPolicy().choose(result.roster, PolicyConfiguration())
+    choice = SimpleNamespace(choice=GreedyDecisionPolicy().choose(DecisionPolicyRequest(
+        result.roster,
+        result.candidates,
+        result.outcome,
+        result.statistics,
+        result.evidence,
+        PolicyConfiguration(),
+    )))
     assert_decision_parity(
         legacy_prices, result, choice, forced=False,
         configuration=PolicyConfiguration())
@@ -143,12 +228,12 @@ def test_search_builds_ledger_priors_from_the_already_priced_roster():
             LEDGER_VALUE_SCALE.identity),
     )
 
-    result = LedgerOnePlySearch().search(
-        EvaluationRequest(root, evaluation_model, baseline_identity="frozen-v1"),
-        evaluator, policy, provider, SearchConfiguration())
+    result = _search(
+        root, evaluation_model, evaluator, policy, provider, SearchConfiguration(),
+        baseline_identity="frozen-v1")
 
-    deltas = tuple(candidate.delta.total for candidate in result.roster.candidates)
-    priors = tuple(candidate.prior for candidate in result.roster.candidates)
+    deltas = tuple(candidate.delta.total for candidate in result.candidates)
+    priors = result.evidence.policy_distribution.priors_for(result.roster)
     assert priors.index(max(priors)) == deltas.index(max(deltas))
     assert all(prior > 0.0 for prior in priors)
     assert result.baseline.baseline_identity == "frozen-v1"
@@ -175,17 +260,15 @@ def test_every_candidate_delta_is_expected_successor_ledger_minus_root_ledger():
         ))},
     )
 
-    result = LedgerOnePlySearch().search(
-        EvaluationRequest(root, EvaluationModel.build()), LedgerValueEvaluator(),
+    result = _search(
+        root, EvaluationModel.build(), LedgerValueEvaluator(),
         UniformPolicyModel(), provider, SearchConfiguration())
 
-    for candidate in result.roster.candidates:
+    for candidate in result.candidates:
         expected = math.fsum(
             successor.probability * successor.valuation.total
             for successor in candidate.successors) - result.baseline.total
         assert candidate.delta.total == pytest.approx(expected)
-        assert candidate.search_value.total == pytest.approx(
-            result.baseline.total + candidate.delta.total)
         assert {successor.valuation.evaluator_identity
                 for successor in candidate.successors} == {
                     LedgerValueEvaluator.identity}
@@ -202,7 +285,7 @@ def test_search_rejects_non_distribution_policy_priors():
         identity = "invalid-priors"
 
         def priors(self, request):
-            return tuple(0.75 for _candidate in request.roster.candidates)
+            return tuple(0.75 for _candidate in request.candidates)
 
     observation = printout(me=player(active=body(DRAGAPULT, 1)))
     board = ObservationStateBuilder(DECK).root(observation)
@@ -212,8 +295,8 @@ def test_search_rejects_non_distribution_policy_priors():
                                                        action("end", (1,)))}, nodes={})
 
     with pytest.raises(TypeError, match="Policy Distribution"):
-        LedgerOnePlySearch().search(
-            EvaluationRequest(root, EvaluationModel.build()), LedgerValueEvaluator(),
+        _search(
+            root, EvaluationModel.build(), LedgerValueEvaluator(),
             InvalidPolicyModel(), provider, SearchConfiguration())
 
 
@@ -237,13 +320,10 @@ def test_search_rejects_p0_v0_identity_mismatch_before_evaluation(mismatch):
     evaluator = CountingLedgerEvaluator()
 
     with pytest.raises(ValueError, match="identity mismatch"):
-        LedgerOnePlySearch().search(
-            EvaluationRequest(root, model, baseline_identity="frozen-v1"),
-            evaluator,
-            policy,
+        _search(
+            root, model, evaluator, policy,
             ScriptedProvider(menus={"root": tuple(root.legal_actions)}, nodes={}),
-            SearchConfiguration(),
-        )
+            SearchConfiguration(), baseline_identity="frozen-v1")
     assert evaluator.calls == {}
 
 
@@ -265,14 +345,16 @@ def test_exhausted_budget_marks_every_root_action_unavailable(monkeypatch):
     first, second = action("card", (0,)), action("card", (1,))
     provider = ScriptedProvider(menus={"root": (first, second)}, nodes={})
 
-    result = LedgerOnePlySearch().search(
-        EvaluationRequest(root, EvaluationModel.build()), LedgerValueEvaluator(),
+    result = _search(
+        root, EvaluationModel.build(), LedgerValueEvaluator(),
         UniformPolicyModel(), provider, SearchConfiguration())
 
-    assert {candidate.status for candidate in result.roster.candidates} == {
+    assert {candidate.delta_status for candidate in result.candidates} == {
         EvaluationStatus.UNAVAILABLE}
     with pytest.raises(ValueError, match="no comparable candidates"):
-        GreedyDecisionPolicy().choose(result.roster, PolicyConfiguration())
+        GreedyDecisionPolicy().choose(DecisionPolicyRequest(
+            result.roster, result.candidates, result.outcome, result.statistics,
+            result.evidence, PolicyConfiguration()))
 
 
 def test_root_evaluation_time_is_inside_the_search_deadline(monkeypatch):
@@ -306,13 +388,13 @@ def test_root_evaluation_time_is_inside_the_search_deadline(monkeypatch):
     first, second = action("card", (0,)), action("card", (1,))
     provider = ScriptedProvider(menus={"root": (first, second)}, nodes={})
 
-    result = LedgerOnePlySearch().search(
-        EvaluationRequest(root, EvaluationModel.build()), MarkingEvaluator(),
+    result = _search(
+        root, EvaluationModel.build(), MarkingEvaluator(),
         UniformPolicyModel(), provider, SearchConfiguration())
 
-    assert result.stop_reason == "time_budget"
-    assert all(candidate.status is EvaluationStatus.UNAVAILABLE
-               for candidate in result.roster.candidates)
+    assert result.outcome.termination.code == "time_budget"
+    assert all(candidate.delta_status is EvaluationStatus.UNAVAILABLE
+               for candidate in result.candidates)
 
 
 def test_forced_action_reports_a_deadline_crossed_during_root_evaluation(monkeypatch):
@@ -349,13 +431,13 @@ def test_forced_action_reports_a_deadline_crossed_during_root_evaluation(monkeyp
     ending = action("end", (0,))
     provider = ScriptedProvider(menus={"root": (ending,)}, nodes={})
 
-    result = LedgerOnePlySearch().search(
-        EvaluationRequest(root, EvaluationModel.build()), MarkingEvaluator(),
+    result = _search(
+        root, EvaluationModel.build(), MarkingEvaluator(),
         UniformPolicyModel(), provider, SearchConfiguration())
 
-    assert result.stop_reason == "time_budget"
-    assert result.roster.candidates[0].status is EvaluationStatus.UNAVAILABLE
-    assert result.roster.candidates[0].delta is None
+    assert result.outcome.termination.code == "time_budget"
+    assert result.candidates[0].delta_status is EvaluationStatus.UNAVAILABLE
+    assert result.candidates[0].delta is None
 
 
 def test_search_owns_and_reuses_the_previous_turn_snapshot():
@@ -371,19 +453,19 @@ def test_search_owns_and_reuses_the_previous_turn_snapshot():
     search = LedgerOnePlySearch()
     model = EvaluationModel.build()
 
-    first = search.search(
-        EvaluationRequest(PreviewState(
-            first_observation, first_board, "first", deck=DECK,
-            deck_counts=first_board.deck_counts or ()), model),
-        evaluator, UniformPolicyModel(), ScriptedProvider(
-            menus={"first": (ending,)}, nodes={}), SearchConfiguration())
-    search.search(
-        EvaluationRequest(PreviewState(
-            second_observation, second_board, "second", deck=DECK,
-            deck_counts=second_board.deck_counts or ()), model,
-            first.baseline, delta),
-        evaluator, UniformPolicyModel(), ScriptedProvider(
-            menus={"second": (ending,)}, nodes={}), SearchConfiguration())
+    first = _search(
+        PreviewState(first_observation, first_board, "first", deck=DECK,
+                     deck_counts=first_board.deck_counts or ()),
+        model, evaluator, UniformPolicyModel(),
+        ScriptedProvider(menus={"first": (ending,)}, nodes={}),
+        SearchConfiguration(), search=search)
+    _search(
+        PreviewState(second_observation, second_board, "second", deck=DECK,
+                     deck_counts=second_board.deck_counts or ()),
+        model, evaluator, UniformPolicyModel(),
+        ScriptedProvider(menus={"second": (ending,)}, nodes={}),
+        SearchConfiguration(), search=search, parent_valuation=first.baseline,
+        observation_delta=delta)
 
     assert evaluator.parent_states[0] is None
     assert evaluator.parent_states[1] is not None
@@ -400,14 +482,14 @@ def test_search_rejects_a_same_position_snapshot_from_a_different_menu():
     search = LedgerOnePlySearch()
     model = EvaluationModel.build()
 
-    first = search.search(
-        EvaluationRequest(root, model), evaluator, UniformPolicyModel(),
-        provider, SearchConfiguration())
-    search.search(
-        EvaluationRequest(
-            root, model, replace(first.baseline, cache_key="different-menu"),
-            SimpleNamespace(parts=())),
-        evaluator, UniformPolicyModel(), provider, SearchConfiguration())
+    first = _search(
+        root, model, evaluator, UniformPolicyModel(), provider,
+        SearchConfiguration(), search=search)
+    _search(
+        root, model, evaluator, UniformPolicyModel(), provider,
+        SearchConfiguration(), search=search,
+        parent_valuation=replace(first.baseline, cache_key="different-menu"),
+        observation_delta=SimpleNamespace(parts=()))
 
     assert evaluator.parent_states[-1] is None
 
@@ -432,20 +514,20 @@ def test_search_never_reuses_incremental_state_across_evaluator_identities():
     first_evaluator = FirstEvaluator()
     second_evaluator = SecondEvaluator()
 
-    first = search.search(
-        EvaluationRequest(PreviewState(
-            first_observation, first_board, "first", deck=DECK,
-            deck_counts=first_board.deck_counts or ()), model),
-        first_evaluator, UniformPolicyModel(), ScriptedProvider(
-            menus={"first": (ending,)}, nodes={}), SearchConfiguration())
+    first = _search(
+        PreviewState(first_observation, first_board, "first", deck=DECK,
+                     deck_counts=first_board.deck_counts or ()),
+        model, first_evaluator, UniformPolicyModel(),
+        ScriptedProvider(menus={"first": (ending,)}, nodes={}),
+        SearchConfiguration(), search=search)
     assert first.baseline.evaluator_identity == FirstEvaluator.identity
-    search.search(
-        EvaluationRequest(PreviewState(
-            second_observation, second_board, "second", deck=DECK,
-            deck_counts=second_board.deck_counts or ()), model,
-            first.baseline, delta),
-        second_evaluator, UniformPolicyModel(), ScriptedProvider(
-            menus={"second": (ending,)}, nodes={}), SearchConfiguration())
+    _search(
+        PreviewState(second_observation, second_board, "second", deck=DECK,
+                     deck_counts=second_board.deck_counts or ()),
+        model, second_evaluator, UniformPolicyModel(),
+        ScriptedProvider(menus={"second": (ending,)}, nodes={}),
+        SearchConfiguration(), search=search, parent_valuation=first.baseline,
+        observation_delta=delta)
 
     assert second_evaluator.parent_states[0] is None
 
@@ -468,12 +550,12 @@ def test_forced_roster_marks_each_candidate_forced():
         nodes={("root", first.identity): Deterministic(landing),
                ("root", second.identity): Deterministic(landing)})
 
-    result = LedgerOnePlySearch().search(
-        EvaluationRequest(root, EvaluationModel.build()), LedgerValueEvaluator(),
+    result = _search(
+        root, EvaluationModel.build(), LedgerValueEvaluator(),
         UniformPolicyModel(), provider, SearchConfiguration())
 
     assert result.roster.forced
-    assert {candidate.disposition for candidate in result.roster.candidates} == {
+    assert {candidate.disposition for candidate in result.candidates} == {
         CandidateDisposition.FORCED}
 
 

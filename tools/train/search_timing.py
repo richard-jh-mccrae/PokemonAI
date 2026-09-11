@@ -30,6 +30,7 @@ DEFAULT_RUNS = REPO / "data" / "search-timing-runs"
 sys.path[:0] = [str(REPO / "tools"), str(REPO / "src")]
 
 from common.cards import card_store  # noqa: E402
+from common.decision.puct import PuctEvidence  # noqa: E402
 from common.decision.turn import engine_backend  # noqa: E402
 from common.puct import evaluation_profile  # noqa: E402
 from common.runtime import (DecisionPilot, DecisionSearchConfiguration,
@@ -233,14 +234,19 @@ def _action(identity) -> dict | None:
 
 def _signature(decision) -> dict:
     result = decision.decision_result
+    evidence = result.search.evidence
+    edges = ({edge.choice: edge.statistics for edge in evidence.root_edges}
+             if isinstance(evidence, PuctEvidence) else {})
     candidates = []
-    for candidate in result.roster.candidates:
+    for action, candidate in zip(result.roster.actions, result.search.candidates):
+        edge = edges.get(candidate.choice)
         candidates.append({
-            "action": _action(candidate.action.identity),
-            "selection": list(candidate.action.selection),
-            "status": candidate.status.value,
-            "search_value": (None if candidate.search_value is None
-                              else candidate.search_value.total),
+            "action": _action(action.identity),
+            "selection": list(action.selection),
+            "status": candidate.delta_status.value,
+            "search_value": (edge.mean_value if edge is not None else
+                              None if candidate.delta is None or result.baseline is None
+                              else result.baseline.total + candidate.delta.total),
             "delta": None if candidate.delta is None else candidate.delta.total,
         })
     return {
@@ -260,8 +266,8 @@ def _decision_signature(signature: dict) -> dict:
 
 def _metrics(decision) -> dict:
     result = decision.decision_result
-    evidence = result.search.puct
-    if evidence is None:
+    evidence = result.search.evidence
+    if not isinstance(evidence, PuctEvidence):
         diagnostics = decision.diagnostics.get("search", {})
         return {
             "simulations": None,
@@ -273,7 +279,7 @@ def _metrics(decision) -> dict:
             "tree_nodes": diagnostics.get("nodes_visited"),
             "cache_entries": None,
             "portfolio_memo": diagnostics.get("portfolio_memo"),
-            "stop_reason": result.search.stop_reason,
+            "stop_reason": result.search.outcome.termination.code,
         }
     return {
         "simulations": evidence.simulations,
@@ -289,7 +295,7 @@ def _metrics(decision) -> dict:
         "peak_pending": evidence.peak_pending,
         "retained_engine_states": evidence.retained_engine_states,
         "peak_retained_engine_states": evidence.peak_retained_engine_states,
-        "stop_reason": result.search.stop_reason,
+        "stop_reason": result.search.outcome.termination.code,
         "outcome": evidence.outcome.value,
     }
 
@@ -338,8 +344,8 @@ def _tree_sample(spec: RootSpec, raw: dict, cards: tuple[int, ...],
                 spec, raw, cards, method, backend, config, capture_tree=True
         ) as (agent_runtime, payload):
             decision = agent_runtime.decide(payload)
-            evidence = decision.decision_result.search.puct
-            if evidence is None or evidence.inspection is None:
+            evidence = decision.decision_result.search.evidence
+            if not isinstance(evidence, PuctEvidence) or evidence.inspection is None:
                 raise RuntimeError("PUCT tree inspection was not captured")
             signature = _signature(decision)
             return {

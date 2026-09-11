@@ -51,6 +51,14 @@ def build_puct_coordinator(evaluation_model, *, baseline_identity: str | None = 
     identity = BehaviorIdentity(
         evaluator.identity, evaluation_model.identity, search.identity, policy.identity, selection.identity,
         "stop-with-evidence-v1", provider_identity, configuration.identity, evaluation_model.prize_plan.identity)
-    return DecisionCoordinator(evaluator, evaluation_model, search, configuration, policy, selection,
-                               PolicyConfiguration(), behavior_identity=identity,
-                               ledger_baseline_identity=baseline_identity)
+    return DecisionCoordinator(
+        evaluator=evaluator,
+        evaluation_model=evaluation_model,
+        search=search,
+        search_configuration=configuration,
+        policy_model=policy,
+        decision_policy=selection,
+        policy_configuration=PolicyConfiguration(),
+        behavior_identity=identity,
+        ledger_baseline_identity=baseline_identity,
+    )

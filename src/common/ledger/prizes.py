@@ -4,6 +4,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from functools import lru_cache
 from itertools import permutations
+from typing import ClassVar
 
 from common.strategy import PrizePlan
 
@@ -13,6 +14,8 @@ PRIZE_ROUTE_CACHE_SIZE = 4096
 
 @dataclass(frozen=True)
 class PrizeMap:
+    owner: ClassVar[str] = "ledger"
+    schema_version: ClassVar[int] = 1
     remaining: int
     route: tuple[int, ...]
     printed_prizes: int

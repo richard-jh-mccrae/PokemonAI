@@ -3,6 +3,7 @@ from __future__ import annotations
 from dataclasses import asdict
 
 from common.api import RootDecision
+from common.decision.puct import PuctEvidence
 from common.decision.turn import EngineBackendDescriptor
 
 from .configuration import PuctConfiguration
@@ -54,32 +55,39 @@ class PuctDecider:
         provider = NativeTurnSearchProvider.from_observation(
             observation, state, backend=self.backend)
         result = self.coordinator.decide(
-            provider.root, provider=provider, parent_valuation=parent_valuation,
+            provider.root.observation, provider=provider, parent_valuation=parent_valuation,
             observation_delta=observation_delta, execution_guard=execution_guard,
             strict=True)
+        evidence = result.search.evidence
         chosen = result.chosen_candidate
         if chosen is None:
-            evidence = result.search.puct
-            outcome = None if evidence is None else evidence.outcome.value
-            failure = result.search.failure
+            outcome = result.search.outcome.status.value
+            failure = result.search.outcome.failure
             detail = ("" if failure is None else
                       f" ({failure.stage.value}: {failure.error_type}: {failure.message})")
             raise PuctUnavailable(
                 f"{self.backend.name} PUCT produced no action: "
-                f"{outcome or 'unknown'}/{result.search.stop_reason}{detail}")
+                f"{outcome}/{result.search.outcome.termination.code}{detail}")
         self.last_valuation = result.baseline
-        value = (chosen.search_value.total if chosen.search_value is not None
-                 else chosen.delta.total if chosen.delta is not None else 0.0)
+        edge = (next(item for item in evidence.root_edges
+                     if item.choice == chosen.choice)
+                if isinstance(evidence, PuctEvidence) else None)
+        value = (edge.statistics.mean_value if edge is not None
+                 and edge.statistics.mean_value is not None else
+                 chosen.delta.total if chosen.delta is not None else 0.0)
+        action = result.chosen
+        if action is None:
+            raise PuctUnavailable("PUCT resolution lost its selected action")
         return RootDecision(
-            tuple(chosen.action.selection), chosen.action.identity, value,
-            chosen.search_value is not None or len(result.roster.candidates) == 1,
+            tuple(action.selection), action.identity, value,
+            (edge is not None and edge.statistics.visits > 0) or result.roster.forced,
             {
                 "backend": self.backend.name,
                 "engine_backend": self.backend.name,
                 "pilot": "puct",
                 "configuration": asdict(self.compute),
                 "behavior": result.behavior_identity,
-                "stop_reason": result.search.stop_reason,
+                "stop_reason": result.search.outcome.termination.code,
             },
             decision_result=result)
 

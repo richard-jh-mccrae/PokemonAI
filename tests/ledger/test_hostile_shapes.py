@@ -109,8 +109,12 @@ def test_a_raising_provider_close_does_not_mask_the_decision():
     play, end = action("play", (0,)), action("end", (1,))
     provider = SlammingProvider(menus={"root": (play, end)},
                                 nodes={("root", play.identity): Terminal(struck, "done")})
+    board = replace(
+        ObservationStateBuilder((DRAGAPULT,) * 60).root(root_obs),
+        legal_actions=(play, end))
     decision = LedgerDecider((DRAGAPULT,) * 60, "test", EvaluationModel.build(),
-                             provider_factory=lambda _s, **_kw: provider).decide(root_obs)
+                             provider_factory=lambda _s, **_kw: provider).decide(
+                                 root_obs, state=board)
     assert decision.diagnostics["backend"] == "ledger"
     assert decision.diagnostics["cleanup_failure"]["stage"] == "provider"
     assert decision.diagnostics["cleanup_failure"]["error_type"] == "RuntimeError"

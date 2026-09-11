@@ -902,7 +902,9 @@ def build_decision_record(result, state, *, episode_key: str, decision_index: in
                           opponent_snapshot=None) -> dict:
     """Build one lossless, hidden-safe record from the typed coordinator result."""
 
-    if result.search.puct is not None:
+    from common.decision.puct import PuctEvidence
+
+    if isinstance(result.search.evidence, PuctEvidence):
         return build_puct_decision_record(
             result, state, episode_key=episode_key, decision_index=decision_index,
             parent_decision_id=parent_decision_id, selection=selection,
@@ -913,50 +915,62 @@ def build_decision_record(result, state, *, episode_key: str, decision_index: in
             decision_limit_seconds=decision_limit_seconds, deadline_hit=deadline_hit,
             opponent_snapshot=opponent_snapshot)
 
-    if not result.roster.legal_actions_proven:
+    if result.roster.decision_key != state.decision_key:
         raise ValueError("telemetry requires an authoritative legal-action roster proof")
     legal_actions = tuple(state.legal_actions)
     legal_proof = tuple((action.identity, tuple(action.selection))
                         for action in legal_actions)
-    if legal_proof != result.roster.legal_action_identities:
+    roster_proof = tuple((choice.identity, choice.selection)
+                         for choice in result.roster.identities)
+    if legal_proof != roster_proof:
         raise ValueError("telemetry legal actions differ from the proven candidate roster")
     actions = [_action(action) for action in legal_actions]
     action_ids = {
         tuple(getattr(action, "selection", ())): saved["id"]
         for action, saved in zip(legal_actions, actions)
     }
+    from common.ledger.evidence import LedgerEvidence
+
+    evidence = result.search.evidence
+    if not isinstance(evidence, LedgerEvidence):
+        raise ValueError("Ledger telemetry requires Ledger evidence")
+    evidence_by_choice = {item.choice: item for item in evidence.candidates}
+    priors = (() if evidence.policy_distribution is None else
+              evidence.policy_distribution.priors_for(result.roster))
     candidates = []
-    for candidate in result.roster.candidates:
+    for index, (action, candidate) in enumerate(zip(
+            result.roster.actions, result.search.candidates)):
         delta = candidate.delta
-        action_id = action_ids.get(tuple(getattr(candidate.action, "selection", ())))
+        action_id = action_ids.get(tuple(action.selection))
         if action_id is None:
             raise ValueError("candidate cannot join the ObservationState legal action table")
+        algorithm = evidence_by_choice[candidate.choice]
         candidates.append({
             "action_id": action_id,
             "disposition": candidate.disposition.value,
-            "status": candidate.status.value,
+            "status": candidate.delta_status.value,
             "delta": None if delta is None else {
                 "total": float(delta.total), "scale": _scale(delta.scale),
                 "components": _components(delta.components),
             },
-            "search_value": (None if candidate.search_value is None else {
-                "total": float(candidate.search_value.total),
-                "scale": _scale(candidate.search_value.scale),
-            }),
-            "prior": candidate.prior,
-            "gaps": list(candidate.gaps),
+            "search_value": None,
+            "prior": None if not priors else priors[index],
+            "gaps": list(candidate.delta_gaps),
             "successors": [_successor(successor) for successor in candidate.successors],
             "continuation": _continuation(candidate.continuation),
-            "policy_tie_break": _allowed(candidate.policy_tie_break),
-            "policy_evidence": _policy_evidence(candidate.policy_evidence),
+            "policy_tie_break": _allowed(algorithm.policy_tie_break),
+            "policy_evidence": _policy_evidence(algorithm.prize_map),
         })
-    chosen = result.chosen_candidate
+    chosen = result.chosen
     if chosen is None:
         raise ValueError("Ledger decision requires a chosen candidate")
-    chosen_id = action_ids[tuple(getattr(chosen.action, "selection", ()))]
+    chosen_id = action_ids[tuple(chosen.selection)]
+    chosen_index = result.roster.identities.index(
+        result.resolution.choice)
+    chosen_candidate = result.search.candidates[chosen_index]
     completeness_candidates = (
-        (chosen,) if result.search.stop_reason == "cached_continuation"
-        else result.roster.candidates
+        (chosen_candidate,) if result.search.outcome.termination.code == "cached_continuation"
+        else result.search.candidates
     )
     record = {
         "schema": SCHEMA,
@@ -974,7 +988,7 @@ def build_decision_record(result, state, *, episode_key: str, decision_index: in
             "decision_key": state.decision_key,
             "chosen_action_id": chosen_id,
             "selection": list(selection),
-            "policy_reason": result.policy_reason.value,
+            "policy_reason": type(result.resolution).__name__,
         },
         "observation": _observation(state),
         "opponent_snapshot": _opponent_snapshot(opponent_snapshot),
@@ -982,22 +996,14 @@ def build_decision_record(result, state, *, episode_key: str, decision_index: in
         "root": _valuation(result.baseline),
         "candidates": candidates,
         "search": {
-            "nodes_visited": int(result.search.nodes_visited),
-            "stop_reason": result.search.stop_reason,
-            "frontier": _allowed(result.search.frontier),
-            "failure": (None if result.search.failure is None else {
-                "stage": result.search.failure.stage.value,
-                "error_type": result.search.failure.error_type,
+            "nodes_visited": int(evidence.nodes_visited),
+            "stop_reason": result.search.outcome.termination.code,
+            "frontier": _allowed(evidence.frontier),
+            "failure": (None if result.search.outcome.failure is None else {
+                "stage": result.search.outcome.failure.stage.value,
+                "error_type": result.search.outcome.failure.error_type,
             }),
-            "trace": (None if result.trace is None else {
-                "nodes_visited": int(result.trace.nodes_visited),
-                "stop_reason": result.trace.stop_reason,
-                "frontier": _allowed(result.trace.frontier),
-                "chosen_action_id": (None if result.trace.chosen_action is None else
-                                     _action(result.trace.chosen_action)["id"]),
-                "action_paths": [[_action(action) for action in path]
-                                 for path in result.trace.action_paths],
-            }),
+            "trace": None,
         },
         "behavior_identity": _behavior_identity(result.behavior_identity),
         "configuration": {
@@ -1013,9 +1019,9 @@ def build_decision_record(result, state, *, episode_key: str, decision_index: in
             "deadline_hit": None if deadline_hit is None else bool(deadline_hit),
         },
         "completeness": ("unavailable" if any(
-            candidate.status.value == "unavailable" for candidate in completeness_candidates
+            candidate.delta_status.value == "unavailable" for candidate in completeness_candidates
         ) else "estimated" if any(
-            candidate.status.value == "estimated" for candidate in completeness_candidates
+            candidate.delta_status.value == "estimated" for candidate in completeness_candidates
         ) else "complete"),
     }
     record["record_id"] = _record_identifier(record)
@@ -1030,14 +1036,18 @@ def build_puct_decision_record(result, state, *, episode_key: str, decision_inde
                                decision_limit_seconds: float | None = None,
                                deadline_hit: bool | None = None,
                                opponent_snapshot=None) -> dict:
-    evidence = result.search.puct
-    if evidence is None:
+    from common.decision.puct import PuctEvidence
+
+    evidence = result.search.evidence
+    if not isinstance(evidence, PuctEvidence):
         raise ValueError("PUCT telemetry requires PUCT search evidence")
-    if not result.roster.legal_actions_proven:
+    if result.roster.decision_key != state.decision_key:
         raise ValueError("telemetry requires an authoritative legal-action roster proof")
     legal_actions = tuple(state.legal_actions)
     legal_proof = tuple((action.identity, tuple(action.selection)) for action in legal_actions)
-    if legal_proof != result.roster.legal_action_identities:
+    roster_proof = tuple((choice.identity, choice.selection)
+                         for choice in result.roster.identities)
+    if legal_proof != roster_proof:
         raise ValueError("telemetry legal actions differ from the proven candidate roster")
     actions = [_action(action) for action in legal_actions]
     action_ids = {
@@ -1045,19 +1055,21 @@ def build_puct_decision_record(result, state, *, episode_key: str, decision_inde
         for action, saved in zip(legal_actions, actions)
     }
     candidates = []
-    for candidate in result.roster.candidates:
-        statistics = candidate.puct
-        if statistics is None or candidate.prior is None:
-            raise ValueError("PUCT candidate lacks search statistics or prior")
-        action_id = action_ids.get(tuple(getattr(candidate.action, "selection", ())))
+    root_distribution = evidence.prior_distributions[0].distribution
+    priors = tuple(item.final_prior for item in root_distribution.actions)
+    for action, candidate, edge, prior in zip(
+            result.roster.actions, result.search.candidates,
+            evidence.root_edges, priors):
+        statistics = edge.statistics
+        action_id = action_ids.get(tuple(action.selection))
         if action_id is None:
             raise ValueError("candidate cannot join the ObservationState legal action table")
         candidates.append({
             "action_id": action_id,
             "disposition": candidate.disposition.value,
-            "status": candidate.status.value,
-            "prior": float(candidate.prior),
-            "gaps": list(candidate.gaps),
+            "status": candidate.delta_status.value,
+            "prior": float(prior),
+            "gaps": list(candidate.delta_gaps),
             "visits": int(statistics.visits),
             "value_sum": float(statistics.value_sum),
             "mean_value": statistics.mean_value,
@@ -1065,13 +1077,14 @@ def build_puct_decision_record(result, state, *, episode_key: str, decision_inde
             "exclusion": statistics.exclusion,
             "tie_break": statistics.tie_break,
         })
-    chosen = result.chosen_candidate
+    chosen = result.chosen
     if chosen is None:
         raise ValueError("PUCT decision requires a chosen candidate")
-    chosen_id = action_ids[tuple(getattr(chosen.action, "selection", ()))]
+    chosen_id = action_ids[tuple(chosen.selection)]
     wire_evidence = dataclasses.asdict(evidence)
     wire_evidence.pop("reproduction_input", None)
     wire_evidence.pop("inspection", None)
+    wire_evidence.pop("root_edges", None)
     record = {
         "schema": SCHEMA,
         "schema_version": SCHEMA_VERSION,
@@ -1096,11 +1109,11 @@ def build_puct_decision_record(result, state, *, episode_key: str, decision_inde
         "root": None if result.baseline is None else _valuation(result.baseline),
         "candidates": candidates,
         "search": {
-            "nodes_visited": int(result.search.nodes_visited),
-            "stop_reason": result.search.stop_reason,
-            "failure": (None if result.search.failure is None else {
-                "stage": result.search.failure.stage.value,
-                "error_type": result.search.failure.error_type,
+            "nodes_visited": int(evidence.simulations),
+            "stop_reason": result.search.outcome.termination.code,
+            "failure": (None if result.search.outcome.failure is None else {
+                "stage": result.search.outcome.failure.stage.value,
+                "error_type": result.search.outcome.failure.error_type,
             }),
             "puct": _allowed(wire_evidence),
         },

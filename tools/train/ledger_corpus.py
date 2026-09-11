@@ -171,8 +171,11 @@ def _runtime_equivalence(decision) -> dict:
     result = getattr(decision, "decision_result", None)
     roster = getattr(result, "roster", None)
     classes = {}
-    for candidate in getattr(roster, "candidates", ()):
-        selections = getattr(candidate.action, "equivalent_selections", ())
+    actions = getattr(roster, "actions", None)
+    if actions is None:
+        actions = tuple(candidate.action for candidate in getattr(roster, "candidates", ()))
+    for action in actions:
+        selections = getattr(action, "equivalent_selections", ())
         singleton_indices = {selection[0] for selection in selections if len(selection) == 1}
         if len(singleton_indices) > 1:
             group = frozenset(singleton_indices)
@@ -183,23 +186,37 @@ def _runtime_equivalence(decision) -> dict:
 def _training_candidates(decision) -> list[dict]:
     result = getattr(decision, "decision_result", None)
     roster = getattr(result, "roster", None)
+    search = getattr(result, "search", None)
+    actions = getattr(roster, "actions", None)
+    candidates = getattr(search, "candidates", None)
+    if actions is None or candidates is None:
+        candidates = tuple(getattr(roster, "candidates", ()))
+        actions = tuple(candidate.action for candidate in candidates)
     rows = []
-    for candidate in getattr(roster, "candidates", ()):
+    for action, candidate in zip(actions, candidates):
         delta = getattr(candidate, "delta", None)
+        status = getattr(candidate, "delta_status", None)
+        if status is None:
+            status = candidate.status
+        gaps = getattr(candidate, "delta_gaps", None)
+        if gaps is None:
+            gaps = candidate.gaps
         components = (() if delta is None else delta.components)
         feature_values = {}
         for component in components:
             feature_values.setdefault(component.key, []).append(component.activation)
         rows.append({
-            "action": str(candidate.action.identity),
-            "selection": list(candidate.action.selection),
+            "action": str(action.identity),
+            "selection": list(action.selection),
             "equivalent_selections": [list(selection) for selection in getattr(
-                candidate.action, "equivalent_selections",
-                (candidate.action.selection,))],
-            "status": candidate.status.value,
+                action, "equivalent_selections", (action.selection,))],
+            "status": status.value,
             "decision_delta": None if delta is None else delta.total,
-            "search_value": (None if candidate.search_value is None
-                             else candidate.search_value.total),
+            "search_value": (
+                getattr(getattr(candidate, "search_value", None), "total", None)
+                if search is None else
+                None if delta is None or result.baseline is None
+                else result.baseline.total + delta.total),
             "features": {feature: math.fsum(values)
                          for feature, values in feature_values.items()},
             "components": [{
@@ -217,7 +234,7 @@ def _training_candidates(decision) -> list[dict]:
                 "action_path": [str(action) for action in successor.action_path],
                 "gaps": list(successor.valuation.gaps),
             } for successor in candidate.successors],
-            "gaps": list(candidate.gaps),
+            "gaps": list(gaps),
         })
     return rows
 
