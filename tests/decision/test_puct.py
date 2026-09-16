@@ -4,20 +4,29 @@ import time
 import pytest
 
 from common.api import ActionIdentity
-from common.decision import DecisionCoordinator, PolicyConfiguration, StateValuation, ValueScale
+from common.decision import (
+    ActionChoiceIdentity, BehaviorIdentity, ComponentContract, DecisionCoordinator,
+    NO_FAIL_SAFE_POLICY_IDENTITY, PolicyConfiguration, StateValuation, ValueScale,
+)
 from common.ledger.search import UniformPolicyModel
-from common.puct import (PuctConfiguration, PuctDecisionPolicy, PuctSearch,
+from common.puct import (PuctConfiguration, PuctDecisionPolicy, PuctSearch, decision_record,
                          evaluation_profile, inspection_profile, play_profile)
 from common.decision.turn import (DirectTurnSearchProvider, NodeKind, SearchNode,
                                   SearchStateKey)
 from common.decision.turn import ChancePlan
-from common.decision.puct import PuctOutcome
+from common.decision.puct import PuctEvidence, PuctOutcome
 from common.observation import ObservationRecord, ObservationStateBuilder
 from common.options import LegalAction
 from ledger_helpers import DARK_E, DRAGAPULT, body, player, printout
 
 
 SCALE = ValueScale("test-worth", 1)
+
+
+def puct_evidence(result):
+    evidence = result.search.evidence
+    assert isinstance(evidence, PuctEvidence)
+    return evidence
 
 
 class GraphEnvironment:
@@ -78,9 +87,15 @@ class GraphEnvironment:
         return f'{{"private":"{self.private}","schema":"controlled-graph-input","version":1}}'
 
 
+class DifferentProviderGraphEnvironment(GraphEnvironment):
+    identity = "different-controlled-turn-graph-v1"
+
+
 class GraphEvaluator:
     identity = "controlled-value-v1"
     value_scale = SCALE
+    accepted_model_identity = "controlled-model-v1"
+    contract = ComponentContract(identity, "SimpleNamespace")
 
     def __init__(self, values):
         self.values = values
@@ -88,18 +103,37 @@ class GraphEvaluator:
     def evaluate(self, request):
         observation = request.state
         return StateValuation(observation.position_key, self.values[observation.position_key],
-                              SCALE, observation.seat, self.identity)
+                              SCALE, observation.seat, self.identity,
+                              evaluation_model_identity=request.evaluation_model.identity)
 
 
 def decide(environment, configuration=None, *, search=None, policy=None, guard=None, evaluator=None):
+    evaluator = evaluator or GraphEvaluator(environment.valuation_values)
+    model = SimpleNamespace(
+        identity="controlled-model-v1",
+        prize_plan=SimpleNamespace(identity="controlled-prize-plan-v1"),
+    )
+    search = search or PuctSearch()
+    configuration = configuration or PuctConfiguration(simulation_limit=64)
+    policy = policy or UniformPolicyModel()
+    selection = PuctDecisionPolicy()
     coordinator = DecisionCoordinator(
-        evaluator=evaluator or GraphEvaluator(environment.valuation_values),
-        evaluation_model=SimpleNamespace(identity="controlled-model-v1"),
-        search=search or PuctSearch(),
-        search_configuration=configuration or PuctConfiguration(simulation_limit=64),
-        policy_model=policy or UniformPolicyModel(),
-        decision_policy=PuctDecisionPolicy(), policy_configuration=PolicyConfiguration())
-    return coordinator.decide(environment.root, provider=environment, strict=True, execution_guard=guard)
+        evaluator=evaluator, evaluation_model=model, search=search,
+        search_configuration=configuration, policy_model=policy,
+        decision_policy=selection, policy_configuration=PolicyConfiguration(),
+        behavior_identity=BehaviorIdentity(
+            evaluator.identity, model.identity, search.identity, policy.identity,
+            selection.identity, NO_FAIL_SAFE_POLICY_IDENTITY, environment.identity,
+            configuration.identity, model.prize_plan.identity,
+        ),
+        compute_identity=configuration.identity,
+    )
+    return coordinator.decide(
+        environment.root.observation,
+        provider=environment,
+        strict=True,
+        execution_guard=guard,
+    )
 
 
 def test_direct_provider_contract_is_explicit_and_incomplete_providers_are_rejected():
@@ -107,14 +141,59 @@ def test_direct_provider_contract_is_explicit_and_incomplete_providers_are_rejec
     assert isinstance(environment, DirectTurnSearchProvider)
 
     incomplete = SimpleNamespace(root=environment.root, identity="incomplete")
+    evaluator = GraphEvaluator(environment.valuation_values)
+    model = SimpleNamespace(
+        identity="controlled-model-v1",
+        prize_plan=SimpleNamespace(identity="controlled-prize-plan-v1"),
+    )
+    search = PuctSearch()
+    configuration = PuctConfiguration(simulation_limit=1)
+    policy = UniformPolicyModel()
+    selection = PuctDecisionPolicy()
     coordinator = DecisionCoordinator(
-        evaluator=GraphEvaluator(environment.valuation_values),
-        evaluation_model=SimpleNamespace(identity="controlled-model-v1"),
-        search=PuctSearch(), search_configuration=PuctConfiguration(simulation_limit=1),
-        policy_model=UniformPolicyModel(), decision_policy=PuctDecisionPolicy(),
-        policy_configuration=PolicyConfiguration())
+        evaluator=evaluator, evaluation_model=model, search=search,
+        search_configuration=configuration, policy_model=policy,
+        decision_policy=selection, policy_configuration=PolicyConfiguration(),
+        behavior_identity=BehaviorIdentity(
+            evaluator.identity, model.identity, search.identity, policy.identity,
+            selection.identity, NO_FAIL_SAFE_POLICY_IDENTITY, incomplete.identity,
+            configuration.identity, model.prize_plan.identity,
+        ),
+        compute_identity=configuration.identity,
+    )
     with pytest.raises(TypeError, match="supported provider contract"):
-        coordinator.decide(incomplete.root, provider=incomplete, strict=True)
+        coordinator.decide(incomplete.root.observation, provider=incomplete, strict=True)
+
+
+def test_behavior_identity_rejects_a_different_runtime_provider():
+    environment = GraphEnvironment({"root": 0.0}, {})
+    configuration = PuctConfiguration(simulation_limit=1)
+    evaluator = GraphEvaluator(environment.valuation_values)
+    model = SimpleNamespace(
+        identity="controlled-model-v1",
+        prize_plan=SimpleNamespace(identity="controlled-prize-plan-v1"),
+    )
+    policy = UniformPolicyModel()
+    selection = PuctDecisionPolicy()
+    search = PuctSearch()
+    coordinator = DecisionCoordinator(
+        evaluator=evaluator,
+        evaluation_model=model,
+        search=search,
+        search_configuration=configuration,
+        policy_model=policy,
+        decision_policy=selection,
+        policy_configuration=PolicyConfiguration(),
+        behavior_identity=BehaviorIdentity(
+            evaluator.identity, model.identity, search.identity, policy.identity,
+            selection.identity, NO_FAIL_SAFE_POLICY_IDENTITY, "different-provider-v1",
+            configuration.identity, model.prize_plan.identity,
+        ),
+        compute_identity=configuration.identity,
+    )
+
+    with pytest.raises(ValueError, match="injected provider"):
+        coordinator.decide(environment.root.observation, provider=environment, strict=True)
 
 
 class DelayGraphEvaluator(GraphEvaluator):
@@ -130,11 +209,16 @@ class DelayGraphEvaluator(GraphEvaluator):
 
 class BiasedPolicy:
     identity = "controlled-biased-prior-v1"
+    contract = ComponentContract(identity, identity)
 
     def priors(self, request):
         distribution = UniformPolicyModel().priors(request)
         if len(distribution.actions) != 2:
-            return distribution
+            return replace(
+                distribution,
+                model_identity=self.identity,
+                configuration_identity=self.identity,
+            )
         actions = tuple(
             replace(item, normalized_score=prior, final_prior=prior)
             for item, prior in zip(distribution.actions, (0.99, 0.01)))
@@ -150,16 +234,51 @@ def test_puct_discovers_same_player_sequence_that_beats_greedy_leaf_value():
 
     result = decide(environment)
 
+    assert result.chosen is not None, result.search.outcome.failure
     assert result.chosen.identity == ActionIdentity("setup")
-    assert result.roster.legal_action_identities == (
-        (ActionIdentity("setup"), (0,)), (ActionIdentity("immediate"), (1,)))
-    setup = result.roster.candidates[0]
-    assert setup.puct.visits > result.roster.candidates[1].puct.visits
-    assert setup.search_value.total > 3.0
-    assert result.search.puct.simulations == 64
-    assert tuple(step.action for step in result.search.puct.principal_variation) == (
+    assert result.roster.identities == (
+        ActionChoiceIdentity(ActionIdentity("setup"), (0,)),
+        ActionChoiceIdentity(ActionIdentity("immediate"), (1,)),
+    )
+    evidence = result.search.evidence
+    assert isinstance(evidence, PuctEvidence)
+    assert evidence.root_edges[0].statistics.visits > evidence.root_edges[1].statistics.visits
+    assert evidence.root_edges[0].statistics.mean_value > 3.0
+    assert evidence.simulations == 64
+    assert tuple(step.action for step in evidence.principal_variation) == (
         ActionIdentity("setup"), ActionIdentity("finish"))
-    assert result.search.puct.principal_variation_stop_reason == "turn_boundary"
+    assert evidence.principal_variation_stop_reason == "turn_boundary"
+
+
+def test_puct_record_joins_reordered_evidence_by_choice_identity():
+    environment = GraphEnvironment(
+        {"root": 0.0, "first": 1.0, "second": 2.0},
+        {"root": (("first", "first"), ("second", "second"))})
+    configuration = PuctConfiguration(simulation_limit=8, exploration=100.0)
+    result = decide(environment, configuration, policy=BiasedPolicy())
+    evidence = puct_evidence(result)
+    root_distribution = evidence.prior_distributions[0]
+    reordered_distribution = replace(
+        root_distribution.distribution,
+        actions=tuple(reversed(root_distribution.distribution.actions)),
+    )
+    reordered = replace(
+        evidence,
+        root_edges=tuple(reversed(evidence.root_edges)),
+        prior_distributions=(
+            replace(root_distribution, distribution=reordered_distribution),
+            *evidence.prior_distributions[1:],
+        ),
+    )
+    decision = replace(result, search=replace(result.search, evidence=reordered))
+
+    record = decision_record(decision, environment.root.observation, configuration)
+    edge_by_choice = {edge.choice: edge.statistics for edge in evidence.root_edges}
+    priors = root_distribution.distribution.priors_for(result.roster)
+
+    assert [row["prior"] for row in record["candidates"]] == list(priors)
+    assert [row["visits"] for row in record["candidates"]] == [
+        edge_by_choice[choice].visits for choice in result.roster.identities]
 
 
 def test_tree_inspection_is_opt_in_and_contains_only_legal_observations():
@@ -174,11 +293,11 @@ def test_tree_inspection_is_opt_in_and_contains_only_legal_observations():
         PuctConfiguration(simulation_limit=2),
         search=PuctSearch(capture_tree=True))
 
-    assert ordinary.search.puct.inspection is None
-    graph = inspected.search.puct.inspection
+    assert puct_evidence(ordinary).inspection is None
+    graph = puct_evidence(inspected).inspection
     assert graph is not None
-    assert (ordinary.search.puct.configuration_identity
-            == inspected.search.puct.configuration_identity)
+    assert (puct_evidence(ordinary).configuration_identity
+            == puct_evidence(inspected).configuration_identity)
     assert graph.root_node_id == 0
     assert len(graph.nodes) == 3
     assert len(graph.edges) == 2
@@ -205,7 +324,7 @@ def test_puct_reports_measured_worker_transport_costs():
     result = decide(environment, PuctConfiguration(
         simulation_limit=2, worker_count=2, batch_size=2))
 
-    transport = result.search.puct.transport
+    transport = puct_evidence(result).transport
     assert transport.worker_count == 2
     assert transport.startup_seconds >= 0
     assert transport.request_messages > 0
@@ -223,10 +342,11 @@ def test_policy_priors_change_root_allocation_without_becoming_values():
         environment, PuctConfiguration(simulation_limit=8, exploration=100.0),
         policy=BiasedPolicy())
 
-    guided, better = result.roster.candidates
-    assert (guided.prior, better.prior) == (0.99, 0.01)
-    assert guided.puct.visits > better.puct.visits
-    assert guided.search_value.total == 0.0
+    guided, better = puct_evidence(result).root_edges
+    distribution = puct_evidence(result).prior_distributions[0].distribution
+    assert tuple(item.final_prior for item in distribution.actions) == (0.99, 0.01)
+    assert guided.statistics.visits > better.statistics.visits
+    assert guided.statistics.mean_value == 0.0
 
 
 def test_transition_exhaustion_returns_completed_action_and_preserves_unvisited_roster():
@@ -236,15 +356,17 @@ def test_transition_exhaustion_returns_completed_action_and_preserves_unvisited_
 
     result = decide(environment, PuctConfiguration(simulation_limit=100, transition_limit=1))
 
-    assert result.search.stop_reason == "transition_limit", result.search.failure
-    assert result.search.puct.work.transitions == 1
-    assert result.search.puct.work.evaluations == 2
-    assert len(result.roster.candidates) == 2
-    assert result.chosen_candidate.puct.visits == 1
-    unvisited = next(candidate for candidate in result.roster.candidates if not candidate.puct.visits)
-    assert unvisited.search_value is None
-    assert unvisited.delta is None
-    assert unvisited.puct.mean_value is None
+    assert result.search.outcome.termination.code == "transition_limit", result.search.outcome.failure
+    assert puct_evidence(result).work.transitions == 1
+    assert puct_evidence(result).work.evaluations == 2
+    assert len(result.roster.actions) == 2
+    chosen_edge = next(edge for edge in puct_evidence(result).root_edges
+                       if edge.choice == result.chosen_candidate.choice)
+    assert chosen_edge.statistics.visits == 1
+    unvisited = next(edge for edge in puct_evidence(result).root_edges
+                     if not edge.statistics.visits)
+    assert result.search.candidate_for(unvisited.choice).delta is None
+    assert unvisited.statistics.mean_value is None
 
 
 class CoinEnvironment(GraphEnvironment):
@@ -265,21 +387,23 @@ def test_chance_backup_averages_outcomes_and_reuses_realized_slots():
     result = decide(CoinEnvironment(), PuctConfiguration(simulation_limit=2000))
 
     assert result.chosen.identity == ActionIdentity("coin")
-    assert 4.5 < result.chosen_candidate.search_value.total < 5.5
-    assert result.search.puct.work.chances == 2
-    chance = result.search.puct.chance_nodes[0]
+    chosen_edge = next(edge for edge in puct_evidence(result).root_edges
+                       if edge.choice == result.chosen_candidate.choice)
+    assert 4.5 < chosen_edge.statistics.mean_value < 5.5
+    assert puct_evidence(result).work.chances == 2
+    chance = puct_evidence(result).chance_nodes[0]
     assert chance.resolved_slots == 2
     assert chance.distinct_successors == 2
-    assert chance.completed_visits == result.chosen_candidate.puct.visits
+    assert chance.completed_visits == chosen_edge.statistics.visits
 
 
 def test_initialization_exhaustion_stops_without_fabricating_an_action():
     environment = CoinEnvironment()
     result = decide(environment, PuctConfiguration(evaluation_limit=1))
     assert result.chosen is None
-    assert result.search.puct.outcome is PuctOutcome.INITIALIZATION_DEGRADED
-    assert result.search.puct.simulations == 0
-    assert all(candidate.puct.visits == 0 for candidate in result.roster.candidates)
+    assert puct_evidence(result).outcome is PuctOutcome.INITIALIZATION_DEGRADED
+    assert puct_evidence(result).simulations == 0
+    assert all(edge.statistics.visits == 0 for edge in puct_evidence(result).root_edges)
     assert environment.closed
 
 
@@ -291,9 +415,9 @@ def test_explicit_cancellation_is_not_reported_as_budget_exhaustion():
     result = decide(CoinEnvironment(), guard=cancellation)
 
     assert result.chosen is None
-    assert result.search.stop_reason == "cancelled"
-    assert result.search.puct.outcome is PuctOutcome.CANCELLED
-    assert result.search.failure is None
+    assert result.search.outcome.termination.code == "cancelled"
+    assert puct_evidence(result).outcome is PuctOutcome.CANCELLED
+    assert result.search.outcome.failure is None
 
 
 class BrokenEnvironment(CoinEnvironment):
@@ -307,10 +431,10 @@ def test_hard_failure_stops_even_when_an_earlier_simulation_completed():
     environment = BrokenEnvironment()
     result = decide(environment)
     assert result.chosen is None
-    assert result.search.puct.outcome is PuctOutcome.HARD_FAILURE
-    assert result.search.puct.simulations >= 1
-    assert result.search.failure.message == "broken engine"
-    assert '"schema":"controlled-graph-input"' in result.search.puct.reproduction_input
+    assert puct_evidence(result).outcome is PuctOutcome.HARD_FAILURE
+    assert puct_evidence(result).simulations >= 1
+    assert result.search.outcome.failure.message == "broken engine"
+    assert '"schema":"controlled-graph-input"' in puct_evidence(result).reproduction_input
     assert environment.closed
 
 
@@ -331,11 +455,11 @@ def test_explicitly_unavailable_action_is_excluded_without_hiding_the_gap():
 
     result = decide(environment, PuctConfiguration(simulation_limit=8))
 
-    assert result.search.puct.outcome is PuctOutcome.SEARCHED
+    assert puct_evidence(result).outcome is PuctOutcome.SEARCHED
     assert result.chosen.identity == ActionIdentity("supported")
-    rejected = result.roster.candidates[0]
-    assert rejected.puct.exclusion == "focal hand update is unavailable"
-    assert rejected.puct.visits == 0
+    rejected = puct_evidence(result).root_edges[0].statistics
+    assert rejected.exclusion == "focal hand update is unavailable"
+    assert rejected.visits == 0
 
 
 def test_actual_single_action_bypasses_evaluation_and_simulation():
@@ -343,22 +467,22 @@ def test_actual_single_action_bypasses_evaluation_and_simulation():
     environment.valuation_values.clear()
     result = decide(environment)
     assert result.chosen.identity == ActionIdentity("end")
-    assert result.search.puct.outcome is PuctOutcome.FORCED
-    assert result.search.puct.work.evaluations == 0
-    assert result.search.puct.simulations == 0
+    assert puct_evidence(result).outcome is PuctOutcome.FORCED
+    assert puct_evidence(result).work.evaluations == 0
+    assert puct_evidence(result).simulations == 0
     assert result.baseline is None
-    assert result.search.puct.principal_variation_stop_reason == "no_completed_edge"
+    assert puct_evidence(result).principal_variation_stop_reason == "no_completed_edge"
 
 
 def test_state_capacity_exhaustion_preserves_honest_resource_evidence():
     result = decide(CoinEnvironment(), PuctConfiguration(state_limit=1, batch_size=4))
 
     assert result.chosen is None
-    assert result.search.stop_reason == "state_limit"
-    assert result.search.puct.work.state_capacity_charged == 1
-    assert result.search.puct.work.transitions == 0
-    assert result.search.puct.cache_entries == 1
-    assert result.search.puct.cache_capacity_charged > result.search.puct.cache_entries
+    assert result.search.outcome.termination.code == "state_limit"
+    assert puct_evidence(result).work.state_capacity_charged == 1
+    assert puct_evidence(result).work.transitions == 0
+    assert puct_evidence(result).cache_entries == 1
+    assert puct_evidence(result).cache_capacity_charged > puct_evidence(result).cache_entries
 
 
 def test_joint_batches_have_identical_structural_evidence_across_worker_counts():
@@ -368,11 +492,11 @@ def test_joint_batches_have_identical_structural_evidence_across_worker_counts()
     for result in results[1:]:
         assert result.chosen == reference.chosen
         assert result.roster == reference.roster
-        assert result.search.puct.work == reference.search.puct.work
-        assert result.search.puct.chance_nodes == reference.search.puct.chance_nodes
-    assert reference.search.puct.batches == 24
-    assert reference.search.puct.peak_pending == 4
-    timing = reference.search.puct.timing
+        assert puct_evidence(result).work == puct_evidence(reference).work
+        assert puct_evidence(result).chance_nodes == puct_evidence(reference).chance_nodes
+    assert puct_evidence(reference).batches == 24
+    assert puct_evidence(reference).peak_pending == 4
+    timing = puct_evidence(reference).timing
     assert timing.prior_seconds + timing.search_seconds + timing.overhead_seconds == pytest.approx(timing.elapsed_seconds)
 
 
@@ -383,20 +507,21 @@ def test_deadline_keeps_completed_batch_work_and_rejects_late_results():
     result = decide(
         environment,
         PuctConfiguration(simulation_limit=2, batch_size=2, worker_count=2,
-                          time_limit_seconds=7, cleanup_reserve_seconds=1),
+                          time_limit_seconds=10, cleanup_reserve_seconds=1),
         evaluator=DelayGraphEvaluator(environment.valuation_values, 2.0))
-    visits = tuple(candidate.puct.visits for candidate in result.roster.candidates)
+    visits = tuple(edge.statistics.visits for edge in puct_evidence(result).root_edges)
 
-    assert result.search.stop_reason == "time_limit"
-    assert result.search.puct.outcome is PuctOutcome.SEARCHED, (
+    assert result.search.outcome.termination.code == "time_limit"
+    assert puct_evidence(result).outcome is PuctOutcome.SEARCHED, (
         {item.category: (item.reserved, item.attempted, item.completed, item.uncertain)
-         for item in result.search.puct.resources}, result.search.failure, visits)
-    assert result.search.puct.simulations == 1
+         for item in puct_evidence(result).resources}, result.search.outcome.failure, visits)
+    assert puct_evidence(result).simulations == 1
     assert sum(visits) == 1
     assert result.chosen.identity.kind == "quick"
     assert environment.closed
     time.sleep(0.05)
-    assert tuple(candidate.puct.visits for candidate in result.roster.candidates) == visits
+    assert tuple(edge.statistics.visits
+                 for edge in puct_evidence(result).root_edges) == visits
 
 
 def test_verified_reuse_can_choose_inherited_evidence_with_no_new_simulations():
@@ -417,12 +542,14 @@ def test_verified_reuse_can_choose_inherited_evidence_with_no_new_simulations():
 
     result = decide(second, configuration, search=search, guard=Expired())
 
-    assert result.search.puct.outcome is PuctOutcome.SEARCHED
+    assert puct_evidence(result).outcome is PuctOutcome.SEARCHED
     assert result.chosen.identity.kind == "finish"
-    assert result.search.puct.simulations == 0
-    assert result.search.puct.inherited_visits > 0
-    assert result.search.puct.reuse_reason == "verified_subtree"
-    assert result.chosen_candidate.puct.inherited_visits == result.chosen_candidate.puct.visits
+    assert puct_evidence(result).simulations == 0
+    assert puct_evidence(result).inherited_visits > 0
+    assert puct_evidence(result).reuse_reason == "verified_subtree"
+    chosen_edge = next(edge for edge in puct_evidence(result).root_edges
+                       if edge.choice == result.chosen_candidate.choice)
+    assert chosen_edge.statistics.inherited_visits == chosen_edge.statistics.visits
     assert first.closed
     search.close()
     assert second.closed
@@ -436,7 +563,8 @@ def test_private_reproduction_input_does_not_change_legal_view_search():
 
     assert results[0].chosen == results[1].chosen
     assert results[0].roster == results[1].roster
-    assert results[0].search.puct.reproduction_input != results[1].search.puct.reproduction_input
+    assert (puct_evidence(results[0]).reproduction_input
+            != puct_evidence(results[1]).reproduction_input)
 
 
 def test_prior_normalization_uses_preparation_allowance_and_falls_back_uniformly():
@@ -450,10 +578,10 @@ def test_prior_normalization_uses_preparation_allowance_and_falls_back_uniformly
                           prior_total_operations=1),
         policy=BiasedPolicy())
 
-    evidence = result.search.puct.prior_distributions[0]
+    evidence = puct_evidence(result).prior_distributions[0]
     assert evidence.preparation_limited
     assert evidence.distribution.fallback_reason.value == "requested_uniform"
-    assert tuple(candidate.prior for candidate in result.roster.candidates) == (0.5, 0.5)
+    assert tuple(item.final_prior for item in evidence.distribution.actions) == (0.5, 0.5)
 
 
 class NestedChanceEnvironment(GraphEnvironment):
@@ -479,11 +607,12 @@ def test_nested_draw_interruption_does_not_redirect_into_a_cheaper_root_path():
         policy=BiasedPolicy())
 
     assert result.chosen.identity.kind == "draw"
-    assert result.search.stop_reason == "transition_limit", result.search.failure
-    assert result.search.puct.outcome is PuctOutcome.SEARCHED
-    assert result.search.puct.work.transitions == 1
-    assert result.search.puct.work.chances == 1
-    assert tuple(candidate.puct.visits for candidate in result.roster.candidates) == (1, 0)
+    assert result.search.outcome.termination.code == "transition_limit", result.search.outcome.failure
+    assert puct_evidence(result).outcome is PuctOutcome.SEARCHED
+    assert puct_evidence(result).work.transitions == 1
+    assert puct_evidence(result).work.chances == 1
+    assert tuple(edge.statistics.visits
+                 for edge in puct_evidence(result).root_edges) == (1, 0)
 
 
 @pytest.mark.parametrize("limit,reason", (("node", "node_limit"), ("cache", "cache_limit")))
@@ -495,8 +624,8 @@ def test_tree_and_cache_caps_stop_before_an_unsupported_backup(limit, reason):
         {"root": (("left", "left"), ("right", "right"))}), configuration)
 
     assert result.chosen is None
-    assert result.search.stop_reason == reason
-    assert result.search.puct.outcome is PuctOutcome.INITIALIZATION_DEGRADED
+    assert result.search.outcome.termination.code == reason
+    assert puct_evidence(result).outcome is PuctOutcome.INITIALIZATION_DEGRADED
 
 
 @pytest.mark.parametrize("factory,reason", (
@@ -506,6 +635,10 @@ def test_tree_and_cache_caps_stop_before_an_unsupported_backup(limit, reason):
     (lambda values, edges: (GraphEnvironment(values, edges),
                             GraphEnvironment(values, edges, root="setup", reuse_allowed=False)),
      "ownership_or_state_unverified"),
+    (lambda values, edges: (GraphEnvironment(values, edges),
+                            DifferentProviderGraphEnvironment(
+                                values, edges, root="setup")),
+     "configuration_or_horizon_changed"),
     (lambda values, edges: (GraphEnvironment(values, edges),
                             GraphEnvironment(values, edges, root="missing")),
      "state_not_retained"),
@@ -528,7 +661,7 @@ def test_reuse_rejects_incompatible_horizon_ownership_and_outcome(factory, reaso
 
     result = decide(second, configuration, search=search, guard=Expired())
 
-    assert result.search.puct.reuse_reason == reason
+    assert puct_evidence(result).reuse_reason == reason
     search.close()
 
 
@@ -544,7 +677,7 @@ def test_declared_profiles_run_the_same_bounded_puct_contract(profile):
         {"root": (("left", "left"), ("right", "right"))}), configuration)
 
     assert result.chosen is not None
-    assert result.search.puct.configuration_identity == configuration.identity
+    assert puct_evidence(result).configuration_identity == configuration.identity
 
 
 def test_fresh_mode_discards_the_previous_tree():
@@ -558,5 +691,5 @@ def test_fresh_mode_discards_the_previous_tree():
 
     result = decide(second, configuration, search=search)
 
-    assert result.search.puct.reuse_reason == "fresh_requested"
+    assert puct_evidence(result).reuse_reason == "fresh_requested"
     assert first.closed and second.closed

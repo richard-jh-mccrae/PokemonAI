@@ -16,9 +16,14 @@ LEDGER = {"evaluator": "ledger-linear-v1", "feature_schema_version": 1,
 
 def _bundle(run: Path, partition: str, episode: int) -> Path:
     from common.api import ActionIdentity
-    from common.decision import (CandidateDisposition, CandidateRoster, ComputeConfiguration,
-                                 DecisionDelta, DecisionResult, EvaluationStatus, SearchResult,
-                                 StateValuation, ValueScale, ValuedCandidate)
+    from common.decision import (
+        ActionChoiceIdentity, CandidateDisposition, CandidateResult, CandidateRoster,
+        BehaviorIdentity, ComputeConfiguration, DecisionDelta, DecisionResult, EvaluationStatus,
+        ForcedSelection, SearchCoverage, SearchOutcome, SearchOutcomeStatus, SearchResult,
+        SearchTermination, StateValuation, ValueScale,
+        NO_FAIL_SAFE_POLICY_IDENTITY, NO_POLICY_MODEL_IDENTITY,
+    )
+    from common.ledger.evidence import LedgerCandidateEvidence, LedgerEvidence
     from common.ledger import EvaluationModel
     from common.observation import ObservationStateBuilder
     from common.options import LegalAction
@@ -32,13 +37,38 @@ def _bundle(run: Path, partition: str, episode: int) -> Path:
     state = replace(state, legal_actions=(action,))
     scale = ValueScale("ledger-worth", 1)
     baseline = StateValuation(state.position_key, 0.0, scale, state.seat, "fixture")
-    candidate = ValuedCandidate(action, DecisionDelta(0.0, scale),
-                                CandidateDisposition.FORCED, EvaluationStatus.COMPLETE)
-    roster = CandidateRoster.from_legal_actions(state.legal_actions, (candidate,))
+    roster = CandidateRoster(state.legal_actions, state.decision_key, forced=True)
+    choice = ActionChoiceIdentity.from_action(action)
+    candidate = CandidateResult(
+        choice, CandidateDisposition.FORCED,
+        DecisionDelta(0.0, scale, perspective=state.seat),
+        EvaluationStatus.COMPLETE)
+    search = SearchResult(
+        baseline,
+        roster,
+        (candidate,),
+        SearchOutcome(
+            SearchOutcomeStatus.COMPLETE,
+            SearchCoverage(),
+            SearchTermination("ledger", "complete", 1),
+        ),
+        evidence=LedgerEvidence(
+            1, 0, (), None, (LedgerCandidateEvidence(choice),)),
+    )
+    evaluation_model = EvaluationModel.build()
+    compute_configuration = ComputeConfiguration()
     decision = build_decision_record(
-        DecisionResult(action, baseline, roster, SearchResult(baseline, roster)), state,
+        DecisionResult(
+            search,
+            ForcedSelection(choice),
+            BehaviorIdentity(
+                "fixture", evaluation_model.identity, "fixture-search", NO_POLICY_MODEL_IDENTITY,
+                "fixture-policy", NO_FAIL_SAFE_POLICY_IDENTITY, "fixture-provider",
+                compute_configuration.identity, evaluation_model.prize_plan.identity,
+            ),
+        ), state,
         episode_key=str(episode), decision_index=0, parent_decision_id=None, selection=(0,),
-        evaluation_model=EvaluationModel.build(), compute_configuration=ComputeConfiguration(),
+        evaluation_model=evaluation_model, compute_configuration=compute_configuration,
         provider_configuration={
             "identity": "fixture-provider", "backend": "fixture",
             "factory": "tests.FixtureProvider", "version": 2,

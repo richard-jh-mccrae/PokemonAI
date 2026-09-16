@@ -9,28 +9,37 @@ import pytest
 
 from common.api import ActionIdentity, RootDecision
 from common.decision import (
+    ActionChoiceIdentity,
     CandidateDisposition,
+    CandidateResult,
     CandidateRoster,
     ComputeConfiguration,
     ContinuationResult,
-    DecisionDelta,
     DecisionFailure,
     DecisionFailureStage,
-    DecisionReason,
     DecisionResult,
     EvaluationStatus,
+    FailSafeSelection,
     OpportunityRef,
+    PolicySelection,
+    SearchCoverage,
+    SearchOutcome,
+    SearchOutcomeStatus,
     SearchResult,
-    SearchTrace,
+    SearchTermination,
     StateValuation,
     SuccessorResult,
     ValueComponent,
     ValueScale,
-    ValuedCandidate,
 )
+from legacy_decision_fixtures import ValuedCandidate
 from common.observation import ObservationStateBuilder, TransitionTrace, VisibleHand
+from common.decision import DecisionDelta as _DecisionDelta
 from common.options import LegalAction
 from common.ledger import BehaviorIdentity, EvaluationModel, PrizeMap
+from common.ledger.evidence import (
+    LedgerCandidateEvidence, LedgerEvidence, LedgerPolicyDecisionEvidence,
+)
 from common.telemetry import (
     MAX_FRAME_BYTES,
     RecordAssembler,
@@ -52,11 +61,75 @@ def Action(identity, selection):
     return LegalAction(identity, selection, (selection,), ())
 
 
+def DecisionDelta(total, scale, components=()):
+    return _DecisionDelta(total, scale, components, perspective=0)
+
+
 def _provider_configuration(identity="fixture-provider"):
     return {
         "identity": identity, "backend": "fixture", "factory": "tests.FixtureProvider",
         "version": 2, "kwargs": {}, "factory_kwargs": {},
     }
+
+
+def typed_ledger_result(
+        state,
+        baseline,
+        candidates,
+        chosen,
+        *,
+        nodes=0,
+        stop_reason="complete",
+        frontier=(),
+        failure=None,
+        behavior=None,
+):
+    roster = CandidateRoster(tuple(candidate.action for candidate in candidates), state.decision_key)
+    results = tuple(CandidateResult(
+        choice,
+        candidate.disposition,
+        candidate.delta,
+        candidate.status,
+        candidate.gaps,
+        candidate.successors,
+        candidate.continuation,
+        (candidate.status if candidate.continuation is not None
+         else EvaluationStatus.UNAVAILABLE),
+        candidate.gaps if candidate.continuation is not None else (),
+    ) for choice, candidate in zip(roster.identities, candidates))
+    evidence = LedgerEvidence(
+        1,
+        nodes,
+        tuple(str(item) for item in frontier),
+        None,
+        tuple(LedgerCandidateEvidence(
+            choice, tuple(candidate.policy_tie_break), candidate.policy_evidence)
+            for choice, candidate in zip(roster.identities, candidates)),
+    )
+    status = (SearchOutcomeStatus.HARD_FAILURE if failure is not None else
+              SearchOutcomeStatus.BUDGET_LIMITED
+              if stop_reason in {"node_budget", "time_budget"} else
+              SearchOutcomeStatus.COMPLETE)
+    search = SearchResult(
+        baseline,
+        roster,
+        results,
+        SearchOutcome(
+            status,
+            SearchCoverage(),
+            SearchTermination("ledger", stop_reason, 1),
+            failure,
+        ),
+        evidence=evidence,
+    )
+    choice = ActionChoiceIdentity.from_action(chosen)
+    resolution = (PolicySelection(choice) if failure is None
+                  else FailSafeSelection(choice, failure))
+    return DecisionResult(
+        search,
+        resolution,
+        behavior,
+    )
 
 
 def test_runtime_provenance_accepts_manifested_source_identity(monkeypatch):
@@ -109,17 +182,15 @@ def test_decision_record_keeps_the_complete_typed_candidate_roster():
         CandidateDisposition.ENDS_TURN,
         EvaluationStatus.COMPLETE,
     )
-    roster = CandidateRoster.from_legal_actions(state.legal_actions, (candidate,))
-    search = SearchResult(baseline, roster, nodes_visited=3, stop_reason="complete")
-    result = DecisionResult(
-        action,
+    result = typed_ledger_result(
+        state,
         baseline,
-        roster,
-        search,
-        SearchTrace(3, "complete", (), action, ((action,),)),
-        DecisionReason.BEST_TURN_ENDER,
-        BehaviorIdentity("eval", "model", "search", "prior", "policy", "fail-safe",
-                         "provider", "compute", "prize-plan"),
+        (candidate,),
+        action,
+        nodes=3,
+        behavior=BehaviorIdentity(
+            "eval", "model", "search", "prior", "policy", "fail-safe",
+            "provider", "compute", "prize-plan"),
     )
 
     record = build_decision_record(
@@ -156,13 +227,7 @@ def test_decision_record_keeps_the_complete_typed_candidate_roster():
         "stop_reason": "complete",
         "frontier": [],
         "failure": None,
-        "trace": {
-            "nodes_visited": 3,
-            "stop_reason": "complete",
-            "frontier": [],
-            "chosen_action_id": record["actions"][0]["id"],
-            "action_paths": [[record["actions"][0]]],
-        },
+        "trace": None,
     }
     model = record["configuration"]["evaluation_model"]
     assert model["valuation"]["values"]["prize.race"] == 1.0
@@ -174,6 +239,40 @@ def test_decision_record_keeps_the_complete_typed_candidate_roster():
     assert record["behavior_identity"]["provider"] == "provider"
     assert record["timing"]["decision_seconds"] == 0.125
     assert record["completeness"] == "complete"
+
+
+def test_action_ids_join_on_exact_identity_and_selection():
+    state = ObservationStateBuilder().root(printout())
+    scale = ValueScale("ledger-worth", 1)
+    actions = (
+        Action(ActionIdentity("card", ("same",)), (0,)),
+        Action(ActionIdentity("card", ("same",)), (1,)),
+    )
+    state = replace(state, legal_actions=actions)
+    baseline = StateValuation(
+        state.position_key, 0.0, scale, state.seat, "ledger-linear-v1")
+    candidates = tuple(ValuedCandidate(
+        action, DecisionDelta(float(index), scale),
+        CandidateDisposition.CONTINUES_TURN, EvaluationStatus.COMPLETE)
+        for index, action in enumerate(actions))
+    result = typed_ledger_result(state, baseline, candidates, actions[1])
+    result = replace(result, resolution=PolicySelection(
+        result.roster.identities[1],
+        LedgerPolicyDecisionEvidence(
+            1, result.roster.identities[1], "best_delta")))
+
+    record = build_decision_record(
+        result, state, episode_key="exact-choice", decision_index=0,
+        parent_decision_id=None, selection=(1,),
+        evaluation_model=EvaluationModel.build(),
+        compute_configuration=ComputeConfiguration(),
+        provider_configuration=_provider_configuration(),
+        provenance={"agent": "test", "artifact": "fixture", "code": "abc",
+                    "data": {}}, decision_seconds=0.0)
+
+    assert len({action["id"] for action in record["actions"]}) == 2
+    assert record["decision"]["chosen_action_id"] == record["actions"][1]["id"]
+    assert record["decision"]["policy_reason"] == "best_delta"
 
 
 @pytest.mark.parametrize(("stop_reason", "expected"), (
@@ -198,10 +297,8 @@ def test_cached_continuation_completeness_uses_the_committed_candidate(
             gaps=("not selected by cached compound policy",), prior=0.0,
         ),
     )
-    roster = CandidateRoster.from_legal_actions(
-        state.legal_actions, candidates, forced=True)
-    result = DecisionResult(
-        chosen, baseline, roster, SearchResult(baseline, roster, stop_reason=stop_reason))
+    result = typed_ledger_result(
+        state, baseline, candidates, chosen, stop_reason=stop_reason)
 
     record = build_decision_record(
         result, state, episode_key="cached-completeness", decision_index=0,
@@ -232,7 +329,7 @@ def test_decision_record_keeps_every_successor_and_continuation_component():
         False,
         state,
         TransitionTrace(1, state.position_key, (action.identity,), state.position_key),
-        (action,),
+        (ActionChoiceIdentity.from_action(action),),
     )
     continuation = ContinuationResult(
         0.75, -0.1, True,
@@ -253,9 +350,7 @@ def test_decision_record_keeps_every_successor_and_continuation_component():
         continuation=continuation,
         policy_evidence=PrizeMap(4, (101, 202), 4, 0),
     )
-    roster = CandidateRoster.from_legal_actions(state.legal_actions, (candidate,))
-    search = SearchResult(baseline, roster)
-    result = DecisionResult(action, baseline, roster, search)
+    result = typed_ledger_result(state, baseline, (candidate,), action)
 
     record = build_decision_record(
         result,
@@ -311,8 +406,7 @@ def test_framing_is_bounded_deterministic_and_lossless_out_of_order():
         CandidateDisposition.ENDS_TURN,
         EvaluationStatus.COMPLETE,
     )
-    roster = CandidateRoster.from_legal_actions(state.legal_actions, (candidate,))
-    result = DecisionResult(action, baseline, roster, SearchResult(baseline, roster))
+    result = typed_ledger_result(state, baseline, (candidate,), action)
     record = build_decision_record(
         result,
         state,
@@ -461,8 +555,7 @@ def _emittable_decision():
         action, DecisionDelta(0.0, scale), CandidateDisposition.ENDS_TURN,
         EvaluationStatus.COMPLETE,
     )
-    roster = CandidateRoster.from_legal_actions(state.legal_actions, (candidate,))
-    result = DecisionResult(action, baseline, roster, SearchResult(baseline, roster))
+    result = typed_ledger_result(state, baseline, (candidate,), action)
     return state, RootDecision((0,), action.identity, 0.0, True, {}, result)
 
 
@@ -501,11 +594,9 @@ def test_emission_and_delivery_failures_preserve_choice_but_make_episode_uncerti
 
 def test_decision_record_rejects_a_circular_unproven_candidate_roster():
     state, decision = _emittable_decision()
-    candidate = decision.decision_result.roster.candidates[0]
-    roster = CandidateRoster((candidate,))
-    result = DecisionResult(
-        candidate.action, decision.decision_result.baseline, roster,
-        SearchResult(decision.decision_result.baseline, roster))
+    original = decision.decision_result
+    roster = replace(original.roster, decision_key="unproven")
+    result = replace(original, search=replace(original.search, roster=roster))
 
     with pytest.raises(ValueError, match="authoritative legal-action roster proof"):
         build_decision_record(
@@ -581,17 +672,15 @@ def test_successor_observation_rejects_a_visible_opponent_hand():
     successor = SuccessorResult(
         1.0, baseline, True, leaked,
         TransitionTrace(1, state.position_key, (action.identity,), state.position_key),
-        (action,),
+        (ActionChoiceIdentity.from_action(action),),
     )
     candidate = ValuedCandidate(
         action, DecisionDelta(0.0, scale), CandidateDisposition.ENDS_TURN,
         EvaluationStatus.COMPLETE, (successor,),
     )
-    roster = CandidateRoster.from_legal_actions(state.legal_actions, (candidate,))
-
     with pytest.raises(ValueError, match="opponent hand must be hidden"):
         build_decision_record(
-            DecisionResult(action, baseline, roster, SearchResult(baseline, roster)), state,
+            typed_ledger_result(state, baseline, (candidate,), action), state,
             episode_key="hidden-successor", decision_index=0, parent_decision_id=None,
             selection=(0,), evaluation_model=EvaluationModel.build(),
             compute_configuration=ComputeConfiguration(),
@@ -636,9 +725,8 @@ def test_hidden_opponent_hand_truth_cannot_change_a_decision_record():
             action, DecisionDelta(0.0, scale), CandidateDisposition.ENDS_TURN,
             EvaluationStatus.COMPLETE,
         )
-        roster = CandidateRoster.from_legal_actions(state.legal_actions, (candidate,))
         return build_decision_record(
-            DecisionResult(action, baseline, roster, SearchResult(baseline, roster)),
+            typed_ledger_result(state, baseline, (candidate,), action),
             state,
             episode_key="hidden-sentinel",
             decision_index=0,
@@ -663,16 +751,14 @@ def test_failure_telemetry_keeps_codes_but_drops_exception_text():
     candidate = ValuedCandidate(
         action, None, CandidateDisposition.FORCED, EvaluationStatus.UNAVAILABLE,
     )
-    roster = CandidateRoster.from_legal_actions(state.legal_actions, (candidate,))
     failure = DecisionFailure(
         DecisionFailureStage.PROVIDER,
         "PrivateProviderError",
         "SECRET-HAND-CONTENT",
         "SECRET-TRACEBACK",
     )
-    result = DecisionResult(
-        action, baseline, roster, SearchResult(baseline, roster, failure=failure),
-    )
+    result = typed_ledger_result(
+        state, baseline, (candidate,), action, failure=failure)
 
     record = build_decision_record(
         result,

@@ -505,13 +505,16 @@ def _legacy_preservation_frontier(candidates, noise_tolerance=0.0):
 
 
 def assert_decision_parity(prices, search_result, choice, *, forced, configuration):
-    candidates = search_result.roster.candidates
+    candidates = search_result.candidates
+    actions = search_result.roster.actions
+    evidence_by_choice = {
+        item.choice: item for item in search_result.evidence.candidates}
     if len(prices) != len(candidates):
         raise AssertionError("candidate roster size changed")
-    for price, candidate in zip(prices, candidates):
-        if price.action.identity != candidate.action.identity:
+    for price, action, candidate in zip(prices, actions, candidates):
+        if price.action.identity != action.identity:
             raise AssertionError("candidate roster order changed")
-        if price.status is not candidate.status:
+        if price.status is not candidate.delta_status:
             raise AssertionError(f"candidate status changed: {price.action.identity}")
         if price.status is EvaluationStatus.UNAVAILABLE:
             if candidate.delta is not None:
@@ -530,7 +533,7 @@ def assert_decision_parity(prices, search_result, choice, *, forced, configurati
                 f"candidate decomposition changed: {price.action.identity}; "
                 f"expected={expected!r}; actual={actual!r}")
         expected_tie_break = _policy_tie_break(price)
-        if candidate.policy_tie_break != expected_tie_break:
+        if evidence_by_choice[candidate.choice].policy_tie_break != expected_tie_break:
             raise AssertionError(f"candidate tie break changed: {price.action.identity}")
     comparable = tuple(
         price for price in prices if price.status is not EvaluationStatus.UNAVAILABLE)
@@ -538,9 +541,12 @@ def assert_decision_parity(prices, search_result, choice, *, forced, configurati
         return
     legacy = legacy_choose(
         comparable, forced=forced, configuration=configuration)
-    if legacy.action.identity != choice.action.identity:
+    deployed = getattr(choice, "action", None)
+    deployed_identity = (deployed.identity if deployed is not None else
+                         search_result.roster.action_for(choice.choice).identity)
+    if legacy.action.identity != deployed_identity:
         raise AssertionError(
-            f"deployed choice changed: deployed={choice.action.identity}; "
+            f"deployed choice changed: deployed={deployed_identity}; "
             f"recomputed={legacy.action.identity}")
 
 

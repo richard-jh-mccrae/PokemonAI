@@ -8,6 +8,7 @@ import os
 from pathlib import Path
 
 from common.decision import (
+    ComponentContract,
     EvaluationStatus,
     StateValuation,
     ValueComponent,
@@ -59,6 +60,8 @@ def evaluator_semantics_identity(paths=None) -> str:
 class LedgerValueEvaluator:
     identity = f"ledger-linear-v2:{FEATURE_CATALOG.identity}:{evaluator_semantics_identity()}"
     value_scale = LEDGER_VALUE_SCALE
+    accepted_model_identity = "*"
+    contract = ComponentContract(identity, "EvaluationModel")
 
     def evaluate_with_state(
             self, request, parent_state=None) -> tuple[StateValuation, EvaluationSnapshot]:

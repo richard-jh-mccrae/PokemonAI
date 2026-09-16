@@ -1,8 +1,10 @@
 from __future__ import annotations
 
-from common.decision import DecisionCoordinator, PolicyConfiguration, PolicySourceIdentity
+from common.decision import (
+    BehaviorIdentity, DecisionCoordinator, NO_FAIL_SAFE_POLICY_IDENTITY,
+    PolicyConfiguration, PolicySourceIdentity,
+)
 from common.ledger import LedgerPolicyModel, UniformPolicyModel
-from common.ledger.configuration import BehaviorIdentity
 from common.ledger.decision import LedgerValueEvaluator
 from common.decision.action_policy import action_policy_for_agent
 from .configuration import PuctConfiguration
@@ -50,7 +52,17 @@ def build_puct_coordinator(evaluation_model, *, baseline_identity: str | None = 
     selection = PuctDecisionPolicy()
     identity = BehaviorIdentity(
         evaluator.identity, evaluation_model.identity, search.identity, policy.identity, selection.identity,
-        "stop-with-evidence-v1", provider_identity, configuration.identity, evaluation_model.prize_plan.identity)
-    return DecisionCoordinator(evaluator, evaluation_model, search, configuration, policy, selection,
-                               PolicyConfiguration(), behavior_identity=identity,
-                               ledger_baseline_identity=baseline_identity)
+        NO_FAIL_SAFE_POLICY_IDENTITY, provider_identity, configuration.identity,
+        evaluation_model.prize_plan.identity)
+    return DecisionCoordinator(
+        evaluator=evaluator,
+        evaluation_model=evaluation_model,
+        search=search,
+        search_configuration=configuration,
+        policy_model=policy,
+        decision_policy=selection,
+        policy_configuration=PolicyConfiguration(),
+        behavior_identity=identity,
+        ledger_baseline_identity=baseline_identity,
+        compute_identity=configuration.identity,
+    )

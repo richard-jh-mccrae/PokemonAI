@@ -7,6 +7,8 @@ from collections.abc import Iterator, Mapping
 from dataclasses import dataclass, field
 from types import MappingProxyType
 
+from common.decision.results import BehaviorIdentity
+
 from .features import FEATURE_CATALOG, FeatureCatalog
 from common.decision import ComputeConfiguration
 
@@ -179,19 +181,6 @@ class ValuationConfiguration(Mapping[str, float]):
     @property
     def identity(self) -> str:
         return self._identity
-
-
-@dataclass(frozen=True, slots=True)
-class BehaviorIdentity:
-    evaluator: str
-    evaluation_model: str
-    search: str
-    policy_model: str
-    decision_policy: str
-    fail_safe_policy: str
-    provider: str
-    compute: str
-    prize_plan: str
 
 
 def _coefficient_pairs(values, label: str) -> list[tuple[str, float]]:

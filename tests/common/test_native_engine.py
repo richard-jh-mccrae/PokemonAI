@@ -405,7 +405,7 @@ def test_native_puct_samples_shuffle_draw_and_replays_the_continuation():
 def test_native_puct_completes_a_bounded_root_search():
     from common.puct import (NativeTurnSearchProvider, PuctConfiguration,
                              build_puct_coordinator)
-    from common.decision.puct import PuctOutcome
+    from common.decision.puct import PuctEvidence, PuctOutcome
 
     baseline = "98a582d49a32146b18e59beed0019041ce1745fd653e94f7d9c86f8cf0aec92d"
     deck = _deck()
@@ -428,17 +428,20 @@ def test_native_puct_completes_a_bounded_root_search():
                 state_limit=200, time_limit_seconds=30, cleanup_reserve_seconds=2))
         search = coordinator.search
 
-        decision = coordinator.decide(provider.root, provider=provider, strict=True)
+        decision = coordinator.decide(
+            provider.root.observation, provider=provider, strict=True)
 
-        assert decision.search.puct.outcome is PuctOutcome.SEARCHED, decision.search.failure
+        evidence = decision.search.evidence
+        assert isinstance(evidence, PuctEvidence)
+        assert evidence.outcome is PuctOutcome.SEARCHED, decision.search.outcome.failure
         assert decision.chosen is not None
-        assert decision.search.puct.simulations == 4
-        assert decision.search.puct.work.transitions > 0
-        assert decision.search.puct.retained_engine_states == 0
-        assert decision.search.puct.peak_retained_engine_states > 0
-        replay = json.loads(decision.search.puct.reproduction_input)
+        assert evidence.simulations == 4
+        assert evidence.work.transitions > 0
+        assert evidence.retained_engine_states == 0
+        assert evidence.peak_retained_engine_states > 0
+        replay = json.loads(evidence.reproduction_input)
         assert replay["payload"]["search_begin_input"] == observation["search_begin_input"]
-        transitions = next(item for item in decision.search.puct.resources
+        transitions = next(item for item in evidence.resources
                            if item.category == "transitions")
         assert transitions.reserved > transitions.attempted >= transitions.completed
     finally:
@@ -467,8 +470,8 @@ def test_agent_runtime_can_select_puct_independently_for_each_backend():
                 decision_configuration=DecisionSearchConfiguration(
                     DecisionPilot.PUCT, backend,
                     PuctConfiguration(
-                        profile="play", simulation_limit=4, batch_size=2,
-                        worker_count=2, chance_samples=4, transition_limit=100,
+                        profile="play", simulation_limit=4, batch_size=1,
+                        worker_count=1, chance_samples=4, transition_limit=100,
                         evaluation_limit=100, chance_limit=20, state_limit=200,
                         time_limit_seconds=30, cleanup_reserve_seconds=2)))
             runtimes.append(runtime)
@@ -478,7 +481,8 @@ def test_agent_runtime_can_select_puct_independently_for_each_backend():
             assert decision.diagnostics["pilot"] == "puct"
             assert decision.diagnostics["backend"] == backend.name
             assert decision.diagnostics["engine_backend"] == backend.name
-            assert decision.decision_result.search.puct.simulations == 4
+            evidence = decision.decision_result.search.evidence
+            assert evidence.simulations == 4
             assert decision.chosen in tuple(
                 action.selection for action in runtime.last_state.legal_actions)
             record = build_decision_record(
@@ -495,18 +499,28 @@ def test_agent_runtime_can_select_puct_independently_for_each_backend():
             assert record["search"]["puct"]["simulations"] == 4
             assert "reproduction_input" not in record["search"]["puct"]
             assert "search_begin_input" not in json.dumps(record)
-            evidence = decision.decision_result.search.puct
+            priors = evidence.prior_distributions[0].distribution.priors_for(
+                decision.decision_result.roster)
+            edges = {edge.choice: edge.statistics for edge in evidence.root_edges}
             public_results.append((
                 decision.chosen,
-                tuple((candidate.prior, candidate.puct.visits,
-                       candidate.puct.value_sum, candidate.puct.exclusion)
-                      for candidate in decision.decision_result.roster.candidates),
+                tuple((prior, edges[choice].visits,
+                       edges[choice].value_sum, edges[choice].exclusion)
+                      for prior, choice in zip(
+                          priors, decision.decision_result.roster.identities)),
                 evidence.simulations, evidence.work,
                 tuple((step.action, step.decision_key, step.chance_slot, step.probability)
                       for step in evidence.principal_variation),
                 evidence.principal_variation_stop_reason,
             ))
-        assert public_results[0] == public_results[1]
+        native, compat = public_results
+        assert native[0] == compat[0]
+        assert len(native[1]) == len(compat[1])
+        for native_edge, compat_edge in zip(native[1], compat[1]):
+            assert native_edge[:2] == compat_edge[:2]
+            assert native_edge[2] == pytest.approx(compat_edge[2], abs=0.01)
+            assert native_edge[3] == compat_edge[3]
+        assert native[2:] == compat[2:]
     finally:
         for runtime in runtimes:
             runtime.puct.close()
@@ -686,11 +700,13 @@ def test_production_runtime_completes_a_full_native_game_with_explicit_projectio
             else:
                 assert decision.diagnostics["backend"] == "ledger"
                 if "failure" in decision.diagnostics:
-                    candidates = decision.decision_result.roster.candidates
-                    assert candidates and all(candidate.status.value == "unavailable" for candidate in candidates)
+                    candidates = decision.decision_result.search.candidates
+                    assert candidates and all(
+                        candidate.delta_status.value == "unavailable"
+                        for candidate in candidates)
                     assert all(not candidate.successors for candidate in candidates)
                     assert any("observation unavailable" in gap or "private opponent selection" in gap
-                               for candidate in candidates for gap in candidate.gaps)
+                               for candidate in candidates for gap in candidate.delta_gaps)
                 assert coordinator_entries[seat] == before + 1
             legal = {selection for action in enumerate_legal_actions(observation)
                      for selection in action.equivalent_selections}

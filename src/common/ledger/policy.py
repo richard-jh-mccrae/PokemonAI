@@ -7,11 +7,14 @@ from dataclasses import asdict, dataclass
 from pathlib import Path
 
 from common.decision import (
+    ComponentContract,
+    DECISION_DELTA,
+    DecisionRequirements,
     EvaluationStatus,
     PolicyActionEvidence,
     PolicyDistribution,
     PolicyFallbackReason,
-    PolicyRequest,
+    PolicyModelRequest,
 )
 
 from .baseline import AUTHORITATIVE_DECKS, baseline_identities, require_baseline
@@ -293,6 +296,14 @@ class LedgerPolicyModel:
         return (f"ledger-policy-model-v1:{self.baseline.baseline_identity}:"
                 f"{self.baseline.value_scale_identity}:{self.configuration.identity}")
 
+    @property
+    def contract(self) -> ComponentContract:
+        return ComponentContract(
+            self.identity,
+            self.configuration.identity,
+            required_statistics=frozenset((DECISION_DELTA,)),
+        )
+
     @classmethod
     def load_calibrated(cls, expected_baseline_identity: str,
                         baseline_path: Path | str,
@@ -304,9 +315,11 @@ class LedgerPolicyModel:
             calibration.value_scale_identity)
         return cls(calibration.configuration, baseline)
 
-    def priors(self, request: PolicyRequest) -> PolicyDistribution:
+    def priors(self, request: PolicyModelRequest) -> PolicyDistribution:
+        if request.requirements != DecisionRequirements((DECISION_DELTA,)):
+            raise ValueError("Ledger policy requires Decision Delta statistics")
         self.validate_source(request.source)
-        candidates = request.roster.candidates
+        candidates = request.candidates
         if any(candidate.delta is not None
                and candidate.delta.scale.identity != request.source.value_scale_identity
                for candidate in candidates):
@@ -314,7 +327,7 @@ class LedgerPolicyModel:
         raw = tuple(None if candidate.delta is None else candidate.delta.total
                     for candidate in candidates)
         normalization = normalize_ledger_priors(
-            raw, (candidate.status for candidate in candidates), self.configuration)
+            raw, (candidate.delta_status for candidate in candidates), self.configuration)
         return self._distribution(
             request, normalization.normalized_scores, normalization.priors,
             normalization.fallback_reason, raw)
@@ -335,11 +348,11 @@ class LedgerPolicyModel:
             raw_delta,
             score,
             prior,
-            candidate.status,
+            candidate.delta_status,
             fallback_reason,
         ) for identity, raw_delta, score, prior, candidate in zip(
-            request.roster.policy_action_identities, raw, normalized, priors,
-            request.roster.candidates))
+            request.roster.identities, raw, normalized, priors,
+            request.candidates))
         return PolicyDistribution(
             self.identity,
             self.configuration.identity,

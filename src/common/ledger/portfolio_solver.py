@@ -76,6 +76,8 @@ class PortfolioSolveStatistics:
 
 
 class TurnPortfolioMemo:
+    identity = "ledger-turn-portfolio-memo-v1"
+
     def __init__(self, max_entries: int = DEFAULT_TURN_PORTFOLIO_MEMO_ENTRIES):
         if max_entries <= 0:
             raise ValueError("Portfolio Memo size must be positive")

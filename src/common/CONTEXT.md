@@ -53,8 +53,8 @@ It never traverses actions or chooses among them.
 _Avoid_: Decision evaluator, action evaluator, search
 
 **Evaluation Request**:
-One Observation State and Evaluation Model plus optional parent valuation and Observation Delta
-hints. Hints may accelerate evaluation but never change its result.
+One Observation State, Evaluation Model, and explicit root perspective plus optional parent valuation
+and Observation Delta hints. Hints may accelerate evaluation but never change its result.
 _Avoid_: Evaluator session, mutable context, cache key
 
 **Valuation Cache**:
@@ -64,7 +64,7 @@ _Avoid_: Evaluator memory, Observation State field, global memo
 
 **State Valuation**:
 The decomposed value of one Observation State under one Evaluation Model, with explicit root-seat
-perspective, Value Scale, and Evaluator Identity.
+perspective, Value Scale, Evaluator Identity, and Evaluation Model Identity.
 _Avoid_: Swing, Search Value, action score
 
 **Value Scale**:
@@ -83,13 +83,43 @@ components that sum to its total; concrete evaluators may add typed evidence.
 _Avoid_: Optional diagnostic, untyped part, Feature Activation
 
 **Evaluator Identity**:
-The canonical identity of the Value Evaluator implementation or model and its Value Scale.
-_Avoid_: Behavior Identity, configuration hash alone
+The canonical identity of the Value Evaluator implementation and behavior-affecting configuration.
+It is distinct from Evaluation Model Identity and Value Scale.
+_Avoid_: Evaluation Model Identity, Behavior Identity, configuration hash alone
+
+**Evaluation Model Identity**:
+The canonical identity of the exact Evaluation Model interpreted by a Value Evaluator.
+_Avoid_: Evaluator Identity, Behavior Identity, Value Scale
 
 **Search Algorithm**:
 The owner of candidate transition traversal and Search Value assembly. It returns every valued
-root candidate and leaves the deployed choice to Decision Policy.
+root candidate, declares its required collaborators, and leaves the deployed choice to Decision Policy.
 _Avoid_: Value Evaluator, decider
+
+**Search Outcome**:
+A typed statement of whether search completed enough valid work to authorize a choice, including
+its coverage and failure. It distinguishes usable bounded completion from unusable termination.
+_Avoid_: PUCT outcome, stop-reason string, success boolean
+
+**Search Termination**:
+An algorithm-owned, typed, versioned reason explaining exactly why search ended. Shared coordination
+uses Search Outcome instead and never branches on this diagnostic detail.
+_Avoid_: Stop-reason string, global reason enum, Search Outcome
+
+**Search Coverage**:
+The exact availability of declared Decision Statistics across one authoritative Candidate Roster.
+It never estimates how much of the reachable game tree was explored.
+_Avoid_: Tree coverage, node count, full/partial flag
+
+**Search Evidence**:
+Optional typed, versioned evidence native to one Search Algorithm and identified by that algorithm.
+It supports neutral statistics without forcing unrelated algorithms to fabricate its shape.
+_Avoid_: Diagnostics mapping, universal tree evidence, PUCT field on Search Result
+
+**Decision Statistic**:
+A typed, versioned semantic quantity a Decision Policy may require for candidates, with explicit
+ownership and Search Coverage. Shared meanings stay neutral; algorithm-specific meanings stay owned.
+_Avoid_: Generic score, diagnostics field, global statistic enum
 
 **One-Ply Ledger Boundary**:
 One root action plus every required effect-resolution choice until control returns to the main
@@ -97,9 +127,22 @@ action menu or the turn ends. It never selects a second independent main action.
 _Avoid_: whole-turn search, PUCT horizon, fixed action count
 
 **Search Value**:
-What a Search Algorithm has established for one action on the root State Valuation's Value Scale,
-including its Decision Delta and decomposed contributions.
-_Avoid_: State Valuation, policy prior, reward
+The umbrella for semantically distinct candidate-value evidence established by a Search Algorithm.
+Every concrete value states its backup meaning, Value Scale, and perspective.
+_Avoid_: Universal Q, State Valuation, policy prior, reward
+
+**Sampled Mean**:
+The arithmetic mean of completed sampled backups for one candidate. It is absent until at least one
+valid backup exists and never represents an unvisited starting reference.
+_Avoid_: Expected Continuation, Best Continuation, unvisited value
+
+**Expected Continuation**:
+A candidate continuation value aggregated under declared probability and decision semantics.
+_Avoid_: Sampled Mean, Best Continuation, generic Q
+
+**Best Continuation**:
+A candidate continuation value produced by an optimizing backup under an explicit perspective.
+_Avoid_: Expected Continuation, Sampled Mean, generic Q
 
 **Feasible Option Portfolio**:
 The state value of compatible opportunities remaining in the current turn under shared allowances,
@@ -124,21 +167,28 @@ Portfolio Problem and evaluator identity. It resets at the turn boundary and nev
 _Avoid_: global cache, approximate reuse, Valuation Cache
 
 **Decision Delta**:
-One candidate's decomposed marginal value against the root State Valuation.
+One candidate's decomposed marginal value against the root State Valuation on that valuation's
+explicit Value Scale and perspective.
 _Avoid_: State Valuation, reward, Swing outside the one-ply adapter
 
 **Turn-End Counterfactual**:
 The legal pass successor used to value the End candidate itself.
 _Avoid_: unchanged root zero, second MAIN action, opponent rollout
 
-**Valued Candidate**:
-One legal root action paired with its aggregate Search Value and explicit Successor Results.
-_Avoid_: OptionPrice, chosen action, ranking row
+**Candidate Result**:
+The neutral evaluated outcome for one Candidate Roster member, joined by Action Choice Identity.
+Algorithm statistics and Policy Distributions remain separate evidence keyed to the same choice.
+_Avoid_: Valued Candidate, roster entry, ranking row
 
 **Candidate Roster**:
-The exact legal root-action set materialized before search. Budget exhaustion changes Evaluation
-Status but never removes a candidate.
-_Avoid_: Expanded actions, top candidates, policy shortlist
+The immutable, ordered legal root-action set materialized before search, containing no valuation or
+algorithm evidence. Every Candidate Result and evidence collection joins back to this authority.
+_Avoid_: Candidate results, expanded actions, policy shortlist
+
+**Action Choice Identity**:
+The canonical identity of one Candidate Roster member, combining its semantic Action Identity with
+the exact selection submitted. Every search, policy, and final-result reference uses this same key.
+_Avoid_: Policy Action Identity, menu index, Action Identity alone
 
 **Candidate Disposition**:
 A structural statement that a candidate continues the decision phase, ends the turn, or is forced.
@@ -156,12 +206,19 @@ Observation State, termination, completeness, and explicit uncertainty or failur
 _Avoid_: ProviderState, raw engine branch, hidden world
 
 **Evaluation Status**:
-A closed statement that a candidate value is complete, explicitly estimated, or unavailable.
-_Avoid_: Gap string, silent zero, validity boolean
+A closed statement of one valuation or evidence item's completeness, estimate, or unavailability.
+It never summarizes every kind of evidence attached to one candidate.
+_Avoid_: Candidate-wide status, Gap string, silent zero, validity boolean
 
 **Policy Model**:
-The replaceable source of action priors P(a|s) used to order and allocate search effort.
+The replaceable source of action priors P(a|s), consuming a validated Policy Model Request whose
+evidence requirements may be empty.
 _Avoid_: Decision Policy, Search Value, action chooser
+
+**Policy Model Request**:
+One Observation State, structural Candidate Roster, source identities, and explicitly available
+candidate evidence offered to a Policy Model under its declared Decision Requirements.
+_Avoid_: Search session, valued roster, algorithm node
 
 **Policy Distribution**:
 A hidden-safe, versioned prior assignment covering every action in one authoritative Candidate
@@ -174,28 +231,58 @@ Multiple samples can yield the same successor; revisiting a sample adds no new d
 _Avoid_: Complete outcome distribution, search visit count, predicted actual hand
 
 **Decision Policy**:
-The replaceable rule that chooses from a Search Algorithm's completed candidate results.
+The replaceable rule that chooses an Action Choice Identity from a validated Decision Policy Request.
 _Avoid_: Policy Model, Value Evaluator, transition provider
+
+**Decision Policy Request**:
+The narrow validated view of one Search Result offered for final selection: its Candidate Roster,
+Search Outcome, Search Coverage, declared Decision Statistics, and optional Search Evidence.
+_Avoid_: Search Result, Candidate Roster alone, diagnostics bag
+
+**Decision Requirement**:
+A typed runtime predicate proving that a Decision Policy Request contains enough valid statistics
+to choose. Its required statistic types are also checked against Search Algorithm capability at assembly.
+_Avoid_: Policy exception, optional-field convention, configuration guess
 
 **Decision Coordinator**:
 The single neutral entry point that composes Search Algorithm, Policy Model, Value Evaluator, and
 Decision Policy for one typed decision.
 _Avoid_: LedgerDecider, runtime routing, evaluator stack
 
+**Component Contract**:
+One component's typed declaration of required inputs, produced evidence, configuration, and optional
+capabilities. Static compatibility is checked at assembly; dynamic claims are checked at boundaries.
+_Avoid_: Identity string, duck-typed convention, mandatory lifecycle
+
+**Reuse Provenance**:
+Typed proof binding retained search state to its owning capability and every behavior-affecting semantic
+input. Missing or mismatched provenance requires fresh execution.
+_Avoid_: Cache key, Behavior Identity alone, best-effort reuse
+
 **Decision Result**:
-The chosen Legal Action together with the complete Search Result, policy or fail-safe reason, and
-Behavior Identity.
-_Avoid_: Diagnostics bag, chosen action alone, Search Result
+One complete Search Result, Behavior Identity, and discriminated Decision Resolution stating normal,
+forced, recovered, or absent selection.
+_Avoid_: Nullable chosen action, diagnostics bag, Search Result
+
+**Decision Resolution**:
+The typed final disposition of one decision: an exact selected Action Choice Identity with owned
+policy evidence, or an explicit no-selection case justified by roster and Search Outcome.
+_Avoid_: Decision Reason enum, nullable action, chosen action alone
 
 **Decision Parity**:
-Preservation of the legal candidate roster, decomposed results, explicit statuses, and chosen action
-through a behavior-neutral architectural change.
-_Avoid_: Choice parity, aggregate agreement alone
+Exact preservation of deterministic roster, value, provenance, status, outcome, completed-work,
+failure, evidence, and choice semantics through a behavior-neutral architectural change.
+_Avoid_: Choice parity, timing equality, aggregate agreement alone
 
 **Fail-safe Policy**:
-The explicit policy used when candidate Search Values cannot be compared. Its decision carries the
-Evaluation Status that required degradation.
-_Avoid_: Exception fallback, neutral score, dropped action
+The explicitly configured policy allowed to recover specified non-permitting Search Outcomes from
+compatible roster evidence. Its decision preserves the original outcome, failure, and recovery reason.
+_Avoid_: Automatic fallback, successful search, dropped failure
+
+**Fail-safe Policy Request**:
+The validated recovery view of a non-permitting Search Outcome, its legal roster, original failure,
+and surviving candidate evidence. It is never a normal Decision Policy Request.
+_Avoid_: Decision Policy Request, callback arguments, successful search
 
 **Valuation Feature**:
 A canonical deck-agnostic marginal property of a card, board, belief, or continuation.
@@ -276,9 +363,9 @@ The versioned indifference, tie, accepted-status, and fail-safe controls used by
 _Avoid_: Search budget, Valuation Configuration
 
 **Behavior Identity**:
-The canonical identity of every replaceable behavior component: evaluator, Evaluation Model
-(including resolved Valuation Configuration and Prize Plan), search, Policy Model, Decision Policy,
-transition semantics, and their effective configurations.
+The resolved aggregate identity of every replaceable behavior component and effective configuration.
+Each component declares its identity; the Decision Coordinator verifies the supplied aggregate. Missing optional
+components use explicit namespaced absence identities.
 _Avoid_: Weights-only hash, deck name
 
 **Indifference Set**:

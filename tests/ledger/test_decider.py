@@ -13,28 +13,55 @@ from ledger_helpers import (DARK_E, DARKNESS, DRAGAPULT, DRAKLOAK, DREEPY, FIRE,
 import pytest
 
 from common.algebra import Deterministic, Refresh, Terminal, Unknown
-from common.decision import (CandidateDisposition, CandidateRoster, DecisionDelta,
-                             ComputeConfiguration, EvaluationStatus, SearchConfiguration,
-                             RealizedOutcome, ValuedCandidate)
+from common.decision import (
+    CandidateDisposition, CandidateResult, CandidateRoster, DecisionDelta,
+    DecisionPolicyRequest,
+    ComputeConfiguration, EvaluationStatus, RealizedOutcome, SearchCoverage,
+    SearchConfiguration, SearchOutcome, SearchOutcomeStatus, SearchTermination,
+)
+from legacy_decision_fixtures import ValuedCandidate
+from common.decision.statistics import DECISION_DELTA
 from common.ledger import EvaluationModel, LedgerDecider, PrizeMap
 from common.ledger.decider import LedgerUnavailable
 from common.ledger.decision import LEDGER_VALUE_SCALE
-from common.ledger.search import GreedyDecisionPolicy
+from common.ledger.search import FailSafeDecisionPolicy, GreedyDecisionPolicy
+from common.ledger.evidence import LedgerCandidateEvidence, LedgerEvidence
 from common.ledger.preview import ContinuationFootprint
+from common.observation import ObservationStateBuilder
 from common.scouting.provider import CardStat, DictCardStatProvider
 from deprecated.bellman.state import DecisionState
 from tools.train.ledger_parity import legacy_choose
 
 
+class ScriptedLedgerDecider(LedgerDecider):
+    def __init__(self, provider, deck, deck_name, ctx, **kwargs):
+        self._scripted_provider = provider
+        super().__init__(
+            deck, deck_name, ctx,
+            provider_factory=lambda _state, **_kw: provider,
+            **kwargs,
+        )
+
+    def decide(self, observation, **kwargs):
+        if kwargs.get("state") is None:
+            board = ObservationStateBuilder(self.deck).root(
+                observation, knowledge=kwargs.get("knowledge"))
+            kwargs["state"] = replace(
+                board,
+                legal_actions=tuple(self._scripted_provider._menus.get("root", ())),
+            )
+        return super().decide(observation, **kwargs)
+
+
 def make_decider(provider, deck=(DRAGAPULT, FIRE_E, DARK_E) * 20, sink=None):
-    return LedgerDecider(deck, "test", EvaluationModel.build(),
-                         provider_factory=lambda _state, **_kw: provider, gap_sink=sink)
+    return ScriptedLedgerDecider(
+        provider, deck, "test", EvaluationModel.build(), gap_sink=sink)
 
 
 def choose_prices(decider, prices, *, forced=False):
     candidates = tuple(ValuedCandidate(
         price.action,
-        DecisionDelta(price.swing, LEDGER_VALUE_SCALE),
+        DecisionDelta(price.swing, LEDGER_VALUE_SCALE, perspective=0),
         (CandidateDisposition.FORCED if forced else
          CandidateDisposition.ENDS_TURN if price.ends_turn
          else CandidateDisposition.CONTINUES_TURN),
@@ -44,9 +71,31 @@ def choose_prices(decider, prices, *, forced=False):
                           else price.prize_map.plan_rank_key()),
         policy_evidence=price.prize_map,
     ) for price in prices)
-    chosen = GreedyDecisionPolicy().choose(
-        CandidateRoster(candidates, forced), decider.compute.policy).action
-    return next(price for price in prices if price.action is chosen)
+    roster = CandidateRoster(
+        tuple(candidate.action for candidate in candidates), "test-decision", forced)
+    typed = tuple(CandidateResult(
+        choice,
+        candidate.disposition,
+        candidate.delta,
+        candidate.status,
+        candidate.gaps,
+        candidate.successors,
+        candidate.continuation,
+        candidate.status,
+    ) for choice, candidate in zip(roster.identities, candidates))
+    covered = tuple(candidate.choice for candidate in typed)
+    outcome = SearchOutcome(
+        SearchOutcomeStatus.COMPLETE,
+        SearchCoverage.covered(DECISION_DELTA, covered),
+        SearchTermination("test", "complete", 1),
+    )
+    evidence = LedgerEvidence(
+        1, 0, (), None,
+        tuple(LedgerCandidateEvidence(candidate.choice) for candidate in typed))
+    chosen = GreedyDecisionPolicy().choose(DecisionPolicyRequest(
+        roster, typed, outcome, (), evidence, decider.compute.policy))
+    action_choice = roster.action_for(chosen)
+    return next(price for price in prices if price.action is action_choice)
 
 
 def state_of(observation, deck):
@@ -76,7 +125,7 @@ def test_positive_develop_beats_a_bigger_turn_ender():
                ("root", attack.identity): Terminal(struck, "attack resolved")})
     decision = make_decider(provider).decide(root_obs)
     assert decision.action.kind == "attach"
-    assert decision.decision_result.chosen is decision.decision_result.roster.candidates[0].action
+    assert decision.decision_result.chosen is decision.decision_result.roster.actions[0]
 
 
 def test_main_phase_preview_does_not_price_a_second_independent_action():
@@ -104,13 +153,11 @@ def test_main_phase_preview_does_not_price_a_second_independent_action():
                (attached.semantic_key, follow_attack.identity):
                    Terminal(strong, "attack resolved")})
 
-    decision = LedgerDecider(
-        DECK, "test", EvaluationModel.build(),
-        provider_factory=lambda _state, **_kw: provider,
-    ).decide(root_obs)
+    decision = ScriptedLedgerDecider(
+        provider, DECK, "test", EvaluationModel.build()).decide(root_obs)
     prices = {row["action"]: row["swing"] for row in decision.diagnostics["prices"]}
     assert prices[str(weak_attack.identity)] > prices[str(attach.identity)]
-    attach_candidate = decision.decision_result.roster.candidates[0]
+    attach_candidate = decision.decision_result.search.candidates[0]
     assert all(follow_attack.identity not in successor.action_path
                for successor in attach_candidate.successors)
 
@@ -135,10 +182,8 @@ def test_one_ply_prefers_an_immediate_gain_over_an_unchanged_landing():
                ("root", wait.identity): Deterministic(waiting),
                (waiting.semantic_key, late_develop.identity): Deterministic(developed)})
 
-    decision = LedgerDecider(
-        DECK, "test", EvaluationModel.build(),
-        provider_factory=lambda _state, **_kw: provider,
-    ).decide(root_obs)
+    decision = ScriptedLedgerDecider(
+        provider, DECK, "test", EvaluationModel.build()).decide(root_obs)
     prices = {row["action"]: row["swing"] for row in decision.diagnostics["prices"]}
 
     assert decision.action == develop.identity
@@ -207,7 +252,7 @@ def test_forced_singleton_still_reports_its_successor_delta():
     price = decision.diagnostics["prices"][0]
 
     assert price["swing"] != 0
-    assert decision.decision_result.roster.candidates[0].successors
+    assert decision.decision_result.search.candidates[0].successors
 
 
 def test_forced_chain_resolves_to_the_best_leaf():
@@ -248,8 +293,8 @@ def test_refresh_pricing_is_deterministic_without_expanding_another_main_menu():
     provider = ScriptedProvider(
         menus={"root": (play, end)},
                nodes={("root", play.identity): Refresh(LILLIES, ((6, 0),), False)})
-    decider = LedgerDecider(deck, "test", EvaluationModel.build(),
-                            provider_factory=lambda _state, **_kw: provider)
+    decider = ScriptedLedgerDecider(
+        provider, deck, "test", EvaluationModel.build())
     first = decider.decide(root_obs)
     second = decider.decide(root_obs)
     prices = {entry["action"]: entry["swing"] for entry in first.diagnostics["prices"]}
@@ -271,8 +316,8 @@ def test_lillies_prices_higher_when_the_hand_it_shuffles_away_is_dead():
         provider = ScriptedProvider(
             menus={"root": (play, end)},
             nodes={("root", play.identity): Refresh(LILLIES, ((4, 0),), False)})
-        decision = LedgerDecider(deck, "test", EvaluationModel.build(),
-                                 provider_factory=lambda _s, **_kw: provider).decide(root_obs)
+        decision = ScriptedLedgerDecider(
+            provider, deck, "test", EvaluationModel.build()).decide(root_obs)
         return {entry["action"]: entry["swing"]
                 for entry in decision.diagnostics["prices"]}[str(play.identity)]
 
@@ -298,8 +343,8 @@ def test_harlequin_two_leg_ev_prices_the_opponents_redraw():
             menus={"root": (play, end)},
             nodes={("root", play.identity):
                    Refresh(HARLEQUIN, ((5, 3), (3, 5)), True)})
-        decision = LedgerDecider(deck, "test", EvaluationModel.build(),
-                                 provider_factory=lambda _s, **_kw: provider).decide(root_obs)
+        decision = ScriptedLedgerDecider(
+            provider, deck, "test", EvaluationModel.build()).decide(root_obs)
         return {entry["action"]: entry["swing"]
                 for entry in decision.diagnostics["prices"]}[str(play.identity)]
 
@@ -434,7 +479,7 @@ def test_presentation_failure_returns_one_typed_fail_safe_result():
     assert decision.diagnostics["failure"]["stage"] == "presentation"
 
 
-def test_fail_safe_policy_failure_returns_one_typed_last_resort_result():
+def test_fail_safe_policy_failure_is_not_hidden_by_an_implicit_lottery():
     class DeadProvider:
         available = False
         _error = "engine session refused"
@@ -443,6 +488,9 @@ def test_fail_safe_policy_failure_returns_one_typed_last_resort_result():
             pass
 
     class BrokenFailSafe:
+        identity = FailSafeDecisionPolicy.identity
+        contract = FailSafeDecisionPolicy.contract
+
         def choose(self, *_args, **_kwargs):
             raise RuntimeError("fail-safe policy failed")
 
@@ -452,13 +500,11 @@ def test_fail_safe_policy_failure_returns_one_typed_last_resort_result():
     decider.coordinator = replace(
         decider.coordinator, fail_safe_policy=BrokenFailSafe())
 
-    decision = decider.decide(
-        printout(me=player(active=body(DRAGAPULT, 1), hand=[FIRE_E]),
-                 select={"context": 0, "minCount": 0, "maxCount": 0, "option": []}))
-
-    assert decision.decision_result is not None
-    assert decision.diagnostics["policy_reason"] == "fail_safe_policy_failure"
-    assert decision.diagnostics["failure"]["stage"] == "policy"
+    with pytest.raises(Exception, match="fail-safe policy failed"):
+        decider.decide(
+            printout(me=player(active=body(DRAGAPULT, 1), hand=[FIRE_E]),
+                     select={"context": 0, "minCount": 0, "maxCount": 0,
+                             "option": []}))
 
 
 def test_harlequin_legs_average_exactly_on_a_uniform_pool():
@@ -474,8 +520,8 @@ def test_harlequin_legs_average_exactly_on_a_uniform_pool():
         provider = ScriptedProvider(
             menus={"root": (play, end)},
             nodes={("root", play.identity): Refresh(HARLEQUIN, draws, True)})
-        decision = LedgerDecider(deck, "test", EvaluationModel.build(),
-                                 provider_factory=lambda _s, **_kw: provider).decide(root_obs)
+        decision = ScriptedLedgerDecider(
+            provider, deck, "test", EvaluationModel.build()).decide(root_obs)
         return {entry["action"]: entry["swing"]
                 for entry in decision.diagnostics["prices"]}[str(play.identity)]
 
@@ -500,11 +546,12 @@ def _price(kind, index, swing, *, ends=False, refresh=False, prize_map=None,
            footprint=None):
     from types import SimpleNamespace
 
+    from common.api import ActionIdentity
     from common.ledger.preview import OptionPrice
 
     return OptionPrice(
         SimpleNamespace(selection=[index],
-                        identity=SimpleNamespace(kind=kind, parts=(index,))),
+                        identity=ActionIdentity(kind, (index,))),
         swing, ends, (),
         footprint=(ContinuationFootprint(0.0, 0.0, False)
                    if footprint is None else footprint),
@@ -518,7 +565,8 @@ def test_prize_plan_does_not_preempt_the_neutral_lottery_for_near_equal_prices()
     prices = (_price("play", 0, 1.0, prize_map=preferred),
               _price("play", 1, 1.0 - 5e-10, prize_map=ordinary))
 
-    assert choose_prices(decider, prices).action.selection == [1]
+    assert choose_prices(decider, prices).action is legacy_choose(
+        prices, forced=False, configuration=decider.compute.policy).action
 
 
 def test_continuing_options_rank_only_by_configured_price():
@@ -605,9 +653,9 @@ def test_action_opportunity_cost_changes_policy_without_changing_canonical_delta
         menus={"root": (attach, end)},
         nodes={("root", attach.identity): Deterministic(attached)})
     from common.ledger import DeckOverlay
-    lifted = LedgerDecider(DECK, "test", EvaluationModel.build(
-        overlay=DeckOverlay({"action.opportunity_cost": 5.0})),
-                           provider_factory=lambda _s, **_kw: provider).decide(root_obs)
+    lifted = ScriptedLedgerDecider(
+        provider, DECK, "test", EvaluationModel.build(
+            overlay=DeckOverlay({"action.opportunity_cost": 5.0}))).decide(root_obs)
     default = make_decider(provider).decide(root_obs)
     lifted_price = next(row for row in lifted.diagnostics["prices"]
                         if row["action"] == str(attach.identity))

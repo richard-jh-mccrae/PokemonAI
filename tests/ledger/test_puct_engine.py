@@ -1,11 +1,15 @@
 from cgpy.experiment import TurnSearchEnvironment
 from common.decision.turn import NodeKind
-from real_engine_helpers import BodySpec, lock_main_allowances, scenario
-from common.decision import DecisionCoordinator, EvaluationStatus, PolicyConfiguration
+from real_engine_helpers import BodySpec, lock_main_allowances, observation, scenario
+from common.decision import (
+    BehaviorIdentity, DecisionCoordinator, EvaluationStatus, NO_FAIL_SAFE_POLICY_IDENTITY,
+    PolicyConfiguration,
+)
 from common.ledger import LedgerPolicyBaseline, LedgerPolicyConfiguration, LedgerPolicyModel
 from common.ledger.decision import LedgerValueEvaluator
+from common.ledger.search import UniformPolicyModel
 from common.puct import PuctConfiguration, PuctDecisionPolicy, PuctSearch
-from common.decision.puct import PuctOutcome
+from common.decision.puct import PuctEvidence, PuctOutcome
 import pytest
 import json
 from common.puct import dumps_decision
@@ -74,24 +78,43 @@ def test_real_ledger_priors_are_bounded_and_search_continues_after_preparation_f
     baseline = LedgerPolicyBaseline("puct-test", evaluator.identity, (model.identity,), evaluator.value_scale.identity)
     policy = LedgerPolicyModel(LedgerPolicyConfiguration(
         8.0, 0.01, (EvaluationStatus.COMPLETE, EvaluationStatus.ESTIMATED)), baseline)
+    search = PuctSearch()
+    configuration = PuctConfiguration(
+        simulation_limit=24, prior_node_operations=prior_limit,
+        prior_total_operations=prior_limit * 2)
+    selection = PuctDecisionPolicy()
     coordinator = DecisionCoordinator(
-        evaluator, model, PuctSearch(),
-        PuctConfiguration(simulation_limit=24, prior_node_operations=prior_limit,
-                          prior_total_operations=prior_limit * 2),
-        policy, PuctDecisionPolicy(), PolicyConfiguration(), ledger_baseline_identity="puct-test")
+        evaluator=evaluator,
+        evaluation_model=model,
+        search=search,
+        search_configuration=configuration,
+        decision_policy=selection,
+        policy_configuration=PolicyConfiguration(),
+        policy_model=policy,
+        behavior_identity=BehaviorIdentity(
+            evaluator.identity, model.identity, search.identity, policy.identity,
+            selection.identity, NO_FAIL_SAFE_POLICY_IDENTITY, environment.identity,
+            configuration.identity, model.prize_plan.identity,
+        ),
+        compute_identity=configuration.identity,
+        ledger_baseline_identity="puct-test",
+    )
 
-    result = coordinator.decide(environment.root, provider=environment, strict=True)
+    result = coordinator.decide(
+        environment.root.observation, provider=environment, strict=True)
 
-    assert result.search.puct.outcome is PuctOutcome.SEARCHED, result.search.failure
+    evidence = result.search.evidence
+    assert isinstance(evidence, PuctEvidence)
+    assert evidence.outcome is PuctOutcome.SEARCHED, result.search.outcome.failure
     assert result.chosen is not None
-    prior = result.search.puct.prior_distributions[0]
+    prior = evidence.prior_distributions[0]
     assert prior.preparation_limited == (prior_limit == 1)
     if prior_limit == 1:
         assert prior.distribution.fallback_reason is not None
     else:
         assert prior.distribution.fallback_reason is None
         assert len({item.final_prior for item in prior.distribution.actions}) > 1
-    assert result.search.puct.work.evaluations > 2
+    assert evidence.work.evaluations > 2
     assert environment.retained_states == 0
     record = json.loads(dumps_decision(result, environment.root.observation, coordinator.search_configuration))
     assert record["schema"] == "puct-decision"
@@ -99,3 +122,49 @@ def test_real_ledger_priors_are_bounded_and_search_continues_after_preparation_f
     assert record["chosen_action"] is not None
     assert len(record["candidates"]) == len(environment.root.observation.legal_actions)
     assert record["evidence"]["resources"]
+
+
+def test_fixed_work_ledger_and_puct_share_neutral_decision_semantics():
+    engine, agent = scenario(
+        "mega_starmie", me_active=BodySpec((1030,)), me_hand=(1227, 3),
+        them_active=BodySpec((1030, 1031), energies=(3, 17)))
+    lock_main_allowances(engine, supporter=False)
+    ledger = agent.ledger.decide(observation(engine)).decision_result
+    environment = TurnSearchEnvironment.from_engine(engine, perspective_seat=0)
+    evaluator = LedgerValueEvaluator()
+    model = agent.ledger.ctx
+    search = PuctSearch()
+    configuration = PuctConfiguration(
+        simulation_limit=24, prior_node_operations=512,
+        prior_total_operations=1024)
+    policy = UniformPolicyModel()
+    selection = PuctDecisionPolicy()
+    coordinator = DecisionCoordinator(
+        evaluator=evaluator,
+        evaluation_model=model,
+        search=search,
+        search_configuration=configuration,
+        decision_policy=selection,
+        policy_configuration=PolicyConfiguration(),
+        policy_model=policy,
+        behavior_identity=BehaviorIdentity(
+            evaluator.identity, model.identity, search.identity, policy.identity,
+            selection.identity, NO_FAIL_SAFE_POLICY_IDENTITY, environment.identity,
+            configuration.identity, model.prize_plan.identity,
+        ),
+        compute_identity=configuration.identity,
+    )
+
+    puct = coordinator.decide(
+        environment.root.observation, provider=environment, strict=True)
+
+    assert ledger.roster.identities == puct.roster.identities
+    assert ledger.search.baseline == puct.search.baseline
+    assert tuple(candidate.choice for candidate in ledger.search.candidates) == ledger.roster.identities
+    assert tuple(candidate.choice for candidate in puct.search.candidates) == puct.roster.identities
+    assert ledger.chosen is not None and puct.chosen is not None
+    assert ledger.chosen_candidate.choice in ledger.roster.identities
+    assert puct.chosen_candidate.choice in puct.roster.identities
+    assert ledger.search.outcome.permits_action
+    assert puct.search.outcome.permits_action
+    environment.close()

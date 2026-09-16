@@ -13,6 +13,7 @@ from agent_helpers import deck as agent_deck
 from ledger_helpers import printout
 
 from common.algebra import Deterministic
+from common.decision import correction_compute_profile
 from common.engine import CgpyTransitionProvider, LedgerCgpyProvider
 from common.ledger import (EvaluationModel, LedgerDecider, LedgerNativeProvider, PreviewState,
                            preview_provider_factory)
@@ -50,7 +51,8 @@ def test_preview_seam_prices_identically_to_the_decisionstate_path(frame):
                           CgpyTransitionProvider(heavy_state), ctx)
 
     light_decider = LedgerDecider(DECK, "mega_starmie", EvaluationModel.build(),
-                                  provider_factory=LedgerCgpyProvider)
+                                  provider_factory=LedgerCgpyProvider,
+                                  compute=correction_compute_profile())
     light = light_decider.decide(frame.obs)
 
     heavy_prices = {str(price.action.identity): round(price.swing, 12) for price in heavy}

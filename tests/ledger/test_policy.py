@@ -8,15 +8,18 @@ import pytest
 from common.api import ActionIdentity
 from common.decision import (
     CandidateDisposition,
+    CandidateResult,
     CandidateRoster,
+    DECISION_DELTA,
     DecisionDelta,
+    DecisionDeltaStatistic,
+    DecisionRequirements,
     EvaluationStatus,
     PolicyFallbackReason,
-    PolicyRequest,
+    PolicyModelRequest,
     PolicyDistribution,
     PolicySourceIdentity,
     ValueScale,
-    ValuedCandidate,
 )
 from common.ledger import (
     LedgerPolicyBaseline,
@@ -43,28 +46,54 @@ class Action:
     selection: tuple[int, ...]
 
 
-def roster(*deltas: float) -> CandidateRoster:
+@dataclass(frozen=True)
+class PreparedRoster:
+    roster: CandidateRoster
+    candidates: tuple[CandidateResult, ...]
+
+
+def roster(*deltas: float) -> PreparedRoster:
     actions = tuple(Action(ActionIdentity("action", (str(index),)), (index,))
                     for index in range(len(deltas)))
-    candidates = tuple(ValuedCandidate(
-        action,
-        DecisionDelta(delta, SCALE),
+    structural = CandidateRoster(actions, "fixture")
+    candidates = tuple(CandidateResult(
+        choice,
         CandidateDisposition.CONTINUES_TURN,
+        DecisionDelta(delta, SCALE, perspective=0),
         EvaluationStatus.COMPLETE,
-    ) for action, delta in zip(actions, deltas))
-    return CandidateRoster.from_legal_actions(actions, candidates)
+    ) for choice, delta in zip(structural.identities, deltas))
+    return PreparedRoster(structural, candidates)
 
 
-def mixed_roster(*items, forced=False) -> CandidateRoster:
+def mixed_roster(*items, forced=False) -> PreparedRoster:
     actions = tuple(Action(ActionIdentity("action", (str(index),)), (index,))
                     for index in range(len(items)))
-    candidates = tuple(ValuedCandidate(
-        action,
-        None if delta is None else DecisionDelta(delta, SCALE),
+    structural = CandidateRoster(actions, "fixture", forced)
+    candidates = tuple(CandidateResult(
+        choice,
         CandidateDisposition.FORCED if forced else CandidateDisposition.CONTINUES_TURN,
+        None if delta is None else DecisionDelta(delta, SCALE, perspective=0),
         status,
-    ) for action, (delta, status) in zip(actions, items))
-    return CandidateRoster.from_legal_actions(actions, candidates, forced=forced)
+    ) for choice, (delta, status) in zip(structural.identities, items))
+    return PreparedRoster(structural, candidates)
+
+
+def policy_request(
+        prepared: PreparedRoster,
+        source: PolicySourceIdentity = SOURCE,
+) -> PolicyModelRequest:
+    observation = replace(OBSERVATION, legal_actions=prepared.roster.actions)
+    proven = replace(prepared.roster, decision_key=observation.decision_key)
+    return PolicyModelRequest(
+        observation,
+        proven,
+        prepared.candidates,
+        tuple(DecisionDeltaStatistic(
+            candidate.choice, candidate.delta, candidate.delta_status)
+            for candidate in prepared.candidates),
+        source,
+        DecisionRequirements((DECISION_DELTA,)),
+    )
 
 
 def test_ledger_policy_softens_canonical_deltas_without_excluding_actions():
@@ -74,7 +103,7 @@ def test_ledger_policy_softens_canonical_deltas_without_excluding_actions():
         BASELINE,
     )
 
-    distribution = model.priors(PolicyRequest(OBSERVATION, candidates, SOURCE))
+    distribution = model.priors(policy_request(candidates))
 
     assert tuple(item.raw_delta for item in distribution.actions) == (2.0, 0.0)
     assert tuple(item.normalized_score for item in distribution.actions) == pytest.approx(
@@ -88,7 +117,7 @@ def test_ledger_policy_softens_canonical_deltas_without_excluding_actions():
 def test_uniform_policy_uses_the_same_evidenced_distribution_contract():
     candidates = roster(-4.0, 9.0)
 
-    distribution = UniformPolicyModel().priors(PolicyRequest(OBSERVATION, candidates, SOURCE))
+    distribution = UniformPolicyModel().priors(policy_request(candidates))
 
     assert tuple(item.raw_delta for item in distribution.actions) == (-4.0, 9.0)
     assert tuple(item.final_prior for item in distribution.actions) == (0.5, 0.5)
@@ -103,19 +132,19 @@ def test_policy_distribution_round_trips_hidden_safe_evidence():
         LedgerPolicyConfiguration(temperature=2.0, uniform_mix=0.1),
         BASELINE,
     )
-    distribution = model.priors(PolicyRequest(OBSERVATION, candidates, SOURCE))
+    distribution = model.priors(policy_request(candidates))
 
     restored = PolicyDistribution.from_dict(
         json.loads(json.dumps(distribution.as_dict(), sort_keys=True)))
 
     assert restored == distribution
-    assert restored.priors_for(candidates) == pytest.approx(
+    assert restored.priors_for(policy_request(candidates).roster) == pytest.approx(
         tuple(item.final_prior for item in distribution.actions))
 
 
 def test_ledger_policy_is_repeatable_across_thread_workers():
     candidates = roster(2.0, -1.0)
-    request = PolicyRequest(OBSERVATION, candidates, SOURCE)
+    request = policy_request(candidates)
     model = LedgerPolicyModel(
         LedgerPolicyConfiguration(temperature=2.0, uniform_mix=0.1), BASELINE)
 
@@ -133,7 +162,7 @@ def test_ledger_policy_is_stable_for_ties_negative_values_and_wide_ranges(
         deltas, expected):
     distribution = LedgerPolicyModel(
         LedgerPolicyConfiguration(temperature=1.0, uniform_mix=0.1), BASELINE,
-    ).priors(PolicyRequest(OBSERVATION, roster(*deltas), SOURCE))
+    ).priors(policy_request(roster(*deltas)))
 
     assert tuple(item.final_prior for item in distribution.actions) == pytest.approx(expected)
 
@@ -143,7 +172,7 @@ def test_forced_unpriced_action_receives_probability_one():
 
     distribution = LedgerPolicyModel(
         LedgerPolicyConfiguration(temperature=1.0, uniform_mix=0.1), BASELINE,
-    ).priors(PolicyRequest(OBSERVATION, candidates, SOURCE))
+    ).priors(policy_request(candidates))
 
     assert distribution.actions[0].final_prior == 1.0
     assert distribution.actions[0].raw_delta is None
@@ -163,7 +192,7 @@ def test_non_comparable_candidate_falls_back_the_entire_roster(
         temperature=1.0, uniform_mix=0.1, accepted_statuses=accepted)
 
     distribution = LedgerPolicyModel(configuration, BASELINE).priors(
-        PolicyRequest(OBSERVATION, candidates, SOURCE))
+        policy_request(candidates))
 
     assert tuple(item.final_prior for item in distribution.actions) == (0.5, 0.5)
     assert distribution.fallback_reason.value == reason
@@ -205,7 +234,7 @@ def test_estimated_candidate_requires_explicit_opt_in():
 
     default = LedgerPolicyModel(
         LedgerPolicyConfiguration(temperature=1.0, uniform_mix=0.1), BASELINE,
-    ).priors(PolicyRequest(OBSERVATION, candidates, SOURCE))
+    ).priors(policy_request(candidates))
     opted_in = LedgerPolicyModel(
         LedgerPolicyConfiguration(
             temperature=1.0,
@@ -213,7 +242,7 @@ def test_estimated_candidate_requires_explicit_opt_in():
             accepted_statuses=(EvaluationStatus.COMPLETE, EvaluationStatus.ESTIMATED),
         ),
         BASELINE,
-    ).priors(PolicyRequest(OBSERVATION, candidates, SOURCE))
+    ).priors(policy_request(candidates))
 
     assert default.fallback_reason is PolicyFallbackReason.UNACCEPTED_STATUS
     assert opted_in.fallback_reason is None
@@ -231,17 +260,20 @@ def test_ledger_policy_rejects_p0_v0_identity_mismatch(field, value, message):
         LedgerPolicyConfiguration(temperature=1.0, uniform_mix=0.1), BASELINE)
 
     with pytest.raises(ValueError, match=message):
-        model.priors(PolicyRequest(
-            OBSERVATION, roster(1.0, 0.0), replace(SOURCE, **{field: value})))
+        model.priors(policy_request(
+            roster(1.0, 0.0), replace(SOURCE, **{field: value})))
 
 
 def test_policy_request_requires_a_nonempty_proven_roster():
-    candidates = roster(1.0).candidates
-
-    with pytest.raises(ValueError, match="proven legal"):
-        PolicyRequest(OBSERVATION, CandidateRoster(candidates), SOURCE)
-    with pytest.raises(ValueError, match="requires a candidate"):
-        PolicyRequest(OBSERVATION, CandidateRoster((), legal_actions_proven=True), SOURCE)
+    prepared = roster(1.0)
+    with pytest.raises(ValueError, match="not proven"):
+        PolicyModelRequest(
+            OBSERVATION, prepared.roster, prepared.candidates, (), SOURCE)
+    with pytest.raises(ValueError, match="do not match"):
+        empty = replace(OBSERVATION, legal_actions=())
+        PolicyModelRequest(
+            empty, CandidateRoster((), empty.decision_key),
+            prepared.candidates, (), SOURCE)
 
 
 def test_ledger_policy_loads_the_committed_frozen_baseline():
@@ -294,7 +326,7 @@ def test_calibrated_model_binds_frozen_baseline_to_recorded_value_scale():
 def test_policy_distribution_decoder_rejects_unknown_fields():
     candidates = roster(1.0, 0.0)
     distribution = UniformPolicyModel().priors(
-        PolicyRequest(OBSERVATION, candidates, SOURCE)).as_dict()
+        policy_request(candidates)).as_dict()
     distribution["invented"] = True
 
     with pytest.raises(ValueError, match="invalid policy distribution fields"):
@@ -303,20 +335,21 @@ def test_policy_distribution_decoder_rejects_unknown_fields():
 
 def test_policy_request_rejects_non_observation_state():
     with pytest.raises(TypeError, match="Observation State"):
-        PolicyRequest(object(), roster(1.0), SOURCE)
+        PolicyModelRequest(object(), roster(1.0).roster, roster(1.0).candidates, (), SOURCE)
 
 
 def test_ledger_policy_rejects_candidate_value_scale_mismatch():
     action = Action(ActionIdentity("action"), (0,))
-    candidate = ValuedCandidate(
-        action,
-        DecisionDelta(1.0, ValueScale("other", 1)),
+    structural = CandidateRoster((action,), "fixture")
+    candidate = CandidateResult(
+        structural.identities[0],
         CandidateDisposition.CONTINUES_TURN,
+        DecisionDelta(1.0, ValueScale("other", 1), perspective=0),
         EvaluationStatus.COMPLETE,
     )
-    candidates = CandidateRoster.from_legal_actions((action,), (candidate,))
+    candidates = PreparedRoster(structural, (candidate,))
     model = LedgerPolicyModel(
         LedgerPolicyConfiguration(temperature=1.0, uniform_mix=0.1), BASELINE)
 
     with pytest.raises(ValueError, match="candidate Value Scale"):
-        model.priors(PolicyRequest(OBSERVATION, candidates, SOURCE))
+        model.priors(policy_request(candidates))

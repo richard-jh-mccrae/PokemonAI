@@ -157,6 +157,56 @@ def test_live_decision_contract_has_no_bellman_plan_state():
     assert not hasattr(decision, "plan_suffix")
 
 
+def test_neutral_decision_contracts_do_not_import_algorithm_packages():
+    targets = (
+        "identity.py", "values.py", "statistics.py", "outcomes.py",
+        "components.py", "results.py", "contracts.py", "coordinator.py",
+    )
+    forbidden = ("common.ledger", "common.puct")
+    offenders = []
+    root = REPO / "src/common/decision"
+    for name in targets:
+        tree = ast.parse((root / name).read_text(encoding="utf-8"), filename=name)
+        for node in ast.walk(tree):
+            modules = (() if isinstance(node, ast.ImportFrom) and node.module is None
+                       else ((node.module,) if isinstance(node, ast.ImportFrom)
+                             else tuple(alias.name for alias in node.names)
+                             if isinstance(node, ast.Import) else ()))
+            if any(module.startswith(forbidden) for module in modules):
+                offenders.append(f"{name}:{node.lineno}")
+    assert offenders == [], f"neutral decision contracts import algorithms — {offenders}"
+
+
+def test_active_consumers_import_behavior_identity_from_the_neutral_contract():
+    offenders = []
+    for path in (REPO / "src/common").rglob("*.py"):
+        relative = path.relative_to(REPO).as_posix()
+        if relative.startswith("src/common/ledger/"):
+            continue
+        tree = ast.parse(path.read_text(encoding="utf-8-sig"), filename=str(path))
+        for node in ast.walk(tree):
+            if (isinstance(node, ast.ImportFrom)
+                    and node.module in ("common.ledger", "common.ledger.configuration")
+                    and any(alias.name == "BehaviorIdentity" for alias in node.names)):
+                offenders.append(f"{relative}:{node.lineno}")
+    assert offenders == [], (
+        f"active consumers import BehaviorIdentity through Ledger — {offenders}")
+
+
+def test_legacy_decision_contracts_are_absent_from_shipped_source():
+    offenders = []
+    for path in (REPO / "src").rglob("*.py"):
+        relative = path.relative_to(REPO).as_posix()
+        tree = ast.parse(path.read_text(encoding="utf-8-sig"), filename=str(path))
+        for node in ast.walk(tree):
+            module = node.module if isinstance(node, ast.ImportFrom) else None
+            if (module == "common.decision.compatibility_contracts"
+                    or (isinstance(node, ast.ImportFrom) and node.level
+                        and module == "compatibility_contracts")):
+                offenders.append(f"{relative}:{node.lineno}")
+    assert offenders == [], f"legacy decision contracts re-entered shipped source — {offenders}"
+
+
 def test_live_runtime_has_no_retired_bellman_or_latch_state():
     text = (REPO / "src/common/runtime.py").read_text(encoding="utf-8")
     retired = (

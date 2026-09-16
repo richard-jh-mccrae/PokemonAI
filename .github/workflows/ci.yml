@@ -255,10 +255,23 @@ jobs:
           tests/test_import_hygiene.py tests/test_source_reachability.py
           -q -n auto --tb=short
           --ignore=tests/ledger/test_real_engine_timing.py
-      - name: Typecheck bounded PUCT contracts
+      - name: Typecheck search adapters
         run: >-
           python -m mypy --check-untyped-defs --follow-imports=skip --ignore-missing-imports
-          src/common/puct src/common/decision/puct.py src/common/decision/turn.py
+          src/common/puct src/common/ledger/search.py
+          src/common/decision/puct.py src/common/decision/turn.py
+      - name: Typecheck neutral decision contracts
+        env:
+          MYPYPATH: tests
+        run: >-
+          python -m mypy --strict --follow-imports=silent
+          src/common/decision/identity.py src/common/decision/values.py
+          src/common/decision/outcomes.py src/common/decision/statistics.py
+          src/common/decision/components.py src/common/decision/results.py
+          src/common/decision/contracts.py src/common/decision/coordinator.py
+          src/common/ledger/evidence.py
+          src/common/puct/policy.py
+          tests/decision/test_neutral_contract_search.py
 
   test-cgpy:
     name: tests / cgpy

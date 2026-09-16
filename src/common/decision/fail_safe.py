@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+from dataclasses import dataclass
 
 from common.api import ActionIdentity
 from common.options import LegalAction, enumerate_legal_actions
@@ -16,7 +17,16 @@ from common.strategy.context import (
     _TO_FIELD,
     _TO_HAND,
 )
-from .contracts import FailSafeRequest
+
+
+@dataclass(frozen=True, slots=True)
+class FailSafeRequest:
+    observation: dict
+    legal_actions: tuple[LegalAction, ...]
+    seat: int
+    state_key: str
+    decision_key: str
+    context: int | None
 
 
 def _int_field(mapping, key, default: int) -> int:
@@ -111,4 +121,4 @@ def fail_safe_request(observation: dict) -> FailSafeRequest:
     return FailSafeRequest(observation, tuple(actions), seat, key, key, context)
 
 
-__all__ = ("fail_safe_request", "safe_legal_selection")
+__all__ = ("FailSafeRequest", "fail_safe_request", "safe_legal_selection")

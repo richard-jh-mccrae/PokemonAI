@@ -141,7 +141,7 @@ fires, the first-merged-keeps-it convention established above still applies: ref
 recompute, rename again. See `.claude/skills/grill-with-docs/SKILL.md` and
 `.claude/skills/open-pr/SKILL.md` for the full mechanics.
 
-**Next free number: 0205.**
+**Next free number: 0216.**
 
 ## Index
 
@@ -352,3 +352,14 @@ recompute, rename again. See `.claude/skills/grill-with-docs/SKILL.md` and
 | [0202](0202-draw-estimates-guide-bounded-continuations.md) | Draw estimates guide bounded continuations | Accepted; built for Issue #607. |
 | [0203](0203-puct-coordinates-reproducible-batches.md) | PUCT coordinates reproducible batches | Accepted; built for Issue #607. |
 | [0204](0204-puct-tree-reuse-is-configurable.md) | PUCT tree reuse is configurable | Accepted; built for Issue #607. |
+| [0205](0205-candidate-rosters-are-structural.md) | Candidate rosters are structural | Accepted; built for Issue #676. |
+| [0206](0206-component-compatibility-is-declared-and-validated.md) | Component compatibility is declared and validated | Accepted; built for Issue #676. |
+| [0207](0207-decision-policy-consumes-a-validated-view.md) | Decision policy consumes a validated result view | Accepted; built for Issue #676. |
+| [0208](0208-decision-resolution-is-discriminated.md) | Decision resolution is discriminated | Accepted; built for Issue #676. |
+| [0209](0209-evaluation-semantics-are-pinned-and-proven.md) | Evaluation semantics are pinned and proven | Accepted; built for Issue #676. |
+| [0210](0210-one-action-choice-identity.md) | One action-choice identity spans search and selection | Accepted; built for Issue #676. |
+| [0211](0211-policy-model-input-is-explicit.md) | Policy model input is explicit | Accepted; built for Issue #676. |
+| [0212](0212-search-evidence-has-one-typed-extension-point.md) | Search evidence has one typed extension point | Accepted; built for Issue #676. |
+| [0213](0213-search-outcomes-authorize-action-generically.md) | Search outcomes authorize action generically | Accepted; built for Issue #676. |
+| [0214](0214-search-recovery-is-explicit.md) | Search recovery is explicit | Accepted; built for Issue #676. |
+| [0215](0215-value-semantics-are-distinct-types.md) | Search value semantics remain distinct types | Accepted; built for Issue #676. |
